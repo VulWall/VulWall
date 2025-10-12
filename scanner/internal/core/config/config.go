@@ -15,6 +15,7 @@ type Config struct {
 	MongoDB       string
 	ServiceName   string
 	Environment   string
+	ShodanAPIKey  string
 }
 
 func Load() (*Config, error) {
@@ -31,6 +32,7 @@ func Load() (*Config, error) {
 		MongoDB:       getEnv("MONGO_DB", "VulWall-Dev"),
 		ServiceName:   getEnv("SERVICE_NAME", "vulwall-scanner"),
 		Environment:   getEnv("ENVIRONMENT", "development"),
+		ShodanAPIKey:  getEnv("SHODAN_API_KEY", ""),
 	}, nil
 }
 

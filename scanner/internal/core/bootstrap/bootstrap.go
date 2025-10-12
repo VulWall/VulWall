@@ -21,7 +21,7 @@ type ConsumerStarter interface {
 }
 
 // ConsumerFactory is a function that creates a consumer instance
-type ConsumerFactory func(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) ConsumerStarter
+type ConsumerFactory func(cfg *config.Config, redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) ConsumerStarter
 
 // ServiceConfig holds the configuration for bootstrapping a service
 type ServiceConfig struct {
@@ -71,7 +71,7 @@ func Run(cfg ServiceConfig) {
 	}
 
 	// Create consumer using the factory function
-	consumer := cfg.Factory(redisClient, db, logger.Log)
+	consumer := cfg.Factory(appCfg, redisClient, db, logger.Log)
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
