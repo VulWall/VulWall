@@ -38,8 +38,11 @@ VulWall.Scanners/
 │           ├── constants.go
 │           ├── service.go
 │           ├── consumer.go
-│           └── discovery/      # Subdomain discovery tools
-│               └── shodan.go   # Shodan API integration
+│           └── discovery/      # Attack surface discovery providers
+│               ├── provider.go          # Provider interface
+│               ├── manager.go           # Discovery orchestration
+│               ├── shodan.go            # Shodan API client
+│               └── shodan_provider.go   # Shodan provider implementation
 ├── ops/                   # Docker and deployment files
 │   ├── Dockerfile.active-recon
 │   ├── Dockerfile.passive-recon
@@ -209,15 +212,18 @@ internal/slices/[slice_name]/
 └── [subdir]/      # Optional: additional tools/modules (e.g., discovery/)
 ```
 
-**Example: attack_surface slice with Shodan integration**
+**Example: attack_surface slice with pluggable discovery providers**
 ```
 internal/slices/attack_surface/
-├── models.go           # AttackSurfaceJob, AttackSurfaceAsset
-├── constants.go        # StreamAttackSurface, AssetStatusActive, etc.
-├── service.go          # ProcessJob(), asset deduplication logic
+├── models.go           # AttackSurfaceJob, AttackSurfaceAsset (includes Protocol field)
+├── constants.go        # StreamAttackSurface, AssetStatusActive, ProtocolTCP/UDP, TargetTypeDomain/IP
+├── service.go          # ProcessJob(), asset deduplication logic (protocol-aware)
 ├── consumer.go         # Redis consumer for attack surface jobs
-└── discovery/
-    └── shodan.go       # Shodan DNS domain API integration
+└── discovery/          # Pluggable provider architecture
+    ├── provider.go             # AttackSurfaceProvider interface
+    ├── manager.go              # Discovery orchestration across multiple providers
+    ├── shodan.go               # Shodan API client (low-level)
+    └── shodan_provider.go      # Shodan provider implementation
 ```
 
 ## Configuration
