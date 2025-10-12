@@ -47,8 +47,8 @@ VulWall.Scanners/
 
 - Go 1.23 or higher
 - Docker and Docker Compose (for containerized deployment)
-- Redis 7+
-- MongoDB 7+
+- **Cloud Redis** (Redis Cloud, Upstash, AWS ElastiCache, etc.)
+- **Cloud MongoDB** (MongoDB Atlas, AWS DocumentDB, etc.)
 
 ### Installation
 
@@ -58,9 +58,10 @@ git clone <repository-url>
 cd VulWall.Scanners
 ```
 
-2. Copy the environment file:
+2. Copy the environment file and configure your cloud credentials:
 ```bash
 cp .env.example .env
+# Edit .env with your cloud Redis and MongoDB credentials
 ```
 
 3. Install dependencies:
@@ -72,7 +73,8 @@ make deps
 
 #### Option 1: Using Docker Compose (Recommended)
 
-Start all services with infrastructure:
+Ensure your `.env` file has valid cloud Redis and MongoDB credentials, then start services:
+
 ```bash
 make docker-up
 ```
@@ -93,17 +95,15 @@ Stop all services:
 make docker-down
 ```
 
-#### Option 2: Running Individually
+#### Option 2: Running Individually (Local Development)
 
-First, ensure Redis and MongoDB are running locally.
+Ensure your `.env` file is configured with cloud credentials, then run services directly:
 
-Run passive reconnaissance service:
 ```bash
+# Run passive reconnaissance service
 make run-passive
-```
 
-Run active reconnaissance service:
-```bash
+# Run active reconnaissance service (in another terminal)
 make run-active
 ```
 
@@ -252,14 +252,14 @@ make vet
 
 ## Configuration
 
-Configuration is loaded from environment variables or `.env` file:
+Configuration is loaded from environment variables or `.env` file. **This project uses cloud-hosted Redis and MongoDB** - configure your cloud provider credentials below:
 
-| Variable | Description | Default |
+| Variable | Description | Example |
 |----------|-------------|---------|
-| `REDIS_ADDR` | Redis server address | `localhost:6379` |
-| `REDIS_PASSWORD` | Redis password | `` |
+| `REDIS_ADDR` | Cloud Redis endpoint | `redis-12345.c1.us-east-1-1.ec2.cloud.redislabs.com:12345` |
+| `REDIS_PASSWORD` | Redis authentication password | `your-redis-password` |
 | `REDIS_DB` | Redis database number | `0` |
-| `MONGO_URI` | MongoDB connection URI | `mongodb://localhost:27017` |
+| `MONGO_URI` | MongoDB Atlas/Cloud connection string | `mongodb+srv://user:pass@cluster.mongodb.net/` |
 | `MONGO_DB` | MongoDB database name | `vulwall` |
 | `SERVICE_NAME` | Service identifier | `vulwall-scanner` |
 | `ENVIRONMENT` | Environment (development/production) | `development` |
