@@ -29,16 +29,16 @@ func NewService(db *mongo.Database, shodanAPIKey string, logger *zap.Logger) *Se
 // ProcessJob processes an attack surface discovery job
 func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 	s.logger.Info("Processing attack surface job",
-		zap.String("job_id", job.JobID),
-		zap.String("root_id", job.RootID),
+		zap.String("trace_id", job.TraceID),
+		zap.String("org_id", job.OrgID),
 		zap.String("host", job.Host),
 	)
 
 	// Check if asset already exists
-	existingAsset, err := s.findExistingAsset(ctx, job.RootID, job.Host, job.Port)
+	existingAsset, err := s.findExistingAsset(ctx, job.OrgID, job.Host, job.Port)
 	if err != nil && err != mongo.ErrNoDocuments {
 		s.logger.Error("Failed to check existing asset",
-			zap.String("job_id", job.JobID),
+			zap.String("trace_id", job.TraceID),
 			zap.Error(err),
 		)
 		return err
@@ -54,7 +54,7 @@ func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 	// Create new asset
 	asset := &AttackSurfaceAsset{
 		ID:        uuid.New().String(),
-		RootID:    job.RootID,
+		OrgID:     job.OrgID,
 		ParentID:  job.ParentID,
 		Host:      job.Host,
 		Port:      job.Port,
@@ -70,19 +70,19 @@ func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 
 	// Trigger subdomain discovery for root domains (no parent)
 	if job.ParentID == nil {
-		go s.discoverSubdomains(context.Background(), asset.ID, job.RootID, job.Host)
+		go s.discoverSubdomains(context.Background(), asset.ID, job.OrgID, job.Host)
 	}
 
 	return nil
 }
 
 // findExistingAsset checks if an asset already exists
-func (s *Service) findExistingAsset(ctx context.Context, rootID, host string, port *int) (*AttackSurfaceAsset, error) {
+func (s *Service) findExistingAsset(ctx context.Context, orgID, host string, port *int) (*AttackSurfaceAsset, error) {
 	collection := s.db.Collection(CollectionAttackSurface)
 
 	filter := bson.M{
-		"root_id": rootID,
-		"host":    host,
+		"org_id": orgID,
+		"host":   host,
 	}
 
 	// Handle port comparison (can be nil or specific value)
@@ -147,7 +147,7 @@ func (s *Service) createAsset(ctx context.Context, asset *AttackSurfaceAsset) er
 	// Use _id field explicitly for MongoDB
 	doc := bson.M{
 		"_id":        asset.ID,
-		"root_id":    asset.RootID,
+		"org_id":     asset.OrgID,
 		"host":       asset.Host,
 		"status":     asset.Status,
 		"first_seen": asset.FirstSeen,
@@ -177,7 +177,7 @@ func (s *Service) createAsset(ctx context.Context, asset *AttackSurfaceAsset) er
 
 	s.logger.Info("Created new attack surface asset",
 		zap.String("asset_id", asset.ID),
-		zap.String("root_id", asset.RootID),
+		zap.String("org_id", asset.OrgID),
 		zap.String("host", asset.Host),
 	)
 
@@ -185,7 +185,7 @@ func (s *Service) createAsset(ctx context.Context, asset *AttackSurfaceAsset) er
 }
 
 // discoverSubdomains discovers subdomains for a given domain using Shodan
-func (s *Service) discoverSubdomains(ctx context.Context, parentID, rootID, domain string) {
+func (s *Service) discoverSubdomains(ctx context.Context, parentID, orgID, domain string) {
 	s.logger.Info("Starting subdomain discovery",
 		zap.String("parent_id", parentID),
 		zap.String("domain", domain),
@@ -224,7 +224,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, parentID, rootID, doma
 		}
 
 		// Check if subdomain already exists
-		existing, err := s.findExistingAsset(ctx, rootID, fullSubdomain, nil)
+		existing, err := s.findExistingAsset(ctx, orgID, fullSubdomain, nil)
 		if err != nil {
 			s.logger.Error("Failed to check existing subdomain",
 				zap.String("subdomain", fullSubdomain),
@@ -250,7 +250,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, parentID, rootID, doma
 		// Create new subdomain asset
 		asset := &AttackSurfaceAsset{
 			ID:        uuid.New().String(),
-			RootID:    rootID,
+			OrgID:     orgID,
 			ParentID:  &parentID,
 			Host:      fullSubdomain,
 			Port:      nil,

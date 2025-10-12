@@ -102,22 +102,22 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 	}
 
 	c.logger.Info("Processing attack surface job",
-		zap.String("job_id", job.JobID),
-		zap.String("root_id", job.RootID),
+		zap.String("trace_id", job.TraceID),
+		zap.String("org_id", job.OrgID),
 		zap.String("host", job.Host),
 	)
 
 	// Process the job
 	if err := c.service.ProcessJob(ctx, job); err != nil {
 		c.logger.Error("Job processing failed",
-			zap.String("job_id", job.JobID),
+			zap.String("trace_id", job.TraceID),
 			zap.Error(err),
 		)
 		return err
 	}
 
 	c.logger.Info("Job processed successfully",
-		zap.String("job_id", job.JobID),
+		zap.String("trace_id", job.TraceID),
 	)
 
 	return nil
