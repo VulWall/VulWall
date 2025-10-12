@@ -226,6 +226,107 @@ internal/slices/attack_surface/
     └── shodan_provider.go      # Shodan provider implementation
 ```
 
+## Discovery Provider Pattern (Attack Surface Slice)
+
+The attack_surface slice implements a **pluggable provider architecture** for discovering assets (subdomains, IPs, ports, services):
+
+### Architecture Overview
+
+```
+Service (asset management)
+    ↓
+Discovery Manager (orchestrator)
+    ↓
+Multiple Providers (Shodan, Nmap, Masscan, etc.)
+```
+
+### Key Components
+
+1. **Provider Interface** (`discovery/provider.go`)
+   ```go
+   type AttackSurfaceProvider interface {
+       Name() string
+       Discover(ctx context.Context, target DiscoveryTarget) ([]DiscoveredAsset, error)
+   }
+   ```
+
+2. **Discovery Manager** (`discovery/manager.go`)
+   - Orchestrates multiple providers
+   - Handles asset deduplication
+   - Creates/updates assets in MongoDB
+   - Runs providers in sequence (or parallel in future)
+
+3. **Provider Implementations**
+   - `ShodanProvider` - Discovers subdomains via Shodan DNS API
+   - Future: `NmapProvider`, `MasscanProvider`, `CensysProvider`, etc.
+
+### Protocol-Aware Asset Model
+
+Assets now include **Protocol** field to differentiate:
+- `192.168.1.1:53/tcp` vs `192.168.1.1:53/udp` are separate assets
+- Subdomains have `Protocol: nil`
+- Port scans specify protocol: `tcp`, `udp`, `sctp`, `icmp`
+
+**Model Structure:**
+```go
+type AttackSurfaceAsset struct {
+    ID        string
+    OrgID     string      // Organization ID for multi-tenant grouping
+    ParentID  *string     // Parent asset (e.g., root domain)
+    Host      string      // Domain or IP
+    Port      *int        // Optional port number
+    Protocol  *string     // tcp, udp, sctp, icmp (nil for non-port assets)
+    Status    string      // active, inactive, unknown
+    FirstSeen time.Time
+    LastSeen  time.Time
+    Metadata  map[string]interface{}
+}
+```
+
+### Constants
+
+**Protocols:** `ProtocolTCP`, `ProtocolUDP`, `ProtocolSCTP`, `ProtocolICMP`
+**Target Types:** `TargetTypeDomain`, `TargetTypeIP`, `TargetTypeCIDR`
+**Asset Status:** `AssetStatusActive`, `AssetStatusInactive`, `AssetStatusUnknown`
+
+### Adding a New Discovery Provider
+
+1. **Create provider file:** `internal/slices/attack_surface/discovery/[provider]_provider.go`
+
+2. **Implement interface:**
+   ```go
+   type MyProvider struct {
+       client *MyClient
+       logger *zap.Logger
+   }
+
+   func (p *MyProvider) Name() string {
+       return "my_provider"
+   }
+
+   func (p *MyProvider) Discover(ctx context.Context, target DiscoveryTarget) ([]DiscoveredAsset, error) {
+       // Discovery logic here
+       // Return []DiscoveredAsset with Host, Port, Protocol, Metadata
+   }
+   ```
+
+3. **Register in service:** Add to `NewService()` in `service.go`:
+   ```go
+   providers := []discovery.AttackSurfaceProvider{
+       discovery.NewShodanProvider(shodanAPIKey, logger),
+       discovery.NewMyProvider(myAPIKey, logger),  // Add here
+   }
+   ```
+
+### Benefits
+
+✅ **Separation of Concerns** - Service handles asset management, providers handle discovery
+✅ **Pluggable** - Add/remove providers without changing core service logic
+✅ **Testable** - Mock providers easily for unit tests
+✅ **Protocol-Aware** - TCP/UDP differentiation built into model
+✅ **Scalable** - Manager can run providers in parallel (future enhancement)
+✅ **Configuration-Driven** - Enable/disable providers via config
+
 ## Configuration
 
 **This project uses cloud-hosted Redis and MongoDB.** Services load config from environment variables or `.env` file:
@@ -281,6 +382,10 @@ See `.env.example` for full list and examples.
 - **No local infrastructure needed** - All services connect to cloud databases directly
 
 ### Integration Examples
-- **Shodan Integration** - attack_surface service uses Shodan DNS domain API for subdomain discovery
-- **Modular design** - Discovery tools are organized in subdirectories (e.g., `discovery/shodan.go`)
-- **Background processing** - Subdomain discovery runs asynchronously for root domains
+- **Pluggable Discovery Architecture** - attack_surface uses provider pattern for extensible discovery
+- **Shodan Integration** - ShodanProvider implements subdomain discovery via Shodan DNS domain API
+- **Protocol-Aware Assets** - Assets differentiate TCP vs UDP on same port (e.g., `192.168.1.1:53/tcp` vs `192.168.1.1:53/udp`)
+- **Modular design** - Discovery providers are isolated in `discovery/` subdirectory
+- **Background processing** - Discovery runs asynchronously for root assets (no parent)
+- **Orchestration** - Discovery Manager coordinates multiple providers and handles deduplication
+- **Future-Ready** - Architecture supports adding Nmap, Masscan, Censys, Certificate Transparency providers
