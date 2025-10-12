@@ -144,13 +144,16 @@ internal/slices/[slice_name]/
 
 ## Configuration
 
-Services load config from environment variables or `.env` file:
-- `REDIS_ADDR` - Redis connection (default: localhost:6379)
-- `MONGO_URI` - MongoDB connection (default: mongodb://localhost:27017)
+**This project uses cloud-hosted Redis and MongoDB.** Services load config from environment variables or `.env` file:
+
+- `REDIS_ADDR` - Cloud Redis endpoint (e.g., `redis-12345.cloud.redislabs.com:12345`)
+- `REDIS_PASSWORD` - Redis authentication password (required for cloud)
+- `REDIS_DB` - Redis database number (default: 0)
+- `MONGO_URI` - MongoDB Atlas/Cloud connection string (e.g., `mongodb+srv://user:pass@cluster.mongodb.net/`)
 - `MONGO_DB` - Database name (default: vulwall)
 - `ENVIRONMENT` - development/production (affects logging)
 
-See `.env.example` for full list.
+See `.env.example` for full list and examples.
 
 ## Testing Strategy
 
@@ -177,9 +180,11 @@ See `.env.example` for full list.
 
 ## Important Notes
 
-- **Never commit `.env`** - only `.env.example` should be in git
+- **Cloud infrastructure** - This project uses cloud-hosted Redis and MongoDB, not self-hosted instances
+- **Never commit `.env`** - only `.env.example` should be in git (contains cloud credentials)
 - **Each slice must be independent** - avoid coupling between slices
 - **Shared code only in `core/` and `shared/`** - slices should not import other slices
 - **Consumer groups prevent duplicate processing** - multiple workers can run safely
 - **Results are written to MongoDB** - Redis is only for job queuing
 - **Graceful shutdown** - Services handle SIGTERM/SIGINT properly
+- **No local infrastructure needed** - All services connect to cloud databases directly
