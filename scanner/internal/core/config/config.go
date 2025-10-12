@@ -28,7 +28,7 @@ func Load() (*Config, error) {
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 		RedisDB:       redisDB,
 		MongoURI:      getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDB:       getEnv("MONGO_DB", "vulwall"),
+		MongoDB:       getEnv("MONGO_DB", "VulWall-Dev"),
 		ServiceName:   getEnv("SERVICE_NAME", "vulwall-scanner"),
 		Environment:   getEnv("ENVIRONMENT", "development"),
 	}, nil
