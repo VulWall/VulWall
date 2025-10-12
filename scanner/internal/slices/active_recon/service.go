@@ -29,7 +29,7 @@ func (s *Service) ProcessScan(ctx context.Context, job shared.ScanJob) (*shared.
 	startTime := time.Now()
 	result := &shared.ScanResult{
 		ScanID:    job.ScanID,
-		Type:      shared.ScanTypeActiveRecon,
+		Type:      ScanTypeActiveRecon,
 		Status:    shared.StatusRunning,
 		StartedAt: startTime,
 	}

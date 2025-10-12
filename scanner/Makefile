@@ -11,6 +11,8 @@ build: ## Build all services
 	@go build -o bin/passive-recon ./cmd/passive-recon
 	@echo "Building active-recon..."
 	@go build -o bin/active-recon ./cmd/active-recon
+	@echo "Building attack-surface..."
+	@go build -o bin/attack-surface ./cmd/attack-surface
 	@echo "Build complete!"
 
 build-passive: ## Build passive-recon service
@@ -19,11 +21,17 @@ build-passive: ## Build passive-recon service
 build-active: ## Build active-recon service
 	@go build -o bin/active-recon ./cmd/active-recon
 
+build-attack-surface: ## Build attack-surface service
+	@go build -o bin/attack-surface ./cmd/attack-surface
+
 run-passive: ## Run passive-recon service locally
 	@go run ./cmd/passive-recon/main.go
 
 run-active: ## Run active-recon service locally
 	@go run ./cmd/active-recon/main.go
+
+run-attack-surface: ## Run attack-surface service locally
+	@go run ./cmd/attack-surface/main.go
 
 test: ## Run tests
 	@go test -v ./...
@@ -56,6 +64,9 @@ docker-scale-passive: ## Scale passive-recon workers (usage: make docker-scale-p
 
 docker-scale-active: ## Scale active-recon workers (usage: make docker-scale-active N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale active-recon=$(N)
+
+docker-scale-attack-surface: ## Scale attack-surface workers (usage: make docker-scale-attack-surface N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale attack-surface=$(N)
 
 deps: ## Download dependencies
 	@go mod download
