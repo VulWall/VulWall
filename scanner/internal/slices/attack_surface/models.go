@@ -9,6 +9,7 @@ type AttackSurfaceJob struct {
 	ParentID *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host     string                 `json:"host" bson:"host"`
 	Port     *int                   `json:"port,omitempty" bson:"port,omitempty"`
+	Protocol *string                `json:"protocol,omitempty" bson:"protocol,omitempty"`
 	Metadata map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 	Created  time.Time              `json:"created" bson:"created"`
 }
@@ -20,6 +21,7 @@ type AttackSurfaceAsset struct {
 	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host      string                 `json:"host" bson:"host"`
 	Port      *int                   `json:"port,omitempty" bson:"port,omitempty"`
+	Protocol  *string                `json:"protocol,omitempty" bson:"protocol,omitempty"`
 	Status    string                 `json:"status" bson:"status"` // active, inactive, unknown
 	FirstSeen time.Time              `json:"first_seen" bson:"first_seen"`
 	LastSeen  time.Time              `json:"last_seen" bson:"last_seen"`

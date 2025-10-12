@@ -10,4 +10,15 @@ const (
 	AssetStatusActive   = "active"
 	AssetStatusInactive = "inactive"
 	AssetStatusUnknown  = "unknown"
+
+	// Protocol constants
+	ProtocolTCP  = "tcp"
+	ProtocolUDP  = "udp"
+	ProtocolSCTP = "sctp"
+	ProtocolICMP = "icmp"
+
+	// Discovery target type constants
+	TargetTypeDomain = "domain"
+	TargetTypeIP     = "ip"
+	TargetTypeCIDR   = "cidr"
 )

@@ -13,17 +13,34 @@ import (
 )
 
 type Service struct {
-	db           *mongo.Database
-	logger       *zap.Logger
-	shodanClient *discovery.ShodanClient
+	db               *mongo.Database
+	logger           *zap.Logger
+	discoveryManager *discovery.Manager
 }
 
 func NewService(db *mongo.Database, shodanAPIKey string, logger *zap.Logger) *Service {
-	return &Service{
-		db:           db,
-		logger:       logger,
-		shodanClient: discovery.NewShodanClient(shodanAPIKey, logger),
+	s := &Service{
+		db:     db,
+		logger: logger,
 	}
+
+	// Initialize discovery providers
+	providers := []discovery.AttackSurfaceProvider{
+		discovery.NewShodanProvider(shodanAPIKey, logger),
+	}
+
+	// Create discovery manager with callbacks to service methods
+	s.discoveryManager = discovery.NewManager(
+		providers,
+		db,
+		CollectionAttackSurface,
+		AssetStatusActive,
+		logger,
+		s.findAssetForManager,
+		s.updateAssetLastSeen,
+	)
+
+	return s
 }
 
 // ProcessJob processes an attack surface discovery job
@@ -35,7 +52,7 @@ func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 	)
 
 	// Check if asset already exists
-	existingAsset, err := s.findExistingAsset(ctx, job.OrgID, job.Host, job.Port)
+	existingAsset, err := s.findExistingAsset(ctx, job.OrgID, job.Host, job.Port, job.Protocol)
 	if err != nil && err != mongo.ErrNoDocuments {
 		s.logger.Error("Failed to check existing asset",
 			zap.String("trace_id", job.TraceID),
@@ -58,6 +75,7 @@ func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 		ParentID:  job.ParentID,
 		Host:      job.Host,
 		Port:      job.Port,
+		Protocol:  job.Protocol,
 		Status:    AssetStatusActive,
 		FirstSeen: now,
 		LastSeen:  now,
@@ -68,16 +86,38 @@ func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 		return err
 	}
 
-	// Trigger subdomain discovery for root domains (no parent)
+	// Trigger discovery for root assets (no parent)
 	if job.ParentID == nil {
-		go s.discoverSubdomains(context.Background(), asset.ID, job.OrgID, job.Host)
+		targetType := s.determineTargetType(job.Host)
+		target := discovery.DiscoveryTarget{
+			Host:     job.Host,
+			Port:     job.Port,
+			Protocol: job.Protocol,
+			Type:     targetType,
+		}
+
+		go func() {
+			if err := s.discoveryManager.DiscoverAndCreateAssets(
+				context.Background(),
+				asset.ID,
+				job.OrgID,
+				target,
+			); err != nil {
+				s.logger.Error("Discovery failed",
+					zap.String("asset_id", asset.ID),
+					zap.String("org_id", job.OrgID),
+					zap.String("host", job.Host),
+					zap.Error(err),
+				)
+			}
+		}()
 	}
 
 	return nil
 }
 
 // findExistingAsset checks if an asset already exists
-func (s *Service) findExistingAsset(ctx context.Context, orgID, host string, port *int) (*AttackSurfaceAsset, error) {
+func (s *Service) findExistingAsset(ctx context.Context, orgID, host string, port *int, protocol *string) (*AttackSurfaceAsset, error) {
 	collection := s.db.Collection(CollectionAttackSurface)
 
 	filter := bson.M{
@@ -90,6 +130,14 @@ func (s *Service) findExistingAsset(ctx context.Context, orgID, host string, por
 		filter["port"] = *port
 	} else {
 		filter["port"] = bson.M{"$exists": false}
+	}
+
+	// Handle protocol comparison (can be nil or specific value)
+	// Protocol matters: 192.168.1.1:53/tcp vs 192.168.1.1:53/udp are different assets
+	if protocol != nil {
+		filter["protocol"] = *protocol
+	} else {
+		filter["protocol"] = bson.M{"$exists": false}
 	}
 
 	var asset AttackSurfaceAsset
@@ -161,6 +209,9 @@ func (s *Service) createAsset(ctx context.Context, asset *AttackSurfaceAsset) er
 	if asset.Port != nil {
 		doc["port"] = *asset.Port
 	}
+	if asset.Protocol != nil {
+		doc["protocol"] = *asset.Protocol
+	}
 	if asset.Metadata != nil && len(asset.Metadata) > 0 {
 		doc["metadata"] = asset.Metadata
 	}
@@ -184,106 +235,37 @@ func (s *Service) createAsset(ctx context.Context, asset *AttackSurfaceAsset) er
 	return nil
 }
 
-// discoverSubdomains discovers subdomains for a given domain using Shodan
-func (s *Service) discoverSubdomains(ctx context.Context, parentID, orgID, domain string) {
-	s.logger.Info("Starting subdomain discovery",
-		zap.String("parent_id", parentID),
-		zap.String("domain", domain),
-	)
-
-	discovered, err := s.shodanClient.DiscoverSubdomains(ctx, domain)
+// findAssetForManager is a helper function for the discovery manager to check if an asset exists
+func (s *Service) findAssetForManager(ctx context.Context, orgID, host string, port *int, protocol *string) (discovery.AssetInfo, error) {
+	asset, err := s.findExistingAsset(ctx, orgID, host, port, protocol)
 	if err != nil {
-		s.logger.Error("Failed to discover subdomains via Shodan",
-			zap.String("domain", domain),
-			zap.Error(err),
-		)
-		return
+		return discovery.AssetInfo{Exists: false}, err
 	}
 
-	if len(discovered) == 0 {
-		s.logger.Info("No subdomains discovered", zap.String("domain", domain))
-		return
+	if asset != nil {
+		return discovery.AssetInfo{
+			ID:     asset.ID,
+			Exists: true,
+		}, nil
 	}
 
-	s.logger.Info("Processing discovered subdomains",
-		zap.String("domain", domain),
-		zap.Int("count", len(discovered)),
-	)
-
-	now := time.Now()
-	for _, subdomainName := range discovered {
-		// Skip empty strings and wildcards
-		if subdomainName == "" || subdomainName == "*" {
-			continue
-		}
-
-		// Build the full subdomain (e.g., "api" + ".example.com")
-		fullSubdomain := subdomainName
-		if !contains(subdomainName, domain) {
-			fullSubdomain = subdomainName + "." + domain
-		}
-
-		// Check if subdomain already exists
-		existing, err := s.findExistingAsset(ctx, orgID, fullSubdomain, nil)
-		if err != nil {
-			s.logger.Error("Failed to check existing subdomain",
-				zap.String("subdomain", fullSubdomain),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		if existing != nil {
-			// Update last_seen for existing subdomain
-			metadata := map[string]interface{}{
-				"source": "shodan",
-			}
-			if err := s.updateAssetLastSeen(ctx, existing.ID, now, metadata); err != nil {
-				s.logger.Error("Failed to update subdomain last_seen",
-					zap.String("subdomain", fullSubdomain),
-					zap.Error(err),
-				)
-			}
-			continue
-		}
-
-		// Create new subdomain asset
-		asset := &AttackSurfaceAsset{
-			ID:        uuid.New().String(),
-			OrgID:     orgID,
-			ParentID:  &parentID,
-			Host:      fullSubdomain,
-			Port:      nil,
-			Status:    AssetStatusActive,
-			FirstSeen: now,
-			LastSeen:  now,
-			Metadata: map[string]interface{}{
-				"source": "shodan",
-			},
-		}
-
-		if err := s.createAsset(ctx, asset); err != nil {
-			s.logger.Error("Failed to create subdomain asset",
-				zap.String("subdomain", fullSubdomain),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		s.logger.Info("Created subdomain asset",
-			zap.String("subdomain", fullSubdomain),
-			zap.String("parent_id", parentID),
-		)
-	}
-
-	s.logger.Info("Subdomain discovery complete",
-		zap.String("domain", domain),
-		zap.Int("total_discovered", len(discovered)),
-	)
+	return discovery.AssetInfo{Exists: false}, nil
 }
 
-// contains checks if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
-		(s[len(s)-len(substr)-1:] == "."+substr || s[:len(substr)+1] == substr+"."))
+// determineTargetType determines the type of target (domain, ip, cidr)
+func (s *Service) determineTargetType(host string) string {
+	// Simple heuristic: if it contains only numbers and dots, it's an IP
+	// For production, use proper IP parsing
+	isIP := true
+	for _, c := range host {
+		if !(c >= '0' && c <= '9' || c == '.') {
+			isIP = false
+			break
+		}
+	}
+
+	if isIP {
+		return TargetTypeIP
+	}
+	return TargetTypeDomain
 }
