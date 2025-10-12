@@ -22,20 +22,6 @@ type ShodanClient struct {
 type ShodanDNSDomainResponse struct {
 	Domain     string   `json:"domain"`
 	Subdomains []string `json:"subdomains"`
-	Data       []struct {
-		Subdomain string `json:"subdomain"`
-		Type      string `json:"type"`
-		Value     string `json:"value"`
-		LastSeen  string `json:"last_seen"`
-	} `json:"data"`
-}
-
-// DiscoveredSubdomain represents a subdomain found by Shodan
-type DiscoveredSubdomain struct {
-	Subdomain string
-	Type      string
-	Value     string
-	LastSeen  time.Time
 }
 
 // NewShodanClient creates a new Shodan API client
@@ -50,7 +36,7 @@ func NewShodanClient(apiKey string, logger *zap.Logger) *ShodanClient {
 }
 
 // DiscoverSubdomains discovers subdomains for a given domain using Shodan DNS API
-func (s *ShodanClient) DiscoverSubdomains(ctx context.Context, domain string) ([]DiscoveredSubdomain, error) {
+func (s *ShodanClient) DiscoverSubdomains(ctx context.Context, domain string) ([]string, error) {
 	if s.apiKey == "" {
 		s.logger.Warn("Shodan API key not configured, skipping Shodan discovery")
 		return nil, nil
@@ -80,7 +66,7 @@ func (s *ShodanClient) DiscoverSubdomains(ctx context.Context, domain string) ([
 
 	if resp.StatusCode == 404 {
 		s.logger.Info("No DNS records found for domain in Shodan", zap.String("domain", domain))
-		return []DiscoveredSubdomain{}, nil
+		return []string{}, nil
 	}
 
 	if resp.StatusCode != 200 {
@@ -98,28 +84,10 @@ func (s *ShodanClient) DiscoverSubdomains(ctx context.Context, domain string) ([
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	// Convert to our internal format
-	var discovered []DiscoveredSubdomain
-	for _, record := range shodanResp.Data {
-		lastSeen := time.Now()
-		if record.LastSeen != "" {
-			if parsed, err := time.Parse(time.RFC3339, record.LastSeen); err == nil {
-				lastSeen = parsed
-			}
-		}
-
-		discovered = append(discovered, DiscoveredSubdomain{
-			Subdomain: record.Subdomain,
-			Type:      record.Type,
-			Value:     record.Value,
-			LastSeen:  lastSeen,
-		})
-	}
-
 	s.logger.Info("Shodan subdomain discovery complete",
 		zap.String("domain", domain),
-		zap.Int("subdomains_found", len(discovered)),
+		zap.Int("subdomains_found", len(shodanResp.Subdomains)),
 	)
 
-	return discovered, nil
+	return shodanResp.Subdomains, nil
 }

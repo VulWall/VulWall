@@ -211,11 +211,16 @@ func (s *Service) discoverSubdomains(ctx context.Context, parentID, rootID, doma
 	)
 
 	now := time.Now()
-	for _, subdomain := range discovered {
+	for _, subdomainName := range discovered {
+		// Skip empty strings and wildcards
+		if subdomainName == "" || subdomainName == "*" {
+			continue
+		}
+
 		// Build the full subdomain (e.g., "api" + ".example.com")
-		fullSubdomain := subdomain.Subdomain
-		if subdomain.Subdomain != "" && !contains(subdomain.Subdomain, domain) {
-			fullSubdomain = subdomain.Subdomain + "." + domain
+		fullSubdomain := subdomainName
+		if !contains(subdomainName, domain) {
+			fullSubdomain = subdomainName + "." + domain
 		}
 
 		// Check if subdomain already exists
@@ -231,9 +236,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, parentID, rootID, doma
 		if existing != nil {
 			// Update last_seen for existing subdomain
 			metadata := map[string]interface{}{
-				"shodan_type":      subdomain.Type,
-				"shodan_value":     subdomain.Value,
-				"shodan_last_seen": subdomain.LastSeen,
+				"source": "shodan",
 			}
 			if err := s.updateAssetLastSeen(ctx, existing.ID, now, metadata); err != nil {
 				s.logger.Error("Failed to update subdomain last_seen",
@@ -255,10 +258,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, parentID, rootID, doma
 			FirstSeen: now,
 			LastSeen:  now,
 			Metadata: map[string]interface{}{
-				"shodan_type":      subdomain.Type,
-				"shodan_value":     subdomain.Value,
-				"shodan_last_seen": subdomain.LastSeen,
-				"source":           "shodan",
+				"source": "shodan",
 			},
 		}
 
