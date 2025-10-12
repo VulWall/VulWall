@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
-	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )
@@ -94,7 +93,7 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 		return nil
 	}
 
-	var job shared.ScanJob
+	var job ScanJob
 	if err := json.Unmarshal([]byte(data), &job); err != nil {
 		c.logger.Error("Failed to unmarshal job", zap.Error(err))
 		return err
@@ -115,7 +114,7 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 	}
 
 	// Save result to MongoDB
-	collection := c.db.Collection(shared.CollectionScanResults)
+	collection := c.db.Collection(CollectionScanResults)
 	if _, err := collection.InsertOne(ctx, result); err != nil {
 		c.logger.Error("Failed to save scan result",
 			zap.String("scan_id", job.ScanID),

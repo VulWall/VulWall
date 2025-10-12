@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
 
@@ -20,17 +19,17 @@ func NewService(logger *zap.Logger) *Service {
 }
 
 // ProcessScan performs passive reconnaissance on a domain
-func (s *Service) ProcessScan(ctx context.Context, job shared.ScanJob) (*shared.ScanResult, error) {
+func (s *Service) ProcessScan(ctx context.Context, job ScanJob) (*ScanResult, error) {
 	s.logger.Info("Starting passive recon scan",
 		zap.String("scan_id", job.ScanID),
 		zap.String("domain", job.Domain),
 	)
 
 	startTime := time.Now()
-	result := &shared.ScanResult{
+	result := &ScanResult{
 		ScanID:    job.ScanID,
 		Type:      ScanTypePassiveRecon,
-		Status:    shared.StatusRunning,
+		Status:    StatusRunning,
 		StartedAt: startTime,
 	}
 
@@ -41,7 +40,7 @@ func (s *Service) ProcessScan(ctx context.Context, job shared.ScanJob) (*shared.
 			zap.String("scan_id", job.ScanID),
 			zap.Error(err),
 		)
-		result.Status = shared.StatusFailed
+		result.Status = StatusFailed
 		result.Error = err.Error()
 		completedAt := time.Now()
 		result.CompletedAt = &completedAt
@@ -50,7 +49,7 @@ func (s *Service) ProcessScan(ctx context.Context, job shared.ScanJob) (*shared.
 	}
 
 	completedAt := time.Now()
-	result.Status = shared.StatusCompleted
+	result.Status = StatusCompleted
 	result.Results = reconResult
 	result.CompletedAt = &completedAt
 	result.Duration = time.Since(startTime).Seconds()
@@ -63,7 +62,7 @@ func (s *Service) ProcessScan(ctx context.Context, job shared.ScanJob) (*shared.
 	return result, nil
 }
 
-func (s *Service) performPassiveRecon(ctx context.Context, domain string, options shared.JobOptions) (*shared.PassiveReconResult, error) {
+func (s *Service) performPassiveRecon(ctx context.Context, domain string, options JobOptions) (*PassiveReconResult, error) {
 	// This is a placeholder implementation
 	// In production, you would integrate with actual passive recon tools:
 	// - Subfinder, Amass for subdomain enumeration
@@ -71,7 +70,7 @@ func (s *Service) performPassiveRecon(ctx context.Context, domain string, option
 	// - Certificate transparency logs
 	// - DNS lookups, WHOIS queries
 
-	result := &shared.PassiveReconResult{
+	result := &PassiveReconResult{
 		Subdomains: []string{
 			fmt.Sprintf("www.%s", domain),
 			fmt.Sprintf("api.%s", domain),
@@ -83,7 +82,7 @@ func (s *Service) performPassiveRecon(ctx context.Context, domain string, option
 			"MX":   "mail." + domain,
 			"TXT":  "v=spf1 include:_spf." + domain + " ~all",
 		},
-		Technologies: []shared.Technology{
+		Technologies: []Technology{
 			{
 				Name:       "Cloudflare",
 				Categories: []string{"CDN", "Security"},

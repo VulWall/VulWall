@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/vulwall/scanners/internal/shared"
 	"github.com/vulwall/scanners/internal/slices/attack_surface/discovery"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -28,7 +27,7 @@ func NewService(db *mongo.Database, shodanAPIKey string, logger *zap.Logger) *Se
 }
 
 // ProcessJob processes an attack surface discovery job
-func (s *Service) ProcessJob(ctx context.Context, job shared.AttackSurfaceJob) error {
+func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 	s.logger.Info("Processing attack surface job",
 		zap.String("job_id", job.JobID),
 		zap.String("root_id", job.RootID),
@@ -53,13 +52,13 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.AttackSurfaceJob) e
 	}
 
 	// Create new asset
-	asset := &shared.AttackSurfaceAsset{
+	asset := &AttackSurfaceAsset{
 		ID:        uuid.New().String(),
 		RootID:    job.RootID,
 		ParentID:  job.ParentID,
 		Host:      job.Host,
 		Port:      job.Port,
-		Status:    shared.AssetStatusActive,
+		Status:    AssetStatusActive,
 		FirstSeen: now,
 		LastSeen:  now,
 		Metadata:  job.Metadata,
@@ -78,8 +77,8 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.AttackSurfaceJob) e
 }
 
 // findExistingAsset checks if an asset already exists
-func (s *Service) findExistingAsset(ctx context.Context, rootID, host string, port *int) (*shared.AttackSurfaceAsset, error) {
-	collection := s.db.Collection(shared.CollectionAttackSurface)
+func (s *Service) findExistingAsset(ctx context.Context, rootID, host string, port *int) (*AttackSurfaceAsset, error) {
+	collection := s.db.Collection(CollectionAttackSurface)
 
 	filter := bson.M{
 		"root_id": rootID,
@@ -93,7 +92,7 @@ func (s *Service) findExistingAsset(ctx context.Context, rootID, host string, po
 		filter["port"] = bson.M{"$exists": false}
 	}
 
-	var asset shared.AttackSurfaceAsset
+	var asset AttackSurfaceAsset
 	err := collection.FindOne(ctx, filter).Decode(&asset)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -107,12 +106,12 @@ func (s *Service) findExistingAsset(ctx context.Context, rootID, host string, po
 
 // updateAssetLastSeen updates the last_seen timestamp and optionally merges metadata
 func (s *Service) updateAssetLastSeen(ctx context.Context, assetID string, lastSeen time.Time, metadata map[string]interface{}) error {
-	collection := s.db.Collection(shared.CollectionAttackSurface)
+	collection := s.db.Collection(CollectionAttackSurface)
 
 	update := bson.M{
 		"$set": bson.M{
 			"last_seen": lastSeen,
-			"status":    shared.AssetStatusActive,
+			"status":    AssetStatusActive,
 		},
 	}
 
@@ -142,8 +141,8 @@ func (s *Service) updateAssetLastSeen(ctx context.Context, assetID string, lastS
 }
 
 // createAsset creates a new attack surface asset
-func (s *Service) createAsset(ctx context.Context, asset *shared.AttackSurfaceAsset) error {
-	collection := s.db.Collection(shared.CollectionAttackSurface)
+func (s *Service) createAsset(ctx context.Context, asset *AttackSurfaceAsset) error {
+	collection := s.db.Collection(CollectionAttackSurface)
 
 	// Use _id field explicitly for MongoDB
 	doc := bson.M{
@@ -246,13 +245,13 @@ func (s *Service) discoverSubdomains(ctx context.Context, parentID, rootID, doma
 		}
 
 		// Create new subdomain asset
-		asset := &shared.AttackSurfaceAsset{
+		asset := &AttackSurfaceAsset{
 			ID:        uuid.New().String(),
 			RootID:    rootID,
 			ParentID:  &parentID,
 			Host:      fullSubdomain,
 			Port:      nil,
-			Status:    shared.AssetStatusActive,
+			Status:    AssetStatusActive,
 			FirstSeen: now,
 			LastSeen:  now,
 			Metadata: map[string]interface{}{
