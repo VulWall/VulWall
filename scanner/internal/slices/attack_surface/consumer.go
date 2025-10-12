@@ -3,11 +3,11 @@ package attack_surface
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
-	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )
@@ -19,11 +19,11 @@ type Consumer struct {
 	logger  *zap.Logger
 }
 
-func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Consumer {
+func NewConsumer(redisClient *redis.Client, db *mongo.Database, shodanAPIKey string, logger *zap.Logger) *Consumer {
 	return &Consumer{
 		redis:   redisClient,
 		db:      db,
-		service: NewService(db, logger),
+		service: NewService(db, shodanAPIKey, logger),
 		logger:  logger,
 	}
 }
@@ -57,7 +57,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 	}).Result()
 
 	if err != nil {
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			// No messages available
 			return nil
 		}
@@ -95,7 +95,7 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 		return nil
 	}
 
-	var job shared.AttackSurfaceJob
+	var job AttackSurfaceJob
 	if err := json.Unmarshal([]byte(data), &job); err != nil {
 		c.logger.Error("Failed to unmarshal job", zap.Error(err))
 		return err

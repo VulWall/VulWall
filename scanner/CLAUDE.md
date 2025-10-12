@@ -12,21 +12,40 @@ VulWall Scanners is a **vertically-sliced Go monorepo** for security scanning se
 VulWall.Scanners/
 ├── cmd/                    # Entry points for each service
 │   ├── active-recon/
-│   └── passive-recon/
+│   ├── passive-recon/
+│   └── attack-surface/
 ├── internal/
 │   ├── core/              # Shared infrastructure
-│   │   ├── config/
-│   │   ├── logger/
-│   │   ├── mongox/
-│   │   └── redisx/
-│   ├── shared/            # Domain models and constants
+│   │   ├── bootstrap/     # Common service bootstrapping
+│   │   ├── config/        # Configuration loader
+│   │   ├── logger/        # Zap logger setup
+│   │   ├── mongox/        # MongoDB connection
+│   │   └── redisx/        # Redis client & consumer groups
+│   ├── shared/            # ONLY truly cross-cutting concerns
 │   └── slices/            # Vertical slices (bounded contexts)
 │       ├── active_recon/
-│       └── passive_recon/
+│       │   ├── models.go       # Slice-specific models
+│       │   ├── constants.go    # Slice-specific constants
+│       │   ├── service.go      # Business logic
+│       │   └── consumer.go     # Redis consumer
+│       ├── passive_recon/
+│       │   ├── models.go
+│       │   ├── constants.go
+│       │   ├── service.go
+│       │   └── consumer.go
+│       └── attack_surface/
+│           ├── models.go
+│           ├── constants.go
+│           ├── service.go
+│           ├── consumer.go
+│           └── discovery/      # Subdomain discovery tools
+│               └── shodan.go   # Shodan API integration
 ├── ops/                   # Docker and deployment files
 │   ├── Dockerfile.active-recon
 │   ├── Dockerfile.passive-recon
+│   ├── Dockerfile.attack-surface
 │   └── docker-compose.yml
+├── scripts/               # Test and utility scripts
 ├── bin/                   # Compiled binaries (gitignored)
 ├── .env.example
 ├── Makefile
@@ -38,11 +57,32 @@ VulWall.Scanners/
 ## Architecture Pattern
 
 This project uses **Vertical Slice Architecture**:
-- Each slice in `internal/slices/` is a bounded context with its own service logic and Redis consumer
-- Shared infrastructure lives in `internal/core/` (Redis, MongoDB, logging, config)
-- Common domain models are in `internal/shared/`
+- Each slice in `internal/slices/` is a bounded context with its own models, service logic, and Redis consumer
+- Shared infrastructure lives in `internal/core/` (Redis, MongoDB, logging, config, bootstrap)
+- `internal/shared/` contains ONLY truly cross-cutting concerns (see Model Ownership below)
 - Each slice has its own entry point in `cmd/`
 - All Docker/deployment files are organized in `ops/`
+
+### Model Ownership Rules
+
+**Each slice OWNS its own models** - this is critical for independence:
+
+✅ **Put in `internal/slices/[slice_name]/models.go`:**
+- Models used ONLY by that slice
+- Slice-specific business logic types
+- Job/Result types specific to that scanner
+
+✅ **Put in `internal/shared/`:**
+- Truly cross-cutting infrastructure (e.g., `Config`)
+- Used by 2+ slices for communication
+- Common interfaces between slices
+- Shared value objects
+
+❌ **DO NOT put in shared:**
+- Models used by only one slice
+- Slice-specific domain logic
+
+**Rule of thumb:** *If you delete a slice and a shared model becomes unused, it shouldn't have been in shared.*
 
 ### Communication Flow
 1. Jobs are published to Redis Streams (e.g., `vulwall:passive_recon`)
@@ -54,23 +94,27 @@ This project uses **Vertical Slice Architecture**:
 
 ### Building Services
 ```bash
-make build                  # Build all services
-make build-passive          # Build passive-recon only
-make build-active           # Build active-recon only
+make build                      # Build all services
+make build-passive              # Build passive-recon only
+make build-active               # Build active-recon only
+make build-attack-surface       # Build attack-surface only
 ```
 
 ### Running Locally
 ```bash
-make run-passive            # Run passive-recon service
-make run-active             # Run active-recon service
+make run-passive                # Run passive-recon service
+make run-active                 # Run active-recon service
+make run-attack-surface         # Run attack-surface service
 ```
 
 ### Docker Operations
 ```bash
-make docker-up              # Start all services
-make docker-down            # Stop all services
-make docker-scale-passive N=4  # Scale passive workers to 4
-make docker-logs            # View logs
+make docker-up                      # Start all services
+make docker-down                    # Stop all services
+make docker-scale-passive N=4       # Scale passive workers to 4
+make docker-scale-active N=3        # Scale active workers to 3
+make docker-scale-attack-surface N=2 # Scale attack-surface workers to 2
+make docker-logs                    # View logs
 ```
 
 ### Testing
@@ -96,50 +140,84 @@ When adding a new scanner type (e.g., `vuln_scan`):
    mkdir -p internal/slices/vuln_scan
    ```
 
-2. **Implement core files:**
+2. **Create slice-specific models:**
+   ```bash
+   # internal/slices/vuln_scan/models.go
+   # Define Job, Result, and all domain models for THIS slice only
+   ```
+
+3. **Create slice-specific constants:**
+   ```bash
+   # internal/slices/vuln_scan/constants.go
+   const (
+       StreamVulnScan        = "vulwall:vuln_scan"
+       GroupVulnScan         = "vuln_scan_group"
+       CollectionVulnScan    = "vuln_scan"
+       StatusPending         = "pending"
+       StatusRunning         = "running"
+       StatusCompleted       = "completed"
+       StatusFailed          = "failed"
+   )
+   ```
+
+4. **Implement core files:**
    - `service.go` - Contains `ProcessScan()` method with scan logic
    - `consumer.go` - Redis stream consumer that reads jobs and calls service
    - Pattern: Copy from `internal/slices/passive_recon/` and adapt
 
-3. **Add constants to `internal/shared/constants.go`:**
-   ```go
-   StreamVulnScan = "vulwall:vuln_scan"
-   GroupVulnScan  = "vuln_scan_group"
-   ```
-
-4. **Create entry point:**
+5. **Create entry point using bootstrap:**
    ```bash
    mkdir -p cmd/vuln-scan
    # Create cmd/vuln-scan/main.go - copy from cmd/passive-recon and adapt
+   # Use bootstrap.Run() to eliminate boilerplate
    ```
 
-5. **Add Docker support:**
-   - Create `ops/Dockerfile.vuln-scan` (all Docker files are in ops/ directory)
+6. **Add Docker support:**
+   - Create `ops/Dockerfile.vuln-scan`
    - Add service to `ops/docker-compose.yml`
-   - Makefile already uses `ops/docker-compose.yml` for all Docker commands
+   - Update `Makefile` with build/run/scale targets
 
-6. **Update models if needed:**
-   - Add result types to `internal/shared/models.go`
-   - Ensure `ScanResult.Results` can handle your result type
+7. **Add test script if needed:**
+   ```bash
+   # Create scripts/test_vuln_scan.sh to publish test jobs to Redis
+   ```
+
+**Important:** Each slice is self-contained. DO NOT add models to `internal/shared/` unless they're truly used by multiple slices.
 
 ## Key Files
 
 ### Infrastructure (`internal/core/`)
+- `bootstrap/bootstrap.go` - Common service initialization pattern (eliminates boilerplate)
 - `config/config.go` - Environment-based configuration loader
 - `logger/logger.go` - Zap logger initialization
 - `redisx/client.go` - Redis client with consumer group helpers
 - `mongox/client.go` - MongoDB connection manager
 
-### Models (`internal/shared/`)
-- `models.go` - `ScanJob`, `ScanResult`, and result type structs
-- `constants.go` - Stream names, consumer groups, collection names, status constants
+### Shared Package (`internal/shared/`)
+- Contains ONLY truly cross-cutting concerns
+- Currently minimal by design (vertical slice independence)
+- Add only when 2+ slices need to communicate
 
-### Example Slice Pattern
-Each slice follows this structure:
+### Vertical Slice Pattern
+Each slice is completely self-contained:
 ```
 internal/slices/[slice_name]/
-├── service.go    # Core business logic, implements ProcessScan()
-└── consumer.go   # Redis consumer, reads jobs → calls service → saves results
+├── models.go      # Slice-specific models (Job, Result, domain types)
+├── constants.go   # Stream names, collection names, status constants
+├── service.go     # Core business logic, implements ProcessXxx()
+├── consumer.go    # Redis consumer, reads jobs → calls service → saves results
+└── [subdir]/      # Optional: additional tools/modules (e.g., discovery/)
+```
+
+**Example: attack_surface slice with Shodan integration**
+```
+internal/slices/attack_surface/
+├── models.go           # AttackSurfaceJob, AttackSurfaceAsset
+├── constants.go        # StreamAttackSurface, AssetStatusActive, etc.
+├── service.go          # ProcessJob(), asset deduplication logic
+├── consumer.go         # Redis consumer for attack surface jobs
+└── discovery/
+    └── shodan.go       # Shodan DNS domain API integration
 ```
 
 ## Configuration
@@ -152,6 +230,7 @@ internal/slices/[slice_name]/
 - `MONGO_URI` - MongoDB Atlas/Cloud connection string (e.g., `mongodb+srv://user:pass@cluster.mongodb.net/`)
 - `MONGO_DB` - Database name (default: vulwall)
 - `ENVIRONMENT` - development/production (affects logging)
+- `SHODAN_API_KEY` - Shodan API key for subdomain discovery (attack-surface service)
 
 See `.env.example` for full list and examples.
 
@@ -180,11 +259,22 @@ See `.env.example` for full list and examples.
 
 ## Important Notes
 
+### Architecture
+- **Each slice must be independent** - avoid coupling between slices
+- **Each slice owns its models** - DO NOT add slice-specific models to `shared/`
+- **Slices should not import other slices** - only import from `core/` and `shared/`
+- **Use bootstrap pattern** - All services use `bootstrap.Run()` to eliminate boilerplate
+- **Models stay in their slice** - Only truly cross-cutting types go in `shared/`
+
+### Infrastructure
 - **Cloud infrastructure** - This project uses cloud-hosted Redis and MongoDB, not self-hosted instances
 - **Never commit `.env`** - only `.env.example` should be in git (contains cloud credentials)
-- **Each slice must be independent** - avoid coupling between slices
-- **Shared code only in `core/` and `shared/`** - slices should not import other slices
 - **Consumer groups prevent duplicate processing** - multiple workers can run safely
 - **Results are written to MongoDB** - Redis is only for job queuing
 - **Graceful shutdown** - Services handle SIGTERM/SIGINT properly
 - **No local infrastructure needed** - All services connect to cloud databases directly
+
+### Integration Examples
+- **Shodan Integration** - attack_surface service uses Shodan DNS domain API for subdomain discovery
+- **Modular design** - Discovery tools are organized in subdirectories (e.g., `discovery/shodan.go`)
+- **Background processing** - Subdomain discovery runs asynchronously for root domains

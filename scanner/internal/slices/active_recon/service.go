@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
 
@@ -20,17 +19,17 @@ func NewService(logger *zap.Logger) *Service {
 }
 
 // ProcessScan performs active reconnaissance on a domain
-func (s *Service) ProcessScan(ctx context.Context, job shared.ScanJob) (*shared.ScanResult, error) {
+func (s *Service) ProcessScan(ctx context.Context, job ScanJob) (*ScanResult, error) {
 	s.logger.Info("Starting active recon scan",
 		zap.String("scan_id", job.ScanID),
 		zap.String("domain", job.Domain),
 	)
 
 	startTime := time.Now()
-	result := &shared.ScanResult{
+	result := &ScanResult{
 		ScanID:    job.ScanID,
 		Type:      ScanTypeActiveRecon,
-		Status:    shared.StatusRunning,
+		Status:    StatusRunning,
 		StartedAt: startTime,
 	}
 
@@ -41,7 +40,7 @@ func (s *Service) ProcessScan(ctx context.Context, job shared.ScanJob) (*shared.
 			zap.String("scan_id", job.ScanID),
 			zap.Error(err),
 		)
-		result.Status = shared.StatusFailed
+		result.Status = StatusFailed
 		result.Error = err.Error()
 		completedAt := time.Now()
 		result.CompletedAt = &completedAt
@@ -50,7 +49,7 @@ func (s *Service) ProcessScan(ctx context.Context, job shared.ScanJob) (*shared.
 	}
 
 	completedAt := time.Now()
-	result.Status = shared.StatusCompleted
+	result.Status = StatusCompleted
 	result.Results = reconResult
 	result.CompletedAt = &completedAt
 	result.Duration = time.Since(startTime).Seconds()
@@ -63,7 +62,7 @@ func (s *Service) ProcessScan(ctx context.Context, job shared.ScanJob) (*shared.
 	return result, nil
 }
 
-func (s *Service) performActiveRecon(ctx context.Context, domain string, options shared.JobOptions) (*shared.ActiveReconResult, error) {
+func (s *Service) performActiveRecon(ctx context.Context, domain string, options JobOptions) (*ActiveReconResult, error) {
 	// This is a placeholder implementation
 	// In production, you would integrate with actual active recon tools:
 	// - Nmap for port scanning
@@ -77,9 +76,9 @@ func (s *Service) performActiveRecon(ctx context.Context, domain string, options
 		ports = []int{80, 443, 22, 21, 25, 3306, 5432, 8080}
 	}
 
-	openPorts := []shared.Port{}
+	openPorts := []Port{}
 	for _, port := range ports {
-		openPorts = append(openPorts, shared.Port{
+		openPorts = append(openPorts, Port{
 			Number:   port,
 			Protocol: "tcp",
 			State:    "open",
@@ -87,9 +86,9 @@ func (s *Service) performActiveRecon(ctx context.Context, domain string, options
 		})
 	}
 
-	result := &shared.ActiveReconResult{
+	result := &ActiveReconResult{
 		OpenPorts: openPorts,
-		Services: []shared.Service{
+		Services: []ServiceInfo{
 			{
 				Name:    "nginx",
 				Version: "1.21.6",
@@ -112,7 +111,7 @@ func (s *Service) performActiveRecon(ctx context.Context, domain string, options
 			fmt.Sprintf("/screenshots/%s_80.png", domain),
 			fmt.Sprintf("/screenshots/%s_443.png", domain),
 		},
-		Certificates: []shared.Certificate{
+		Certificates: []Certificate{
 			{
 				Subject:  "CN=" + domain,
 				Issuer:   "CN=Let's Encrypt Authority X3",
