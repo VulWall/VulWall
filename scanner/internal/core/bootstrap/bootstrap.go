@@ -51,6 +51,9 @@ func Run(cfg ServiceConfig) {
 		zap.String("stream", cfg.StreamName),
 	)
 
+	// Create context for service lifecycle
+	ctx := context.Background()
+
 	// Connect to Redis
 	redisClient, err := redisx.NewClient(appCfg)
 	if err != nil {
@@ -63,9 +66,9 @@ func Run(cfg ServiceConfig) {
 	if err != nil {
 		logger.Log.Fatal("Failed to connect to MongoDB", zap.Error(err))
 	}
+	defer db.Client().Disconnect(ctx)
 
 	// Create consumer group
-	ctx := context.Background()
 	if err := redisx.CreateConsumerGroup(ctx, redisClient, cfg.StreamName, cfg.ConsumerGroup); err != nil {
 		logger.Log.Fatal("Failed to create consumer group", zap.Error(err))
 	}
