@@ -1,4 +1,4 @@
-package discovery
+package shodan
 
 import (
 	"context"
@@ -11,22 +11,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// ShodanClient handles Shodan API interactions for subdomain discovery
-type ShodanClient struct {
+// Client handles Shodan API interactions for subdomain discovery
+type Client struct {
 	apiKey     string
 	httpClient *http.Client
 	logger     *zap.Logger
 }
 
-// ShodanDNSDomainResponse represents Shodan DNS domain API response
-type ShodanDNSDomainResponse struct {
+// DNSDomainResponse represents Shodan DNS domain API response
+type DNSDomainResponse struct {
 	Domain     string   `json:"domain"`
 	Subdomains []string `json:"subdomains"`
 }
 
-// NewShodanClient creates a new Shodan API client
-func NewShodanClient(apiKey string, logger *zap.Logger) *ShodanClient {
-	return &ShodanClient{
+// NewClient creates a new Shodan API client
+func NewClient(apiKey string, logger *zap.Logger) *Client {
+	return &Client{
 		apiKey: apiKey,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -36,25 +36,25 @@ func NewShodanClient(apiKey string, logger *zap.Logger) *ShodanClient {
 }
 
 // DiscoverSubdomains discovers subdomains for a given domain using Shodan DNS API
-func (s *ShodanClient) DiscoverSubdomains(ctx context.Context, domain string) ([]string, error) {
-	if s.apiKey == "" {
-		s.logger.Warn("Shodan API key not configured, skipping Shodan discovery")
+func (c *Client) DiscoverSubdomains(ctx context.Context, domain string) ([]string, error) {
+	if c.apiKey == "" {
+		c.logger.Warn("Shodan API key not configured, skipping Shodan discovery")
 		return nil, nil
 	}
 
-	s.logger.Info("Discovering subdomains via Shodan",
+	c.logger.Info("Discovering subdomains via Shodan",
 		zap.String("domain", domain),
 	)
 
 	// Shodan DNS domain endpoint
-	url := fmt.Sprintf("https://api.shodan.io/dns/domain/%s?key=%s", domain, s.apiKey)
+	url := fmt.Sprintf("https://api.shodan.io/dns/domain/%s?key=%s", domain, c.apiKey)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -65,7 +65,7 @@ func (s *ShodanClient) DiscoverSubdomains(ctx context.Context, domain string) ([
 	}
 
 	if resp.StatusCode == 404 {
-		s.logger.Info("No DNS records found for domain in Shodan", zap.String("domain", domain))
+		c.logger.Info("No DNS records found for domain in Shodan", zap.String("domain", domain))
 		return []string{}, nil
 	}
 
@@ -79,12 +79,12 @@ func (s *ShodanClient) DiscoverSubdomains(ctx context.Context, domain string) ([
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	var shodanResp ShodanDNSDomainResponse
+	var shodanResp DNSDomainResponse
 	if err := json.Unmarshal(body, &shodanResp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	s.logger.Info("Shodan subdomain discovery complete",
+	c.logger.Info("Shodan subdomain discovery complete",
 		zap.String("domain", domain),
 		zap.Int("subdomains_found", len(shodanResp.Subdomains)),
 	)

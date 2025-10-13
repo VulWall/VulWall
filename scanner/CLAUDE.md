@@ -38,11 +38,12 @@ VulWall.Scanners/
 │           ├── constants.go
 │           ├── service.go
 │           ├── consumer.go
-│           └── discovery/      # Attack surface discovery providers
+│           └── discovery/      # Attack surface discovery framework
 │               ├── provider.go          # Provider interface
 │               ├── manager.go           # Discovery orchestration
-│               ├── shodan.go            # Shodan API client
-│               └── shodan_provider.go   # Shodan provider implementation
+│               └── shodan/              # Shodan provider (subdirectory per provider)
+│                   ├── client.go        # Shodan API client
+│                   └── provider.go      # Provider implementation
 ├── ops/                   # Docker and deployment files
 │   ├── Dockerfile.active-recon
 │   ├── Dockerfile.passive-recon
@@ -222,8 +223,15 @@ internal/slices/attack_surface/
 └── discovery/          # Pluggable provider architecture
     ├── provider.go             # AttackSurfaceProvider interface
     ├── manager.go              # Discovery orchestration across multiple providers
-    ├── shodan.go               # Shodan API client (low-level)
-    └── shodan_provider.go      # Shodan provider implementation
+    ├── shodan/                 # Shodan provider (each provider in own subdirectory)
+    │   ├── client.go           # Shodan API client (low-level)
+    │   └── provider.go         # Provider implementation
+    ├── nmap/                   # Future: Nmap provider
+    │   ├── client.go
+    │   └── provider.go
+    └── masscan/                # Future: Masscan provider
+        ├── client.go
+        └── provider.go
 ```
 
 ## Discovery Provider Pattern (Attack Surface Slice)
@@ -291,30 +299,75 @@ type AttackSurfaceAsset struct {
 
 ### Adding a New Discovery Provider
 
-1. **Create provider file:** `internal/slices/attack_surface/discovery/[provider]_provider.go`
+1. **Create provider directory:**
+   ```bash
+   mkdir internal/slices/attack_surface/discovery/myprovider
+   ```
 
-2. **Implement interface:**
+2. **Create API client:** `discovery/myprovider/client.go`
    ```go
-   type MyProvider struct {
-       client *MyClient
+   package myprovider
+
+   import (
+       "context"
+       "go.uber.org/zap"
+   )
+
+   type Client struct {
+       apiKey string
        logger *zap.Logger
    }
 
-   func (p *MyProvider) Name() string {
-       return "my_provider"
+   func NewClient(apiKey string, logger *zap.Logger) *Client {
+       return &Client{apiKey: apiKey, logger: logger}
    }
 
-   func (p *MyProvider) Discover(ctx context.Context, target DiscoveryTarget) ([]DiscoveredAsset, error) {
-       // Discovery logic here
-       // Return []DiscoveredAsset with Host, Port, Protocol, Metadata
+   func (c *Client) DiscoverAssets(ctx context.Context, target string) ([]string, error) {
+       // API interaction logic here
    }
    ```
 
-3. **Register in service:** Add to `NewService()` in `service.go`:
+3. **Implement provider:** `discovery/myprovider/provider.go`
    ```go
+   package myprovider
+
+   import (
+       "context"
+       "github.com/vulwall/scanners/internal/slices/attack_surface/discovery"
+       "go.uber.org/zap"
+   )
+
+   type Provider struct {
+       client *Client
+       logger *zap.Logger
+   }
+
+   func NewProvider(apiKey string, logger *zap.Logger) *Provider {
+       return &Provider{
+           client: NewClient(apiKey, logger),
+           logger: logger,
+       }
+   }
+
+   func (p *Provider) Name() string {
+       return "myprovider"
+   }
+
+   func (p *Provider) Discover(ctx context.Context, target discovery.DiscoveryTarget) ([]discovery.DiscoveredAsset, error) {
+       // Discovery logic here
+       // Return []discovery.DiscoveredAsset with Host, Port, Protocol, Metadata
+   }
+   ```
+
+4. **Register in service:** Add to `NewService()` in `service.go`:
+   ```go
+   import (
+       "github.com/vulwall/scanners/internal/slices/attack_surface/discovery/myprovider"
+   )
+
    providers := []discovery.AttackSurfaceProvider{
-       discovery.NewShodanProvider(shodanAPIKey, logger),
-       discovery.NewMyProvider(myAPIKey, logger),  // Add here
+       shodan.NewProvider(shodanAPIKey, logger),
+       myprovider.NewProvider(myAPIKey, logger),  // Add here
    }
    ```
 
@@ -383,9 +436,10 @@ See `.env.example` for full list and examples.
 
 ### Integration Examples
 - **Pluggable Discovery Architecture** - attack_surface uses provider pattern for extensible discovery
-- **Shodan Integration** - ShodanProvider implements subdomain discovery via Shodan DNS domain API
+- **Shodan Integration** - Each provider has its own package: `discovery/shodan/` with `client.go` and `provider.go`
 - **Protocol-Aware Assets** - Assets differentiate TCP vs UDP on same port (e.g., `192.168.1.1:53/tcp` vs `192.168.1.1:53/udp`)
-- **Modular design** - Discovery providers are isolated in `discovery/` subdirectory
+- **Modular design** - Each provider isolated in its own subdirectory under `discovery/`
 - **Background processing** - Discovery runs asynchronously for root assets (no parent)
 - **Orchestration** - Discovery Manager coordinates multiple providers and handles deduplication
-- **Future-Ready** - Architecture supports adding Nmap, Masscan, Censys, Certificate Transparency providers
+- **Scalable structure** - Easy to add new providers: create `discovery/[provider]/` with `client.go` and `provider.go`
+- **Future-Ready** - Architecture ready for Nmap (`discovery/nmap/`), Masscan (`discovery/masscan/`), Censys, Certificate Transparency providers

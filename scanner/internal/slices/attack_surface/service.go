@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/slices/attack_surface/discovery"
+	"github.com/vulwall/scanners/internal/slices/attack_surface/discovery/shodan"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -26,7 +27,7 @@ func NewService(db *mongo.Database, shodanAPIKey string, logger *zap.Logger) *Se
 
 	// Initialize discovery providers
 	providers := []discovery.AttackSurfaceProvider{
-		discovery.NewShodanProvider(shodanAPIKey, logger),
+		shodan.NewProvider(shodanAPIKey, logger),
 	}
 
 	// Create discovery manager with callbacks to service methods

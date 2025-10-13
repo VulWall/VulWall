@@ -1,32 +1,33 @@
-package discovery
+package shodan
 
 import (
 	"context"
 
+	"github.com/vulwall/scanners/internal/slices/attack_surface/discovery"
 	"go.uber.org/zap"
 )
 
-// ShodanProvider implements AttackSurfaceProvider for Shodan subdomain discovery
-type ShodanProvider struct {
-	client *ShodanClient
+// Provider implements discovery.AttackSurfaceProvider for Shodan subdomain discovery
+type Provider struct {
+	client *Client
 	logger *zap.Logger
 }
 
-// NewShodanProvider creates a new Shodan provider
-func NewShodanProvider(apiKey string, logger *zap.Logger) *ShodanProvider {
-	return &ShodanProvider{
-		client: NewShodanClient(apiKey, logger),
+// NewProvider creates a new Shodan provider
+func NewProvider(apiKey string, logger *zap.Logger) *Provider {
+	return &Provider{
+		client: NewClient(apiKey, logger),
 		logger: logger,
 	}
 }
 
 // Name returns the provider name
-func (p *ShodanProvider) Name() string {
+func (p *Provider) Name() string {
 	return "shodan"
 }
 
 // Discover discovers subdomains using Shodan DNS API
-func (p *ShodanProvider) Discover(ctx context.Context, target DiscoveryTarget) ([]DiscoveredAsset, error) {
+func (p *Provider) Discover(ctx context.Context, target discovery.DiscoveryTarget) ([]discovery.DiscoveredAsset, error) {
 	// Shodan only works with domains
 	if target.Type != "domain" {
 		p.logger.Debug("Skipping non-domain target for Shodan", zap.String("type", target.Type))
@@ -40,11 +41,11 @@ func (p *ShodanProvider) Discover(ctx context.Context, target DiscoveryTarget) (
 	}
 
 	if len(subdomains) == 0 {
-		return []DiscoveredAsset{}, nil
+		return []discovery.DiscoveredAsset{}, nil
 	}
 
 	// Convert subdomains to DiscoveredAsset format
-	assets := make([]DiscoveredAsset, 0, len(subdomains))
+	assets := make([]discovery.DiscoveredAsset, 0, len(subdomains))
 	for _, subdomainName := range subdomains {
 		// Skip empty strings and wildcards
 		if subdomainName == "" || subdomainName == "*" {
@@ -57,7 +58,7 @@ func (p *ShodanProvider) Discover(ctx context.Context, target DiscoveryTarget) (
 			fullSubdomain = subdomainName + "." + target.Host
 		}
 
-		assets = append(assets, DiscoveredAsset{
+		assets = append(assets, discovery.DiscoveredAsset{
 			Host:     fullSubdomain,
 			Port:     nil, // Subdomains don't have ports
 			Protocol: nil, // Subdomains don't have protocols
