@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VulWall Scanners is a **vertically-sliced Go monorepo** for security scanning services. Each feature domain (passive_recon, active_recon, discovery services) is implemented as an independent "slice" that can be compiled and deployed separately, while sharing common infrastructure code.
+VulWall Engine is a **vertically-sliced Go monorepo** for security scanning services. Each feature domain (passive_recon, active_recon, discovery services) is implemented as an independent "slice" that can be compiled and deployed separately, while sharing common infrastructure code.
 
 ## Project Structure
 
 ```
-VulWall.Scanners/
+VulWall.Engine/
 ├── cmd/                    # Entry points for each service
 │   ├── active-recon/
 │   ├── passive-recon/
