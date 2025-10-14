@@ -25,7 +25,7 @@ func NewService(db *mongo.Database, logger *zap.Logger) *Service {
 }
 
 // ProcessFinding processes a discovery finding and persists it to MongoDB
-func (s *Service) ProcessFinding(ctx context.Context, finding DiscoveryFinding) error {
+func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFinding) error {
 	s.logger.Info("Processing discovery finding",
 		zap.String("trace_id", finding.TraceID),
 		zap.String("source", finding.Source),

@@ -6,9 +6,8 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/vulwall/scanners/internal/ingestion"
-	"github.com/vulwall/scanners/internal/shared"
 	"github.com/vulwall/scanners/internal/discoveries/shodan_discovery/shodan"
+	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
 
@@ -36,7 +35,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	now := time.Now()
 
 	// Publish root asset finding
-	if err := s.publishFinding(ctx, ingestion.DiscoveryFinding{
+	if err := s.publishFinding(ctx, shared.DiscoveryFinding{
 		TraceID:   job.TraceID,
 		Source:    "shodan",
 		ParentID:  job.ParentID,
@@ -100,7 +99,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID, domain string
 		}
 
 		// Publish subdomain finding
-		if err := s.publishFinding(ctx, ingestion.DiscoveryFinding{
+		if err := s.publishFinding(ctx, shared.DiscoveryFinding{
 			TraceID:   traceID,
 			Source:    "shodan",
 			ParentID:  &parentHost,
@@ -127,7 +126,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID, domain string
 }
 
 // publishFinding publishes a discovery finding to the vulwall:discoveries stream
-func (s *Service) publishFinding(ctx context.Context, finding ingestion.DiscoveryFinding) error {
+func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFinding) error {
 	data, err := json.Marshal(finding)
 	if err != nil {
 		s.logger.Error("Failed to marshal finding", zap.Error(err))

@@ -100,7 +100,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 		return fmt.Errorf("message missing 'data' field")
 	}
 
-	var finding DiscoveryFinding
+	var finding shared.DiscoveryFinding
 	if err := json.Unmarshal([]byte(dataStr), &finding); err != nil {
 		return fmt.Errorf("failed to unmarshal finding: %w", err)
 	}
