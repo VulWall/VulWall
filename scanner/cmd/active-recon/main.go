@@ -4,7 +4,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/bootstrap"
 	"github.com/vulwall/scanners/internal/core/config"
-	"github.com/vulwall/scanners/internal/slices/active_recon"
+	"github.com/vulwall/scanners/internal/discoveries/active_recon"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )

@@ -6,6 +6,7 @@ import (
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/shared"
 	"github.com/vulwall/scanners/internal/discoveries/shodan_discovery"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )
 
