@@ -33,17 +33,18 @@ services:
     deploy:
       replicas: 2
 
-  attack-surface:
+  shodan-discovery:
     build:
       context: ..
-      dockerfile: ops/Dockerfile.attack-surface
+      dockerfile: ops/Dockerfile.shodan-discovery
     environment:
       - REDIS_ADDR=${REDIS_ADDR}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_DB=${REDIS_DB:-0}
       - MONGO_URI=${MONGO_URI}
       - MONGO_DB=${MONGO_DB:-vulwall}
-      - SERVICE_NAME=attack-surface
+      - SHODAN_API_KEY=${SHODAN_API_KEY}
+      - SERVICE_NAME=shodan-discovery
       - ENVIRONMENT=${ENVIRONMENT:-production}
     restart: unless-stopped
     deploy:

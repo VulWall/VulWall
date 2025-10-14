@@ -1,4 +1,4 @@
-package attack_surface
+package shodan_discovery
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
+	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )
@@ -31,12 +32,12 @@ func NewConsumer(redisClient *redis.Client, db *mongo.Database, shodanAPIKey str
 // Start begins consuming jobs from the Redis stream
 func (c *Consumer) Start(ctx context.Context) error {
 	consumerName := "worker-" + uuid.New().String()
-	c.logger.Info("Starting attack surface consumer", zap.String("consumer", consumerName))
+	c.logger.Info("Starting Shodan discovery consumer", zap.String("consumer", consumerName))
 
 	for {
 		select {
 		case <-ctx.Done():
-			c.logger.Info("Shutting down attack surface consumer")
+			c.logger.Info("Shutting down Shodan discovery consumer")
 			return ctx.Err()
 		default:
 			if err := c.processMessages(ctx, consumerName); err != nil {
@@ -49,9 +50,9 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
 	streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-		Group:    GroupAttackSurface,
+		Group:    GroupShodanDiscovery,
 		Consumer: consumerName,
-		Streams:  []string{StreamAttackSurface, ">"},
+		Streams:  []string{shared.StreamDiscovery, ">"},
 		Count:    1,
 		Block:    5 * time.Second,
 	}).Result()
@@ -75,7 +76,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			}
 
 			// Acknowledge the message
-			if err := c.redis.XAck(ctx, StreamAttackSurface, GroupAttackSurface, message.ID).Err(); err != nil {
+			if err := c.redis.XAck(ctx, shared.StreamDiscovery, GroupShodanDiscovery, message.ID).Err(); err != nil {
 				c.logger.Error("Failed to acknowledge message",
 					zap.String("message_id", message.ID),
 					zap.Error(err),
@@ -95,13 +96,13 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 		return nil
 	}
 
-	var job AttackSurfaceJob
+	var job shared.DiscoveryJob
 	if err := json.Unmarshal([]byte(data), &job); err != nil {
 		c.logger.Error("Failed to unmarshal job", zap.Error(err))
 		return err
 	}
 
-	c.logger.Info("Processing attack surface job",
+	c.logger.Info("Processing discovery job with Shodan",
 		zap.String("trace_id", job.TraceID),
 		zap.String("host", job.Host),
 	)

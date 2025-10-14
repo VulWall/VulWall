@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o attack-surface ./cmd/attack-surface
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o shodan-discovery ./cmd/shodan-discovery
 
 # Final stage
 FROM alpine:latest
@@ -20,7 +20,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 # Copy the binary from builder
-COPY --from=builder /app/attack-surface .
+COPY --from=builder /app/shodan-discovery .
 
 # Run the binary
-CMD ["./attack-surface"]
+CMD ["./shodan-discovery"]
