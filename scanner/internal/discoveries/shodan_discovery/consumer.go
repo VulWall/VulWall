@@ -9,22 +9,19 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/shared"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )
 
 type Consumer struct {
 	redis   *redis.Client
-	db      *mongo.Database
 	service *Service
 	logger  *zap.Logger
 }
 
-func NewConsumer(redisClient *redis.Client, db *mongo.Database, shodanAPIKey string, logger *zap.Logger) *Consumer {
+func NewConsumer(redisClient *redis.Client, shodanAPIKey string, logger *zap.Logger) *Consumer {
 	return &Consumer{
 		redis:   redisClient,
-		db:      db,
-		service: NewService(db, shodanAPIKey, logger),
+		service: NewService(redisClient, shodanAPIKey, logger),
 		logger:  logger,
 	}
 }

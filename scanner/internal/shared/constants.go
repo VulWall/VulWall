@@ -12,7 +12,8 @@ const (
 	CollectionAttackSurface = "attack_surface"
 
 	// Redis Streams
-	StreamDiscovery = "vulwall:discovery" // Shared discovery stream for all providers
+	StreamDiscovery  = "vulwall:discovery"  // Input stream for discovery jobs
+	StreamDiscoveries = "vulwall:discoveries" // Output stream for discovery findings (consumed by ingestion service)
 
 	// Attack Surface Asset Status
 	AssetStatusActive   = "active"

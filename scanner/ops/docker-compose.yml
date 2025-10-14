@@ -49,3 +49,19 @@ services:
     restart: unless-stopped
     deploy:
       replicas: 2
+
+  ingestion:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile.ingestion
+    environment:
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
+      - MONGO_URI=${MONGO_URI}
+      - MONGO_DB=${MONGO_DB:-vulwall}
+      - SERVICE_NAME=ingestion
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+    restart: unless-stopped
+    deploy:
+      replicas: 2

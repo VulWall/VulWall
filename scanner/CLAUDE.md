@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VulWall Engine is a **vertically-sliced Go monorepo** for security scanning services. Each feature domain (passive_recon, active_recon, discovery services) is implemented as an independent "slice" that can be compiled and deployed separately, while sharing common infrastructure code.
+VulWall Engine is a **vertically-sliced Go monorepo** for security scanning services. Each feature domain (discovery services, scanners) is implemented as an independent service that can be compiled and deployed separately, while sharing common infrastructure code.
+
+**Key architectural principle:** Discovery services focus on finding assets and publish findings to Redis streams. The **ingestion service** is the single source of truth for MongoDB persistence.
 
 ## Project Structure
 
@@ -13,7 +15,8 @@ VulWall.Engine/
 ├── cmd/                    # Entry points for each service
 │   ├── active-recon/
 │   ├── passive-recon/
-│   └── shodan-discovery/   # Discovery service using Shodan
+│   ├── shodan-discovery/   # Discovery service using Shodan
+│   └── ingestion/          # Ingestion service (MongoDB persistence)
 ├── internal/
 │   ├── core/              # Shared infrastructure
 │   │   ├── bootstrap/     # Common service bootstrapping
@@ -21,13 +24,18 @@ VulWall.Engine/
 │   │   ├── logger/        # Zap logger setup
 │   │   ├── mongox/        # MongoDB connection
 │   │   └── redisx/        # Redis client & consumer groups
-│   ├── shared/            # Cross-cutting concerns used by 2+ slices
+│   ├── shared/            # Cross-cutting concerns used by 2+ services
 │   │   ├── models.go      # Shared models (DiscoveryJob, AttackSurfaceAsset)
 │   │   └── constants.go   # Shared constants (streams, protocols, statuses)
-│   └── slices/            # Vertical slices (bounded contexts)
+│   ├── ingestion/         # Ingestion service (MongoDB persistence layer)
+│   │   ├── constants.go   # Consumer group name
+│   │   ├── models.go      # DiscoveryFinding model
+│   │   ├── service.go     # MongoDB persistence logic
+│   │   └── consumer.go    # Redis consumer
+│   └── discoveries/       # Discovery services (no MongoDB access)
 │       ├── active_recon/
-│       │   ├── models.go       # Slice-specific models
-│       │   ├── constants.go    # Slice-specific constants
+│       │   ├── models.go       # Service-specific models
+│       │   ├── constants.go    # Service-specific constants
 │       │   ├── service.go      # Business logic
 │       │   └── consumer.go     # Redis consumer
 │       ├── passive_recon/
@@ -45,6 +53,7 @@ VulWall.Engine/
 │   ├── Dockerfile.active-recon
 │   ├── Dockerfile.passive-recon
 │   ├── Dockerfile.shodan-discovery
+│   ├── Dockerfile.ingestion
 │   └── docker-compose.yml
 ├── scripts/               # Test and utility scripts
 ├── bin/                   # Compiled binaries (gitignored)
@@ -57,53 +66,97 @@ VulWall.Engine/
 
 ## Architecture Pattern
 
-This project uses **Vertical Slice Architecture**:
-- Each slice in `internal/slices/` is a bounded context with its own service logic and Redis consumer
-- Shared infrastructure lives in `internal/core/` (Redis, MongoDB, logging, config, bootstrap)
-- `internal/shared/` contains models and constants used by 2+ slices (see Model Ownership below)
-- Each slice has its own entry point in `cmd/`
-- All Docker/deployment files are organized in `ops/`
+This project uses **Vertical Slice Architecture** with a **centralized ingestion layer**:
+
+### Core Principles
+
+1. **Discovery services** (in `internal/discoveries/`) consume jobs from `vulwall:discovery` stream
+2. Discovery services perform scanning/discovery logic (NO MongoDB access)
+3. Discovery services publish findings to `vulwall:discoveries` stream
+4. **Ingestion service** (in `internal/ingestion/`) is the ONLY service that writes to MongoDB
+5. Ingestion service consumes from `vulwall:discoveries` and persists to MongoDB
+
+### Directory Organization
+
+- `internal/core/` - Shared infrastructure (Redis, MongoDB, logging, config, bootstrap)
+- `internal/shared/` - Models and constants used by 2+ services
+- `internal/discoveries/` - Discovery services (publish findings, no MongoDB)
+- `internal/ingestion/` - Ingestion service (MongoDB persistence layer)
+- `cmd/` - Entry points for each service
+- `ops/` - Docker and deployment files
+
+### Communication Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Discovery Architecture                       │
+└─────────────────────────────────────────────────────────────────┘
+
+1. Job Published to vulwall:discovery
+   └─→ Consumed by ALL discovery services (parallel processing)
+
+2. Discovery Services Process Jobs
+   ├─→ Shodan Discovery (finds subdomains)
+   ├─→ Nmap Discovery (scans ports) [future]
+   └─→ Masscan Discovery (scans IPs) [future]
+
+3. Discovery Services Publish Findings
+   └─→ All publish to vulwall:discoveries stream
+       ├─→ Each finding includes "source" field ("shodan", "nmap", etc.)
+       └─→ Consumed by Ingestion Service
+
+4. Ingestion Service Persists to MongoDB
+   └─→ attack_surface collection
+       ├─→ Creates new assets
+       ├─→ Updates existing assets (last_seen)
+       └─→ Handles deduplication (host + port + protocol)
+```
 
 ### Model Ownership Rules
 
-**Models belong in `internal/shared/` when used by multiple slices:**
+**Models belong in `internal/shared/` when used by multiple services:**
 
 ✅ **Put in `internal/shared/models.go`:**
-- Models used by 2+ slices
+- Models used by 2+ services
 - Shared job formats (e.g., `DiscoveryJob` consumed by all discovery services)
-- Shared asset models (e.g., `AttackSurfaceAsset` written by all discovery services)
-- Common data structures for inter-slice communication
+- Shared asset models (e.g., `AttackSurfaceAsset` written by ingestion service)
+- Common data structures for inter-service communication
 
 ✅ **Put in `internal/shared/constants.go`:**
-- Shared stream names (e.g., `StreamDiscovery`)
+- Shared stream names (e.g., `StreamDiscovery`, `StreamDiscoveries`)
 - Shared collection names (e.g., `CollectionAttackSurface`)
 - Protocol/status constants used by multiple services
 - Target type constants
 
-✅ **Put in `internal/slices/[slice_name]/`:**
-- Models used ONLY by that slice
-- Slice-specific business logic types
-- Job/Result types specific to that scanner (unless shared)
-- Constants specific to that slice (e.g., consumer group names)
+✅ **Put in `internal/discoveries/[service_name]/`:**
+- Models used ONLY by that discovery service
+- Service-specific business logic types
+- Constants specific to that service (e.g., consumer group names)
+
+✅ **Put in `internal/ingestion/`:**
+- `DiscoveryFinding` model (consumed from vulwall:discoveries stream)
+- Ingestion-specific constants (consumer group name)
 
 ❌ **DO NOT put in shared:**
-- Models used by only one slice
-- Slice-specific domain logic
+- Models used by only one service
+- Service-specific domain logic
 
-**Rule of thumb:** *If a model or constant is used by 2+ slices, put it in `shared/`. Otherwise, keep it in the slice.*
+**Rule of thumb:** *If a model or constant is used by 2+ services, put it in `shared/`. Otherwise, keep it in the service directory.*
 
-### Discovery Service Architecture (New Pattern)
+### Discovery Service Architecture
 
-The discovery services use a **parallel consumer group pattern** where multiple independent services listen to the same stream with different consumer groups:
+Discovery services use a **parallel consumer group pattern** where multiple independent services listen to the same input stream with different consumer groups, then publish to a shared output stream:
 
 ```
-Redis Stream: vulwall:discovery (shared)
+Input Stream: vulwall:discovery
     ↓
     ├─→ Consumer Group: group_shodan_discovery  → Shodan Discovery Service
     ├─→ Consumer Group: group_nmap_discovery    → Nmap Discovery Service (future)
     └─→ Consumer Group: group_masscan_discovery → Masscan Discovery Service (future)
-
-All services write to: MongoDB → attack_surface collection
+        ↓
+        All publish findings to: vulwall:discoveries
+        ↓
+    Ingestion Service → MongoDB (attack_surface collection)
 ```
 
 **Key Benefits:**
@@ -112,19 +165,18 @@ All services write to: MongoDB → attack_surface collection
 - ✅ Scale each tool independently (e.g., 5 Shodan workers, 2 Nmap workers)
 - ✅ Deploy/update tools independently
 - ✅ Easy to add new discovery tools
+- ✅ **Single source of truth for MongoDB** (ingestion service only)
+- ✅ Discovery services focus on discovery logic only
+- ✅ Clear separation of concerns
 
 **How it works:**
 1. Publisher sends job to `vulwall:discovery` stream
 2. **All** discovery services receive the same job (different consumer groups)
 3. Each service processes the job with its own tool (Shodan, Nmap, etc.)
-4. All services write discovered assets to `attack_surface` collection
-5. Asset deduplication handled by unique constraint (host + port + protocol)
-
-### Communication Flow
-1. Jobs are published to Redis Streams (e.g., `vulwall:passive_recon`, `vulwall:discovery`)
-2. Consumer workers read from streams using consumer groups
-3. Business logic in `service.go` processes the job
-4. Results are saved to MongoDB collections (e.g., `passive_recon`, `attack_surface`)
+4. Each service publishes findings to `vulwall:discoveries` stream with `source` field
+5. Ingestion service consumes from `vulwall:discoveries`
+6. Ingestion service persists findings to `attack_surface` collection
+7. Asset deduplication handled by ingestion service (host + port + protocol)
 
 ## Common Commands
 
@@ -134,6 +186,7 @@ make build                      # Build all services
 make build-passive              # Build passive-recon only
 make build-active               # Build active-recon only
 make build-shodan-discovery     # Build shodan-discovery only
+make build-ingestion            # Build ingestion only
 ```
 
 ### Running Locally
@@ -141,6 +194,7 @@ make build-shodan-discovery     # Build shodan-discovery only
 make run-passive                # Run passive-recon service
 make run-active                 # Run active-recon service
 make run-shodan-discovery       # Run shodan-discovery service
+make run-ingestion              # Run ingestion service
 ```
 
 ### Docker Operations
@@ -150,6 +204,7 @@ make docker-down                       # Stop all services
 make docker-scale-passive N=4          # Scale passive workers to 4
 make docker-scale-active N=3           # Scale active workers to 3
 make docker-scale-shodan-discovery N=2 # Scale shodan-discovery workers to 2
+make docker-scale-ingestion N=3        # Scale ingestion workers to 3
 make docker-logs                       # View logs
 ```
 
@@ -167,93 +222,69 @@ make vet                    # Run go vet
 make deps                   # Download and tidy dependencies
 ```
 
-## Adding a New Vertical Slice (Traditional Pattern)
-
-When adding a new scanner type (e.g., `vuln_scan`):
-
-1. **Create slice directory structure:**
-   ```bash
-   mkdir -p internal/slices/vuln_scan
-   ```
-
-2. **Create slice-specific models:**
-   ```bash
-   # internal/slices/vuln_scan/models.go
-   # Define Job, Result, and all domain models for THIS slice only
-   ```
-
-3. **Create slice-specific constants:**
-   ```bash
-   # internal/slices/vuln_scan/constants.go
-   const (
-       StreamVulnScan        = "vulwall:vuln_scan"
-       GroupVulnScan         = "vuln_scan_group"
-       CollectionVulnScan    = "vuln_scan"
-   )
-   ```
-
-4. **Implement core files:**
-   - `service.go` - Contains `ProcessScan()` method with scan logic
-   - `consumer.go` - Redis stream consumer that reads jobs and calls service
-   - Pattern: Copy from `internal/slices/passive_recon/` and adapt
-
-5. **Create entry point using bootstrap:**
-   ```bash
-   mkdir -p cmd/vuln-scan
-   # Create cmd/vuln-scan/main.go - copy from cmd/passive-recon and adapt
-   # Use bootstrap.Run() to eliminate boilerplate
-   ```
-
-6. **Add Docker support:**
-   - Create `ops/Dockerfile.vuln-scan`
-   - Add service to `ops/docker-compose.yml`
-   - Update `Makefile` with build/run/scale targets
-
-**Important:** Each slice is self-contained. Only add models to `internal/shared/` if they're used by multiple slices.
-
-## Adding a New Discovery Service (Parallel Consumer Pattern)
+## Adding a New Discovery Service
 
 When adding a new discovery tool (e.g., `nmap_discovery`):
 
-1. **Create slice directory:**
+1. **Create service directory:**
    ```bash
-   mkdir -p internal/slices/nmap_discovery
+   mkdir -p internal/discoveries/nmap_discovery
    ```
 
 2. **Create constants (consumer group only):**
    ```bash
-   # internal/slices/nmap_discovery/constants.go
+   # internal/discoveries/nmap_discovery/constants.go
    package nmap_discovery
 
    const (
        // Nmap-specific consumer group
-       // Stream name (vulwall:discovery) is in shared.StreamDiscovery
-       // Collection name (attack_surface) is in shared.CollectionAttackSurface
+       // Stream names are in shared.StreamDiscovery and shared.StreamDiscoveries
        GroupNmapDiscovery = "group_nmap_discovery"
    )
    ```
 
-3. **Create service.go:**
+3. **Create service.go (NO MongoDB dependency):**
    ```go
    package nmap_discovery
 
    import (
        "context"
+       "encoding/json"
+       "github.com/go-redis/redis/v8"
+       "github.com/vulwall/scanners/internal/ingestion"
        "github.com/vulwall/scanners/internal/shared"
-       "github.com/vulwall/scanners/internal/slices/nmap_discovery/nmap"
    )
 
    type Service struct {
-       db         *mongo.Database
+       redis      *redis.Client
        logger     *zap.Logger
        nmapClient *nmap.Client
    }
 
    func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error {
-       // 1. Check if asset exists (optional - create if doesn't exist)
-       // 2. Run nmap scan on job.Host
-       // 3. Create discovered assets (ports, services) in attack_surface collection
-       // 4. Use shared.AttackSurfaceAsset model
+       // 1. Run nmap scan on job.Host
+       // 2. For each discovered port/service, publish finding to vulwall:discoveries
+       // 3. Use ingestion.DiscoveryFinding model with source="nmap"
+       finding := ingestion.DiscoveryFinding{
+           TraceID:  job.TraceID,
+           Source:   "nmap",
+           Host:     job.Host,
+           Port:     &discoveredPort,
+           Protocol: &protocol,
+           Status:   shared.AssetStatusActive,
+           Metadata: map[string]interface{}{"service": serviceName},
+           Timestamp: time.Now(),
+       }
+       return s.publishFinding(ctx, finding)
+   }
+
+   func (s *Service) publishFinding(ctx context.Context, finding ingestion.DiscoveryFinding) error {
+       data, _ := json.Marshal(finding)
+       _, err := s.redis.XAdd(ctx, &redis.XAddArgs{
+           Stream: shared.StreamDiscoveries,
+           Values: map[string]interface{}{"data": string(data)},
+       }).Result()
+       return err
    }
    ```
 
@@ -261,29 +292,12 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
    ```go
    package nmap_discovery
 
-   import (
-       "github.com/vulwall/scanners/internal/shared"
-   )
-
-   func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
-       streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-           Group:    GroupNmapDiscovery,              // Unique consumer group
-           Consumer: consumerName,
-           Streams:  []string{shared.StreamDiscovery, ">"}, // Shared stream
-           Count:    1,
-           Block:    5 * time.Second,
-       }).Result()
-       // ... process job using shared.DiscoveryJob
-   }
+   // Consumer reads from shared.StreamDiscovery
+   // Calls service.ProcessJob()
+   // NO MongoDB access
    ```
 
-5. **Create tool-specific client:**
-   ```bash
-   # internal/slices/nmap_discovery/nmap/client.go
-   # Implement Nmap scanning logic
-   ```
-
-6. **Create entry point:**
+5. **Create entry point:**
    ```bash
    mkdir -p cmd/nmap-discovery
    # cmd/nmap-discovery/main.go
@@ -295,32 +309,34 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
    import (
        "github.com/vulwall/scanners/internal/core/bootstrap"
        "github.com/vulwall/scanners/internal/shared"
-       "github.com/vulwall/scanners/internal/slices/nmap_discovery"
+       "github.com/vulwall/scanners/internal/discoveries/nmap_discovery"
    )
 
    func main() {
        bootstrap.Run(bootstrap.ServiceConfig{
            ServiceName:   "nmap-discovery",
-           StreamName:    shared.StreamDiscovery,              // Shared stream
-           ConsumerGroup: nmap_discovery.GroupNmapDiscovery,   // Unique group
-           Factory: func(cfg *config.Config, redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
-               return nmap_discovery.NewConsumer(redisClient, db, logger)
+           StreamName:    shared.StreamDiscovery,
+           ConsumerGroup: nmap_discovery.GroupNmapDiscovery,
+           Factory: func(cfg *config.Config, redisClient *redis.Client, _ *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
+               return nmap_discovery.NewConsumer(redisClient, logger)
            },
        })
    }
    ```
 
-7. **Add Docker support:**
+6. **Add Docker support:**
    - Create `ops/Dockerfile.nmap-discovery`
    - Add to `ops/docker-compose.yml`
-   - Update `Makefile`
+   - Update `Makefile` with build/run/scale targets
 
 **Key Points:**
-- Use `shared.StreamDiscovery` (same stream as other discovery services)
-- Use unique consumer group per tool (e.g., `group_nmap_discovery`)
-- Use `shared.DiscoveryJob` for input
-- Use `shared.AttackSurfaceAsset` for output
-- Write to `shared.CollectionAttackSurface`
+- ✅ Use `shared.StreamDiscovery` (input stream)
+- ✅ Use `shared.StreamDiscoveries` (output stream)
+- ✅ Use unique consumer group per tool (e.g., `group_nmap_discovery`)
+- ✅ Use `shared.DiscoveryJob` for input
+- ✅ Use `ingestion.DiscoveryFinding` for output
+- ✅ **NO MongoDB dependency** in discovery services
+- ✅ Publish findings with `source` field ("nmap", "shodan", etc.)
 
 ## Key Files
 
@@ -332,24 +348,30 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
 - `mongox/client.go` - MongoDB connection manager
 
 ### Shared Package (`internal/shared/`)
-- `models.go` - Models used by 2+ slices (DiscoveryJob, AttackSurfaceAsset)
-- `constants.go` - Constants used by 2+ slices (streams, protocols, statuses)
+- `models.go` - Models used by 2+ services (DiscoveryJob, AttackSurfaceAsset)
+- `constants.go` - Constants used by 2+ services (streams, protocols, statuses)
 
-### Vertical Slice Pattern
-Each slice is self-contained:
+### Ingestion Service (`internal/ingestion/`)
+- `constants.go` - Consumer group name for ingestion service
+- `models.go` - DiscoveryFinding model (consumed from vulwall:discoveries)
+- `service.go` - MongoDB persistence logic (create/update assets)
+- `consumer.go` - Redis consumer for vulwall:discoveries stream
+
+### Discovery Service Pattern (`internal/discoveries/[service_name]/`)
+Each discovery service is self-contained:
 ```
-internal/slices/[slice_name]/
-├── constants.go   # Slice-specific constants (consumer group, etc.)
-├── service.go     # Core business logic, implements ProcessXxx()
-├── consumer.go    # Redis consumer, reads jobs → calls service → saves results
-├── models.go      # Optional: slice-specific models (if not using shared)
+internal/discoveries/[service_name]/
+├── constants.go   # Consumer group name
+├── service.go     # Discovery logic, publishes findings to Redis
+├── consumer.go    # Redis consumer, reads jobs from vulwall:discovery
+├── models.go      # Optional: service-specific models
 └── [tool]/        # Tool-specific implementation (client, API wrappers, etc.)
     └── client.go
 ```
 
 ### Shared Models
 
-**DiscoveryJob** - Common job format for all discovery services:
+**DiscoveryJob** - Common job format for all discovery services (input):
 ```go
 type DiscoveryJob struct {
     TraceID  string                 // Request tracing
@@ -362,7 +384,22 @@ type DiscoveryJob struct {
 }
 ```
 
-**AttackSurfaceAsset** - Common asset model written by all discovery services:
+**DiscoveryFinding** - Common finding format published by all discovery services (output):
+```go
+type DiscoveryFinding struct {
+    TraceID   string                 // Request tracing
+    Source    string                 // "shodan", "nmap", "masscan", etc.
+    ParentID  *string                // Parent asset ID
+    Host      string                 // Domain or IP
+    Port      *int                   // Optional port number
+    Protocol  *string                // tcp, udp, sctp, icmp (nil for non-port assets)
+    Status    string                 // active, inactive, unknown
+    Metadata  map[string]interface{} // Source-specific data
+    Timestamp time.Time              // When finding was discovered
+}
+```
+
+**AttackSurfaceAsset** - Asset model persisted by ingestion service (MongoDB):
 ```go
 type AttackSurfaceAsset struct {
     ID        string                 // UUID
@@ -380,16 +417,18 @@ type AttackSurfaceAsset struct {
 **Key Design Decisions:**
 - ❌ **No `org_id` field** - Assets are globally unique, organization ownership tracked separately
 - ✅ **Protocol-aware** - `192.168.1.1:53/tcp` ≠ `192.168.1.1:53/udp`
-- ✅ **Asset deduplication** - Unique by (host + port + protocol)
+- ✅ **Asset deduplication** - Unique by (host + port + protocol), handled by ingestion service
 - ✅ **Source tracking** - Use `metadata.source` to identify discovery tool
+- ✅ **Separation of concerns** - Discovery services publish, ingestion service persists
 
 ### Shared Constants
 
 **Stream Names:**
-- `shared.StreamDiscovery = "vulwall:discovery"` - Shared by all discovery services
+- `shared.StreamDiscovery = "vulwall:discovery"` - Input stream for discovery jobs
+- `shared.StreamDiscoveries = "vulwall:discoveries"` - Output stream for discovery findings
 
 **Collection Names:**
-- `shared.CollectionAttackSurface = "attack_surface"` - Written by all discovery services
+- `shared.CollectionAttackSurface = "attack_surface"` - Written by ingestion service only
 
 **Protocols:**
 - `shared.ProtocolTCP`, `ProtocolUDP`, `ProtocolSCTP`, `ProtocolICMP`
@@ -418,7 +457,7 @@ See `.env.example` for full list and examples.
 
 - Unit tests for service logic should mock Redis/MongoDB
 - Integration tests should use testcontainers
-- Each slice is independent - test in isolation
+- Each service is independent - test in isolation
 - Shared core packages should have comprehensive tests
 
 ## Publishing Discovery Jobs
@@ -434,6 +473,8 @@ redis-cli XADD vulwall:discovery * data '{
 }'
 
 # Result: Shodan finds subdomains, Nmap scans ports, etc. - all simultaneously
+# Each service publishes findings to vulwall:discoveries
+# Ingestion service persists findings to MongoDB
 ```
 
 **Job with specific port/protocol:**
@@ -457,44 +498,46 @@ redis-cli XADD vulwall:discovery * data '{
 
 ## Development Workflow
 
-1. Make changes to a slice (e.g., `internal/slices/shodan_discovery/`)
-2. Test locally: `make run-shodan-discovery`
-3. Verify: Publish test job to Redis, check MongoDB for results
-4. Build: `make build-shodan-discovery`
+1. Make changes to a service (e.g., `internal/discoveries/shodan_discovery/`)
+2. Test locally: `make run-shodan-discovery` + `make run-ingestion`
+3. Verify: Publish test job to `vulwall:discovery`, check MongoDB for results
+4. Build: `make build-shodan-discovery && make build-ingestion`
 5. Deploy: `make docker-build && make docker-up`
 
 ## Important Notes
 
 ### Architecture
-- **Each slice must be independent** - avoid coupling between slices
-- **Shared models for communication** - Use `internal/shared/` for models used by 2+ slices
-- **Slices should not import other slices** - only import from `core/` and `shared/`
+- **Each discovery service must be independent** - avoid coupling between services
+- **Shared models for communication** - Use `internal/shared/` for models used by 2+ services
+- **Discovery services should not access MongoDB** - only publish findings to Redis
+- **Ingestion service is the single source of truth** - only it writes to MongoDB
 - **Use bootstrap pattern** - All services use `bootstrap.Run()` to eliminate boilerplate
-- **Discovery services use parallel consumer pattern** - Same stream, different consumer groups
 
 ### Infrastructure
 - **Cloud infrastructure** - This project uses cloud-hosted Redis and MongoDB, not self-hosted instances
 - **Never commit `.env`** - only `.env.example` should be in git (contains cloud credentials)
 - **Consumer groups prevent duplicate processing** - multiple workers can run safely
-- **Results are written to MongoDB** - Redis is only for job queuing
+- **Discovery services publish to Redis** - ingestion service persists to MongoDB
 - **Graceful shutdown** - Services handle SIGTERM/SIGINT properly
 - **No local infrastructure needed** - All services connect to cloud databases directly
 
 ### Discovery Services Pattern
 - **Parallel processing** - Multiple discovery tools process same job simultaneously
 - **Independent scaling** - Scale each discovery tool independently (e.g., 5 Shodan, 2 Nmap workers)
-- **Shared stream** - `vulwall:discovery` consumed by all discovery services
+- **Shared input stream** - `vulwall:discovery` consumed by all discovery services
+- **Shared output stream** - `vulwall:discoveries` published by all discovery services
 - **Unique consumer groups** - Each tool has its own group (e.g., `group_shodan_discovery`)
-- **Shared models** - All use `shared.DiscoveryJob` input and `shared.AttackSurfaceAsset` output
-- **Asset deduplication** - MongoDB handles via unique constraint on (host + port + protocol)
+- **Shared models** - All use `shared.DiscoveryJob` input and `ingestion.DiscoveryFinding` output
+- **Single persistence layer** - Only ingestion service writes to MongoDB
+- **Asset deduplication** - Handled by ingestion service via (host + port + protocol) uniqueness
 - **No organization tracking** - Assets are globally unique, org ownership tracked separately
 - **Source attribution** - Use `metadata.source` to identify which tool discovered the asset
 
 ### Example: Shodan Discovery Service
 ```
-internal/slices/shodan_discovery/
+internal/discoveries/shodan_discovery/
 ├── constants.go      # GroupShodanDiscovery only
-├── service.go        # Uses shared.DiscoveryJob, writes shared.AttackSurfaceAsset
+├── service.go        # Uses shared.DiscoveryJob, publishes ingestion.DiscoveryFinding
 ├── consumer.go       # Listens to shared.StreamDiscovery with GroupShodanDiscovery
 └── shodan/
     └── client.go     # Shodan API client implementation
@@ -503,7 +546,9 @@ internal/slices/shodan_discovery/
 **Flow:**
 1. Job published to `vulwall:discovery`
 2. Shodan service receives job (consumer group: `group_shodan_discovery`)
-3. Creates root asset if doesn't exist
-4. Triggers subdomain discovery for domains
-5. Writes discovered subdomains as child assets
-6. All assets have `metadata.source = "shodan"`
+3. Discovers subdomains using Shodan API
+4. Publishes finding for root domain to `vulwall:discoveries` with `source="shodan"`
+5. Publishes findings for each subdomain to `vulwall:discoveries` with `source="shodan"`
+6. Ingestion service consumes from `vulwall:discoveries`
+7. Ingestion service creates/updates assets in MongoDB
+8. All assets have `metadata.source = "shodan"`

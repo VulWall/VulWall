@@ -5,8 +5,7 @@ import (
 	"github.com/vulwall/scanners/internal/core/bootstrap"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/shared"
-	"github.com/vulwall/scanners/internal/slices/shodan_discovery"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/vulwall/scanners/internal/discoveries/shodan_discovery"
 	"go.uber.org/zap"
 )
 
@@ -15,8 +14,8 @@ func main() {
 		ServiceName:   "shodan-discovery",
 		StreamName:    shared.StreamDiscovery,
 		ConsumerGroup: shodan_discovery.GroupShodanDiscovery,
-		Factory: func(cfg *config.Config, redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
-			return shodan_discovery.NewConsumer(redisClient, db, cfg.ShodanAPIKey, logger)
+		Factory: func(cfg *config.Config, redisClient *redis.Client, _ *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
+			return shodan_discovery.NewConsumer(redisClient, cfg.ShodanAPIKey, logger)
 		},
 	})
 }
