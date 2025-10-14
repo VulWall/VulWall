@@ -48,12 +48,11 @@ func NewService(db *mongo.Database, shodanAPIKey string, logger *zap.Logger) *Se
 func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 	s.logger.Info("Processing attack surface job",
 		zap.String("trace_id", job.TraceID),
-		zap.String("org_id", job.OrgID),
 		zap.String("host", job.Host),
 	)
 
 	// Check if asset already exists
-	existingAsset, err := s.findExistingAsset(ctx, job.OrgID, job.Host, job.Port, job.Protocol)
+	existingAsset, err := s.findExistingAsset(ctx, job.Host, job.Port, job.Protocol)
 	if err != nil && err != mongo.ErrNoDocuments {
 		s.logger.Error("Failed to check existing asset",
 			zap.String("trace_id", job.TraceID),
@@ -72,7 +71,6 @@ func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 	// Create new asset
 	asset := &AttackSurfaceAsset{
 		ID:        uuid.New().String(),
-		OrgID:     job.OrgID,
 		ParentID:  job.ParentID,
 		Host:      job.Host,
 		Port:      job.Port,
@@ -101,12 +99,10 @@ func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 			if err := s.discoveryManager.DiscoverAndCreateAssets(
 				context.Background(),
 				asset.ID,
-				job.OrgID,
 				target,
 			); err != nil {
 				s.logger.Error("Discovery failed",
 					zap.String("asset_id", asset.ID),
-					zap.String("org_id", job.OrgID),
 					zap.String("host", job.Host),
 					zap.Error(err),
 				)
@@ -118,12 +114,11 @@ func (s *Service) ProcessJob(ctx context.Context, job AttackSurfaceJob) error {
 }
 
 // findExistingAsset checks if an asset already exists
-func (s *Service) findExistingAsset(ctx context.Context, orgID, host string, port *int, protocol *string) (*AttackSurfaceAsset, error) {
+func (s *Service) findExistingAsset(ctx context.Context, host string, port *int, protocol *string) (*AttackSurfaceAsset, error) {
 	collection := s.db.Collection(CollectionAttackSurface)
 
 	filter := bson.M{
-		"org_id": orgID,
-		"host":   host,
+		"host": host,
 	}
 
 	// Handle port comparison (can be nil or specific value)
@@ -196,7 +191,6 @@ func (s *Service) createAsset(ctx context.Context, asset *AttackSurfaceAsset) er
 	// Use _id field explicitly for MongoDB
 	doc := bson.M{
 		"_id":        asset.ID,
-		"org_id":     asset.OrgID,
 		"host":       asset.Host,
 		"status":     asset.Status,
 		"first_seen": asset.FirstSeen,
@@ -229,7 +223,6 @@ func (s *Service) createAsset(ctx context.Context, asset *AttackSurfaceAsset) er
 
 	s.logger.Info("Created new attack surface asset",
 		zap.String("asset_id", asset.ID),
-		zap.String("org_id", asset.OrgID),
 		zap.String("host", asset.Host),
 	)
 
@@ -237,8 +230,8 @@ func (s *Service) createAsset(ctx context.Context, asset *AttackSurfaceAsset) er
 }
 
 // findAssetForManager is a helper function for the discovery manager to check if an asset exists
-func (s *Service) findAssetForManager(ctx context.Context, orgID, host string, port *int, protocol *string) (discovery.AssetInfo, error) {
-	asset, err := s.findExistingAsset(ctx, orgID, host, port, protocol)
+func (s *Service) findAssetForManager(ctx context.Context, host string, port *int, protocol *string) (discovery.AssetInfo, error) {
+	asset, err := s.findExistingAsset(ctx, host, port, protocol)
 	if err != nil {
 		return discovery.AssetInfo{Exists: false}, err
 	}

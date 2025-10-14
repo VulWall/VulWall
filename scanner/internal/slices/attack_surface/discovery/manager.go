@@ -23,7 +23,7 @@ type Manager struct {
 }
 
 // FindAssetFunc is a function type for finding existing assets
-type FindAssetFunc func(ctx context.Context, orgID, host string, port *int, protocol *string) (AssetInfo, error)
+type FindAssetFunc func(ctx context.Context, host string, port *int, protocol *string) (AssetInfo, error)
 
 // UpdateAssetFunc is a function type for updating asset last_seen
 type UpdateAssetFunc func(ctx context.Context, assetID string, lastSeen time.Time, metadata map[string]interface{}) error
@@ -58,11 +58,10 @@ func NewManager(
 // DiscoverAndCreateAssets runs all discovery providers and creates assets in the database
 func (m *Manager) DiscoverAndCreateAssets(
 	ctx context.Context,
-	parentID, orgID string,
+	parentID string,
 	target DiscoveryTarget,
 ) error {
 	m.logger.Info("Starting discovery",
-		zap.String("org_id", orgID),
 		zap.String("parent_id", parentID),
 		zap.String("host", target.Host),
 		zap.String("type", target.Type),
@@ -102,13 +101,13 @@ func (m *Manager) DiscoverAndCreateAssets(
 	}
 
 	// Create or update assets in database
-	return m.createDiscoveredAssets(ctx, parentID, orgID, allAssets)
+	return m.createDiscoveredAssets(ctx, parentID, allAssets)
 }
 
 // createDiscoveredAssets creates or updates discovered assets in the database
 func (m *Manager) createDiscoveredAssets(
 	ctx context.Context,
-	parentID, orgID string,
+	parentID string,
 	assets []DiscoveredAsset,
 ) error {
 	now := time.Now()
@@ -116,7 +115,7 @@ func (m *Manager) createDiscoveredAssets(
 
 	for _, asset := range assets {
 		// Check if asset already exists
-		existing, err := m.findAssetFunc(ctx, orgID, asset.Host, asset.Port, asset.Protocol)
+		existing, err := m.findAssetFunc(ctx, asset.Host, asset.Port, asset.Protocol)
 		if err != nil {
 			m.logger.Error("Failed to check existing asset",
 				zap.String("host", asset.Host),
@@ -140,7 +139,6 @@ func (m *Manager) createDiscoveredAssets(
 		assetID := uuid.New().String()
 		doc := bson.M{
 			"_id":        assetID,
-			"org_id":     orgID,
 			"parent_id":  parentID,
 			"host":       asset.Host,
 			"status":     m.assetStatusActive,
@@ -171,7 +169,6 @@ func (m *Manager) createDiscoveredAssets(
 
 		m.logger.Info("Created discovered asset",
 			zap.String("asset_id", assetID),
-			zap.String("org_id", orgID),
 			zap.String("host", asset.Host),
 		)
 	}

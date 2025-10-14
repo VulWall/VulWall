@@ -5,7 +5,6 @@ import "time"
 // AttackSurfaceJob represents a job to discover attack surface assets
 type AttackSurfaceJob struct {
 	TraceID  string                 `json:"trace_id" bson:"trace_id"`
-	OrgID    string                 `json:"org_id" bson:"org_id"`
 	ParentID *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host     string                 `json:"host" bson:"host"`
 	Port     *int                   `json:"port,omitempty" bson:"port,omitempty"`
@@ -17,7 +16,6 @@ type AttackSurfaceJob struct {
 // AttackSurfaceAsset represents a discovered asset in the attack surface
 type AttackSurfaceAsset struct {
 	ID        string                 `json:"_id" bson:"_id"`
-	OrgID     string                 `json:"org_id" bson:"org_id"`
 	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host      string                 `json:"host" bson:"host"`
 	Port      *int                   `json:"port,omitempty" bson:"port,omitempty"`
