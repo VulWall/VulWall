@@ -76,6 +76,7 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 			Port:      &finding.Port,
 			Protocol:  &protocol,
 			Status:    finding.Status,
+			Source:    finding.Source,
 			FirstSeen: now,
 			LastSeen:  now,
 			Metadata:  finding.Metadata,
@@ -88,6 +89,7 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 			"port":       newAsset.Port,
 			"protocol":   newAsset.Protocol,
 			"status":     newAsset.Status,
+			"source":     newAsset.Source,
 			"first_seen": newAsset.FirstSeen,
 			"last_seen":  newAsset.LastSeen,
 			"metadata":   newAsset.Metadata,
@@ -118,13 +120,14 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 		)
 		return err
 	} else {
-		// Asset exists - update last_seen and status
+		// Asset exists - update last_seen, status, and source
 		assetID = existingAsset.ID
 
 		update := bson.M{
 			"$set": bson.M{
 				"last_seen": now,
 				"status":    finding.Status,
+				"source":    finding.Source, // Update source (in case different tool rediscovered)
 			},
 		}
 
@@ -181,16 +184,14 @@ func (s *Service) linkAssetToOrg(ctx context.Context, col *mongo.Collection, ass
 			OrgID:           orgID,
 			Status:          shared.OrgAssetStatusConfirmed,
 			AssignedAt:      timestamp,
-			Source:          source,
 		}
 
 		doc := bson.M{
-			"_id":               newLink.ID,
-			"attacksurface_id":  newLink.AttackSurfaceID,
-			"org_id":            newLink.OrgID,
-			"status":            newLink.Status,
-			"assigned_at":       newLink.AssignedAt,
-			"source":            newLink.Source,
+			"_id":              newLink.ID,
+			"attacksurface_id": newLink.AttackSurfaceID,
+			"org_id":           newLink.OrgID,
+			"status":           newLink.Status,
+			"assigned_at":      newLink.AssignedAt,
 		}
 
 		_, err := col.InsertOne(ctx, doc)

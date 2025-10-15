@@ -43,6 +43,7 @@ type AttackSurfaceAsset struct {
 	Port      *int                   `json:"port,omitempty" bson:"port,omitempty"`
 	Protocol  *string                `json:"protocol,omitempty" bson:"protocol,omitempty"`
 	Status    string                 `json:"status" bson:"status"` // active, inactive, unknown
+	Source    string                 `json:"source" bson:"source"` // "port_discovery", "nmap", "masscan", etc.
 	FirstSeen time.Time              `json:"first_seen" bson:"first_seen"`
 	LastSeen  time.Time              `json:"last_seen" bson:"last_seen"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
@@ -50,10 +51,10 @@ type AttackSurfaceAsset struct {
 
 // ResolutionHistory tracks IP resolution history for a domain
 type ResolutionHistory struct {
-	IP               string     `json:"ip" bson:"ip"`
-	AttackSurfaceID  *string    `json:"attacksurface_id,omitempty" bson:"attacksurface_id,omitempty"` // Links to AttackSurfaceAsset
-	ResolvedFrom     time.Time  `json:"resolved_from" bson:"resolved_from"`
-	ResolvedUntil    *time.Time `json:"resolved_until,omitempty" bson:"resolved_until,omitempty"` // nil means currently active
+	IP              string     `json:"ip" bson:"ip"`
+	AttackSurfaceID *string    `json:"attacksurface_id,omitempty" bson:"attacksurface_id,omitempty"` // Links to AttackSurfaceAsset
+	ResolvedFrom    time.Time  `json:"resolved_from" bson:"resolved_from"`
+	ResolvedUntil   *time.Time `json:"resolved_until,omitempty" bson:"resolved_until,omitempty"` // nil means currently active
 }
 
 // OrgDomain represents a domain discovered for an organization
@@ -72,7 +73,7 @@ type IPDiscoveryJob struct {
 	TraceID   string                 `json:"trace_id" bson:"trace_id"`
 	OrgID     string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
 	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
-	IP        string                 `json:"ip" bson:"ip"`         // Target IP address
+	IP        string                 `json:"ip" bson:"ip"`                                     // Target IP address
 	PortRange *string                `json:"port_range,omitempty" bson:"port_range,omitempty"` // Optional: "1-1000" or "80,443,22"
 	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 	Created   time.Time              `json:"created" bson:"created"`
@@ -95,11 +96,11 @@ type IPDiscoveryFinding struct {
 
 // OrgAttackSurface represents the relationship between an organization and an attack surface asset
 // This links organizations to attack surface assets they own/monitor
+// NOTE: Source of discovery is stored in AttackSurfaceAsset.Metadata, not here
 type OrgAttackSurface struct {
-	ID               string    `json:"_id" bson:"_id"`
-	AttackSurfaceID  string    `json:"attacksurface_id" bson:"attacksurface_id"` // References AttackSurfaceAsset._id
-	OrgID            string    `json:"org_id" bson:"org_id"`                     // Organization GUID
-	Status           string    `json:"status" bson:"status"`                     // "confirmed", "pending", "dismissed"
-	AssignedAt       time.Time `json:"assigned_at" bson:"assigned_at"`           // When the asset was assigned to this org
-	Source           string    `json:"source" bson:"source"`                     // Discovery source that found this asset
+	ID              string    `json:"_id" bson:"_id"`
+	AttackSurfaceID string    `json:"attacksurface_id" bson:"attacksurface_id"` // References AttackSurfaceAsset._id
+	OrgID           string    `json:"org_id" bson:"org_id"`                     // Organization GUID
+	Status          string    `json:"status" bson:"status"`                     // "confirmed", "pending", "dismissed"
+	AssignedAt      time.Time `json:"assigned_at" bson:"assigned_at"`           // When the asset was assigned to this org
 }
