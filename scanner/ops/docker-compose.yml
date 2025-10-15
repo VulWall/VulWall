@@ -33,10 +33,10 @@ services:
     deploy:
       replicas: 2
 
-  shodan-discovery:
+  domain-discovery:
     build:
       context: ..
-      dockerfile: ops/Dockerfile.shodan-discovery
+      dockerfile: ops/Dockerfile.domain-discovery
     environment:
       - REDIS_ADDR=${REDIS_ADDR}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
@@ -44,7 +44,7 @@ services:
       - MONGO_URI=${MONGO_URI}
       - MONGO_DB=${MONGO_DB:-vulwall}
       - SHODAN_API_KEY=${SHODAN_API_KEY}
-      - SERVICE_NAME=shodan-discovery
+      - SERVICE_NAME=domain-discovery
       - ENVIRONMENT=${ENVIRONMENT:-production}
     restart: unless-stopped
     deploy:

@@ -1,4 +1,4 @@
-package shodan_discovery
+package domain_discovery
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/vulwall/scanners/internal/discoveries/shodan_discovery/shodan"
+	"github.com/vulwall/scanners/internal/discoveries/domain_discovery/shodan"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )

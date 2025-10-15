@@ -1,4 +1,4 @@
-package shodan_discovery
+package domain_discovery
 
 const (
 	// Shodan subdomain discovery service consumer group

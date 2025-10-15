@@ -5,18 +5,18 @@ import (
 	"github.com/vulwall/scanners/internal/core/bootstrap"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/shared"
-	"github.com/vulwall/scanners/internal/discoveries/shodan_discovery"
+	"github.com/vulwall/scanners/internal/discoveries/domain_discovery"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )
 
 func main() {
 	bootstrap.Run(bootstrap.ServiceConfig{
-		ServiceName:   "shodan-discovery",
+		ServiceName:   "domain-discovery",
 		StreamName:    shared.StreamDomainDiscoveryQueue,
-		ConsumerGroup: shodan_discovery.GroupShodanSubdomainService,
+		ConsumerGroup: domain_discovery.GroupShodanSubdomainService,
 		Factory: func(cfg *config.Config, redisClient *redis.Client, _ *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
-			return shodan_discovery.NewConsumer(redisClient, cfg.ShodanAPIKey, logger)
+			return domain_discovery.NewConsumer(redisClient, cfg.ShodanAPIKey, logger)
 		},
 	})
 }
