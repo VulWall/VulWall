@@ -6,7 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 VulWall Engine is a **vertically-sliced Go monorepo** for security scanning services. Each feature domain (discovery services, scanners) is implemented as an independent service that can be compiled and deployed separately, while sharing common infrastructure code.
 
-**Key architectural principle:** Discovery services focus on finding assets and publish findings to Redis streams. The **ingestion service** is the single source of truth for MongoDB persistence.
+**Key architectural principles:**
+- Discovery services focus on finding assets and publish findings to Redis streams
+- The **ingestion service** is the single source of truth for MongoDB persistence
+- All jobs MUST include `org_id` (organization GUID) or they will be skipped
+- Shodan domain discoveries are stored in `org_domains` collection with IP resolution history
+- Port-based discoveries are stored in `attack_surface` collection
 
 ## Project Structure
 
@@ -71,10 +76,14 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 ### Core Principles
 
 1. **Discovery services** (in `internal/discoveries/`) consume jobs from `vulwall:discovery` stream
-2. Discovery services perform scanning/discovery logic (NO MongoDB access)
-3. Discovery services publish findings to `vulwall:discoveries` stream
-4. **Ingestion service** (in `internal/ingestion/`) is the ONLY service that writes to MongoDB
-5. Ingestion service consumes from `vulwall:discoveries` and persists to MongoDB
+2. Discovery services MUST validate `org_id` is present - skip jobs without it
+3. Discovery services perform scanning/discovery logic (NO MongoDB access)
+4. Discovery services publish findings to `vulwall:discoveries` stream with `org_id` and `source`
+5. **Ingestion service** (in `internal/ingestion/`) is the ONLY service that writes to MongoDB
+6. Ingestion service MUST validate `source` is present - skip findings without it
+7. Ingestion service routes findings:
+   - Shodan domains (with IP, no port) → `org_domains` collection with resolution history
+   - Other findings (ports, services) → `attack_surface` collection
 
 ### Directory Organization
 
@@ -170,13 +179,16 @@ Input Stream: vulwall:discovery
 - ✅ Clear separation of concerns
 
 **How it works:**
-1. Publisher sends job to `vulwall:discovery` stream
+1. Publisher sends job to `vulwall:discovery` stream (MUST include `org_id`)
 2. **All** discovery services receive the same job (different consumer groups)
-3. Each service processes the job with its own tool (Shodan, Nmap, etc.)
-4. Each service publishes findings to `vulwall:discoveries` stream with `source` field
-5. Ingestion service consumes from `vulwall:discoveries`
-6. Ingestion service persists findings to `attack_surface` collection
-7. Asset deduplication handled by ingestion service (host + port + protocol)
+3. Each service validates `org_id` is present (skip if missing)
+4. Each service processes the job with its own tool (Shodan, Nmap, etc.)
+5. Each service publishes findings to `vulwall:discoveries` stream with `org_id` and `source` field
+6. Ingestion service consumes from `vulwall:discoveries`
+7. Ingestion service validates `source` is present (skip if missing)
+8. Ingestion service routes findings:
+   - Shodan domains (with IP, no port) → `org_domains` with IP resolution history
+   - Other findings → `attack_surface` collection (host + port + protocol deduplication)
 
 ## Common Commands
 
@@ -348,13 +360,15 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
 - `mongox/client.go` - MongoDB connection manager
 
 ### Shared Package (`internal/shared/`)
-- `models.go` - Models used by 2+ services (DiscoveryJob, AttackSurfaceAsset)
-- `constants.go` - Constants used by 2+ services (streams, protocols, statuses)
+- `models.go` - Models used by 2+ services (DiscoveryJob, DiscoveryFinding, AttackSurfaceAsset, OrgDomain, ResolutionHistory)
+- `constants.go` - Constants used by 2+ services (streams, collections, protocols, statuses)
 
 ### Ingestion Service (`internal/ingestion/`)
 - `constants.go` - Consumer group name for ingestion service
-- `models.go` - DiscoveryFinding model (consumed from vulwall:discoveries)
-- `service.go` - MongoDB persistence logic (create/update assets)
+- `service.go` - MongoDB persistence logic with dual routing:
+  - `processOrgDomain()` - Stores Shodan domains in `org_domains` with IP resolution history
+  - `processAttackSurface()` - Stores port-based findings in `attack_surface`
+  - Source validation (skip findings without `source` field)
 - `consumer.go` - Redis consumer for vulwall:discoveries stream
 
 ### Discovery Service Pattern (`internal/discoveries/[service_name]/`)
@@ -375,6 +389,7 @@ internal/discoveries/[service_name]/
 ```go
 type DiscoveryJob struct {
     TraceID  string                 // Request tracing
+    OrgID    string                 // REQUIRED: organization GUID (validated by consumers)
     ParentID *string                // Parent asset ID (for recursive discovery)
     Host     string                 // Domain or IP to discover
     Port     *int                   // Optional: specific port to scan
@@ -384,13 +399,17 @@ type DiscoveryJob struct {
 }
 ```
 
+**⚠️ IMPORTANT:** Discovery consumers MUST validate `org_id` is present and skip jobs without it.
+
 **DiscoveryFinding** - Common finding format published by all discovery services (output):
 ```go
 type DiscoveryFinding struct {
     TraceID   string                 // Request tracing
-    Source    string                 // "shodan", "nmap", "masscan", etc.
+    OrgID     string                 // REQUIRED: organization GUID (passed from job)
+    Source    string                 // REQUIRED: "shodan", "nmap", "masscan", etc. (validated by ingestion)
     ParentID  *string                // Parent asset ID
     Host      string                 // Domain or IP
+    IP        *string                // Resolved IP address (Shodan includes this)
     Port      *int                   // Optional port number
     Protocol  *string                // tcp, udp, sctp, icmp (nil for non-port assets)
     Status    string                 // active, inactive, unknown
@@ -399,7 +418,35 @@ type DiscoveryFinding struct {
 }
 ```
 
-**AttackSurfaceAsset** - Asset model persisted by ingestion service (MongoDB):
+**⚠️ IMPORTANT:** Ingestion service MUST validate `source` is present and skip findings without it.
+
+**OrgDomain** - Domain model with IP resolution history (MongoDB `org_domains` collection):
+```go
+type OrgDomain struct {
+    ID                string              // UUID
+    OrgID             string              // Organization GUID
+    Domain            string              // Domain name (e.g., "api.example.com")
+    Source            string              // Discovery source ("shodan", etc.)
+    ResolutionHistory []ResolutionHistory // IP resolution history over time
+}
+
+type ResolutionHistory struct {
+    IP               string     // IP address
+    AttackSurfaceID  *string    // Optional: links to AttackSurfaceAsset
+    ResolvedFrom     time.Time  // When this IP resolution started
+    ResolvedUntil    *time.Time // When it ended (nil = currently active)
+}
+```
+
+**How IP Resolution History Works:**
+- When a domain is first discovered, a new `OrgDomain` is created with initial IP
+- When the same domain is scanned again:
+  - **IP unchanged:** No update (skip)
+  - **IP changed:** Close previous resolution (set `resolved_until`), add new resolution
+- Only the most recent resolution has `resolved_until = nil` (currently active)
+- This tracks domain hijacking, infrastructure changes, and CDN switches over time
+
+**AttackSurfaceAsset** - Port/service model (MongoDB `attack_surface` collection):
 ```go
 type AttackSurfaceAsset struct {
     ID        string                 // UUID
@@ -410,25 +457,30 @@ type AttackSurfaceAsset struct {
     Status    string                 // active, inactive, unknown
     FirstSeen time.Time
     LastSeen  time.Time
-    Metadata  map[string]interface{} // Source-specific data (e.g., {"source": "shodan"})
+    Metadata  map[string]interface{} // Source-specific data (e.g., {"source": "nmap"})
 }
 ```
 
 **Key Design Decisions:**
-- ❌ **No `org_id` field** - Assets are globally unique, organization ownership tracked separately
+- ✅ **Dual collection strategy:**
+  - `org_domains` - Shodan domain discoveries with IP history (no port)
+  - `attack_surface` - Port-based discoveries and other findings
+- ✅ **org_id tracking** - `OrgDomain` links domains to organizations
 - ✅ **Protocol-aware** - `192.168.1.1:53/tcp` ≠ `192.168.1.1:53/udp`
 - ✅ **Asset deduplication** - Unique by (host + port + protocol), handled by ingestion service
-- ✅ **Source tracking** - Use `metadata.source` to identify discovery tool
+- ✅ **Source tracking** - Use `source` field to identify discovery tool
+- ✅ **IP history** - Track domain-to-IP changes over time for security monitoring
 - ✅ **Separation of concerns** - Discovery services publish, ingestion service persists
 
 ### Shared Constants
 
 **Stream Names:**
-- `shared.StreamDiscovery = "vulwall:discovery"` - Input stream for discovery jobs
-- `shared.StreamDiscoveries = "vulwall:discoveries"` - Output stream for discovery findings
+- `shared.StreamDiscovery = "vulwall:discovery"` - Input stream for discovery jobs (requires `org_id`)
+- `shared.StreamDiscoveries = "vulwall:discoveries"` - Output stream for discovery findings (requires `source`)
 
 **Collection Names:**
-- `shared.CollectionAttackSurface = "attack_surface"` - Written by ingestion service only
+- `shared.CollectionAttackSurface = "attack_surface"` - Port-based findings (written by ingestion service)
+- `shared.CollectionOrgDomains = "org_domains"` - Shodan domain discoveries with IP history (written by ingestion service)
 
 **Protocols:**
 - `shared.ProtocolTCP`, `ProtocolUDP`, `ProtocolSCTP`, `ProtocolICMP`
@@ -465,28 +517,44 @@ See `.env.example` for full list and examples.
 To trigger discovery across all discovery services:
 
 ```bash
-# Publish to shared stream - ALL discovery services receive this
+# ✅ VALID: Job with org_id (will be processed)
 redis-cli XADD vulwall:discovery * data '{
   "trace_id": "trace-123",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
   "host": "example.com",
-  "created": "2025-10-14T10:00:00Z"
+  "created": "2025-10-15T10:00:00Z"
 }'
 
-# Result: Shodan finds subdomains, Nmap scans ports, etc. - all simultaneously
-# Each service publishes findings to vulwall:discoveries
-# Ingestion service persists findings to MongoDB
+# Result:
+# 1. Shodan discovers subdomains and resolves IPs
+# 2. Findings published to vulwall:discoveries with org_id and source="shodan"
+# 3. Ingestion service stores in org_domains collection with IP resolution history
 ```
 
-**Job with specific port/protocol:**
+**❌ INVALID: Job without org_id (will be skipped):**
 ```bash
 redis-cli XADD vulwall:discovery * data '{
   "trace_id": "trace-456",
+  "host": "example.com",
+  "created": "2025-10-15T10:00:00Z"
+}'
+# This job will be skipped by all discovery consumers
+```
+
+**Job with specific port/protocol (goes to attack_surface):**
+```bash
+redis-cli XADD vulwall:discovery * data '{
+  "trace_id": "trace-789",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
   "host": "192.168.1.1",
   "port": 443,
   "protocol": "tcp",
-  "created": "2025-10-14T10:00:00Z"
+  "created": "2025-10-15T10:00:00Z"
 }'
+# Port-based findings go to attack_surface collection (not org_domains)
 ```
+
+**⚠️ IMPORTANT:** All jobs MUST include `org_id` or they will be skipped by consumers.
 
 ## Dependencies
 
@@ -522,16 +590,20 @@ redis-cli XADD vulwall:discovery * data '{
 - **No local infrastructure needed** - All services connect to cloud databases directly
 
 ### Discovery Services Pattern
+- **Organization-scoped** - All jobs require `org_id` (GUID), consumers skip jobs without it
 - **Parallel processing** - Multiple discovery tools process same job simultaneously
 - **Independent scaling** - Scale each discovery tool independently (e.g., 5 Shodan, 2 Nmap workers)
 - **Shared input stream** - `vulwall:discovery` consumed by all discovery services
 - **Shared output stream** - `vulwall:discoveries` published by all discovery services
 - **Unique consumer groups** - Each tool has its own group (e.g., `group_shodan_discovery`)
-- **Shared models** - All use `shared.DiscoveryJob` input and `ingestion.DiscoveryFinding` output
-- **Single persistence layer** - Only ingestion service writes to MongoDB
-- **Asset deduplication** - Handled by ingestion service via (host + port + protocol) uniqueness
-- **No organization tracking** - Assets are globally unique, org ownership tracked separately
-- **Source attribution** - Use `metadata.source` to identify which tool discovered the asset
+- **Shared models** - All use `shared.DiscoveryJob` input and `shared.DiscoveryFinding` output
+- **Source validation** - Ingestion service requires `source` field, skips findings without it
+- **Dual collection strategy:**
+  - **org_domains** - Shodan domain discoveries (with IP, no port) with resolution history
+  - **attack_surface** - Port-based discoveries and other findings
+- **IP resolution tracking** - Shodan resolves domains to IPs, ingestion tracks changes over time
+- **Asset deduplication** - Handled by ingestion service via (host + port + protocol) for attack_surface
+- **Source attribution** - Use `source` field to identify which tool discovered the asset
 
 ### Example: Shodan Discovery Service
 ```
@@ -544,11 +616,16 @@ internal/discoveries/shodan_discovery/
 ```
 
 **Flow:**
-1. Job published to `vulwall:discovery`
-2. Shodan service receives job (consumer group: `group_shodan_discovery`)
-3. Discovers subdomains using Shodan API
-4. Publishes finding for root domain to `vulwall:discoveries` with `source="shodan"`
-5. Publishes findings for each subdomain to `vulwall:discoveries` with `source="shodan"`
-6. Ingestion service consumes from `vulwall:discoveries`
-7. Ingestion service creates/updates assets in MongoDB
-8. All assets have `metadata.source = "shodan"`
+1. Job published to `vulwall:discovery` (with `org_id`)
+2. Shodan service validates `org_id` is present (skips if missing)
+3. Shodan service discovers subdomains using Shodan API
+4. For each domain (root + subdomains):
+   - Resolves domain to IP address
+   - Publishes finding to `vulwall:discoveries` with `org_id`, `source="shodan"`, and `ip`
+5. Ingestion service validates `source` is present (skips if missing)
+6. For Shodan findings (with IP, no port):
+   - Stores in `org_domains` collection
+   - Tracks IP resolution history
+   - If IP changed: closes old resolution, adds new one
+7. For port-based findings:
+   - Stores in `attack_surface` collection (existing logic)
