@@ -1,4 +1,4 @@
-package ingestion
+package domain_ingestion
 
 import (
 	"context"
@@ -24,9 +24,9 @@ func NewService(db *mongo.Database, logger *zap.Logger) *Service {
 	}
 }
 
-// ProcessFinding processes a discovery finding and persists it to MongoDB
+// ProcessFinding processes a domain discovery finding and persists it to MongoDB
 func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFinding) error {
-	s.logger.Info("Processing discovery finding",
+	s.logger.Info("Processing domain discovery finding",
 		zap.String("trace_id", finding.TraceID),
 		zap.String("org_id", finding.OrgID),
 		zap.String("source", finding.Source),
@@ -48,7 +48,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 		return s.processOrgDomain(ctx, finding)
 	}
 
-	// Skip non-Shodan findings (attack surface ingestion removed)
+	// Skip non-Shodan findings (attack surface ingestion removed from domain ingestion)
 	s.logger.Debug("Skipping non-Shodan finding",
 		zap.String("trace_id", finding.TraceID),
 		zap.String("source", finding.Source),

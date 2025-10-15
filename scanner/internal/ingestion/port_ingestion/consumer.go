@@ -1,4 +1,4 @@
-package ingestion
+package port_ingestion
 
 import (
 	"context"
@@ -29,14 +29,14 @@ func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logg
 
 func (c *Consumer) Start(ctx context.Context) error {
 	// Create consumer group if it doesn't exist
-	err := c.redis.XGroupCreateMkStream(ctx, shared.StreamDomainDiscoveryResults, GroupIngestion, "0").Err()
+	err := c.redis.XGroupCreateMkStream(ctx, shared.StreamIPDiscoveryResults, GroupPortIngestion, "0").Err()
 	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
-	c.logger.Info("Starting ingestion consumer",
-		zap.String("stream", shared.StreamDomainDiscoveryResults),
-		zap.String("group", GroupIngestion),
+	c.logger.Info("Starting port ingestion consumer",
+		zap.String("stream", shared.StreamIPDiscoveryResults),
+		zap.String("group", GroupPortIngestion),
 	)
 
 	// Start message processing
@@ -47,14 +47,14 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 	for {
 		select {
 		case <-ctx.Done():
-			c.logger.Info("Consumer context cancelled, shutting down")
+			c.logger.Info("Port ingestion consumer context cancelled, shutting down")
 			return ctx.Err()
 		default:
 			// Read messages from stream
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupIngestion,
+				Group:    GroupPortIngestion,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamIPDiscoveryResults, ">"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
@@ -81,7 +81,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 					}
 
 					// Acknowledge message
-					if err := c.redis.XAck(ctx, shared.StreamDomainDiscoveryResults, GroupIngestion, message.ID).Err(); err != nil {
+					if err := c.redis.XAck(ctx, shared.StreamIPDiscoveryResults, GroupPortIngestion, message.ID).Err(); err != nil {
 						c.logger.Error("Failed to acknowledge message",
 							zap.String("message_id", message.ID),
 							zap.Error(err),
@@ -100,16 +100,17 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 		return fmt.Errorf("message missing 'data' field")
 	}
 
-	var finding shared.DiscoveryFinding
+	var finding shared.IPDiscoveryFinding
 	if err := json.Unmarshal([]byte(dataStr), &finding); err != nil {
 		return fmt.Errorf("failed to unmarshal finding: %w", err)
 	}
 
-	c.logger.Info("Processing discovery finding",
+	c.logger.Info("Processing port discovery finding",
 		zap.String("message_id", message.ID),
 		zap.String("trace_id", finding.TraceID),
 		zap.String("source", finding.Source),
-		zap.String("host", finding.Host),
+		zap.String("ip", finding.IP),
+		zap.Int("port", finding.Port),
 	)
 
 	// Process the finding
@@ -117,7 +118,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 		return fmt.Errorf("failed to process finding: %w", err)
 	}
 
-	c.logger.Info("Successfully processed finding",
+	c.logger.Info("Successfully processed port finding",
 		zap.String("message_id", message.ID),
 		zap.String("trace_id", finding.TraceID),
 	)

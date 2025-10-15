@@ -13,6 +13,8 @@ build: ## Build all services
 	@go build -o bin/active-recon ./cmd/active-recon
 	@echo "Building domain-discovery..."
 	@go build -o bin/domain-discovery ./cmd/domain-discovery
+	@echo "Building port-discovery..."
+	@go build -o bin/port-discovery ./cmd/port-discovery
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Build complete!"
@@ -26,6 +28,9 @@ build-active: ## Build active-recon service
 build-domain-discovery: ## Build domain-discovery service
 	@go build -o bin/domain-discovery ./cmd/domain-discovery
 
+build-port-discovery: ## Build port-discovery service
+	@go build -o bin/port-discovery ./cmd/port-discovery
+
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
 
@@ -37,6 +42,9 @@ run-active: ## Run active-recon service locally
 
 run-domain-discovery: ## Run domain-discovery service locally
 	@go run ./cmd/domain-discovery/main.go
+
+run-port-discovery: ## Run port-discovery service locally
+	@go run ./cmd/port-discovery/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
@@ -75,6 +83,9 @@ docker-scale-active: ## Scale active-recon workers (usage: make docker-scale-act
 
 docker-scale-domain-discovery: ## Scale domain-discovery workers (usage: make docker-scale-domain-discovery N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale domain-discovery=$(N)
+
+docker-scale-port-discovery: ## Scale port-discovery workers (usage: make docker-scale-port-discovery N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale port-discovery=$(N)
 
 docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ingestion N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
