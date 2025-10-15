@@ -38,7 +38,6 @@ type DiscoveryFinding struct {
 // This is written to MongoDB by all discovery providers
 type AttackSurfaceAsset struct {
 	ID        string                 `json:"_id" bson:"_id"`
-	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host      string                 `json:"host" bson:"host"`
 	Port      *int                   `json:"port,omitempty" bson:"port,omitempty"`
 	Protocol  *string                `json:"protocol,omitempty" bson:"protocol,omitempty"`
@@ -73,7 +72,6 @@ type OrgDomain struct {
 type IPDiscoveryJob struct {
 	TraceID   string                 `json:"trace_id" bson:"trace_id"`
 	OrgID     string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
-	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	IP        string                 `json:"ip" bson:"ip"`                                     // Target IP address
 	PortRange *string                `json:"port_range,omitempty" bson:"port_range,omitempty"` // Optional: "1-1000" or "80,443,22"
 	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
@@ -86,7 +84,6 @@ type IPDiscoveryFinding struct {
 	TraceID   string                 `json:"trace_id" bson:"trace_id"`
 	OrgID     string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
 	Source    string                 `json:"source" bson:"source"` // "port_discovery", etc.
-	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	IP        string                 `json:"ip" bson:"ip"`
 	Port      int                    `json:"port" bson:"port"`
 	Protocol  string                 `json:"protocol" bson:"protocol"` // tcp, udp

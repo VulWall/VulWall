@@ -67,11 +67,10 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 	var assetID string
 
 	if err == mongo.ErrNoDocuments {
-		// Create new attack surface asset (without org_id in metadata)
+		// Create new attack surface asset
 		protocol := finding.Protocol
 		newAsset := shared.AttackSurfaceAsset{
 			ID:        uuid.New().String(),
-			ParentID:  finding.ParentID,
 			Host:      finding.IP,
 			Port:      &finding.Port,
 			Protocol:  &protocol,
@@ -84,15 +83,14 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 		}
 
 		doc := bson.M{
-			"_id":        newAsset.ID,
-			"parent_id":  newAsset.ParentID,
-			"host":       newAsset.Host,
-			"port":       newAsset.Port,
-			"protocol":   newAsset.Protocol,
-			"status":     newAsset.Status,
-			"source":     newAsset.Source,
+			"_id":       newAsset.ID,
+			"host":      newAsset.Host,
+			"port":      newAsset.Port,
+			"protocol":  newAsset.Protocol,
+			"status":    newAsset.Status,
+			"source":    newAsset.Source,
 			"first_seen": newAsset.FirstSeen,
-			"last_seen":  newAsset.LastSeen,
+			"last_seen": newAsset.LastSeen,
 		}
 
 		// Only include banner if not nil
