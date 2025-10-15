@@ -10,6 +10,7 @@ const (
 	// MongoDB Collections
 	CollectionScanResults   = "scan_results"
 	CollectionAttackSurface = "attack_surface"
+	CollectionOrgDomains    = "org_domains"
 
 	// Redis Streams
 	StreamDiscovery  = "vulwall:discovery"  // Input stream for discovery jobs

@@ -9,6 +9,7 @@ import "time"
 // This is the shared job format consumed by all discovery providers (Shodan, Nmap, Masscan, etc.)
 type DiscoveryJob struct {
 	TraceID  string                 `json:"trace_id" bson:"trace_id"`
+	OrgID    string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
 	ParentID *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host     string                 `json:"host" bson:"host"`
 	Port     *int                   `json:"port,omitempty" bson:"port,omitempty"`
@@ -21,9 +22,11 @@ type DiscoveryJob struct {
 // This is published to vulwall:discoveries by all discovery services
 type DiscoveryFinding struct {
 	TraceID   string                 `json:"trace_id" bson:"trace_id"`
+	OrgID     string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
 	Source    string                 `json:"source" bson:"source"` // "shodan", "nmap", "masscan", etc.
 	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host      string                 `json:"host" bson:"host"`
+	IP        *string                `json:"ip,omitempty" bson:"ip,omitempty"` // IP address (if resolved)
 	Port      *int                   `json:"port,omitempty" bson:"port,omitempty"`
 	Protocol  *string                `json:"protocol,omitempty" bson:"protocol,omitempty"`
 	Status    string                 `json:"status" bson:"status"` // active, inactive, unknown
@@ -43,4 +46,22 @@ type AttackSurfaceAsset struct {
 	FirstSeen time.Time              `json:"first_seen" bson:"first_seen"`
 	LastSeen  time.Time              `json:"last_seen" bson:"last_seen"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+}
+
+// ResolutionHistory tracks IP resolution history for a domain
+type ResolutionHistory struct {
+	IP               string     `json:"ip" bson:"ip"`
+	AttackSurfaceID  *string    `json:"attacksurface_id,omitempty" bson:"attacksurface_id,omitempty"` // Links to AttackSurfaceAsset
+	ResolvedFrom     time.Time  `json:"resolved_from" bson:"resolved_from"`
+	ResolvedUntil    *time.Time `json:"resolved_until,omitempty" bson:"resolved_until,omitempty"` // nil means currently active
+}
+
+// OrgDomain represents a domain discovered for an organization
+// Used to track domain-to-IP resolution history
+type OrgDomain struct {
+	ID                string              `json:"_id" bson:"_id"`
+	OrgID             string              `json:"org_id" bson:"org_id"`
+	Domain            string              `json:"domain" bson:"domain"`
+	Source            string              `json:"source" bson:"source"` // "shodan", "nmap", etc.
+	ResolutionHistory []ResolutionHistory `json:"resolution_history" bson:"resolution_history"`
 }

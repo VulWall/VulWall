@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 
@@ -90,4 +91,24 @@ func (c *Client) DiscoverSubdomains(ctx context.Context, domain string) ([]strin
 	)
 
 	return shodanResp.Subdomains, nil
+}
+
+// ResolveIP resolves a domain name to its IP address
+func (c *Client) ResolveIP(ctx context.Context, domain string) (string, error) {
+	resolver := &net.Resolver{}
+	ips, err := resolver.LookupIP(ctx, "ip4", domain)
+	if err != nil {
+		c.logger.Debug("Failed to resolve IP for domain",
+			zap.String("domain", domain),
+			zap.Error(err),
+		)
+		return "", err
+	}
+
+	if len(ips) == 0 {
+		return "", fmt.Errorf("no IP addresses found for domain: %s", domain)
+	}
+
+	// Return the first IP address
+	return ips[0].String(), nil
 }

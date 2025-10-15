@@ -99,8 +99,18 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 		return err
 	}
 
+	// Validate org_id is present (required)
+	if job.OrgID == "" {
+		c.logger.Warn("Skipping job: missing org_id",
+			zap.String("message_id", message.ID),
+			zap.String("trace_id", job.TraceID),
+		)
+		return nil
+	}
+
 	c.logger.Info("Processing discovery job with Shodan",
 		zap.String("trace_id", job.TraceID),
+		zap.String("org_id", job.OrgID),
 		zap.String("host", job.Host),
 	)
 
@@ -108,6 +118,7 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 	if err := c.service.ProcessJob(ctx, job); err != nil {
 		c.logger.Error("Job processing failed",
 			zap.String("trace_id", job.TraceID),
+			zap.String("org_id", job.OrgID),
 			zap.Error(err),
 		)
 		return err
@@ -115,6 +126,7 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 
 	c.logger.Info("Job processed successfully",
 		zap.String("trace_id", job.TraceID),
+		zap.String("org_id", job.OrgID),
 	)
 
 	return nil
