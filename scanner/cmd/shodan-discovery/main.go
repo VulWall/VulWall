@@ -13,8 +13,8 @@ import (
 func main() {
 	bootstrap.Run(bootstrap.ServiceConfig{
 		ServiceName:   "shodan-discovery",
-		StreamName:    shared.StreamDiscovery,
-		ConsumerGroup: shodan_discovery.GroupShodanDiscovery,
+		StreamName:    shared.StreamDomainDiscoveryQueue,
+		ConsumerGroup: shodan_discovery.GroupShodanSubdomainService,
 		Factory: func(cfg *config.Config, redisClient *redis.Client, _ *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
 			return shodan_discovery.NewConsumer(redisClient, cfg.ShodanAPIKey, logger)
 		},

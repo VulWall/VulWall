@@ -47,9 +47,9 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
 	streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-		Group:    GroupShodanDiscovery,
+		Group:    GroupShodanSubdomainService,
 		Consumer: consumerName,
-		Streams:  []string{shared.StreamDiscovery, ">"},
+		Streams:  []string{shared.StreamDomainDiscoveryQueue, ">"},
 		Count:    1,
 		Block:    5 * time.Second,
 	}).Result()
@@ -73,7 +73,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			}
 
 			// Acknowledge the message
-			if err := c.redis.XAck(ctx, shared.StreamDiscovery, GroupShodanDiscovery, message.ID).Err(); err != nil {
+			if err := c.redis.XAck(ctx, shared.StreamDomainDiscoveryQueue, GroupShodanSubdomainService, message.ID).Err(); err != nil {
 				c.logger.Error("Failed to acknowledge message",
 					zap.String("message_id", message.ID),
 					zap.Error(err),

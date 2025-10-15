@@ -13,7 +13,7 @@ import (
 func main() {
 	bootstrap.Run(bootstrap.ServiceConfig{
 		ServiceName:   "ingestion",
-		StreamName:    shared.StreamDiscoveries,
+		StreamName:    shared.StreamDomainDiscoveryResults,
 		ConsumerGroup: ingestion.GroupIngestion,
 		Factory: func(cfg *config.Config, redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
 			return ingestion.NewConsumer(redisClient, db, logger)

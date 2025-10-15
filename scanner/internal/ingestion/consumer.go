@@ -29,13 +29,13 @@ func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logg
 
 func (c *Consumer) Start(ctx context.Context) error {
 	// Create consumer group if it doesn't exist
-	err := c.redis.XGroupCreateMkStream(ctx, shared.StreamDiscoveries, GroupIngestion, "0").Err()
+	err := c.redis.XGroupCreateMkStream(ctx, shared.StreamDomainDiscoveryResults, GroupIngestion, "0").Err()
 	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
 	c.logger.Info("Starting ingestion consumer",
-		zap.String("stream", shared.StreamDiscoveries),
+		zap.String("stream", shared.StreamDomainDiscoveryResults),
 		zap.String("group", GroupIngestion),
 	)
 
@@ -54,7 +54,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupIngestion,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDiscoveries, ">"},
+				Streams:  []string{shared.StreamDomainDiscoveryResults, ">"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
@@ -81,7 +81,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 					}
 
 					// Acknowledge message
-					if err := c.redis.XAck(ctx, shared.StreamDiscoveries, GroupIngestion, message.ID).Err(); err != nil {
+					if err := c.redis.XAck(ctx, shared.StreamDomainDiscoveryResults, GroupIngestion, message.ID).Err(); err != nil {
 						c.logger.Error("Failed to acknowledge message",
 							zap.String("message_id", message.ID),
 							zap.Error(err),

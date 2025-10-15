@@ -153,7 +153,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID, orgID, domain
 	return nil
 }
 
-// publishFinding publishes a discovery finding to the vulwall:discoveries stream
+// publishFinding publishes a discovery finding to the domain discovery results stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFinding) error {
 	data, err := json.Marshal(finding)
 	if err != nil {
@@ -162,7 +162,7 @@ func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFi
 	}
 
 	_, err = s.redis.XAdd(ctx, &redis.XAddArgs{
-		Stream: shared.StreamDiscoveries,
+		Stream: shared.StreamDomainDiscoveryResults,
 		Values: map[string]interface{}{
 			"data": string(data),
 		},
@@ -170,14 +170,14 @@ func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFi
 
 	if err != nil {
 		s.logger.Error("Failed to publish finding to stream",
-			zap.String("stream", shared.StreamDiscoveries),
+			zap.String("stream", shared.StreamDomainDiscoveryResults),
 			zap.Error(err),
 		)
 		return err
 	}
 
 	s.logger.Debug("Published finding to stream",
-		zap.String("stream", shared.StreamDiscoveries),
+		zap.String("stream", shared.StreamDomainDiscoveryResults),
 		zap.String("host", finding.Host),
 		zap.String("source", finding.Source),
 	)
