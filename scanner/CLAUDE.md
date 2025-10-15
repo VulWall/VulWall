@@ -8,10 +8,10 @@ VulWall Engine is a **vertically-sliced Go monorepo** for security scanning serv
 
 **Key architectural principles:**
 - Discovery services focus on finding assets and publish findings to Redis streams
-- The **ingestion service** is the single source of truth for MongoDB persistence
+- The **ingestion service** uses **vertical slice architecture** with concurrent consumers
 - All jobs MUST include `org_id` (organization GUID) or they will be skipped
-- Shodan domain discoveries are stored in `org_domains` collection with IP resolution history
-- Attack surface ingestion has been removed (only Shodan domain discovery is persisted)
+- **Domain discoveries:** Shodan domains stored in `org_domains` collection with IP resolution history
+- **Port discoveries:** Port scans stored in `attack_surface` + `org_attack_surface` collections (normalized design)
 
 ## Project Structure
 
@@ -20,8 +20,9 @@ VulWall.Engine/
 ├── cmd/                    # Entry points for each service
 │   ├── active-recon/
 │   ├── passive-recon/
-│   ├── shodan-discovery/   # Discovery service using Shodan
-│   └── ingestion/          # Ingestion service (MongoDB persistence)
+│   ├── domain-discovery/   # Domain discovery service (Shodan)
+│   ├── port-discovery/     # Port discovery service (TCP scanner)
+│   └── ingestion/          # Ingestion orchestrator (MongoDB persistence)
 ├── internal/
 │   ├── core/              # Shared infrastructure
 │   │   ├── bootstrap/     # Common service bootstrapping
@@ -30,13 +31,18 @@ VulWall.Engine/
 │   │   ├── mongox/        # MongoDB connection
 │   │   └── redisx/        # Redis client & consumer groups
 │   ├── shared/            # Cross-cutting concerns used by 2+ services
-│   │   ├── models.go      # Shared models (DiscoveryJob, AttackSurfaceAsset)
+│   │   ├── models.go      # Shared models (DiscoveryJob, IPDiscoveryJob, etc.)
 │   │   └── constants.go   # Shared constants (streams, protocols, statuses)
-│   ├── ingestion/         # Ingestion service (MongoDB persistence layer)
-│   │   ├── constants.go   # Consumer group name
-│   │   ├── models.go      # DiscoveryFinding model
-│   │   ├── service.go     # MongoDB persistence logic
-│   │   └── consumer.go    # Redis consumer
+│   ├── ingestion/         # Ingestion service (vertical slice architecture)
+│   │   ├── orchestrator.go      # Runs all consumers concurrently
+│   │   ├── domain_ingestion/    # Domain ingestion slice
+│   │   │   ├── constants.go     # Consumer group
+│   │   │   ├── service.go       # org_domains persistence
+│   │   │   └── consumer.go      # Consumes domain_discovery_results
+│   │   └── port_ingestion/      # Port ingestion slice
+│   │       ├── constants.go     # Consumer group
+│   │       ├── service.go       # attack_surface + org_attack_surface persistence
+│   │       └── consumer.go      # Consumes ip_discovery_results
 │   └── discoveries/       # Discovery services (no MongoDB access)
 │       ├── active_recon/
 │       │   ├── models.go       # Service-specific models
@@ -48,16 +54,23 @@ VulWall.Engine/
 │       │   ├── constants.go
 │       │   ├── service.go
 │       │   └── consumer.go
-│       └── shodan_discovery/   # Shodan discovery service
-│           ├── constants.go    # Consumer group name only
-│           ├── service.go      # Discovery logic
+│       ├── domain_discovery/   # Shodan domain discovery
+│       │   ├── constants.go    # Consumer group name only
+│       │   ├── service.go      # Discovery logic
+│       │   ├── consumer.go     # Redis consumer
+│       │   └── shodan/         # Shodan-specific client
+│       │       └── client.go   # Shodan API client
+│       └── port_discovery/     # Port scanner
+│           ├── constants.go    # Consumer group + common ports array
+│           ├── service.go      # Port scanning logic
 │           ├── consumer.go     # Redis consumer
-│           └── shodan/         # Shodan-specific client
-│               └── client.go   # Shodan API client
+│           └── scanner/        # Simple TCP scanner
+│               └── scanner.go  # TCP connect with 2s timeout
 ├── ops/                   # Docker and deployment files
 │   ├── Dockerfile.active-recon
 │   ├── Dockerfile.passive-recon
-│   ├── Dockerfile.shodan-discovery
+│   ├── Dockerfile.domain-discovery
+│   ├── Dockerfile.port-discovery
 │   ├── Dockerfile.ingestion
 │   └── docker-compose.yml
 ├── scripts/               # Test and utility scripts
@@ -75,15 +88,20 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 
 ### Core Principles
 
-1. **Discovery services** (in `internal/discoveries/`) consume jobs from `domain_discovery_queue` stream
+1. **Discovery services** (in `internal/discoveries/`) consume jobs from Redis streams:
+   - Domain discovery: consumes from `domain_discovery_queue`
+   - Port discovery: consumes from `ip_discovery_queue`
 2. Discovery services MUST validate `org_id` is present - skip jobs without it
 3. Discovery services perform scanning/discovery logic (NO MongoDB access)
-4. Discovery services publish findings to `domain_discovery_results` stream with `org_id` and `source`
+4. Discovery services publish findings to Redis result streams with `org_id` and `source`
 5. **Ingestion service** (in `internal/ingestion/`) is the ONLY service that writes to MongoDB
-6. Ingestion service MUST validate `source` is present - skip findings without it
-7. Ingestion service currently only processes Shodan domain discoveries:
-   - Shodan domains (with IP, no port) → `org_domains` collection with resolution history
-   - Non-Shodan findings are skipped (attack surface ingestion removed)
+6. Ingestion service uses **vertical slice architecture** with concurrent consumers:
+   - `domain_ingestion` - processes domain discoveries → `org_domains` collection
+   - `port_ingestion` - processes port discoveries → `attack_surface` + `org_attack_surface` collections
+7. Each ingestion slice MUST validate `source` is present - skip findings without it
+8. **Normalized database design:**
+   - Assets stored in `attack_surface` (NO org_id in this collection)
+   - Org-to-asset relationships stored in `org_attack_surface` (links orgs to assets)
 
 ### Directory Organization
 
@@ -101,24 +119,36 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 │                     Discovery Architecture                       │
 └─────────────────────────────────────────────────────────────────┘
 
-1. Job Published to domain_discovery_queue
-   └─→ Consumed by ALL discovery services (parallel processing)
+DOMAIN DISCOVERY FLOW:
+1. Job Published to domain_discovery_queue (with org_id)
+   └─→ Consumed by domain discovery service
 
-2. Discovery Services Process Jobs
-   ├─→ Shodan Discovery (finds subdomains)
-   ├─→ Nmap Discovery (scans ports) [future]
-   └─→ Masscan Discovery (scans IPs) [future]
+2. Domain Discovery Service (Shodan)
+   ├─→ Finds subdomains and resolves IPs
+   └─→ Publishes to domain_discovery_results (source="shodan")
 
-3. Discovery Services Publish Findings
-   └─→ All publish to domain_discovery_results stream
-       ├─→ Each finding includes "source" field ("shodan", "nmap", etc.)
-       └─→ Consumed by Ingestion Service
-
-4. Ingestion Service Persists to MongoDB
-   └─→ org_domains collection (Shodan only)
+3. Domain Ingestion Consumer
+   └─→ Persists to org_domains collection
        ├─→ Stores domains with IP resolution history
-       ├─→ Tracks IP changes over time
-       └─→ Non-Shodan findings are skipped (attack surface ingestion removed)
+       └─→ Tracks IP changes over time
+
+PORT DISCOVERY FLOW:
+1. Job Published to ip_discovery_queue (with org_id)
+   └─→ Consumed by port discovery service
+
+2. Port Discovery Service
+   ├─→ Scans 23 common ports (TCP connect, 2s timeout)
+   └─→ Publishes to ip_discovery_results (source="port_discovery")
+
+3. Port Ingestion Consumer
+   └─→ Persists to TWO collections:
+       ├─→ attack_surface (assets without org_id)
+       └─→ org_attack_surface (org-to-asset relationships)
+
+INGESTION SERVICE ARCHITECTURE:
+├─→ Orchestrator starts both consumers concurrently
+├─→ domain_ingestion: consumes domain_discovery_results
+└─→ port_ingestion: consumes ip_discovery_results
 ```
 
 ### Model Ownership Rules
@@ -127,24 +157,36 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 
 ✅ **Put in `internal/shared/models.go`:**
 - Models used by 2+ services
-- Shared job formats (e.g., `DiscoveryJob` consumed by all discovery services)
-- Shared asset models (e.g., `AttackSurfaceAsset` written by ingestion service)
+- Shared job formats:
+  - `DiscoveryJob` (domain discovery jobs)
+  - `IPDiscoveryJob` (port discovery jobs)
+- Shared finding formats:
+  - `DiscoveryFinding` (domain discovery findings)
+  - `IPDiscoveryFinding` (port discovery findings)
+- Shared asset models:
+  - `AttackSurfaceAsset` (port/service assets)
+  - `OrgAttackSurface` (org-to-asset relationships)
+  - `OrgDomain` (domain assets with IP history)
 - Common data structures for inter-service communication
 
 ✅ **Put in `internal/shared/constants.go`:**
-- Shared stream names (e.g., `StreamDiscovery`, `StreamDiscoveries`)
-- Shared collection names (e.g., `CollectionAttackSurface`)
+- Shared stream names:
+  - `StreamDomainDiscoveryQueue`, `StreamDomainDiscoveryResults`
+  - `StreamIPDiscoveryQueue`, `StreamIPDiscoveryResults`
+- Shared collection names:
+  - `CollectionAttackSurface`, `CollectionOrgAttackSurface`, `CollectionOrgDomains`
 - Protocol/status constants used by multiple services
+- Org asset status constants (confirmed, pending, dismissed)
 - Target type constants
 
 ✅ **Put in `internal/discoveries/[service_name]/`:**
 - Models used ONLY by that discovery service
 - Service-specific business logic types
-- Constants specific to that service (e.g., consumer group names)
+- Constants specific to that service (e.g., consumer group names, common ports array)
 
-✅ **Put in `internal/ingestion/`:**
-- `DiscoveryFinding` model (consumed from domain_discovery_results stream)
-- Ingestion-specific constants (consumer group name)
+✅ **Put in `internal/ingestion/[slice_name]/`:**
+- Slice-specific constants (consumer group names)
+- NO models needed (uses shared models)
 
 ❌ **DO NOT put in shared:**
 - Models used by only one service
@@ -197,7 +239,8 @@ Input Stream: domain_discovery_queue
 make build                      # Build all services
 make build-passive              # Build passive-recon only
 make build-active               # Build active-recon only
-make build-shodan-discovery     # Build shodan-discovery only
+make build-domain-discovery     # Build domain-discovery only
+make build-port-discovery       # Build port-discovery only
 make build-ingestion            # Build ingestion only
 ```
 
@@ -205,8 +248,9 @@ make build-ingestion            # Build ingestion only
 ```bash
 make run-passive                # Run passive-recon service
 make run-active                 # Run active-recon service
-make run-shodan-discovery       # Run shodan-discovery service
-make run-ingestion              # Run ingestion service
+make run-domain-discovery       # Run domain-discovery service
+make run-port-discovery         # Run port-discovery service
+make run-ingestion              # Run ingestion service (both consumers)
 ```
 
 ### Docker Operations
@@ -215,7 +259,8 @@ make docker-up                         # Start all services
 make docker-down                       # Stop all services
 make docker-scale-passive N=4          # Scale passive workers to 4
 make docker-scale-active N=3           # Scale active workers to 3
-make docker-scale-shodan-discovery N=2 # Scale shodan-discovery workers to 2
+make docker-scale-domain-discovery N=2 # Scale domain-discovery workers to 2
+make docker-scale-port-discovery N=5   # Scale port-discovery workers to 5
 make docker-scale-ingestion N=3        # Scale ingestion workers to 3
 make docker-logs                       # View logs
 ```
@@ -418,7 +463,36 @@ type DiscoveryFinding struct {
 }
 ```
 
-**⚠️ IMPORTANT:** Ingestion service MUST validate `source` is present and skip findings without it. Currently, only Shodan findings (with IP, no port) are persisted to MongoDB.
+**⚠️ IMPORTANT:** Ingestion service MUST validate `source` is present and skip findings without it.
+
+**IPDiscoveryJob** - Job format for port discovery services (input):
+```go
+type IPDiscoveryJob struct {
+    TraceID   string                 // Request tracing
+    OrgID     string                 // REQUIRED: organization GUID (validated by consumers)
+    ParentID  *string                // Parent asset ID
+    IP        string                 // Target IP address
+    PortRange *string                // Optional: "1-1000" or "80,443,22"
+    Metadata  map[string]interface{} // Provider-specific metadata
+    Created   time.Time
+}
+```
+
+**IPDiscoveryFinding** - Finding format published by port discovery services (output):
+```go
+type IPDiscoveryFinding struct {
+    TraceID   string                 // Request tracing
+    OrgID     string                 // REQUIRED: organization GUID (passed from job)
+    Source    string                 // REQUIRED: "port_discovery", etc. (validated by ingestion)
+    ParentID  *string                // Parent asset ID
+    IP        string                 // Target IP
+    Port      int                    // Discovered port number
+    Protocol  string                 // tcp, udp
+    Status    string                 // active, inactive
+    Metadata  map[string]interface{} // Source-specific data (e.g., banner)
+    Timestamp time.Time              // When finding was discovered
+}
+```
 
 **OrgDomain** - Domain model with IP resolution history (MongoDB `org_domains` collection):
 ```go
@@ -457,18 +531,34 @@ type AttackSurfaceAsset struct {
     Status    string                 // active, inactive, unknown
     FirstSeen time.Time
     LastSeen  time.Time
-    Metadata  map[string]interface{} // Source-specific data (e.g., {"source": "nmap"})
+    Metadata  map[string]interface{} // Source-specific data (e.g., banner, service name)
+    // NOTE: NO org_id in this collection - use OrgAttackSurface for org relationships
+}
+```
+
+**OrgAttackSurface** - Links organizations to attack surface assets (MongoDB `org_attack_surface` collection):
+```go
+type OrgAttackSurface struct {
+    ID              string    // UUID
+    AttackSurfaceID string    // References AttackSurfaceAsset._id
+    OrgID           string    // Organization GUID
+    Status          string    // "confirmed", "pending", "dismissed"
+    AssignedAt      time.Time // When the asset was assigned to this org
+    Source          string    // Discovery source that found this asset ("port_discovery", etc.)
 }
 ```
 
 **Key Design Decisions:**
-- ✅ **Dual collection strategy:**
-  - `org_domains` - Shodan domain discoveries with IP history (no port)
-  - `attack_surface` - Port-based discoveries and other findings
-- ✅ **org_id tracking** - `OrgDomain` links domains to organizations
+- ✅ **Normalized database design:**
+  - `attack_surface` - Stores assets WITHOUT org_id (normalized, deduplicated)
+  - `org_attack_surface` - Stores org-to-asset relationships (many-to-many)
+  - `org_domains` - Shodan domain discoveries with IP history (includes org_id)
+- ✅ **Flexible relationships** - Same asset can belong to multiple organizations
+- ✅ **Clean separation** - Assets are org-agnostic, relationships tracked separately
+- ✅ **Status tracking** - Each org can have different status for the same asset
 - ✅ **Protocol-aware** - `192.168.1.1:53/tcp` ≠ `192.168.1.1:53/udp`
 - ✅ **Asset deduplication** - Unique by (host + port + protocol), handled by ingestion service
-- ✅ **Source tracking** - Use `source` field to identify discovery tool
+- ✅ **Source tracking** - Both finding source and org-asset link source are tracked
 - ✅ **IP history** - Track domain-to-IP changes over time for security monitoring
 - ✅ **Separation of concerns** - Discovery services publish, ingestion service persists
 
@@ -477,10 +567,13 @@ type AttackSurfaceAsset struct {
 **Stream Names:**
 - `shared.StreamDomainDiscoveryQueue = "domain_discovery_queue"` - Input stream for domain discovery jobs (requires `org_id`)
 - `shared.StreamDomainDiscoveryResults = "domain_discovery_results"` - Output stream for domain discovery findings (requires `source`)
+- `shared.StreamIPDiscoveryQueue = "ip_discovery_queue"` - Input stream for IP port discovery jobs (requires `org_id`)
+- `shared.StreamIPDiscoveryResults = "ip_discovery_results"` - Output stream for IP port discovery findings (requires `source`)
 
 **Collection Names:**
-- `shared.CollectionAttackSurface = "attack_surface"` - Port-based findings (not currently used - ingestion removed)
-- `shared.CollectionOrgDomains = "org_domains"` - Shodan domain discoveries with IP history (written by ingestion service)
+- `shared.CollectionAttackSurface = "attack_surface"` - Port-based assets (NO org_id stored here)
+- `shared.CollectionOrgAttackSurface = "org_attack_surface"` - Org-to-asset relationships
+- `shared.CollectionOrgDomains = "org_domains"` - Shodan domain discoveries with IP history
 
 **Protocols:**
 - `shared.ProtocolTCP`, `ProtocolUDP`, `ProtocolSCTP`, `ProtocolICMP`
@@ -490,6 +583,11 @@ type AttackSurfaceAsset struct {
 
 **Asset Status:**
 - `shared.AssetStatusActive`, `AssetStatusInactive`, `AssetStatusUnknown`
+
+**Org Asset Status:**
+- `shared.OrgAssetStatusConfirmed` - Asset confirmed to belong to org
+- `shared.OrgAssetStatusPending` - Asset pending verification
+- `shared.OrgAssetStatusDismissed` - Asset dismissed/not relevant to org
 
 ## Configuration
 
@@ -514,7 +612,9 @@ See `.env.example` for full list and examples.
 
 ## Publishing Discovery Jobs
 
-To trigger discovery across all discovery services:
+### Domain Discovery (Shodan)
+
+To trigger domain discovery:
 
 ```bash
 # ✅ VALID: Job with org_id (will be processed)
@@ -526,35 +626,60 @@ redis-cli XADD domain_discovery_queue * data '{
 }'
 
 # Result:
-# 1. Shodan discovers subdomains and resolves IPs
+# 1. Domain discovery service finds subdomains and resolves IPs
 # 2. Findings published to domain_discovery_results with org_id and source="shodan"
-# 3. Ingestion service stores in org_domains collection with IP resolution history
+# 3. Domain ingestion consumer stores in org_domains collection with IP resolution history
+```
+
+### Port Discovery (TCP Scanner)
+
+To trigger port discovery:
+
+```bash
+# ✅ VALID: Job with org_id (will be processed)
+redis-cli XADD ip_discovery_queue * data '{
+  "trace_id": "trace-456",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
+  "ip": "8.8.8.8",
+  "created": "2025-10-15T10:00:00Z"
+}'
+
+# Result:
+# 1. Port discovery service scans 23 common ports (TCP connect, 2s timeout)
+# 2. For each open port, finding published to ip_discovery_results with source="port_discovery"
+# 3. Port ingestion consumer stores in:
+#    - attack_surface collection (asset without org_id)
+#    - org_attack_surface collection (org-to-asset link with status="confirmed")
 ```
 
 **❌ INVALID: Job without org_id (will be skipped):**
 ```bash
-redis-cli XADD domain_discovery_queue * data '{
-  "trace_id": "trace-456",
-  "host": "example.com",
-  "created": "2025-10-15T10:00:00Z"
-}'
-# This job will be skipped by all discovery consumers
-```
-
-**Job with specific port/protocol (currently skipped by ingestion):**
-```bash
-redis-cli XADD domain_discovery_queue * data '{
+redis-cli XADD ip_discovery_queue * data '{
   "trace_id": "trace-789",
-  "org_id": "550e8400-e29b-41d4-a716-446655440000",
-  "host": "192.168.1.1",
-  "port": 443,
-  "protocol": "tcp",
+  "ip": "8.8.8.8",
   "created": "2025-10-15T10:00:00Z"
 }'
-# Port-based findings are currently skipped by ingestion service (attack surface ingestion removed)
+# This job will be skipped by port discovery consumer
 ```
 
 **⚠️ IMPORTANT:** All jobs MUST include `org_id` or they will be skipped by consumers.
+
+### Querying Results
+
+**Query attack surface assets for an organization:**
+```javascript
+// Join org_attack_surface with attack_surface
+db.org_attack_surface.aggregate([
+  { $match: { org_id: "550e8400-e29b-41d4-a716-446655440000" } },
+  { $lookup: {
+      from: "attack_surface",
+      localField: "attacksurface_id",
+      foreignField: "_id",
+      as: "asset"
+  }},
+  { $unwind: "$asset" }
+])
+```
 
 ## Dependencies
 
@@ -591,18 +716,21 @@ redis-cli XADD domain_discovery_queue * data '{
 
 ### Discovery Services Pattern
 - **Organization-scoped** - All jobs require `org_id` (GUID), consumers skip jobs without it
-- **Parallel processing** - Multiple discovery tools process same job simultaneously
-- **Independent scaling** - Scale each discovery tool independently (e.g., 5 Shodan, 2 Nmap workers)
-- **Shared input stream** - `domain_discovery_queue` consumed by all discovery services
-- **Shared output stream** - `domain_discovery_results` published by all discovery services
-- **Unique consumer groups** - Each tool has its own group (e.g., `shodan_subdomain_service`)
-- **Shared models** - All use `shared.DiscoveryJob` input and `shared.DiscoveryFinding` output
+- **Two discovery flows:**
+  - **Domain discovery:** `domain_discovery_queue` → `domain_discovery_results` → `org_domains`
+  - **Port discovery:** `ip_discovery_queue` → `ip_discovery_results` → `attack_surface` + `org_attack_surface`
+- **Independent scaling** - Scale each discovery tool independently (e.g., 5 domain workers, 10 port workers)
+- **Unique consumer groups** - Each tool has its own group:
+  - Domain: `shodan_subdomain_service`
+  - Port: `port_discovery_service`
+- **Shared models** - All use appropriate shared job/finding models
 - **Source validation** - Ingestion service requires `source` field, skips findings without it
-- **Shodan-only ingestion:**
-  - **org_domains** - Shodan domain discoveries (with IP, no port) with resolution history
-  - **Attack surface ingestion removed** - Non-Shodan findings are skipped
-- **IP resolution tracking** - Shodan resolves domains to IPs, ingestion tracks changes over time
+- **Vertical slice ingestion** - Each ingestion type runs concurrently:
+  - **domain_ingestion** - Shodan domains → `org_domains` with IP resolution history
+  - **port_ingestion** - Port scans → `attack_surface` + `org_attack_surface` (normalized design)
+- **IP resolution tracking** - Domain discovery resolves IPs, ingestion tracks changes over time
 - **Source attribution** - Use `source` field to identify which tool discovered the asset
+- **Normalized org relationships** - Port assets stored without org_id, relationships in separate collection
 
 ### Example: Shodan Discovery Service
 ```
@@ -614,17 +742,38 @@ internal/discoveries/shodan_discovery/
     └── client.go     # Shodan API client implementation
 ```
 
-**Flow:**
+**Domain Discovery Flow:**
 1. Job published to `domain_discovery_queue` (with `org_id`)
-2. Shodan service validates `org_id` is present (skips if missing)
-3. Shodan service discovers subdomains using Shodan API
+2. Domain discovery service validates `org_id` is present (skips if missing)
+3. Domain discovery service finds subdomains using Shodan API
 4. For each domain (root + subdomains):
    - Resolves domain to IP address
    - Publishes finding to `domain_discovery_results` with `org_id`, `source="shodan"`, and `ip`
-5. Ingestion service validates `source` is present (skips if missing)
+5. Domain ingestion consumer validates `source` is present (skips if missing)
 6. For Shodan findings (with IP, no port):
    - Stores in `org_domains` collection
    - Tracks IP resolution history
    - If IP changed: closes old resolution, adds new one
-7. For non-Shodan findings:
-   - Skipped by ingestion service (logged at debug level)
+
+### Example: Port Discovery Service
+```
+internal/discoveries/port_discovery/
+├── constants.go      # GroupPortDiscovery + CommonPorts array (23 ports)
+├── service.go        # Uses shared.IPDiscoveryJob, publishes shared.IPDiscoveryFinding
+├── consumer.go       # Listens to shared.StreamIPDiscoveryQueue with GroupPortDiscovery
+└── scanner/
+    └── scanner.go    # Simple TCP connect scanner with 2s timeout
+```
+
+**Port Discovery Flow:**
+1. Job published to `ip_discovery_queue` (with `org_id`)
+2. Port discovery service validates `org_id` is present (skips if missing)
+3. Port discovery service scans 23 common ports (TCP connect, 2s timeout, concurrent)
+4. For each open port:
+   - Attempts to grab service banner (500ms timeout)
+   - Publishes finding to `ip_discovery_results` with `org_id`, `source="port_discovery"`, port, protocol
+5. Port ingestion consumer validates `source` is present (skips if missing)
+6. For port findings:
+   - Stores asset in `attack_surface` collection (deduped by IP + port + protocol, NO org_id)
+   - Creates link in `org_attack_surface` collection (org_id + asset_id + status="confirmed")
+   - If asset exists: updates `last_seen` and merges metadata

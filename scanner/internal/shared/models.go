@@ -92,3 +92,14 @@ type IPDiscoveryFinding struct {
 	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 	Timestamp time.Time              `json:"timestamp" bson:"timestamp"`
 }
+
+// OrgAttackSurface represents the relationship between an organization and an attack surface asset
+// This links organizations to attack surface assets they own/monitor
+type OrgAttackSurface struct {
+	ID               string    `json:"_id" bson:"_id"`
+	AttackSurfaceID  string    `json:"attacksurface_id" bson:"attacksurface_id"` // References AttackSurfaceAsset._id
+	OrgID            string    `json:"org_id" bson:"org_id"`                     // Organization GUID
+	Status           string    `json:"status" bson:"status"`                     // "confirmed", "pending", "dismissed"
+	AssignedAt       time.Time `json:"assigned_at" bson:"assigned_at"`           // When the asset was assigned to this org
+	Source           string    `json:"source" bson:"source"`                     // Discovery source that found this asset
+}

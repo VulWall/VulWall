@@ -8,9 +8,10 @@ const (
 	StatusFailed    = "failed"
 
 	// MongoDB Collections
-	CollectionScanResults   = "scan_results"
-	CollectionAttackSurface = "attack_surface"
-	CollectionOrgDomains    = "org_domains"
+	CollectionScanResults      = "scan_results"
+	CollectionAttackSurface    = "attack_surface"
+	CollectionOrgAttackSurface = "org_attack_surface"
+	CollectionOrgDomains       = "org_domains"
 
 	// Redis Streams - Domain Discovery
 	StreamDomainDiscoveryQueue   = "domain_discovery_queue"   // Input stream for domain discovery jobs
@@ -24,6 +25,11 @@ const (
 	AssetStatusActive   = "active"
 	AssetStatusInactive = "inactive"
 	AssetStatusUnknown  = "unknown"
+
+	// Org Attack Surface Status
+	OrgAssetStatusConfirmed = "confirmed"
+	OrgAssetStatusPending   = "pending"
+	OrgAssetStatusDismissed = "dismissed"
 
 	// Protocol constants
 	ProtocolTCP  = "tcp"
