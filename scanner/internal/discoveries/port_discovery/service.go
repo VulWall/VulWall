@@ -54,9 +54,10 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 			"scan_method": "tcp_connect",
 		}
 
-		// Add banner if available
+		// Set banner if available
+		var banner *string
 		if portResult.Banner != "" {
-			metadata["banner"] = portResult.Banner
+			banner = &portResult.Banner
 		}
 
 		finding := shared.IPDiscoveryFinding{
@@ -68,6 +69,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 			Port:      portResult.Port,
 			Protocol:  shared.ProtocolTCP,
 			Status:    shared.AssetStatusActive,
+			Banner:    banner,
 			Metadata:  metadata,
 			Timestamp: now,
 		}

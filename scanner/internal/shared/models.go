@@ -44,6 +44,7 @@ type AttackSurfaceAsset struct {
 	Protocol  *string                `json:"protocol,omitempty" bson:"protocol,omitempty"`
 	Status    string                 `json:"status" bson:"status"` // active, inactive, unknown
 	Source    string                 `json:"source" bson:"source"` // "port_discovery", "nmap", "masscan", etc.
+	Banner    *string                `json:"banner,omitempty" bson:"banner,omitempty"` // Service banner (if available)
 	FirstSeen time.Time              `json:"first_seen" bson:"first_seen"`
 	LastSeen  time.Time              `json:"last_seen" bson:"last_seen"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
@@ -90,6 +91,7 @@ type IPDiscoveryFinding struct {
 	Port      int                    `json:"port" bson:"port"`
 	Protocol  string                 `json:"protocol" bson:"protocol"` // tcp, udp
 	Status    string                 `json:"status" bson:"status"`     // active, inactive
+	Banner    *string                `json:"banner,omitempty" bson:"banner,omitempty"` // Service banner (if available)
 	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 	Timestamp time.Time              `json:"timestamp" bson:"timestamp"`
 }

@@ -77,6 +77,7 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 			Protocol:  &protocol,
 			Status:    finding.Status,
 			Source:    finding.Source,
+			Banner:    finding.Banner,
 			FirstSeen: now,
 			LastSeen:  now,
 			Metadata:  finding.Metadata,
@@ -90,6 +91,7 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 			"protocol":   newAsset.Protocol,
 			"status":     newAsset.Status,
 			"source":     newAsset.Source,
+			"banner":     newAsset.Banner,
 			"first_seen": newAsset.FirstSeen,
 			"last_seen":  newAsset.LastSeen,
 			"metadata":   newAsset.Metadata,
@@ -120,7 +122,7 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 		)
 		return err
 	} else {
-		// Asset exists - update last_seen, status, and source
+		// Asset exists - update last_seen, status, source, and banner
 		assetID = existingAsset.ID
 
 		update := bson.M{
@@ -128,6 +130,7 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 				"last_seen": now,
 				"status":    finding.Status,
 				"source":    finding.Source, // Update source (in case different tool rediscovered)
+				"banner":    finding.Banner, // Update banner if new scan provides it
 			},
 		}
 
