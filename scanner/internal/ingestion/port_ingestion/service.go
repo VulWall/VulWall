@@ -91,9 +91,13 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 			"protocol":   newAsset.Protocol,
 			"status":     newAsset.Status,
 			"source":     newAsset.Source,
-			"banner":     newAsset.Banner,
 			"first_seen": newAsset.FirstSeen,
 			"last_seen":  newAsset.LastSeen,
+		}
+
+		// Only include banner if not nil
+		if newAsset.Banner != nil {
+			doc["banner"] = newAsset.Banner
 		}
 
 		// Only include metadata if not empty
@@ -134,8 +138,12 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 				"last_seen": now,
 				"status":    finding.Status,
 				"source":    finding.Source, // Update source (in case different tool rediscovered)
-				"banner":    finding.Banner, // Update banner if new scan provides it
 			},
+		}
+
+		// Update banner if new scan provides it
+		if finding.Banner != nil {
+			update["$set"].(bson.M)["banner"] = finding.Banner
 		}
 
 		// Update metadata if new info is available
