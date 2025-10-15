@@ -50,10 +50,6 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 	// Publish findings for each open port
 	now := time.Now()
 	for _, portResult := range openPorts {
-		metadata := map[string]interface{}{
-			"scan_method": "tcp_connect",
-		}
-
 		// Set banner if available
 		var banner *string
 		if portResult.Banner != "" {
@@ -70,7 +66,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 			Protocol:  shared.ProtocolTCP,
 			Status:    shared.AssetStatusActive,
 			Banner:    banner,
-			Metadata:  metadata,
+			Metadata:  nil, // Keep field for future extensibility
 			Timestamp: now,
 		}
 

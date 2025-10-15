@@ -94,7 +94,11 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 			"banner":     newAsset.Banner,
 			"first_seen": newAsset.FirstSeen,
 			"last_seen":  newAsset.LastSeen,
-			"metadata":   newAsset.Metadata,
+		}
+
+		// Only include metadata if not empty
+		if len(newAsset.Metadata) > 0 {
+			doc["metadata"] = newAsset.Metadata
 		}
 
 		_, err := attackSurfaceCol.InsertOne(ctx, doc)

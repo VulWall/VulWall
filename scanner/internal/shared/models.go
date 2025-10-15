@@ -98,7 +98,7 @@ type IPDiscoveryFinding struct {
 
 // OrgAttackSurface represents the relationship between an organization and an attack surface asset
 // This links organizations to attack surface assets they own/monitor
-// NOTE: Source of discovery is stored in AttackSurfaceAsset.Metadata, not here
+// NOTE: Source of discovery is stored in AttackSurfaceAsset.Source, not here
 type OrgAttackSurface struct {
 	ID              string    `json:"_id" bson:"_id"`
 	AttackSurfaceID string    `json:"attacksurface_id" bson:"attacksurface_id"` // References AttackSurfaceAsset._id

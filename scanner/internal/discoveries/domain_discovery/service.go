@@ -135,7 +135,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID, orgID, domain
 			Port:      nil,
 			Protocol:  nil,
 			Status:    shared.AssetStatusActive,
-			Metadata:  map[string]interface{}{"discovery_type": "subdomain"},
+			Metadata:  nil, // Keep field for future extensibility
 			Timestamp: now,
 		}); err != nil {
 			s.logger.Error("Failed to publish subdomain finding",
