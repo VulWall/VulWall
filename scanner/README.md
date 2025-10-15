@@ -148,10 +148,10 @@ Jobs are published to Redis streams. Example passive recon job:
 
 ```bash
 # Publish a passive recon job
-redis-cli XADD vulwall:passive_recon * data '{"scan_id":"scan-123","type":"passive_recon","domain":"example.com","user_id":"user-456","options":{"threads":10,"timeout":300},"created":"2025-10-11T10:00:00Z"}'
+redis-cli XADD passive_recon * data '{"scan_id":"scan-123","type":"passive_recon","domain":"example.com","user_id":"user-456","options":{"threads":10,"timeout":300},"created":"2025-10-11T10:00:00Z"}'
 
 # Publish an active recon job
-redis-cli XADD vulwall:active_recon * data '{"scan_id":"scan-124","type":"active_recon","domain":"example.com","user_id":"user-456","options":{"aggressive":false,"ports":[80,443,22],"threads":5,"timeout":600},"created":"2025-10-11T10:00:00Z"}'
+redis-cli XADD active_recon * data '{"scan_id":"scan-124","type":"active_recon","domain":"example.com","user_id":"user-456","options":{"aggressive":false,"ports":[80,443,22],"threads":5,"timeout":600},"created":"2025-10-11T10:00:00Z"}'
 ```
 
 ### Scan Results
@@ -214,7 +214,7 @@ mkdir -p cmd/new-service
 4. Add constants to `internal/shared/constants.go`:
 ```go
 const (
-    StreamNewService = "vulwall:new_service"
+    StreamNewService = "new_service"
     GroupNewService  = "new_service_group"
 )
 ```
@@ -270,22 +270,22 @@ Configuration is loaded from environment variables or `.env` file. **This projec
 
 | Service | Stream Name | Consumer Group | Status |
 |---------|-------------|----------------|--------|
-| Passive Recon | `vulwall:passive_recon` | `passive_recon_group` | ✅ Implemented |
-| Active Recon | `vulwall:active_recon` | `active_recon_group` | ✅ Implemented |
-| Vuln Scan | `vulwall:vuln_scan` | `vuln_scan_group` | 🚧 Planned |
-| Report Gen | `vulwall:report_gen` | `report_gen_group` | 🚧 Planned |
+| Passive Recon | `passive_recon` | `passive_recon_group` | ✅ Implemented |
+| Active Recon | `active_recon` | `active_recon_group` | ✅ Implemented |
+| Vuln Scan | `vuln_scan` | `vuln_scan_group` | 🚧 Planned |
+| Report Gen | `report_gen` | `report_gen_group` | 🚧 Planned |
 
 ### Monitoring Streams
 
 ```bash
 # View pending messages
-redis-cli XPENDING vulwall:passive_recon passive_recon_group
+redis-cli XPENDING passive_recon passive_recon_group
 
 # View stream length
-redis-cli XLEN vulwall:passive_recon
+redis-cli XLEN passive_recon
 
 # View recent messages
-redis-cli XRANGE vulwall:passive_recon - + COUNT 10
+redis-cli XRANGE passive_recon - + COUNT 10
 ```
 
 ## MongoDB Collections

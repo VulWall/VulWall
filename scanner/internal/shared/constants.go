@@ -13,8 +13,8 @@ const (
 	CollectionOrgDomains    = "org_domains"
 
 	// Redis Streams
-	StreamDomainDiscoveryQueue   = "vulwall:domain_discovery_queue"   // Input stream for domain discovery jobs
-	StreamDomainDiscoveryResults = "vulwall:domain_discovery_results" // Output stream for domain discovery findings (consumed by ingestion service)
+	StreamDomainDiscoveryQueue   = "domain_discovery_queue"   // Input stream for domain discovery jobs
+	StreamDomainDiscoveryResults = "domain_discovery_results" // Output stream for domain discovery findings (consumed by ingestion service)
 
 	// Attack Surface Asset Status
 	AssetStatusActive   = "active"
