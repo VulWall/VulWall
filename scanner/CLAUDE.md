@@ -75,10 +75,10 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 
 ### Core Principles
 
-1. **Discovery services** (in `internal/discoveries/`) consume jobs from `vulwall:domain_discovery_queue` stream
+1. **Discovery services** (in `internal/discoveries/`) consume jobs from `domain_discovery_queue` stream
 2. Discovery services MUST validate `org_id` is present - skip jobs without it
 3. Discovery services perform scanning/discovery logic (NO MongoDB access)
-4. Discovery services publish findings to `vulwall:domain_discovery_results` stream with `org_id` and `source`
+4. Discovery services publish findings to `domain_discovery_results` stream with `org_id` and `source`
 5. **Ingestion service** (in `internal/ingestion/`) is the ONLY service that writes to MongoDB
 6. Ingestion service MUST validate `source` is present - skip findings without it
 7. Ingestion service currently only processes Shodan domain discoveries:
@@ -101,7 +101,7 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 │                     Discovery Architecture                       │
 └─────────────────────────────────────────────────────────────────┘
 
-1. Job Published to vulwall:domain_discovery_queue
+1. Job Published to domain_discovery_queue
    └─→ Consumed by ALL discovery services (parallel processing)
 
 2. Discovery Services Process Jobs
@@ -110,7 +110,7 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
    └─→ Masscan Discovery (scans IPs) [future]
 
 3. Discovery Services Publish Findings
-   └─→ All publish to vulwall:domain_discovery_results stream
+   └─→ All publish to domain_discovery_results stream
        ├─→ Each finding includes "source" field ("shodan", "nmap", etc.)
        └─→ Consumed by Ingestion Service
 
@@ -143,7 +143,7 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 - Constants specific to that service (e.g., consumer group names)
 
 ✅ **Put in `internal/ingestion/`:**
-- `DiscoveryFinding` model (consumed from vulwall:discoveries stream)
+- `DiscoveryFinding` model (consumed from domain_discovery_results stream)
 - Ingestion-specific constants (consumer group name)
 
 ❌ **DO NOT put in shared:**
@@ -157,13 +157,13 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 Discovery services use a **parallel consumer group pattern** where multiple independent services listen to the same input stream with different consumer groups, then publish to a shared output stream:
 
 ```
-Input Stream: vulwall:domain_discovery_queue
+Input Stream: domain_discovery_queue
     ↓
     ├─→ Consumer Group: shodan_subdomain_service  → Shodan Discovery Service
     ├─→ Consumer Group: nmap_discovery_service    → Nmap Discovery Service (future)
     └─→ Consumer Group: masscan_discovery_service → Masscan Discovery Service (future)
         ↓
-        All publish findings to: vulwall:domain_discovery_results
+        All publish findings to: domain_discovery_results
         ↓
     Ingestion Service → MongoDB (org_domains collection for Shodan only)
 ```
@@ -179,12 +179,12 @@ Input Stream: vulwall:domain_discovery_queue
 - ✅ Clear separation of concerns
 
 **How it works:**
-1. Publisher sends job to `vulwall:domain_discovery_queue` stream (MUST include `org_id`)
+1. Publisher sends job to `domain_discovery_queue` stream (MUST include `org_id`)
 2. **All** discovery services receive the same job (different consumer groups)
 3. Each service validates `org_id` is present (skip if missing)
 4. Each service processes the job with its own tool (Shodan, Nmap, etc.)
-5. Each service publishes findings to `vulwall:domain_discovery_results` stream with `org_id` and `source` field
-6. Ingestion service consumes from `vulwall:domain_discovery_results`
+5. Each service publishes findings to `domain_discovery_results` stream with `org_id` and `source` field
+6. Ingestion service consumes from `domain_discovery_results`
 7. Ingestion service validates `source` is present (skip if missing)
 8. Ingestion service currently only processes Shodan domain discoveries:
    - Shodan domains (with IP, no port) → `org_domains` with IP resolution history
@@ -275,7 +275,7 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
 
    func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error {
        // 1. Run nmap scan on job.Host
-       // 2. For each discovered port/service, publish finding to vulwall:discoveries
+       // 2. For each discovered port/service, publish finding to domain_discovery_results
        // 3. Use ingestion.DiscoveryFinding model with source="nmap"
        finding := ingestion.DiscoveryFinding{
            TraceID:  job.TraceID,
@@ -369,7 +369,7 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
   - `processOrgDomain()` - Stores Shodan domains in `org_domains` with IP resolution history
   - `processAttackSurface()` - Stores port-based findings in `attack_surface`
   - Source validation (skip findings without `source` field)
-- `consumer.go` - Redis consumer for vulwall:discoveries stream
+- `consumer.go` - Redis consumer for domain_discovery_results stream
 
 ### Discovery Service Pattern (`internal/discoveries/[service_name]/`)
 Each discovery service is self-contained:
@@ -377,7 +377,7 @@ Each discovery service is self-contained:
 internal/discoveries/[service_name]/
 ├── constants.go   # Consumer group name
 ├── service.go     # Discovery logic, publishes findings to Redis
-├── consumer.go    # Redis consumer, reads jobs from vulwall:discovery
+├── consumer.go    # Redis consumer, reads jobs from domain_discovery_queue
 ├── models.go      # Optional: service-specific models
 └── [tool]/        # Tool-specific implementation (client, API wrappers, etc.)
     └── client.go
@@ -475,8 +475,8 @@ type AttackSurfaceAsset struct {
 ### Shared Constants
 
 **Stream Names:**
-- `shared.StreamDomainDiscoveryQueue = "vulwall:domain_discovery_queue"` - Input stream for domain discovery jobs (requires `org_id`)
-- `shared.StreamDomainDiscoveryResults = "vulwall:domain_discovery_results"` - Output stream for domain discovery findings (requires `source`)
+- `shared.StreamDomainDiscoveryQueue = "domain_discovery_queue"` - Input stream for domain discovery jobs (requires `org_id`)
+- `shared.StreamDomainDiscoveryResults = "domain_discovery_results"` - Output stream for domain discovery findings (requires `source`)
 
 **Collection Names:**
 - `shared.CollectionAttackSurface = "attack_surface"` - Port-based findings (not currently used - ingestion removed)
@@ -518,7 +518,7 @@ To trigger discovery across all discovery services:
 
 ```bash
 # ✅ VALID: Job with org_id (will be processed)
-redis-cli XADD vulwall:domain_discovery_queue * data '{
+redis-cli XADD domain_discovery_queue * data '{
   "trace_id": "trace-123",
   "org_id": "550e8400-e29b-41d4-a716-446655440000",
   "host": "example.com",
@@ -527,13 +527,13 @@ redis-cli XADD vulwall:domain_discovery_queue * data '{
 
 # Result:
 # 1. Shodan discovers subdomains and resolves IPs
-# 2. Findings published to vulwall:domain_discovery_results with org_id and source="shodan"
+# 2. Findings published to domain_discovery_results with org_id and source="shodan"
 # 3. Ingestion service stores in org_domains collection with IP resolution history
 ```
 
 **❌ INVALID: Job without org_id (will be skipped):**
 ```bash
-redis-cli XADD vulwall:domain_discovery_queue * data '{
+redis-cli XADD domain_discovery_queue * data '{
   "trace_id": "trace-456",
   "host": "example.com",
   "created": "2025-10-15T10:00:00Z"
@@ -543,7 +543,7 @@ redis-cli XADD vulwall:domain_discovery_queue * data '{
 
 **Job with specific port/protocol (currently skipped by ingestion):**
 ```bash
-redis-cli XADD vulwall:domain_discovery_queue * data '{
+redis-cli XADD domain_discovery_queue * data '{
   "trace_id": "trace-789",
   "org_id": "550e8400-e29b-41d4-a716-446655440000",
   "host": "192.168.1.1",
@@ -568,7 +568,7 @@ redis-cli XADD vulwall:domain_discovery_queue * data '{
 
 1. Make changes to a service (e.g., `internal/discoveries/shodan_discovery/`)
 2. Test locally: `make run-shodan-discovery` + `make run-ingestion`
-3. Verify: Publish test job to `vulwall:domain_discovery_queue`, check MongoDB for results
+3. Verify: Publish test job to `domain_discovery_queue`, check MongoDB for results
 4. Build: `make build-shodan-discovery && make build-ingestion`
 5. Deploy: `make docker-build && make docker-up`
 
@@ -593,8 +593,8 @@ redis-cli XADD vulwall:domain_discovery_queue * data '{
 - **Organization-scoped** - All jobs require `org_id` (GUID), consumers skip jobs without it
 - **Parallel processing** - Multiple discovery tools process same job simultaneously
 - **Independent scaling** - Scale each discovery tool independently (e.g., 5 Shodan, 2 Nmap workers)
-- **Shared input stream** - `vulwall:domain_discovery_queue` consumed by all discovery services
-- **Shared output stream** - `vulwall:domain_discovery_results` published by all discovery services
+- **Shared input stream** - `domain_discovery_queue` consumed by all discovery services
+- **Shared output stream** - `domain_discovery_results` published by all discovery services
 - **Unique consumer groups** - Each tool has its own group (e.g., `shodan_subdomain_service`)
 - **Shared models** - All use `shared.DiscoveryJob` input and `shared.DiscoveryFinding` output
 - **Source validation** - Ingestion service requires `source` field, skips findings without it
@@ -615,12 +615,12 @@ internal/discoveries/shodan_discovery/
 ```
 
 **Flow:**
-1. Job published to `vulwall:domain_discovery_queue` (with `org_id`)
+1. Job published to `domain_discovery_queue` (with `org_id`)
 2. Shodan service validates `org_id` is present (skips if missing)
 3. Shodan service discovers subdomains using Shodan API
 4. For each domain (root + subdomains):
    - Resolves domain to IP address
-   - Publishes finding to `vulwall:domain_discovery_results` with `org_id`, `source="shodan"`, and `ip`
+   - Publishes finding to `domain_discovery_results` with `org_id`, `source="shodan"`, and `ip`
 5. Ingestion service validates `source` is present (skips if missing)
 6. For Shodan findings (with IP, no port):
    - Stores in `org_domains` collection

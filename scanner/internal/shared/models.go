@@ -65,3 +65,30 @@ type OrgDomain struct {
 	Source            string              `json:"source" bson:"source"` // "shodan", "nmap", etc.
 	ResolutionHistory []ResolutionHistory `json:"resolution_history" bson:"resolution_history"`
 }
+
+// IPDiscoveryJob represents a job to discover open ports on an IP address
+// This is consumed by port discovery services (port_discovery, etc.)
+type IPDiscoveryJob struct {
+	TraceID   string                 `json:"trace_id" bson:"trace_id"`
+	OrgID     string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
+	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
+	IP        string                 `json:"ip" bson:"ip"`         // Target IP address
+	PortRange *string                `json:"port_range,omitempty" bson:"port_range,omitempty"` // Optional: "1-1000" or "80,443,22"
+	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+	Created   time.Time              `json:"created" bson:"created"`
+}
+
+// IPDiscoveryFinding represents a discovered open port on an IP
+// This is published to ip_discovery_results by port discovery services
+type IPDiscoveryFinding struct {
+	TraceID   string                 `json:"trace_id" bson:"trace_id"`
+	OrgID     string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
+	Source    string                 `json:"source" bson:"source"` // "port_discovery", etc.
+	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
+	IP        string                 `json:"ip" bson:"ip"`
+	Port      int                    `json:"port" bson:"port"`
+	Protocol  string                 `json:"protocol" bson:"protocol"` // tcp, udp
+	Status    string                 `json:"status" bson:"status"`     // active, inactive
+	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+	Timestamp time.Time              `json:"timestamp" bson:"timestamp"`
+}
