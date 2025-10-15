@@ -48,8 +48,10 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 }
 
 // processAttackSurface stores port findings in the attack_surface collection
+// and links them to organizations via org_attack_surface collection
 func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDiscoveryFinding) error {
-	collection := s.db.Collection(shared.CollectionAttackSurface)
+	attackSurfaceCol := s.db.Collection(shared.CollectionAttackSurface)
+	orgAttackSurfaceCol := s.db.Collection(shared.CollectionOrgAttackSurface)
 	now := time.Now()
 
 	// Check if this asset (IP + port + protocol) already exists
@@ -60,10 +62,12 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 	}
 
 	var existingAsset shared.AttackSurfaceAsset
-	err := collection.FindOne(ctx, filter).Decode(&existingAsset)
+	err := attackSurfaceCol.FindOne(ctx, filter).Decode(&existingAsset)
+
+	var assetID string
 
 	if err == mongo.ErrNoDocuments {
-		// Create new attack surface asset
+		// Create new attack surface asset (without org_id in metadata)
 		protocol := finding.Protocol
 		newAsset := shared.AttackSurfaceAsset{
 			ID:        uuid.New().String(),
@@ -77,13 +81,6 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 			Metadata:  finding.Metadata,
 		}
 
-		// Add org_id and source to metadata
-		if newAsset.Metadata == nil {
-			newAsset.Metadata = make(map[string]interface{})
-		}
-		newAsset.Metadata["org_id"] = finding.OrgID
-		newAsset.Metadata["source"] = finding.Source
-
 		doc := bson.M{
 			"_id":        newAsset.ID,
 			"parent_id":  newAsset.ParentID,
@@ -96,69 +93,139 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 			"metadata":   newAsset.Metadata,
 		}
 
-		_, err := collection.InsertOne(ctx, doc)
+		_, err := attackSurfaceCol.InsertOne(ctx, doc)
 		if err != nil {
 			s.logger.Error("Failed to create AttackSurfaceAsset",
 				zap.String("ip", finding.IP),
 				zap.Int("port", finding.Port),
-				zap.String("org_id", finding.OrgID),
 				zap.Error(err),
 			)
 			return err
 		}
 
+		assetID = newAsset.ID
+
 		s.logger.Info("Created new AttackSurfaceAsset",
+			zap.String("asset_id", assetID),
 			zap.String("ip", finding.IP),
 			zap.Int("port", finding.Port),
 			zap.String("protocol", finding.Protocol),
-			zap.String("org_id", finding.OrgID),
 		)
-		return nil
-	}
-
-	if err != nil {
+	} else if err != nil {
 		s.logger.Error("Failed to check existing AttackSurfaceAsset",
 			zap.String("trace_id", finding.TraceID),
 			zap.Error(err),
 		)
 		return err
-	}
+	} else {
+		// Asset exists - update last_seen and status
+		assetID = existingAsset.ID
 
-	// Asset exists - update last_seen and status
-	update := bson.M{
-		"$set": bson.M{
-			"last_seen": now,
-			"status":    finding.Status,
-		},
-	}
-
-	// Update metadata if new info is available
-	if len(finding.Metadata) > 0 {
-		// Merge metadata
-		if existingAsset.Metadata == nil {
-			existingAsset.Metadata = make(map[string]interface{})
+		update := bson.M{
+			"$set": bson.M{
+				"last_seen": now,
+				"status":    finding.Status,
+			},
 		}
-		for k, v := range finding.Metadata {
-			existingAsset.Metadata[k] = v
-		}
-		update["$set"].(bson.M)["metadata"] = existingAsset.Metadata
-	}
 
-	_, err = collection.UpdateOne(ctx, bson.M{"_id": existingAsset.ID}, update)
-	if err != nil {
-		s.logger.Error("Failed to update AttackSurfaceAsset",
+		// Update metadata if new info is available
+		if len(finding.Metadata) > 0 {
+			// Merge metadata
+			if existingAsset.Metadata == nil {
+				existingAsset.Metadata = make(map[string]interface{})
+			}
+			for k, v := range finding.Metadata {
+				existingAsset.Metadata[k] = v
+			}
+			update["$set"].(bson.M)["metadata"] = existingAsset.Metadata
+		}
+
+		_, err = attackSurfaceCol.UpdateOne(ctx, bson.M{"_id": existingAsset.ID}, update)
+		if err != nil {
+			s.logger.Error("Failed to update AttackSurfaceAsset",
+				zap.String("ip", finding.IP),
+				zap.Int("port", finding.Port),
+				zap.Error(err),
+			)
+			return err
+		}
+
+		s.logger.Info("Updated AttackSurfaceAsset",
+			zap.String("asset_id", assetID),
 			zap.String("ip", finding.IP),
 			zap.Int("port", finding.Port),
+			zap.String("protocol", finding.Protocol),
+		)
+	}
+
+	// Now link the asset to the organization in org_attack_surface collection
+	return s.linkAssetToOrg(ctx, orgAttackSurfaceCol, assetID, finding.OrgID, finding.Source, now)
+}
+
+// linkAssetToOrg creates or updates the relationship between an asset and an organization
+func (s *Service) linkAssetToOrg(ctx context.Context, col *mongo.Collection, assetID, orgID, source string, timestamp time.Time) error {
+	// Check if this relationship already exists
+	filter := bson.M{
+		"attacksurface_id": assetID,
+		"org_id":           orgID,
+	}
+
+	var existingLink shared.OrgAttackSurface
+	err := col.FindOne(ctx, filter).Decode(&existingLink)
+
+	if err == mongo.ErrNoDocuments {
+		// Create new org-asset link with "confirmed" status
+		newLink := shared.OrgAttackSurface{
+			ID:              uuid.New().String(),
+			AttackSurfaceID: assetID,
+			OrgID:           orgID,
+			Status:          shared.OrgAssetStatusConfirmed,
+			AssignedAt:      timestamp,
+			Source:          source,
+		}
+
+		doc := bson.M{
+			"_id":               newLink.ID,
+			"attacksurface_id":  newLink.AttackSurfaceID,
+			"org_id":            newLink.OrgID,
+			"status":            newLink.Status,
+			"assigned_at":       newLink.AssignedAt,
+			"source":            newLink.Source,
+		}
+
+		_, err := col.InsertOne(ctx, doc)
+		if err != nil {
+			s.logger.Error("Failed to create OrgAttackSurface link",
+				zap.String("asset_id", assetID),
+				zap.String("org_id", orgID),
+				zap.Error(err),
+			)
+			return err
+		}
+
+		s.logger.Info("Created OrgAttackSurface link",
+			zap.String("asset_id", assetID),
+			zap.String("org_id", orgID),
+			zap.String("source", source),
+		)
+		return nil
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to check existing OrgAttackSurface link",
+			zap.String("asset_id", assetID),
+			zap.String("org_id", orgID),
 			zap.Error(err),
 		)
 		return err
 	}
 
-	s.logger.Info("Updated AttackSurfaceAsset",
-		zap.String("ip", finding.IP),
-		zap.Int("port", finding.Port),
-		zap.String("protocol", finding.Protocol),
-		zap.String("org_id", finding.OrgID),
+	// Link already exists - optionally update it (e.g., refresh source)
+	s.logger.Debug("OrgAttackSurface link already exists",
+		zap.String("asset_id", assetID),
+		zap.String("org_id", orgID),
+		zap.String("status", existingLink.Status),
 	)
+
 	return nil
 }
