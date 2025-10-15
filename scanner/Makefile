@@ -12,7 +12,7 @@ build: ## Build all services
 	@echo "Building active-recon..."
 	@go build -o bin/active-recon ./cmd/active-recon
 	@echo "Building shodan-discovery..."
-	@go build -o bin/shodan-discovery ./cmd/shodan-discovery
+	@go build -o bin/shodan-discovery ./cmd/domain-discovery/shodan-discovery
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Build complete!"
@@ -24,7 +24,7 @@ build-active: ## Build active-recon service
 	@go build -o bin/active-recon ./cmd/active-recon
 
 build-shodan-discovery: ## Build shodan-discovery service
-	@go build -o bin/shodan-discovery ./cmd/shodan-discovery
+	@go build -o bin/shodan-discovery ./cmd/domain-discovery/shodan-discovery
 
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
@@ -36,7 +36,7 @@ run-active: ## Run active-recon service locally
 	@go run ./cmd/active-recon/main.go
 
 run-shodan-discovery: ## Run shodan-discovery service locally
-	@go run ./cmd/shodan-discovery/main.go
+	@go run ./cmd/domain-discovery/shodan-discovery/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
