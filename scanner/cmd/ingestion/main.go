@@ -58,6 +58,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Ensure indexes exist
+	if err := mongox.EnsureIndexes(ctx, db, logger.Log); err != nil {
+		logger.Log.Fatal("Failed to create indexes", zap.Error(err))
+	}
+
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
