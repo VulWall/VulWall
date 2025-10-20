@@ -2,12 +2,12 @@ package domain_ingestion
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
+	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -255,20 +255,9 @@ func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.Disc
 		Created: time.Now(),
 	}
 
-	// Marshal to JSON
-	data, err := json.Marshal(ipJob)
-	if err != nil {
-		return fmt.Errorf("failed to marshal IP discovery job: %w", err)
-	}
-
-	// Publish to ip_discovery_queue stream
-	_, err = s.redis.XAdd(ctx, &redis.XAddArgs{
-		Stream: shared.StreamIPDiscoveryQueue,
-		Values: map[string]interface{}{"data": string(data)},
-	}).Result()
-
-	if err != nil {
-		return fmt.Errorf("failed to publish to Redis stream: %w", err)
+	// Use shared publisher utility
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryQueue, ipJob); err != nil {
+		return fmt.Errorf("failed to publish IP discovery job: %w", err)
 	}
 
 	return nil

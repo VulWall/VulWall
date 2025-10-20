@@ -2,10 +2,10 @@ package domain_discovery
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/discoveries/domain_discovery/shodan"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
@@ -155,20 +155,8 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID, orgID, domain
 
 // publishFinding publishes a discovery finding to the domain discovery results stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFinding) error {
-	data, err := json.Marshal(finding)
-	if err != nil {
-		s.logger.Error("Failed to marshal finding", zap.Error(err))
-		return err
-	}
-
-	_, err = s.redis.XAdd(ctx, &redis.XAddArgs{
-		Stream: shared.StreamDomainDiscoveryResults,
-		Values: map[string]interface{}{
-			"data": string(data),
-		},
-	}).Result()
-
-	if err != nil {
+	// Use shared publisher utility
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDomainDiscoveryResults, finding); err != nil {
 		s.logger.Error("Failed to publish finding to stream",
 			zap.String("stream", shared.StreamDomainDiscoveryResults),
 			zap.Error(err),
