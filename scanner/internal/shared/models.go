@@ -38,6 +38,7 @@ type DiscoveryFinding struct {
 // This is written to MongoDB by all discovery providers
 type AttackSurfaceAsset struct {
 	ID        string                 `json:"_id" bson:"_id"`
+	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"` // Links to OrgAsset (IP asset)
 	Host      string                 `json:"host" bson:"host"`
 	Port      *int                   `json:"port,omitempty" bson:"port,omitempty"`
 	Protocol  *string                `json:"protocol,omitempty" bson:"protocol,omitempty"`
@@ -57,8 +58,31 @@ type ResolutionHistory struct {
 	ResolvedUntil   *time.Time `json:"resolved_until,omitempty" bson:"resolved_until,omitempty"` // nil means currently active
 }
 
+// OrgAsset represents an asset discovered for an organization (domain or IP)
+// Uses type discrimination to store different asset types in a single collection
+type OrgAsset struct {
+	ID        string    `json:"_id" bson:"_id"`
+	AssetType string    `json:"asset_type" bson:"asset_type"` // "domain" or "ip"
+	OrgID     string    `json:"org_id" bson:"org_id"`
+	Source    string    `json:"source" bson:"source"`
+	Status    string    `json:"status" bson:"status"`
+	FirstSeen time.Time `json:"first_seen" bson:"first_seen"`
+	LastSeen  time.Time `json:"last_seen" bson:"last_seen"`
+
+	// Domain-specific fields (populated when asset_type = "domain")
+	Domain            *string             `json:"domain,omitempty" bson:"domain,omitempty"`
+	CurrentIP         *string             `json:"current_ip,omitempty" bson:"current_ip,omitempty"`
+	ResolutionHistory []ResolutionHistory `json:"resolution_history,omitempty" bson:"resolution_history,omitempty"`
+
+	// IP-specific fields (populated when asset_type = "ip")
+	IP            *string  `json:"ip,omitempty" bson:"ip,omitempty"`
+	ParentID      *string  `json:"parent_id,omitempty" bson:"parent_id,omitempty"`       // Links to parent domain asset
+	ParentDomains []string `json:"parent_domains,omitempty" bson:"parent_domains,omitempty"` // Quick reference to parent domain names
+}
+
 // OrgDomain represents a domain discovered for an organization
-// Used to track domain-to-IP resolution history
+// DEPRECATED: Use OrgAsset with asset_type = "domain" instead
+// Kept for backward compatibility during migration
 type OrgDomain struct {
 	ID                string              `json:"_id" bson:"_id"`
 	OrgID             string              `json:"org_id" bson:"org_id"`

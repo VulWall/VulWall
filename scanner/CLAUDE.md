@@ -10,8 +10,9 @@ VulWall Engine is a **vertically-sliced Go monorepo** for security scanning serv
 - Discovery services focus on finding assets and publish findings to Redis streams
 - The **ingestion service** uses **vertical slice architecture** with concurrent consumers
 - All jobs MUST include `org_id` (organization GUID) or they will be skipped
-- **Domain discoveries:** Shodan domains stored in `org_domains` collection with IP resolution history
+- **Domain & IP discoveries:** Stored in unified `org_assets` collection with type discrimination (asset_type: "domain" or "ip")
 - **Port discoveries:** Port scans stored in `attack_surface` + `org_attack_surface` collections (normalized design)
+- **Hierarchical relationships:** Domain → IP → Port via parent_id fields
 
 ## Project Structure
 
@@ -96,12 +97,12 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 4. Discovery services publish findings to Redis result streams with `org_id` and `source`
 5. **Ingestion service** (in `internal/ingestion/`) is the ONLY service that writes to MongoDB
 6. Ingestion service uses **vertical slice architecture** with concurrent consumers:
-   - `domain_ingestion` - processes domain discoveries → `org_domains` collection
+   - `domain_ingestion` - processes domain discoveries → `org_assets` collection (asset_type: "domain" and "ip")
    - `port_ingestion` - processes port discoveries → `attack_surface` + `org_attack_surface` collections
 7. Each ingestion slice MUST validate `source` is present - skip findings without it
-8. **Normalized database design:**
-   - Assets stored in `attack_surface` (NO org_id in this collection)
-   - Org-to-asset relationships stored in `org_attack_surface` (links orgs to assets)
+8. **Database design:**
+   - Domains & IPs: `org_assets` collection with type discrimination and parent_id hierarchy
+   - Ports: `attack_surface` (NO org_id, normalized) + `org_attack_surface` (org-to-asset links)
 
 ### Directory Organization
 
@@ -494,14 +495,26 @@ type IPDiscoveryFinding struct {
 }
 ```
 
-**OrgDomain** - Domain model with IP resolution history (MongoDB `org_domains` collection):
+**OrgAsset** - Unified domain and IP model with type discrimination (MongoDB `org_assets` collection):
 ```go
-type OrgDomain struct {
-    ID                string              // UUID
-    OrgID             string              // Organization GUID
-    Domain            string              // Domain name (e.g., "api.example.com")
-    Source            string              // Discovery source ("shodan", etc.)
+type OrgAsset struct {
+    ID        string    // UUID
+    AssetType string    // "domain" or "ip" (type discrimination)
+    OrgID     string    // Organization GUID
+    Source    string    // Discovery source
+    Status    string    // active, inactive, unknown
+    FirstSeen time.Time
+    LastSeen  time.Time
+
+    // Domain-specific fields (when asset_type = "domain")
+    Domain            *string             // Domain name (e.g., "api.example.com")
+    CurrentIP         *string             // Current resolved IP
     ResolutionHistory []ResolutionHistory // IP resolution history over time
+
+    // IP-specific fields (when asset_type = "ip")
+    IP            *string  // IP address
+    ParentID      *string  // Links to parent domain asset
+    ParentDomains []string // Quick reference to parent domain names
 }
 
 type ResolutionHistory struct {
@@ -512,11 +525,20 @@ type ResolutionHistory struct {
 }
 ```
 
-**How IP Resolution History Works:**
-- When a domain is first discovered, a new `OrgDomain` is created with initial IP
-- When the same domain is scanned again:
-  - **IP unchanged:** No update (skip)
-  - **IP changed:** Close previous resolution (set `resolved_until`), add new resolution
+**How the Unified Collection Works:**
+- **Type discrimination**: `asset_type` field determines document structure ("domain" or "ip")
+- **Hierarchical relationships**: Domain assets link to IP assets via `parent_id`
+- **MongoDB flexible schema**: Domain-specific and IP-specific fields coexist in same collection
+- **Domain → IP flow**:
+  1. Domain discovered → stored as `asset_type: "domain"` with resolution_history
+  2. IP resolved from domain → stored as `asset_type: "ip"` with `parent_id` pointing to domain
+  3. Port scan triggered → IP asset ID passed to port ingestion for `parent_id` linking
+
+**IP Resolution History (for domains only):**
+- When a domain is first discovered, a new domain asset is created with initial IP in resolution_history
+- When the same domain is rescanned:
+  - **IP unchanged:** Update `last_seen` only
+  - **IP changed:** Close previous resolution (set `resolved_until`), add new resolution, update `current_ip`
 - Only the most recent resolution has `resolved_until = nil` (currently active)
 - This tracks domain hijacking, infrastructure changes, and CDN switches over time
 
@@ -549,13 +571,20 @@ type OrgAttackSurface struct {
 ```
 
 **Key Design Decisions:**
-- ✅ **Normalized database design:**
-  - `attack_surface` - Stores assets WITHOUT org_id (normalized, deduplicated)
-  - `org_attack_surface` - Stores org-to-asset relationships (many-to-many)
-  - `org_domains` - Shodan domain discoveries with IP history (includes org_id)
-- ✅ **Flexible relationships** - Same asset can belong to multiple organizations
-- ✅ **Clean separation** - Assets are org-agnostic, relationships tracked separately
-- ✅ **Status tracking** - Each org can have different status for the same asset
+- ✅ **Unified asset collection with type discrimination:**
+  - `org_assets` - Stores domains and IPs with `asset_type` field ("domain" or "ip")
+  - Leverages MongoDB flexible schema for domain-specific vs IP-specific fields
+  - Natural parent-child hierarchy via `parent_id` (domain → IP → port)
+- ✅ **Normalized port storage:**
+  - `attack_surface` - Stores ports WITHOUT org_id (normalized, deduplicated)
+  - `org_attack_surface` - Stores org-to-port relationships (many-to-many)
+- ✅ **Hierarchical traceability:**
+  - Domain assets track IP resolution history
+  - IP assets link back to parent domains via `parent_id`
+  - Port assets link to IP assets via `parent_id` (tracing: port → IP → domain)
+- ✅ **Flexible relationships** - Same port asset can belong to multiple organizations
+- ✅ **Clean separation** - Ports are org-agnostic, relationships tracked separately
+- ✅ **Status tracking** - Each org can have different status for the same port
 - ✅ **Protocol-aware** - `192.168.1.1:53/tcp` ≠ `192.168.1.1:53/udp`
 - ✅ **Asset deduplication** - Unique by (host + port + protocol), handled by ingestion service
 - ✅ **Source tracking** - Both finding source and org-asset link source are tracked
@@ -571,9 +600,14 @@ type OrgAttackSurface struct {
 - `shared.StreamIPDiscoveryResults = "ip_discovery_results"` - Output stream for IP port discovery findings (requires `source`)
 
 **Collection Names:**
+- `shared.CollectionOrgAssets = "org_assets"` - Unified domains and IPs with type discrimination
 - `shared.CollectionAttackSurface = "attack_surface"` - Port-based assets (NO org_id stored here)
-- `shared.CollectionOrgAttackSurface = "org_attack_surface"` - Org-to-asset relationships
-- `shared.CollectionOrgDomains = "org_domains"` - Shodan domain discoveries with IP history
+- `shared.CollectionOrgAttackSurface = "org_attack_surface"` - Org-to-port relationships
+- `shared.CollectionOrgDomains = "org_domains"` - DEPRECATED: Use CollectionOrgAssets instead
+
+**Asset Types (for OrgAsset.AssetType):**
+- `shared.AssetTypeDomain = "domain"` - Domain asset type
+- `shared.AssetTypeIP = "ip"` - IP asset type
 
 **Protocols:**
 - `shared.ProtocolTCP`, `ProtocolUDP`, `ProtocolSCTP`, `ProtocolICMP`

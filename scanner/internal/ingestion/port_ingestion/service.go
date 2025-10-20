@@ -54,6 +54,15 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 	orgAttackSurfaceCol := s.db.Collection(shared.CollectionOrgAttackSurface)
 	now := time.Now()
 
+	// Find parent IP asset from org_assets collection (if available from metadata)
+	var parentIPAssetID *string
+	if ipAssetIDStr, ok := finding.Metadata["ip_asset_id"].(string); ok {
+		parentIPAssetID = &ipAssetIDStr
+		s.logger.Debug("Found parent IP asset ID in metadata",
+			zap.String("ip_asset_id", ipAssetIDStr),
+		)
+	}
+
 	// Check if this asset (IP + port + protocol) already exists
 	filter := bson.M{
 		"host":     finding.IP,
@@ -71,6 +80,7 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 		protocol := finding.Protocol
 		newAsset := shared.AttackSurfaceAsset{
 			ID:        uuid.New().String(),
+			ParentID:  parentIPAssetID, // Link to IP asset in org_assets
 			Host:      finding.IP,
 			Port:      &finding.Port,
 			Protocol:  &protocol,
@@ -83,14 +93,19 @@ func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDis
 		}
 
 		doc := bson.M{
-			"_id":       newAsset.ID,
-			"host":      newAsset.Host,
-			"port":      newAsset.Port,
-			"protocol":  newAsset.Protocol,
-			"status":    newAsset.Status,
-			"source":    newAsset.Source,
+			"_id":        newAsset.ID,
+			"host":       newAsset.Host,
+			"port":       newAsset.Port,
+			"protocol":   newAsset.Protocol,
+			"status":     newAsset.Status,
+			"source":     newAsset.Source,
 			"first_seen": newAsset.FirstSeen,
-			"last_seen": newAsset.LastSeen,
+			"last_seen":  newAsset.LastSeen,
+		}
+
+		// Include parent_id if available
+		if newAsset.ParentID != nil {
+			doc["parent_id"] = newAsset.ParentID
 		}
 
 		// Only include banner if not nil

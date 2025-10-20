@@ -11,7 +11,8 @@ const (
 	CollectionScanResults      = "scan_results"
 	CollectionAttackSurface    = "attack_surface"
 	CollectionOrgAttackSurface = "org_attack_surface"
-	CollectionOrgDomains       = "org_domains"
+	CollectionOrgAssets        = "org_assets" // Unified collection for domains and IPs
+	CollectionOrgDomains       = "org_domains" // DEPRECATED: Use CollectionOrgAssets instead
 
 	// Redis Streams - Domain Discovery
 	StreamDomainDiscoveryQueue   = "domain_discovery_queue"   // Input stream for domain discovery jobs
@@ -41,4 +42,8 @@ const (
 	TargetTypeDomain = "domain"
 	TargetTypeIP     = "ip"
 	TargetTypeCIDR   = "cidr"
+
+	// Asset type constants (for OrgAsset.AssetType)
+	AssetTypeDomain = "domain"
+	AssetTypeIP     = "ip"
 )
