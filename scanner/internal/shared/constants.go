@@ -8,10 +8,9 @@ const (
 	StatusFailed    = "failed"
 
 	// MongoDB Collections
-	CollectionScanResults      = "scan_results"
-	CollectionAttackSurface    = "attack_surface"
-	CollectionOrgAttackSurface = "org_attack_surface"
-	CollectionOrgAssets        = "org_assets" // Unified collection for domains and IPs
+	CollectionScanResults = "scan_results"
+	CollectionDiscoveries = "discoveries" // Global asset registry (domains, subdomains, IPs, ports)
+	CollectionOrgAssets   = "org_assets"  // Org-to-asset relationship links
 
 	// Redis Streams - Domain Discovery
 	StreamDomainDiscoveryQueue   = "domain_discovery_queue"   // Input stream for domain discovery jobs
@@ -21,15 +20,21 @@ const (
 	StreamIPDiscoveryQueue   = "ip_discovery_queue"   // Input stream for IP port discovery jobs
 	StreamIPDiscoveryResults = "ip_discovery_results" // Output stream for IP port discovery findings (consumed by ingestion service)
 
-	// Attack Surface Asset Status
+	// Asset Types (for Discovery.AssetType)
+	AssetTypeDomain    = "domain"
+	AssetTypeSubdomain = "subdomain"
+	AssetTypeIP        = "ip"
+	AssetTypePort      = "port"
+
+	// Discovery Asset Status (technical state)
 	AssetStatusActive   = "active"
 	AssetStatusInactive = "inactive"
 	AssetStatusUnknown  = "unknown"
 
-	// Org Attack Surface Status
-	OrgAssetStatusConfirmed = "confirmed"
-	OrgAssetStatusPending   = "pending"
-	OrgAssetStatusDismissed = "dismissed"
+	// Org Asset Link Status (organizational state)
+	OrgAssetStatusConfirmed = "confirmed" // Asset confirmed to belong to org
+	OrgAssetStatusPending   = "pending"   // Asset pending verification
+	OrgAssetStatusDismissed = "dismissed" // Asset dismissed/not relevant to org
 
 	// Protocol constants
 	ProtocolTCP  = "tcp"
@@ -41,8 +46,4 @@ const (
 	TargetTypeDomain = "domain"
 	TargetTypeIP     = "ip"
 	TargetTypeCIDR   = "cidr"
-
-	// Asset type constants (for OrgAsset.AssetType)
-	AssetTypeDomain = "domain"
-	AssetTypeIP     = "ip"
 )

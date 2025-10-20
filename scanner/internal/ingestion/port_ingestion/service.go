@@ -23,7 +23,7 @@ func NewService(db *mongo.Database, logger *zap.Logger) *Service {
 	}
 }
 
-// ProcessFinding processes a port discovery finding and persists it to MongoDB attack_surface collection
+// ProcessFinding processes a port discovery finding and persists it to MongoDB discoveries collection
 func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscoveryFinding) error {
 	s.logger.Info("Processing port discovery finding",
 		zap.String("trace_id", finding.TraceID),
@@ -33,7 +33,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 		zap.Int("port", finding.Port),
 	)
 
-	// Validate source is present (required) - skip if missing
+	// Validate source is present (required)
 	if finding.Source == "" {
 		s.logger.Warn("Skipping finding: missing source",
 			zap.String("trace_id", finding.TraceID),
@@ -43,218 +43,394 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 		return nil
 	}
 
-	// Store port finding in attack_surface collection
-	return s.processAttackSurface(ctx, finding)
-}
-
-// processAttackSurface stores port findings in the attack_surface collection
-// and links them to organizations via org_attack_surface collection
-func (s *Service) processAttackSurface(ctx context.Context, finding shared.IPDiscoveryFinding) error {
-	attackSurfaceCol := s.db.Collection(shared.CollectionAttackSurface)
-	orgAttackSurfaceCol := s.db.Collection(shared.CollectionOrgAttackSurface)
 	now := time.Now()
 
-	// Find parent IP asset from org_assets collection (if available from metadata)
-	var parentIPAssetID *string
-	if ipAssetIDStr, ok := finding.Metadata["ip_asset_id"].(string); ok {
-		parentIPAssetID = &ipAssetIDStr
-		s.logger.Debug("Found parent IP asset ID in metadata",
-			zap.String("ip_asset_id", ipAssetIDStr),
+	// 1. Ensure IP discovery exists (create if not found)
+	ipDiscoveryID, err := s.ensureIPDiscovery(ctx, finding, now)
+	if err != nil {
+		return err
+	}
+
+	// 2. Create org_assets link for IP
+	if err := s.createOrgAssetLink(ctx, finding.OrgID, ipDiscoveryID, now); err != nil {
+		s.logger.Error("Failed to create org_assets link for IP",
+			zap.String("discovery_id", ipDiscoveryID),
+			zap.String("org_id", finding.OrgID),
+			zap.Error(err),
 		)
+		// Don't fail the entire operation
 	}
 
-	// Check if this asset (IP + port + protocol) already exists
+	// 3. Upsert port discovery
+	portDiscoveryID, err := s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
+	if err != nil {
+		return err
+	}
+
+	// 4. Create org_assets link for port
+	if err := s.createOrgAssetLink(ctx, finding.OrgID, portDiscoveryID, now); err != nil {
+		s.logger.Error("Failed to create org_assets link for port",
+			zap.String("discovery_id", portDiscoveryID),
+			zap.String("org_id", finding.OrgID),
+			zap.Error(err),
+		)
+		// Don't fail the entire operation
+	}
+
+	return nil
+}
+
+// ensureIPDiscovery ensures an IP discovery exists, creating it if not found
+func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscoveryFinding, timestamp time.Time) (string, error) {
+	collection := s.db.Collection(shared.CollectionDiscoveries)
+
+	// Check if IP discovery exists
 	filter := bson.M{
-		"host":     finding.IP,
-		"port":     finding.Port,
-		"protocol": finding.Protocol,
+		"asset_type": shared.AssetTypeIP,
+		"ip":         finding.IP,
 	}
 
-	var existingAsset shared.AttackSurfaceAsset
-	err := attackSurfaceCol.FindOne(ctx, filter).Decode(&existingAsset)
-
-	var assetID string
+	var existingIPDiscovery shared.Discovery
+	err := collection.FindOne(ctx, filter).Decode(&existingIPDiscovery)
 
 	if err == mongo.ErrNoDocuments {
-		// Create new attack surface asset
-		protocol := finding.Protocol
-		newAsset := shared.AttackSurfaceAsset{
-			ID:        uuid.New().String(),
-			ParentID:  parentIPAssetID, // Link to IP asset in org_assets
-			Host:      finding.IP,
-			Port:      &finding.Port,
-			Protocol:  &protocol,
-			Status:    finding.Status,
+		// Create new IP discovery
+		ipDiscoveryID := uuid.New().String()
+		newIPDiscovery := shared.Discovery{
+			ID:        ipDiscoveryID,
+			AssetType: shared.AssetTypeIP,
 			Source:    finding.Source,
-			Banner:    finding.Banner,
-			FirstSeen: now,
-			LastSeen:  now,
+			Status:    finding.Status,
+			ParentID:  finding.ParentID, // From IPDiscoveryJob.ParentID
+			IP:        &finding.IP,
+			FirstSeen: timestamp,
+			LastSeen:  timestamp,
 			Metadata:  finding.Metadata,
 		}
 
-		doc := bson.M{
-			"_id":        newAsset.ID,
-			"host":       newAsset.Host,
-			"port":       newAsset.Port,
-			"protocol":   newAsset.Protocol,
-			"status":     newAsset.Status,
-			"source":     newAsset.Source,
-			"first_seen": newAsset.FirstSeen,
-			"last_seen":  newAsset.LastSeen,
-		}
+		doc := s.buildDiscoveryDocument(newIPDiscovery)
 
-		// Include parent_id if available
-		if newAsset.ParentID != nil {
-			doc["parent_id"] = newAsset.ParentID
-		}
-
-		// Only include banner if not nil
-		if newAsset.Banner != nil {
-			doc["banner"] = newAsset.Banner
-		}
-
-		// Only include metadata if not empty
-		if len(newAsset.Metadata) > 0 {
-			doc["metadata"] = newAsset.Metadata
-		}
-
-		_, err := attackSurfaceCol.InsertOne(ctx, doc)
+		_, err := collection.InsertOne(ctx, doc)
 		if err != nil {
-			s.logger.Error("Failed to create AttackSurfaceAsset",
+			s.logger.Error("Failed to create IP discovery",
 				zap.String("ip", finding.IP),
-				zap.Int("port", finding.Port),
 				zap.Error(err),
 			)
-			return err
+			return "", err
 		}
 
-		assetID = newAsset.ID
-
-		s.logger.Info("Created new AttackSurfaceAsset",
-			zap.String("asset_id", assetID),
+		s.logger.Info("Created new IP discovery",
+			zap.String("discovery_id", ipDiscoveryID),
 			zap.String("ip", finding.IP),
-			zap.Int("port", finding.Port),
-			zap.String("protocol", finding.Protocol),
 		)
-	} else if err != nil {
-		s.logger.Error("Failed to check existing AttackSurfaceAsset",
+		return ipDiscoveryID, nil
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to check existing IP discovery",
 			zap.String("trace_id", finding.TraceID),
 			zap.Error(err),
 		)
-		return err
-	} else {
-		// Asset exists - update last_seen, status, source, and banner
-		assetID = existingAsset.ID
+		return "", err
+	}
 
-		update := bson.M{
-			"$set": bson.M{
-				"last_seen": now,
-				"status":    finding.Status,
-				"source":    finding.Source, // Update source (in case different tool rediscovered)
-			},
+	// IP exists - update last_seen
+	update := bson.M{
+		"$set": bson.M{
+			"last_seen": timestamp,
+		},
+	}
+
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": existingIPDiscovery.ID}, update)
+	if err != nil {
+		s.logger.Error("Failed to update IP discovery",
+			zap.String("ip", finding.IP),
+			zap.Error(err),
+		)
+		return "", err
+	}
+
+	s.logger.Debug("Updated existing IP discovery",
+		zap.String("discovery_id", existingIPDiscovery.ID),
+		zap.String("ip", finding.IP),
+	)
+	return existingIPDiscovery.ID, nil
+}
+
+// upsertPortDiscovery creates or updates a port discovery
+func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDiscoveryFinding, ipDiscoveryID string, timestamp time.Time) (string, error) {
+	collection := s.db.Collection(shared.CollectionDiscoveries)
+
+	// Check if port discovery already exists
+	filter := bson.M{
+		"asset_type": shared.AssetTypePort,
+		"ip":         finding.IP,
+		"port":       finding.Port,
+		"protocol":   finding.Protocol,
+	}
+
+	var existingPortDiscovery shared.Discovery
+	err := collection.FindOne(ctx, filter).Decode(&existingPortDiscovery)
+
+	if err == mongo.ErrNoDocuments {
+		// Create new port discovery
+		portDiscoveryID := uuid.New().String()
+		newPortDiscovery := shared.Discovery{
+			ID:          portDiscoveryID,
+			AssetType:   shared.AssetTypePort,
+			Source:      finding.Source,
+			Status:      finding.Status,
+			ParentID:    &ipDiscoveryID,
+			IP:          &finding.IP,
+			Port:        &finding.Port,
+			Protocol:    &finding.Protocol,
+			Banner:      finding.Banner,
+			ServiceName: finding.ServiceName,
+			Product:     finding.Product,
+			Version:     finding.Version,
+			FirstSeen:   timestamp,
+			LastSeen:    timestamp,
+			Metadata:    finding.Metadata,
+			PreviousServices: []shared.ServiceHistoryEntry{}, // Empty initially
 		}
 
-		// Update banner if new scan provides it
-		if finding.Banner != nil {
-			update["$set"].(bson.M)["banner"] = finding.Banner
-		}
+		doc := s.buildDiscoveryDocument(newPortDiscovery)
 
-		// Update metadata if new info is available
-		if len(finding.Metadata) > 0 {
-			// Merge metadata
-			if existingAsset.Metadata == nil {
-				existingAsset.Metadata = make(map[string]interface{})
-			}
-			for k, v := range finding.Metadata {
-				existingAsset.Metadata[k] = v
-			}
-			update["$set"].(bson.M)["metadata"] = existingAsset.Metadata
-		}
-
-		_, err = attackSurfaceCol.UpdateOne(ctx, bson.M{"_id": existingAsset.ID}, update)
+		_, err := collection.InsertOne(ctx, doc)
 		if err != nil {
-			s.logger.Error("Failed to update AttackSurfaceAsset",
+			s.logger.Error("Failed to create port discovery",
 				zap.String("ip", finding.IP),
 				zap.Int("port", finding.Port),
 				zap.Error(err),
 			)
-			return err
+			return "", err
 		}
 
-		s.logger.Info("Updated AttackSurfaceAsset",
-			zap.String("asset_id", assetID),
+		s.logger.Info("Created new port discovery",
+			zap.String("discovery_id", portDiscoveryID),
 			zap.String("ip", finding.IP),
 			zap.Int("port", finding.Port),
 			zap.String("protocol", finding.Protocol),
 		)
+		return portDiscoveryID, nil
 	}
 
-	// Now link the asset to the organization in org_attack_surface collection
-	return s.linkAssetToOrg(ctx, orgAttackSurfaceCol, assetID, finding.OrgID, finding.Source, now)
+	if err != nil {
+		s.logger.Error("Failed to check existing port discovery",
+			zap.String("trace_id", finding.TraceID),
+			zap.Error(err),
+		)
+		return "", err
+	}
+
+	// Port exists - check if service has changed
+	if err := s.updatePortDiscovery(ctx, &existingPortDiscovery, finding, timestamp); err != nil {
+		return "", err
+	}
+
+	return existingPortDiscovery.ID, nil
 }
 
-// linkAssetToOrg creates or updates the relationship between an asset and an organization
-func (s *Service) linkAssetToOrg(ctx context.Context, col *mongo.Collection, assetID, orgID, source string, timestamp time.Time) error {
-	// Check if this relationship already exists
-	filter := bson.M{
-		"attacksurface_id": assetID,
-		"org_id":           orgID,
+// updatePortDiscovery updates port discovery with new scan results and tracks service changes
+func (s *Service) updatePortDiscovery(ctx context.Context, discovery *shared.Discovery, finding shared.IPDiscoveryFinding, timestamp time.Time) error {
+	collection := s.db.Collection(shared.CollectionDiscoveries)
+
+	// Check if service has changed
+	currentService := ""
+	if discovery.ServiceName != nil {
+		currentService = *discovery.ServiceName
 	}
 
-	var existingLink shared.OrgAttackSurface
-	err := col.FindOne(ctx, filter).Decode(&existingLink)
+	newService := ""
+	if finding.ServiceName != nil {
+		newService = *finding.ServiceName
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"last_seen": timestamp,
+			"status":    finding.Status,
+		},
+	}
+
+	// If service changed, archive the old one and update to new
+	if currentService != newService && currentService != "" {
+		// Add current service to history
+		historyEntry := shared.ServiceHistoryEntry{
+			ServiceName: currentService,
+			Product:     discovery.Product,
+			Version:     discovery.Version,
+			LastSeen:    timestamp,
+		}
+
+		update["$push"] = bson.M{
+			"previous_services": historyEntry,
+		}
+
+		s.logger.Info("Service changed on port",
+			zap.String("discovery_id", discovery.ID),
+			zap.String("ip", *discovery.IP),
+			zap.Int("port", *discovery.Port),
+			zap.String("old_service", currentService),
+			zap.String("new_service", newService),
+		)
+	}
+
+	// Update current service details
+	if finding.ServiceName != nil {
+		update["$set"].(bson.M)["service_name"] = finding.ServiceName
+	}
+	if finding.Banner != nil {
+		update["$set"].(bson.M)["banner"] = finding.Banner
+	}
+	if finding.Product != nil {
+		update["$set"].(bson.M)["product"] = finding.Product
+	}
+	if finding.Version != nil {
+		update["$set"].(bson.M)["version"] = finding.Version
+	}
+
+	// Merge metadata
+	if len(finding.Metadata) > 0 {
+		if discovery.Metadata == nil {
+			update["$set"].(bson.M)["metadata"] = finding.Metadata
+		} else {
+			// Merge metadata
+			for k, v := range finding.Metadata {
+				discovery.Metadata[k] = v
+			}
+			update["$set"].(bson.M)["metadata"] = discovery.Metadata
+		}
+	}
+
+	_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, update)
+	if err != nil {
+		s.logger.Error("Failed to update port discovery",
+			zap.String("ip", *discovery.IP),
+			zap.Int("port", *discovery.Port),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	s.logger.Debug("Updated port discovery",
+		zap.String("discovery_id", discovery.ID),
+		zap.String("ip", *discovery.IP),
+		zap.Int("port", *discovery.Port),
+	)
+	return nil
+}
+
+// createOrgAssetLink creates a link between an organization and a discovered asset
+func (s *Service) createOrgAssetLink(ctx context.Context, orgID, assetID string, timestamp time.Time) error {
+	collection := s.db.Collection(shared.CollectionOrgAssets)
+
+	// Check if link already exists
+	filter := bson.M{
+		"org_id":   orgID,
+		"asset_id": assetID,
+	}
+
+	var existingLink shared.OrgAssetLink
+	err := collection.FindOne(ctx, filter).Decode(&existingLink)
 
 	if err == mongo.ErrNoDocuments {
-		// Create new org-asset link with "confirmed" status
-		newLink := shared.OrgAttackSurface{
-			ID:              uuid.New().String(),
-			AttackSurfaceID: assetID,
-			OrgID:           orgID,
-			Status:          shared.OrgAssetStatusConfirmed,
-			AssignedAt:      timestamp,
+		// Create new link
+		linkID := uuid.New().String()
+		newLink := shared.OrgAssetLink{
+			ID:         linkID,
+			OrgID:      orgID,
+			AssetID:    assetID,
+			Status:     shared.OrgAssetStatusConfirmed,
+			AssignedAt: timestamp,
 		}
 
 		doc := bson.M{
-			"_id":              newLink.ID,
-			"attacksurface_id": newLink.AttackSurfaceID,
-			"org_id":           newLink.OrgID,
-			"status":           newLink.Status,
-			"assigned_at":      newLink.AssignedAt,
+			"_id":         newLink.ID,
+			"org_id":      newLink.OrgID,
+			"asset_id":    newLink.AssetID,
+			"status":      newLink.Status,
+			"assigned_at": newLink.AssignedAt,
 		}
 
-		_, err := col.InsertOne(ctx, doc)
+		_, err := collection.InsertOne(ctx, doc)
 		if err != nil {
-			s.logger.Error("Failed to create OrgAttackSurface link",
-				zap.String("asset_id", assetID),
+			s.logger.Error("Failed to create org_assets link",
 				zap.String("org_id", orgID),
+				zap.String("asset_id", assetID),
 				zap.Error(err),
 			)
 			return err
 		}
 
-		s.logger.Info("Created OrgAttackSurface link",
-			zap.String("asset_id", assetID),
+		s.logger.Debug("Created org_assets link",
 			zap.String("org_id", orgID),
-			zap.String("source", source),
+			zap.String("asset_id", assetID),
 		)
 		return nil
 	}
 
 	if err != nil {
-		s.logger.Error("Failed to check existing OrgAttackSurface link",
-			zap.String("asset_id", assetID),
+		s.logger.Error("Failed to check existing org_assets link",
 			zap.String("org_id", orgID),
+			zap.String("asset_id", assetID),
 			zap.Error(err),
 		)
 		return err
 	}
 
-	// Link already exists - optionally update it (e.g., refresh source)
-	s.logger.Debug("OrgAttackSurface link already exists",
-		zap.String("asset_id", assetID),
+	// Link already exists
+	s.logger.Debug("Org_assets link already exists",
 		zap.String("org_id", orgID),
-		zap.String("status", existingLink.Status),
+		zap.String("asset_id", assetID),
 	)
-
 	return nil
+}
+
+// buildDiscoveryDocument builds a BSON document from a Discovery struct, excluding nil fields
+func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
+	doc := bson.M{
+		"_id":        discovery.ID,
+		"asset_type": discovery.AssetType,
+		"source":     discovery.Source,
+		"status":     discovery.Status,
+		"first_seen": discovery.FirstSeen,
+		"last_seen":  discovery.LastSeen,
+	}
+
+	if discovery.ParentID != nil {
+		doc["parent_id"] = discovery.ParentID
+	}
+
+	if len(discovery.Metadata) > 0 {
+		doc["metadata"] = discovery.Metadata
+	}
+
+	// Asset-type specific fields
+	if discovery.IP != nil {
+		doc["ip"] = discovery.IP
+	}
+	if discovery.Port != nil {
+		doc["port"] = discovery.Port
+	}
+	if discovery.Protocol != nil {
+		doc["protocol"] = discovery.Protocol
+	}
+	if discovery.Banner != nil {
+		doc["banner"] = discovery.Banner
+	}
+	if discovery.ServiceName != nil {
+		doc["service_name"] = discovery.ServiceName
+	}
+	if discovery.Product != nil {
+		doc["product"] = discovery.Product
+	}
+	if discovery.Version != nil {
+		doc["version"] = discovery.Version
+	}
+	if len(discovery.PreviousServices) > 0 {
+		doc["previous_services"] = discovery.PreviousServices
+	}
+
+	return doc
 }

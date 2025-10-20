@@ -10,9 +10,11 @@ VulWall Engine is a **vertically-sliced Go monorepo** for security scanning serv
 - Discovery services focus on finding assets and publish findings to Redis streams
 - The **ingestion service** uses **vertical slice architecture** with concurrent consumers
 - All jobs MUST include `org_id` (organization GUID) or they will be skipped
-- **Domain & IP discoveries:** Stored in unified `org_assets` collection with type discrimination (asset_type: "domain" or "ip")
-- **Port discoveries:** Port scans stored in `attack_surface` + `org_attack_surface` collections (normalized design)
-- **Hierarchical relationships:** Domain → IP → Port via parent_id fields
+- **Unified asset storage:** ALL assets (domains, subdomains, IPs, ports) stored in single `discoveries` collection
+- **Type discrimination:** Uses `asset_type` field (domain, subdomain, ip, port) to distinguish asset types
+- **Normalized design:** Assets stored WITHOUT org_id in `discoveries`, org relationships in separate `org_assets` collection
+- **Hierarchical relationships:** Domain → Subdomain → IP → Port via parent_id fields
+- **Two status fields:** `discovery.status` (technical state: active/inactive) and `org_assets.status` (organizational state: confirmed/pending/dismissed)
 
 ## Project Structure
 
@@ -38,11 +40,11 @@ VulWall.Engine/
 │   │   ├── orchestrator.go      # Runs all consumers concurrently
 │   │   ├── domain_ingestion/    # Domain ingestion slice
 │   │   │   ├── constants.go     # Consumer group
-│   │   │   ├── service.go       # org_assets persistence (domains and IPs)
+│   │   │   ├── service.go       # discoveries + org_assets persistence (domains, subdomains, IPs)
 │   │   │   └── consumer.go      # Consumes domain_discovery_results
 │   │   └── port_ingestion/      # Port ingestion slice
 │   │       ├── constants.go     # Consumer group
-│   │       ├── service.go       # attack_surface + org_attack_surface persistence
+│   │       ├── service.go       # discoveries + org_assets persistence (ports)
 │   │       └── consumer.go      # Consumes ip_discovery_results
 │   └── discoveries/       # Discovery services (no MongoDB access)
 │       ├── active_recon/
@@ -97,12 +99,13 @@ This project uses **Vertical Slice Architecture** with a **centralized ingestion
 4. Discovery services publish findings to Redis result streams with `org_id` and `source`
 5. **Ingestion service** (in `internal/ingestion/`) is the ONLY service that writes to MongoDB
 6. Ingestion service uses **vertical slice architecture** with concurrent consumers:
-   - `domain_ingestion` - processes domain discoveries → `org_assets` collection (asset_type: "domain" and "ip")
-   - `port_ingestion` - processes port discoveries → `attack_surface` + `org_attack_surface` collections
+   - `domain_ingestion` - processes domain/subdomain/IP discoveries → `discoveries` + `org_assets` collections
+   - `port_ingestion` - processes port discoveries → `discoveries` + `org_assets` collections
 7. Each ingestion slice MUST validate `source` is present - skip findings without it
 8. **Database design:**
-   - Domains & IPs: `org_assets` collection with type discrimination and parent_id hierarchy
-   - Ports: `attack_surface` (NO org_id, normalized) + `org_attack_surface` (org-to-asset links)
+   - `discoveries` - Global asset registry (NO org_id, fully normalized) with 4 asset types: domain, subdomain, ip, port
+   - `org_assets` - Many-to-many relationship links between organizations and discovered assets
+   - Parent ID hierarchy: domain (parent_id=null) → subdomain (parent_id=domain_id) → ip (parent_id=domain/subdomain_id) → port (parent_id=ip_id)
 
 ### Directory Organization
 
@@ -129,9 +132,11 @@ DOMAIN DISCOVERY FLOW:
    └─→ Publishes to domain_discovery_results (source="shodan")
 
 3. Domain Ingestion Consumer
-   └─→ Persists to org_assets collection
-       ├─→ Stores domains with IP resolution history
-       └─→ Tracks IP changes over time
+   └─→ Persists to TWO collections:
+       ├─→ discoveries collection (3 asset types: domain, subdomain, ip)
+       │   ├─→ Domains/subdomains: tracks IP resolution history
+       │   └─→ IPs: separate records with parent_id
+       └─→ org_assets collection (org-to-asset relationship links)
 
 PORT DISCOVERY FLOW:
 1. Job Published to ip_discovery_queue (with org_id)
@@ -143,8 +148,10 @@ PORT DISCOVERY FLOW:
 
 3. Port Ingestion Consumer
    └─→ Persists to TWO collections:
-       ├─→ attack_surface (assets without org_id)
-       └─→ org_attack_surface (org-to-asset relationships)
+       ├─→ discoveries collection (asset_type: "port", NO org_id)
+       │   ├─→ Tracks service changes in previous_services array
+       │   └─→ Stores banner, service_name, product, version
+       └─→ org_assets collection (org-to-asset relationship link)
 
 INGESTION SERVICE ARCHITECTURE:
 ├─→ Orchestrator starts both consumers concurrently
@@ -165,9 +172,10 @@ INGESTION SERVICE ARCHITECTURE:
   - `DiscoveryFinding` (domain discovery findings)
   - `IPDiscoveryFinding` (port discovery findings)
 - Shared asset models:
-  - `AttackSurfaceAsset` (port/service assets)
-  - `OrgAttackSurface` (org-to-asset relationships)
-  - `OrgAsset` (unified domain and IP assets with type discrimination)
+  - `Discovery` (unified asset model for all 4 types: domain, subdomain, ip, port)
+  - `OrgAssetLink` (org-to-asset relationship links)
+  - `ResolutionHistoryEntry` (IP resolution history for domains/subdomains)
+  - `ServiceHistoryEntry` (service change history for ports)
 - Common data structures for inter-service communication
 
 ✅ **Put in `internal/shared/constants.go`:**
@@ -175,9 +183,12 @@ INGESTION SERVICE ARCHITECTURE:
   - `StreamDomainDiscoveryQueue`, `StreamDomainDiscoveryResults`
   - `StreamIPDiscoveryQueue`, `StreamIPDiscoveryResults`
 - Shared collection names:
-  - `CollectionOrgAssets`, `CollectionAttackSurface`, `CollectionOrgAttackSurface`
+  - `CollectionDiscoveries` - Global asset registry
+  - `CollectionOrgAssets` - Org-to-asset relationship links
+- Asset type constants (domain, subdomain, ip, port)
 - Protocol/status constants used by multiple services
-- Org asset status constants (confirmed, pending, dismissed)
+- Discovery asset status (technical state: active, inactive, unknown)
+- Org asset link status (organizational state: confirmed, pending, dismissed)
 - Target type constants
 
 ✅ **Put in `internal/discoveries/[service_name]/`:**
@@ -208,7 +219,7 @@ Input Stream: domain_discovery_queue
         ↓
         All publish findings to: domain_discovery_results
         ↓
-    Ingestion Service → MongoDB (org_assets collection for Shodan only)
+    Ingestion Service → MongoDB (discoveries + org_assets collections)
 ```
 
 **Key Benefits:**
@@ -229,9 +240,10 @@ Input Stream: domain_discovery_queue
 5. Each service publishes findings to `domain_discovery_results` stream with `org_id` and `source` field
 6. Ingestion service consumes from `domain_discovery_results`
 7. Ingestion service validates `source` is present (skip if missing)
-8. Ingestion service currently only processes Shodan domain discoveries:
-   - Shodan domains (with IP, no port) → `org_assets` with IP resolution history
-   - Non-Shodan findings → skipped (logged at debug level)
+8. Ingestion service processes all domain/subdomain discoveries:
+   - Domains/subdomains → `discoveries` (asset_type: "domain" or "subdomain") with IP resolution history
+   - IPs → `discoveries` (asset_type: "ip") as separate records with parent_id
+   - All assets → `org_assets` links created for organization relationships
 
 ## Common Commands
 
@@ -406,16 +418,32 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
 - `mongox/client.go` - MongoDB connection manager
 
 ### Shared Package (`internal/shared/`)
-- `models.go` - Models used by 2+ services (DiscoveryJob, DiscoveryFinding, AttackSurfaceAsset, OrgAsset, ResolutionHistory)
-- `constants.go` - Constants used by 2+ services (streams, collections, protocols, statuses)
+- `models.go` - Models used by 2+ services:
+  - Job formats: `DiscoveryJob`, `IPDiscoveryJob`
+  - Finding formats: `DiscoveryFinding`, `IPDiscoveryFinding`
+  - Asset models: `Discovery` (unified model for all 4 asset types)
+  - Relationship model: `OrgAssetLink`
+  - History models: `ResolutionHistoryEntry`, `ServiceHistoryEntry`
+- `constants.go` - Constants used by 2+ services (streams, collections, asset types, protocols, statuses)
 
 ### Ingestion Service (`internal/ingestion/`)
-- `constants.go` - Consumer group name for ingestion service
-- `service.go` - MongoDB persistence logic with dual routing:
-  - `processOrgAsset()` - Stores Shodan domains and IPs in `org_assets` with type discrimination
-  - `processAttackSurface()` - Stores port-based findings in `attack_surface`
-  - Source validation (skip findings without `source` field)
+**Domain Ingestion Slice** (`internal/ingestion/domain_ingestion/`):
+- `constants.go` - Consumer group name
+- `service.go` - MongoDB persistence for domains, subdomains, and IPs:
+  - `upsertDomainDiscovery()` - Creates/updates domains or subdomains with IP resolution history
+  - `upsertIPDiscovery()` - Creates/updates IP records with parent_id
+  - `createOrgAssetLink()` - Creates org-to-asset relationship links
+  - `publishIPDiscoveryJob()` - Triggers port scanning for new IPs
 - `consumer.go` - Redis consumer for domain_discovery_results stream
+
+**Port Ingestion Slice** (`internal/ingestion/port_ingestion/`):
+- `constants.go` - Consumer group name
+- `service.go` - MongoDB persistence for ports:
+  - `ensureIPDiscovery()` - Ensures IP record exists
+  - `upsertPortDiscovery()` - Creates/updates port records with service tracking
+  - `updatePortDiscovery()` - Tracks service changes in previous_services array
+  - `createOrgAssetLink()` - Creates org-to-asset relationship links
+- `consumer.go` - Redis consumer for ip_discovery_results stream
 
 ### Discovery Service Pattern (`internal/discoveries/[service_name]/`)
 Each discovery service is self-contained:
@@ -482,113 +510,107 @@ type IPDiscoveryJob struct {
 **IPDiscoveryFinding** - Finding format published by port discovery services (output):
 ```go
 type IPDiscoveryFinding struct {
-    TraceID   string                 // Request tracing
-    OrgID     string                 // REQUIRED: organization GUID (passed from job)
-    Source    string                 // REQUIRED: "port_discovery", etc. (validated by ingestion)
-    ParentID  *string                // Parent asset ID
-    IP        string                 // Target IP
-    Port      int                    // Discovered port number
-    Protocol  string                 // tcp, udp
-    Status    string                 // active, inactive
-    Metadata  map[string]interface{} // Source-specific data (e.g., banner)
-    Timestamp time.Time              // When finding was discovered
+    TraceID     string                 // Request tracing
+    OrgID       string                 // REQUIRED: organization GUID (passed from job)
+    Source      string                 // REQUIRED: "port_discovery", etc. (validated by ingestion)
+    ParentID    *string                // Parent asset ID
+    IP          string                 // Target IP
+    Port        int                    // Discovered port number
+    Protocol    string                 // tcp, udp
+    Status      string                 // active, inactive
+    Banner      *string                // Service banner (optional)
+    ServiceName *string                // Service name (e.g., "http", "ssh") (optional)
+    Product     *string                // Product name (e.g., "Apache", "nginx") (optional)
+    Version     *string                // Version string (e.g., "2.4.41") (optional)
+    Metadata    map[string]interface{} // Source-specific data
+    Timestamp   time.Time              // When finding was discovered
 }
 ```
 
-**OrgAsset** - Unified domain and IP model with type discrimination (MongoDB `org_assets` collection):
+**Discovery** - Unified asset model with type discrimination (MongoDB `discoveries` collection):
 ```go
-type OrgAsset struct {
-    ID        string    // UUID
-    AssetType string    // "domain" or "ip" (type discrimination)
-    OrgID     string    // Organization GUID
-    Source    string    // Discovery source
-    Status    string    // active, inactive, unknown
-    FirstSeen time.Time
-    LastSeen  time.Time
+type Discovery struct {
+    ID         string    // UUID
+    AssetType  string    // "domain", "subdomain", "ip", or "port" (type discrimination)
+    Source     string    // Discovery source ("shodan", "port_discovery", etc.)
+    Status     string    // active, inactive, unknown (technical state)
+    ParentID   *string   // Parent asset ID (hierarchical relationships)
+    FirstSeen  time.Time
+    LastSeen   time.Time
+    Metadata   map[string]interface{} // Generic metadata for all types
 
     // Domain-specific fields (when asset_type = "domain")
-    Domain            *string             // Domain name (e.g., "api.example.com")
-    CurrentIP         *string             // Current resolved IP
-    ResolutionHistory []ResolutionHistory // IP resolution history over time
+    Domain            *string                   // Domain name (e.g., "example.com")
+    ResolutionHistory []ResolutionHistoryEntry  // IP resolution history
+
+    // Subdomain-specific fields (when asset_type = "subdomain")
+    Subdomain *string // Subdomain name (e.g., "api.example.com")
+    // Note: Subdomains also use ResolutionHistory
 
     // IP-specific fields (when asset_type = "ip")
-    IP            *string  // IP address
-    ParentID      *string  // Links to parent domain asset
-    ParentDomains []string // Quick reference to parent domain names
+    IP *string // IP address
+
+    // Port-specific fields (when asset_type = "port")
+    Port             *int                   // Port number
+    Protocol         *string                // tcp, udp
+    Banner           *string                // Service banner
+    ServiceName      *string                // Service name (e.g., "http", "ssh")
+    Product          *string                // Product (e.g., "Apache", "nginx")
+    Version          *string                // Version (e.g., "2.4.41")
+    PreviousServices []ServiceHistoryEntry  // Service change history
 }
 
-type ResolutionHistory struct {
-    IP               string     // IP address
-    AttackSurfaceID  *string    // Optional: links to AttackSurfaceAsset
-    ResolvedFrom     time.Time  // When this IP resolution started
-    ResolvedUntil    *time.Time // When it ended (nil = currently active)
+type ResolutionHistoryEntry struct {
+    IP        string     // IP address
+    FirstSeen time.Time  // When this IP resolution started
+    LastSeen  *time.Time // When it ended (nil = currently active)
 }
-```
 
-**How the Unified Collection Works:**
-- **Type discrimination**: `asset_type` field determines document structure ("domain" or "ip")
-- **Hierarchical relationships**: Domain assets link to IP assets via `parent_id`
-- **MongoDB flexible schema**: Domain-specific and IP-specific fields coexist in same collection
-- **Domain → IP flow**:
-  1. Domain discovered → stored as `asset_type: "domain"` with resolution_history
-  2. IP resolved from domain → stored as `asset_type: "ip"` with `parent_id` pointing to domain
-  3. Port scan triggered → IP asset ID passed to port ingestion for `parent_id` linking
-
-**IP Resolution History (for domains only):**
-- When a domain is first discovered, a new domain asset is created with initial IP in resolution_history
-- When the same domain is rescanned:
-  - **IP unchanged:** Update `last_seen` only
-  - **IP changed:** Close previous resolution (set `resolved_until`), add new resolution, update `current_ip`
-- Only the most recent resolution has `resolved_until = nil` (currently active)
-- This tracks domain hijacking, infrastructure changes, and CDN switches over time
-
-**AttackSurfaceAsset** - Port/service model (MongoDB `attack_surface` collection):
-```go
-type AttackSurfaceAsset struct {
-    ID        string                 // UUID
-    ParentID  *string                // Parent asset (e.g., root domain)
-    Host      string                 // Domain or IP
-    Port      *int                   // Optional port number
-    Protocol  *string                // tcp, udp, sctp, icmp (nil for non-port assets)
-    Status    string                 // active, inactive, unknown
-    FirstSeen time.Time
-    LastSeen  time.Time
-    Metadata  map[string]interface{} // Source-specific data (e.g., banner, service name)
-    // NOTE: NO org_id in this collection - use OrgAttackSurface for org relationships
+type ServiceHistoryEntry struct {
+    ServiceName string     // Service name
+    Product     *string    // Product name
+    Version     *string    // Version string
+    LastSeen    time.Time  // When this service was last seen
 }
 ```
 
-**OrgAttackSurface** - Links organizations to attack surface assets (MongoDB `org_attack_surface` collection):
+**OrgAssetLink** - Links organizations to discovered assets (MongoDB `org_assets` collection):
 ```go
-type OrgAttackSurface struct {
-    ID              string    // UUID
-    AttackSurfaceID string    // References AttackSurfaceAsset._id
-    OrgID           string    // Organization GUID
-    Status          string    // "confirmed", "pending", "dismissed"
-    AssignedAt      time.Time // When the asset was assigned to this org
-    Source          string    // Discovery source that found this asset ("port_discovery", etc.)
+type OrgAssetLink struct {
+    ID         string    // UUID
+    OrgID      string    // Organization GUID
+    AssetID    string    // References Discovery._id
+    Status     string    // "confirmed", "pending", "dismissed" (organizational state)
+    AssignedAt time.Time // When the asset was assigned to this org
 }
 ```
 
 **Key Design Decisions:**
 - ✅ **Unified asset collection with type discrimination:**
-  - `org_assets` - Stores domains and IPs with `asset_type` field ("domain" or "ip")
-  - Leverages MongoDB flexible schema for domain-specific vs IP-specific fields
-  - Natural parent-child hierarchy via `parent_id` (domain → IP → port)
-- ✅ **Normalized port storage:**
-  - `attack_surface` - Stores ports WITHOUT org_id (normalized, deduplicated)
-  - `org_attack_surface` - Stores org-to-port relationships (many-to-many)
+  - `discoveries` - Global asset registry storing ALL 4 asset types (domain, subdomain, ip, port)
+  - Leverages MongoDB flexible schema for type-specific fields
+  - NO org_id in discoveries (fully normalized, same asset shared across orgs)
+  - Natural parent-child hierarchy via `parent_id`: domain → subdomain → ip → port
+- ✅ **Normalized org relationships:**
+  - `org_assets` - Many-to-many relationship links between organizations and assets
+  - Same asset can belong to multiple organizations with different statuses
+  - Clean separation: assets are org-agnostic, relationships tracked separately
+- ✅ **Two status fields with different meanings:**
+  - `discovery.status` - Technical state (active/inactive/unknown) - is the asset reachable?
+  - `org_assets.status` - Organizational state (confirmed/pending/dismissed) - does org claim this asset?
 - ✅ **Hierarchical traceability:**
-  - Domain assets track IP resolution history
-  - IP assets link back to parent domains via `parent_id`
-  - Port assets link to IP assets via `parent_id` (tracing: port → IP → domain)
-- ✅ **Flexible relationships** - Same port asset can belong to multiple organizations
-- ✅ **Clean separation** - Ports are org-agnostic, relationships tracked separately
-- ✅ **Status tracking** - Each org can have different status for the same port
-- ✅ **Protocol-aware** - `192.168.1.1:53/tcp` ≠ `192.168.1.1:53/udp`
-- ✅ **Asset deduplication** - Unique by (host + port + protocol), handled by ingestion service
-- ✅ **Source tracking** - Both finding source and org-asset link source are tracked
-- ✅ **IP history** - Track domain-to-IP changes over time for security monitoring
+  - Domains track parent_id=null (root assets)
+  - Subdomains track parent_id=domain_id
+  - IPs track parent_id=domain_id or subdomain_id
+  - Ports track parent_id=ip_id
+  - Full chain: port → IP → subdomain → domain
+- ✅ **History tracking:**
+  - Domains and subdomains: IP resolution history (tracks when IPs change)
+  - Ports: Service change history (tracks when services change)
+- ✅ **Protocol-aware deduplication:**
+  - `192.168.1.1:53/tcp` ≠ `192.168.1.1:53/udp` (different discoveries)
+  - Assets unique by (type + identifying fields), handled by ingestion service
+- ✅ **Source tracking** - Discovery source tracked for each asset
 - ✅ **Separation of concerns** - Discovery services publish, ingestion service persists
 
 ### Shared Constants
@@ -600,13 +622,14 @@ type OrgAttackSurface struct {
 - `shared.StreamIPDiscoveryResults = "ip_discovery_results"` - Output stream for IP port discovery findings (requires `source`)
 
 **Collection Names:**
-- `shared.CollectionOrgAssets = "org_assets"` - Unified domains and IPs with type discrimination
-- `shared.CollectionAttackSurface = "attack_surface"` - Port-based assets (NO org_id stored here)
-- `shared.CollectionOrgAttackSurface = "org_attack_surface"` - Org-to-port relationships
+- `shared.CollectionDiscoveries = "discoveries"` - Global asset registry (all 4 asset types, NO org_id)
+- `shared.CollectionOrgAssets = "org_assets"` - Org-to-asset relationship links
 
-**Asset Types (for OrgAsset.AssetType):**
+**Asset Types (for Discovery.AssetType):**
 - `shared.AssetTypeDomain = "domain"` - Domain asset type
+- `shared.AssetTypeSubdomain = "subdomain"` - Subdomain asset type
 - `shared.AssetTypeIP = "ip"` - IP asset type
+- `shared.AssetTypePort = "port"` - Port asset type
 
 **Protocols:**
 - `shared.ProtocolTCP`, `ProtocolUDP`, `ProtocolSCTP`, `ProtocolICMP`
@@ -614,10 +637,12 @@ type OrgAttackSurface struct {
 **Target Types:**
 - `shared.TargetTypeDomain`, `TargetTypeIP`, `TargetTypeCIDR`
 
-**Asset Status:**
-- `shared.AssetStatusActive`, `AssetStatusInactive`, `AssetStatusUnknown`
+**Discovery Asset Status (technical state):**
+- `shared.AssetStatusActive` - Asset is live/reachable
+- `shared.AssetStatusInactive` - Asset is not reachable
+- `shared.AssetStatusUnknown` - Asset state is unknown
 
-**Org Asset Status:**
+**Org Asset Link Status (organizational state):**
 - `shared.OrgAssetStatusConfirmed` - Asset confirmed to belong to org
 - `shared.OrgAssetStatusPending` - Asset pending verification
 - `shared.OrgAssetStatusDismissed` - Asset dismissed/not relevant to org
@@ -661,7 +686,10 @@ redis-cli XADD domain_discovery_queue * data '{
 # Result:
 # 1. Domain discovery service finds subdomains and resolves IPs
 # 2. Findings published to domain_discovery_results with org_id and source="shodan"
-# 3. Domain ingestion consumer stores in org_assets collection with IP resolution history
+# 3. Domain ingestion consumer stores in:
+#    - discoveries collection (asset_type: "domain" or "subdomain" with IP resolution history)
+#    - discoveries collection (asset_type: "ip" as separate record with parent_id)
+#    - org_assets collection (org-to-asset relationship links)
 ```
 
 ### Port Discovery (TCP Scanner)
@@ -681,8 +709,9 @@ redis-cli XADD ip_discovery_queue * data '{
 # 1. Port discovery service scans 23 common ports (TCP connect, 2s timeout)
 # 2. For each open port, finding published to ip_discovery_results with source="port_discovery"
 # 3. Port ingestion consumer stores in:
-#    - attack_surface collection (asset without org_id)
-#    - org_attack_surface collection (org-to-asset link with status="confirmed")
+#    - discoveries collection (asset_type: "ip", ensures IP record exists)
+#    - discoveries collection (asset_type: "port" with banner, service_name, product, version)
+#    - org_assets collection (org-to-asset relationship links for both IP and port)
 ```
 
 **❌ INVALID: Job without org_id (will be skipped):**
@@ -699,19 +728,56 @@ redis-cli XADD ip_discovery_queue * data '{
 
 ### Querying Results
 
-**Query attack surface assets for an organization:**
+**Query all assets for an organization:**
 ```javascript
-// Join org_attack_surface with attack_surface
-db.org_attack_surface.aggregate([
+// Join org_assets with discoveries
+db.org_assets.aggregate([
   { $match: { org_id: "550e8400-e29b-41d4-a716-446655440000" } },
   { $lookup: {
-      from: "attack_surface",
-      localField: "attacksurface_id",
+      from: "discoveries",
+      localField: "asset_id",
       foreignField: "_id",
-      as: "asset"
+      as: "discovery"
   }},
-  { $unwind: "$asset" }
+  { $unwind: "$discovery" }
 ])
+```
+
+**Query only ports for an organization:**
+```javascript
+// Join org_assets with discoveries, filter by asset_type
+db.org_assets.aggregate([
+  { $match: { org_id: "550e8400-e29b-41d4-a716-446655440000" } },
+  { $lookup: {
+      from: "discoveries",
+      localField: "asset_id",
+      foreignField: "_id",
+      as: "discovery"
+  }},
+  { $unwind: "$discovery" },
+  { $match: { "discovery.asset_type": "port" } }
+])
+```
+
+**Query domain hierarchy (domain → subdomains → IPs → ports):**
+```javascript
+// Find all subdomains of a domain
+db.discoveries.find({
+  asset_type: "subdomain",
+  parent_id: "domain-uuid-here"
+})
+
+// Find all IPs resolved from a domain/subdomain
+db.discoveries.find({
+  asset_type: "ip",
+  parent_id: "domain-or-subdomain-uuid-here"
+})
+
+// Find all ports on an IP
+db.discoveries.find({
+  asset_type: "port",
+  parent_id: "ip-uuid-here"
+})
 ```
 
 ## Dependencies
@@ -750,8 +816,8 @@ db.org_attack_surface.aggregate([
 ### Discovery Services Pattern
 - **Organization-scoped** - All jobs require `org_id` (GUID), consumers skip jobs without it
 - **Two discovery flows:**
-  - **Domain discovery:** `domain_discovery_queue` → `domain_discovery_results` → `org_assets`
-  - **Port discovery:** `ip_discovery_queue` → `ip_discovery_results` → `attack_surface` + `org_attack_surface`
+  - **Domain discovery:** `domain_discovery_queue` → `domain_discovery_results` → `discoveries` (domain, subdomain, ip) + `org_assets`
+  - **Port discovery:** `ip_discovery_queue` → `ip_discovery_results` → `discoveries` (ip, port) + `org_assets`
 - **Independent scaling** - Scale each discovery tool independently (e.g., 5 domain workers, 10 port workers)
 - **Unique consumer groups** - Each tool has its own group:
   - Domain: `shodan_subdomain_service`
@@ -759,11 +825,14 @@ db.org_attack_surface.aggregate([
 - **Shared models** - All use appropriate shared job/finding models
 - **Source validation** - Ingestion service requires `source` field, skips findings without it
 - **Vertical slice ingestion** - Each ingestion type runs concurrently:
-  - **domain_ingestion** - Shodan domains → `org_assets` with IP resolution history
-  - **port_ingestion** - Port scans → `attack_surface` + `org_attack_surface` (normalized design)
-- **IP resolution tracking** - Domain discovery resolves IPs, ingestion tracks changes over time
+  - **domain_ingestion** - Processes domains, subdomains, and IPs → `discoveries` + `org_assets`
+  - **port_ingestion** - Processes ports → `discoveries` + `org_assets`
+- **History tracking:**
+  - Domain/subdomain ingestion tracks IP resolution changes over time
+  - Port ingestion tracks service changes over time (previous_services array)
 - **Source attribution** - Use `source` field to identify which tool discovered the asset
-- **Normalized org relationships** - Port assets stored without org_id, relationships in separate collection
+- **Normalized org relationships** - All assets stored without org_id in `discoveries`, relationships in separate `org_assets` collection
+- **Type discrimination** - Single `discoveries` collection uses `asset_type` field to distinguish 4 asset types
 
 ### Example: Shodan Discovery Service
 ```
@@ -783,10 +852,13 @@ internal/discoveries/shodan_discovery/
    - Resolves domain to IP address
    - Publishes finding to `domain_discovery_results` with `org_id`, `source="shodan"`, and `ip`
 5. Domain ingestion consumer validates `source` is present (skips if missing)
-6. For Shodan findings (with IP, no port):
-   - Stores in `org_assets` collection
-   - Tracks IP resolution history
-   - If IP changed: closes old resolution, adds new one
+6. For domain/subdomain findings:
+   - Determines asset_type (domain vs subdomain) by dot count
+   - Stores in `discoveries` collection with IP resolution history
+   - Creates separate IP record in `discoveries` with parent_id
+   - Creates `org_assets` links for both domain/subdomain and IP
+   - If domain IP changed: closes old resolution, adds new one to history
+   - Triggers port scanning for new IPs
 
 ### Example: Port Discovery Service
 ```
@@ -807,6 +879,8 @@ internal/discoveries/port_discovery/
    - Publishes finding to `ip_discovery_results` with `org_id`, `source="port_discovery"`, port, protocol
 5. Port ingestion consumer validates `source` is present (skips if missing)
 6. For port findings:
-   - Stores asset in `attack_surface` collection (deduped by IP + port + protocol, NO org_id)
-   - Creates link in `org_attack_surface` collection (org_id + asset_id + status="confirmed")
-   - If asset exists: updates `last_seen` and merges metadata
+   - Ensures IP record exists in `discoveries` (creates if not found)
+   - Stores port in `discoveries` collection (asset_type: "port", parent_id: ip_id)
+   - Tracks service changes: if service_name changed, archives old service to previous_services array
+   - Creates `org_assets` links for both IP and port
+   - If port exists: updates `last_seen`, merges metadata, and updates service fields

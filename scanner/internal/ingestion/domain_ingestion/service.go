@@ -3,6 +3,7 @@ package domain_ingestion
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -37,7 +38,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 		zap.String("host", finding.Host),
 	)
 
-	// Validate source is present (required) - skip if missing
+	// Validate source is present (required)
 	if finding.Source == "" {
 		s.logger.Warn("Skipping finding: missing source",
 			zap.String("trace_id", finding.TraceID),
@@ -47,53 +48,89 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 		return nil
 	}
 
-	// Handle Shodan discoveries - store in OrgAssets collection
-	if finding.Source == "shodan" && finding.Port == nil && finding.IP != nil {
-		return s.processOrgAsset(ctx, finding)
+	// Validate IP is present for domain discoveries
+	if finding.IP == nil || *finding.IP == "" {
+		s.logger.Warn("Skipping finding: missing IP",
+			zap.String("trace_id", finding.TraceID),
+			zap.String("host", finding.Host),
+		)
+		return nil
 	}
 
-	// Skip non-Shodan findings (attack surface ingestion removed from domain ingestion)
-	s.logger.Debug("Skipping non-Shodan finding",
-		zap.String("trace_id", finding.TraceID),
-		zap.String("source", finding.Source),
-		zap.String("host", finding.Host),
-	)
-	return nil
+	// Determine if this is a domain or subdomain
+	assetType := s.determineAssetType(finding.Host, finding.ParentID)
+
+	// Process the discovery
+	return s.processDiscovery(ctx, finding, assetType)
 }
 
-// processOrgAsset processes Shodan domain discoveries and stores them in OrgAssets collection
-// Creates/updates both domain asset (asset_type = "domain") and IP asset (asset_type = "ip")
-func (s *Service) processOrgAsset(ctx context.Context, finding shared.DiscoveryFinding) error {
+// determineAssetType determines if a host is a domain or subdomain
+func (s *Service) determineAssetType(host string, parentID *string) string {
+	// If parentID is specified, it's explicitly a subdomain
+	if parentID != nil && *parentID != "" {
+		return shared.AssetTypeSubdomain
+	}
+
+	// Count dots to determine if subdomain
+	// example.com = 1 dot = domain
+	// api.example.com = 2 dots = subdomain
+	dotCount := strings.Count(host, ".")
+	if dotCount > 1 {
+		return shared.AssetTypeSubdomain
+	}
+
+	return shared.AssetTypeDomain
+}
+
+// processDiscovery processes a domain/subdomain discovery and stores in discoveries collection
+func (s *Service) processDiscovery(ctx context.Context, finding shared.DiscoveryFinding, assetType string) error {
 	now := time.Now()
 
-	// 1. Upsert domain asset (asset_type = "domain")
-	domainAssetID, err := s.upsertDomainAsset(ctx, finding, now)
+	// 1. Upsert domain/subdomain in discoveries collection
+	discoveryID, err := s.upsertDomainDiscovery(ctx, finding, assetType, now)
 	if err != nil {
 		return err
 	}
 
-	// 2. Upsert IP asset (asset_type = "ip", parent_id = domainAssetID)
-	ipAssetID, shouldTriggerPortScan, err := s.upsertIPAsset(ctx, finding, domainAssetID, now)
+	// 2. Create org_assets link
+	if err := s.createOrgAssetLink(ctx, finding.OrgID, discoveryID, now); err != nil {
+		s.logger.Error("Failed to create org_assets link",
+			zap.String("discovery_id", discoveryID),
+			zap.String("org_id", finding.OrgID),
+			zap.Error(err),
+		)
+		// Don't fail the entire operation if link creation fails
+	}
+
+	// 3. Upsert IP discovery (separate record)
+	ipDiscoveryID, isNewIP, err := s.upsertIPDiscovery(ctx, finding, discoveryID, now)
 	if err != nil {
 		return err
 	}
 
-	// 3. Trigger IP discovery job if we have a new IP
-	if shouldTriggerPortScan {
-		if err := s.publishIPDiscoveryJob(ctx, finding, ipAssetID); err != nil {
+	// 4. Create org_assets link for IP
+	if err := s.createOrgAssetLink(ctx, finding.OrgID, ipDiscoveryID, now); err != nil {
+		s.logger.Error("Failed to create org_assets link for IP",
+			zap.String("discovery_id", ipDiscoveryID),
+			zap.String("org_id", finding.OrgID),
+			zap.Error(err),
+		)
+	}
+
+	// 5. Trigger port discovery if this is a new IP
+	if isNewIP {
+		if err := s.publishIPDiscoveryJob(ctx, finding, ipDiscoveryID); err != nil {
 			s.logger.Error("Failed to publish IP discovery job",
 				zap.String("trace_id", finding.TraceID),
-				zap.String("domain", finding.Host),
 				zap.String("ip", *finding.IP),
 				zap.Error(err),
 			)
-			// Don't fail the domain ingestion if IP scan trigger fails
+			// Don't fail if trigger fails
 		} else {
 			s.logger.Info("Triggered IP discovery job",
 				zap.String("trace_id", finding.TraceID),
-				zap.String("domain", finding.Host),
 				zap.String("ip", *finding.IP),
-				zap.String("ip_asset_id", ipAssetID),
+				zap.String("ip_discovery_id", ipDiscoveryID),
 			)
 		}
 	}
@@ -101,149 +138,146 @@ func (s *Service) processOrgAsset(ctx context.Context, finding shared.DiscoveryF
 	return nil
 }
 
-// upsertDomainAsset creates or updates a domain asset in org_assets collection
-func (s *Service) upsertDomainAsset(ctx context.Context, finding shared.DiscoveryFinding, timestamp time.Time) (string, error) {
-	collection := s.db.Collection(shared.CollectionOrgAssets)
+// upsertDomainDiscovery creates or updates a domain/subdomain discovery
+func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.DiscoveryFinding, assetType string, timestamp time.Time) (string, error) {
+	collection := s.db.Collection(shared.CollectionDiscoveries)
 
-	// Check if domain asset already exists
+	// Build filter based on asset type
 	filter := bson.M{
-		"asset_type": shared.AssetTypeDomain,
-		"org_id":     finding.OrgID,
-		"domain":     finding.Host,
+		"asset_type": assetType,
+	}
+	if assetType == shared.AssetTypeDomain {
+		filter["domain"] = finding.Host
+	} else {
+		filter["subdomain"] = finding.Host
 	}
 
-	var existingAsset shared.OrgAsset
-	err := collection.FindOne(ctx, filter).Decode(&existingAsset)
+	var existingDiscovery shared.Discovery
+	err := collection.FindOne(ctx, filter).Decode(&existingDiscovery)
 
 	if err == mongo.ErrNoDocuments {
-		// Create new domain asset
-		domainAssetID := uuid.New().String()
-		newAsset := shared.OrgAsset{
-			ID:        domainAssetID,
-			AssetType: shared.AssetTypeDomain,
-			OrgID:     finding.OrgID,
+		// Create new discovery
+		discoveryID := uuid.New().String()
+		newDiscovery := shared.Discovery{
+			ID:        discoveryID,
+			AssetType: assetType,
 			Source:    finding.Source,
 			Status:    finding.Status,
+			ParentID:  finding.ParentID,
 			FirstSeen: timestamp,
 			LastSeen:  timestamp,
-			Domain:    &finding.Host,
-			CurrentIP: finding.IP,
-			ResolutionHistory: []shared.ResolutionHistory{
+			Metadata:  finding.Metadata,
+			ResolutionHistory: []shared.ResolutionHistoryEntry{
 				{
-					IP:            *finding.IP,
-					ResolvedFrom:  timestamp,
-					ResolvedUntil: nil, // Currently active
+					IP:        *finding.IP,
+					FirstSeen: timestamp,
+					LastSeen:  nil, // Currently active
 				},
 			},
 		}
 
-		doc := bson.M{
-			"_id":                newAsset.ID,
-			"asset_type":         newAsset.AssetType,
-			"org_id":             newAsset.OrgID,
-			"source":             newAsset.Source,
-			"status":             newAsset.Status,
-			"first_seen":         newAsset.FirstSeen,
-			"last_seen":          newAsset.LastSeen,
-			"domain":             newAsset.Domain,
-			"current_ip":         newAsset.CurrentIP,
-			"resolution_history": newAsset.ResolutionHistory,
+		// Set domain or subdomain field
+		if assetType == shared.AssetTypeDomain {
+			newDiscovery.Domain = &finding.Host
+		} else {
+			newDiscovery.Subdomain = &finding.Host
 		}
+
+		doc := s.buildDiscoveryDocument(newDiscovery)
 
 		_, err := collection.InsertOne(ctx, doc)
 		if err != nil {
-			s.logger.Error("Failed to create domain asset",
-				zap.String("domain", finding.Host),
-				zap.String("org_id", finding.OrgID),
+			s.logger.Error("Failed to create discovery",
+				zap.String("asset_type", assetType),
+				zap.String("host", finding.Host),
 				zap.Error(err),
 			)
 			return "", err
 		}
 
-		s.logger.Info("Created new domain asset",
-			zap.String("asset_id", domainAssetID),
-			zap.String("domain", finding.Host),
-			zap.String("org_id", finding.OrgID),
+		s.logger.Info("Created new discovery",
+			zap.String("discovery_id", discoveryID),
+			zap.String("asset_type", assetType),
+			zap.String("host", finding.Host),
 			zap.String("ip", *finding.IP),
 		)
-		return domainAssetID, nil
+		return discoveryID, nil
 	}
 
 	if err != nil {
-		s.logger.Error("Failed to check existing domain asset",
+		s.logger.Error("Failed to check existing discovery",
 			zap.String("trace_id", finding.TraceID),
 			zap.Error(err),
 		)
 		return "", err
 	}
 
-	// Domain asset exists - update it
-	if err := s.updateDomainAssetResolution(ctx, &existingAsset, *finding.IP, timestamp); err != nil {
+	// Discovery exists - update resolution history
+	if err := s.updateResolutionHistory(ctx, &existingDiscovery, *finding.IP, timestamp); err != nil {
 		return "", err
 	}
 
-	return existingAsset.ID, nil
+	return existingDiscovery.ID, nil
 }
 
-// updateDomainAssetResolution updates the resolution history when IP changes
-func (s *Service) updateDomainAssetResolution(ctx context.Context, asset *shared.OrgAsset, newIP string, timestamp time.Time) error {
-	collection := s.db.Collection(shared.CollectionOrgAssets)
+// updateResolutionHistory updates the IP resolution history for a domain/subdomain
+func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared.Discovery, newIP string, timestamp time.Time) error {
+	collection := s.db.Collection(shared.CollectionDiscoveries)
 
-	// Check if the most recent resolution is still active and matches the new IP
-	if len(asset.ResolutionHistory) > 0 {
-		lastResolution := asset.ResolutionHistory[len(asset.ResolutionHistory)-1]
+	// Check if IP has changed
+	if len(discovery.ResolutionHistory) > 0 {
+		lastResolution := discovery.ResolutionHistory[len(discovery.ResolutionHistory)-1]
 
-		// If IP hasn't changed and resolution is still active, only update last_seen
-		if lastResolution.IP == newIP && lastResolution.ResolvedUntil == nil {
+		// If IP unchanged, just update last_seen
+		if lastResolution.IP == newIP && lastResolution.LastSeen == nil {
 			update := bson.M{
 				"$set": bson.M{
 					"last_seen": timestamp,
 				},
 			}
-			_, err := collection.UpdateOne(ctx, bson.M{"_id": asset.ID}, update)
+			_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, update)
 			if err != nil {
-				s.logger.Error("Failed to update domain asset last_seen",
-					zap.String("domain", *asset.Domain),
+				s.logger.Error("Failed to update discovery last_seen",
+					zap.String("discovery_id", discovery.ID),
 					zap.Error(err),
 				)
 				return err
 			}
 
 			s.logger.Debug("IP unchanged, updated last_seen",
-				zap.String("domain", *asset.Domain),
+				zap.String("discovery_id", discovery.ID),
 				zap.String("ip", newIP),
 			)
 			return nil
 		}
 
-		// If IP has changed, close the current resolution and add new one
-		if lastResolution.IP != newIP && lastResolution.ResolvedUntil == nil {
+		// If IP changed, close previous resolution and add new one
+		if lastResolution.IP != newIP && lastResolution.LastSeen == nil {
 			update := bson.M{
 				"$set": bson.M{
-					"resolution_history." + fmt.Sprint(len(asset.ResolutionHistory)-1) + ".resolved_until": timestamp,
-					"current_ip":  newIP,
-					"last_seen":   timestamp,
+					"resolution_history." + fmt.Sprint(len(discovery.ResolutionHistory)-1) + ".last_seen": timestamp,
+					"last_seen": timestamp,
 				},
 				"$push": bson.M{
-					"resolution_history": shared.ResolutionHistory{
-						IP:            newIP,
-						ResolvedFrom:  timestamp,
-						ResolvedUntil: nil, // Currently active
+					"resolution_history": shared.ResolutionHistoryEntry{
+						IP:        newIP,
+						FirstSeen: timestamp,
+						LastSeen:  nil, // Currently active
 					},
 				},
 			}
 
-			_, err := collection.UpdateOne(ctx, bson.M{"_id": asset.ID}, update)
+			_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, update)
 			if err != nil {
-				s.logger.Error("Failed to update domain asset resolution",
-					zap.String("domain", *asset.Domain),
+				s.logger.Error("Failed to update resolution history",
+					zap.String("discovery_id", discovery.ID),
 					zap.Error(err),
 				)
 				return err
 			}
 
-			s.logger.Info("Updated domain asset with new IP resolution",
-				zap.String("domain", *asset.Domain),
+			s.logger.Info("Updated discovery with new IP resolution",
+				zap.String("discovery_id", discovery.ID),
 				zap.String("old_ip", lastResolution.IP),
 				zap.String("new_ip", newIP),
 			)
@@ -251,169 +285,230 @@ func (s *Service) updateDomainAssetResolution(ctx context.Context, asset *shared
 		}
 	}
 
-	// Shouldn't normally reach here, but handle it gracefully
+	// Shouldn't reach here, but handle gracefully
 	update := bson.M{
 		"$push": bson.M{
-			"resolution_history": shared.ResolutionHistory{
-				IP:            newIP,
-				ResolvedFrom:  timestamp,
-				ResolvedUntil: nil,
+			"resolution_history": shared.ResolutionHistoryEntry{
+				IP:        newIP,
+				FirstSeen: timestamp,
+				LastSeen:  nil,
 			},
 		},
 		"$set": bson.M{
-			"current_ip": newIP,
-			"last_seen":  timestamp,
+			"last_seen": timestamp,
 		},
 	}
 
-	_, err := collection.UpdateOne(ctx, bson.M{"_id": asset.ID}, update)
+	_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, update)
 	if err != nil {
-		s.logger.Error("Failed to add resolution to domain asset",
-			zap.String("domain", *asset.Domain),
+		s.logger.Error("Failed to add resolution history",
+			zap.String("discovery_id", discovery.ID),
 			zap.Error(err),
 		)
 		return err
 	}
 
-	s.logger.Info("Added new resolution to domain asset",
-		zap.String("domain", *asset.Domain),
-		zap.String("ip", newIP),
-	)
 	return nil
 }
 
-// upsertIPAsset creates or updates an IP asset in org_assets collection
-// Returns (ipAssetID, shouldTriggerPortScan, error)
-func (s *Service) upsertIPAsset(ctx context.Context, finding shared.DiscoveryFinding, domainAssetID string, timestamp time.Time) (string, bool, error) {
-	collection := s.db.Collection(shared.CollectionOrgAssets)
+// upsertIPDiscovery creates or updates an IP discovery
+// Returns (ipDiscoveryID, isNewIP, error)
+func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.DiscoveryFinding, parentDiscoveryID string, timestamp time.Time) (string, bool, error) {
+	collection := s.db.Collection(shared.CollectionDiscoveries)
 
-	// Check if IP asset already exists for this org
+	// Check if IP discovery already exists
 	filter := bson.M{
 		"asset_type": shared.AssetTypeIP,
-		"org_id":     finding.OrgID,
 		"ip":         *finding.IP,
 	}
 
-	var existingIPAsset shared.OrgAsset
-	err := collection.FindOne(ctx, filter).Decode(&existingIPAsset)
+	var existingIPDiscovery shared.Discovery
+	err := collection.FindOne(ctx, filter).Decode(&existingIPDiscovery)
 
 	if err == mongo.ErrNoDocuments {
-		// Create new IP asset
-		ipAssetID := uuid.New().String()
-		newIPAsset := shared.OrgAsset{
-			ID:            ipAssetID,
-			AssetType:     shared.AssetTypeIP,
-			OrgID:         finding.OrgID,
-			Source:        finding.Source,
-			Status:        finding.Status,
-			FirstSeen:     timestamp,
-			LastSeen:      timestamp,
-			IP:            finding.IP,
-			ParentID:      &domainAssetID,
-			ParentDomains: []string{finding.Host},
+		// Create new IP discovery
+		ipDiscoveryID := uuid.New().String()
+		newIPDiscovery := shared.Discovery{
+			ID:        ipDiscoveryID,
+			AssetType: shared.AssetTypeIP,
+			Source:    finding.Source,
+			Status:    finding.Status,
+			ParentID:  &parentDiscoveryID,
+			IP:        finding.IP,
+			FirstSeen: timestamp,
+			LastSeen:  timestamp,
+			Metadata:  finding.Metadata,
 		}
 
-		doc := bson.M{
-			"_id":            newIPAsset.ID,
-			"asset_type":     newIPAsset.AssetType,
-			"org_id":         newIPAsset.OrgID,
-			"source":         newIPAsset.Source,
-			"status":         newIPAsset.Status,
-			"first_seen":     newIPAsset.FirstSeen,
-			"last_seen":      newIPAsset.LastSeen,
-			"ip":             newIPAsset.IP,
-			"parent_id":      newIPAsset.ParentID,
-			"parent_domains": newIPAsset.ParentDomains,
-		}
+		doc := s.buildDiscoveryDocument(newIPDiscovery)
 
 		_, err := collection.InsertOne(ctx, doc)
 		if err != nil {
-			s.logger.Error("Failed to create IP asset",
+			s.logger.Error("Failed to create IP discovery",
 				zap.String("ip", *finding.IP),
-				zap.String("org_id", finding.OrgID),
 				zap.Error(err),
 			)
 			return "", false, err
 		}
 
-		s.logger.Info("Created new IP asset",
-			zap.String("asset_id", ipAssetID),
+		s.logger.Info("Created new IP discovery",
+			zap.String("discovery_id", ipDiscoveryID),
 			zap.String("ip", *finding.IP),
-			zap.String("org_id", finding.OrgID),
-			zap.String("parent_domain", finding.Host),
+			zap.String("parent_id", parentDiscoveryID),
 		)
-		return ipAssetID, true, nil // Trigger port scan for new IP
+		return ipDiscoveryID, true, nil
 	}
 
 	if err != nil {
-		s.logger.Error("Failed to check existing IP asset",
+		s.logger.Error("Failed to check existing IP discovery",
 			zap.String("trace_id", finding.TraceID),
 			zap.Error(err),
 		)
 		return "", false, err
 	}
 
-	// IP asset exists - update last_seen and add parent domain if not already present
-	updateDoc := bson.M{
+	// IP exists - just update last_seen
+	update := bson.M{
 		"$set": bson.M{
 			"last_seen": timestamp,
 		},
 	}
 
-	// Add parent domain to the list if not already present
-	alreadyHasParent := false
-	for _, domain := range existingIPAsset.ParentDomains {
-		if domain == finding.Host {
-			alreadyHasParent = true
-			break
-		}
-	}
-
-	if !alreadyHasParent {
-		updateDoc["$addToSet"] = bson.M{
-			"parent_domains": finding.Host,
-		}
-		s.logger.Info("Adding parent domain to existing IP asset",
-			zap.String("ip", *finding.IP),
-			zap.String("new_parent_domain", finding.Host),
-		)
-	}
-
-	_, err = collection.UpdateOne(ctx, bson.M{"_id": existingIPAsset.ID}, updateDoc)
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": existingIPDiscovery.ID}, update)
 	if err != nil {
-		s.logger.Error("Failed to update IP asset",
+		s.logger.Error("Failed to update IP discovery",
 			zap.String("ip", *finding.IP),
 			zap.Error(err),
 		)
 		return "", false, err
 	}
 
-	s.logger.Debug("Updated existing IP asset",
-		zap.String("asset_id", existingIPAsset.ID),
+	s.logger.Debug("Updated existing IP discovery",
+		zap.String("discovery_id", existingIPDiscovery.ID),
 		zap.String("ip", *finding.IP),
 	)
-	return existingIPAsset.ID, false, nil // Don't trigger port scan for existing IP
+	return existingIPDiscovery.ID, false, nil
+}
+
+// createOrgAssetLink creates a link between an organization and a discovered asset
+func (s *Service) createOrgAssetLink(ctx context.Context, orgID, assetID string, timestamp time.Time) error {
+	collection := s.db.Collection(shared.CollectionOrgAssets)
+
+	// Check if link already exists
+	filter := bson.M{
+		"org_id":   orgID,
+		"asset_id": assetID,
+	}
+
+	var existingLink shared.OrgAssetLink
+	err := collection.FindOne(ctx, filter).Decode(&existingLink)
+
+	if err == mongo.ErrNoDocuments {
+		// Create new link
+		linkID := uuid.New().String()
+		newLink := shared.OrgAssetLink{
+			ID:         linkID,
+			OrgID:      orgID,
+			AssetID:    assetID,
+			Status:     shared.OrgAssetStatusConfirmed,
+			AssignedAt: timestamp,
+		}
+
+		doc := bson.M{
+			"_id":         newLink.ID,
+			"org_id":      newLink.OrgID,
+			"asset_id":    newLink.AssetID,
+			"status":      newLink.Status,
+			"assigned_at": newLink.AssignedAt,
+		}
+
+		_, err := collection.InsertOne(ctx, doc)
+		if err != nil {
+			s.logger.Error("Failed to create org_assets link",
+				zap.String("org_id", orgID),
+				zap.String("asset_id", assetID),
+				zap.Error(err),
+			)
+			return err
+		}
+
+		s.logger.Debug("Created org_assets link",
+			zap.String("org_id", orgID),
+			zap.String("asset_id", assetID),
+		)
+		return nil
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to check existing org_assets link",
+			zap.String("org_id", orgID),
+			zap.String("asset_id", assetID),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	// Link already exists
+	s.logger.Debug("Org_assets link already exists",
+		zap.String("org_id", orgID),
+		zap.String("asset_id", assetID),
+	)
+	return nil
 }
 
 // publishIPDiscoveryJob publishes an IP discovery job to trigger port scanning
-func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.DiscoveryFinding, ipAssetID string) error {
-	// Create IP discovery job
+func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.DiscoveryFinding, ipDiscoveryID string) error {
 	ipJob := shared.IPDiscoveryJob{
-		TraceID: finding.TraceID,
-		OrgID:   finding.OrgID,
-		IP:      *finding.IP,
+		TraceID:  finding.TraceID,
+		OrgID:    finding.OrgID,
+		ParentID: &ipDiscoveryID,
+		IP:       *finding.IP,
 		Metadata: map[string]interface{}{
-			"source":       "domain_discovery",
-			"domain":       finding.Host,
-			"ip_asset_id":  ipAssetID,
+			"source":          "domain_discovery",
+			"ip_discovery_id": ipDiscoveryID,
 		},
 		Created: time.Now(),
 	}
 
-	// Use shared publisher utility
 	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryQueue, ipJob); err != nil {
 		return fmt.Errorf("failed to publish IP discovery job: %w", err)
 	}
 
 	return nil
+}
+
+// buildDiscoveryDocument builds a BSON document from a Discovery struct, excluding nil fields
+func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
+	doc := bson.M{
+		"_id":        discovery.ID,
+		"asset_type": discovery.AssetType,
+		"source":     discovery.Source,
+		"status":     discovery.Status,
+		"first_seen": discovery.FirstSeen,
+		"last_seen":  discovery.LastSeen,
+	}
+
+	if discovery.ParentID != nil {
+		doc["parent_id"] = discovery.ParentID
+	}
+
+	if len(discovery.Metadata) > 0 {
+		doc["metadata"] = discovery.Metadata
+	}
+
+	// Asset-type specific fields
+	if discovery.Domain != nil {
+		doc["domain"] = discovery.Domain
+	}
+	if discovery.Subdomain != nil {
+		doc["subdomain"] = discovery.Subdomain
+	}
+	if discovery.IP != nil {
+		doc["ip"] = discovery.IP
+	}
+	if len(discovery.ResolutionHistory) > 0 {
+		doc["resolution_history"] = discovery.ResolutionHistory
+	}
+
+	return doc
 }
