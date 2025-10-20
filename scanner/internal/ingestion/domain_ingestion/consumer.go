@@ -22,7 +22,7 @@ type Consumer struct {
 func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Consumer {
 	return &Consumer{
 		redis:   redisClient,
-		service: NewService(db, logger),
+		service: NewService(db, redisClient, logger),
 		logger:  logger,
 	}
 }

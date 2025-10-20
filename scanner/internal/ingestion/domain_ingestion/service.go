@@ -2,9 +2,11 @@ package domain_ingestion
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
@@ -14,12 +16,14 @@ import (
 
 type Service struct {
 	db     *mongo.Database
+	redis  *redis.Client
 	logger *zap.Logger
 }
 
-func NewService(db *mongo.Database, logger *zap.Logger) *Service {
+func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
 		db:     db,
+		redis:  redis,
 		logger: logger,
 	}
 }
@@ -71,10 +75,14 @@ func (s *Service) processOrgDomain(ctx context.Context, finding shared.Discovery
 	var existingDomain shared.OrgDomain
 	err := collection.FindOne(ctx, filter).Decode(&existingDomain)
 
+	var domainID string
+	var shouldTriggerPortScan bool
+
 	if err == mongo.ErrNoDocuments {
 		// Create new OrgDomain with first IP resolution
+		domainID = uuid.New().String()
 		newDomain := &shared.OrgDomain{
-			ID:     uuid.New().String(),
+			ID:     domainID,
 			OrgID:  finding.OrgID,
 			Domain: finding.Host,
 			Source: finding.Source,
@@ -110,19 +118,48 @@ func (s *Service) processOrgDomain(ctx context.Context, finding shared.Discovery
 			zap.String("org_id", finding.OrgID),
 			zap.String("ip", *finding.IP),
 		)
-		return nil
-	}
-
-	if err != nil {
+		shouldTriggerPortScan = true
+	} else if err != nil {
 		s.logger.Error("Failed to check existing OrgDomain",
 			zap.String("trace_id", finding.TraceID),
 			zap.Error(err),
 		)
 		return err
+	} else {
+		// Domain exists - check if IP has changed
+		domainID = existingDomain.ID
+		if err := s.updateOrgDomainResolution(ctx, &existingDomain, *finding.IP, now); err != nil {
+			return err
+		}
+
+		// Trigger port scan only if IP changed (new resolution added)
+		if len(existingDomain.ResolutionHistory) > 0 {
+			lastResolution := existingDomain.ResolutionHistory[len(existingDomain.ResolutionHistory)-1]
+			shouldTriggerPortScan = lastResolution.IP != *finding.IP
+		}
 	}
 
-	// Domain exists - check if IP has changed
-	return s.updateOrgDomainResolution(ctx, &existingDomain, *finding.IP, now)
+	// Trigger IP discovery job if we have a new IP
+	if shouldTriggerPortScan && finding.IP != nil && *finding.IP != "" {
+		if err := s.publishIPDiscoveryJob(ctx, finding, domainID); err != nil {
+			s.logger.Error("Failed to publish IP discovery job",
+				zap.String("trace_id", finding.TraceID),
+				zap.String("domain", finding.Host),
+				zap.String("ip", *finding.IP),
+				zap.Error(err),
+			)
+			// Don't fail the domain ingestion if IP scan trigger fails
+		} else {
+			s.logger.Info("Triggered IP discovery job",
+				zap.String("trace_id", finding.TraceID),
+				zap.String("domain", finding.Host),
+				zap.String("ip", *finding.IP),
+				zap.String("domain_id", domainID),
+			)
+		}
+	}
+
+	return nil
 }
 
 // updateOrgDomainResolution updates the resolution history when IP changes
@@ -200,5 +237,39 @@ func (s *Service) updateOrgDomainResolution(ctx context.Context, domain *shared.
 		zap.String("domain", domain.Domain),
 		zap.String("ip", newIP),
 	)
+	return nil
+}
+
+// publishIPDiscoveryJob publishes an IP discovery job to trigger port scanning
+func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.DiscoveryFinding, domainID string) error {
+	// Create IP discovery job
+	ipJob := shared.IPDiscoveryJob{
+		TraceID: finding.TraceID,
+		OrgID:   finding.OrgID,
+		IP:      *finding.IP,
+		Metadata: map[string]interface{}{
+			"source":    "domain_discovery",
+			"domain":    finding.Host,
+			"domain_id": domainID,
+		},
+		Created: time.Now(),
+	}
+
+	// Marshal to JSON
+	data, err := json.Marshal(ipJob)
+	if err != nil {
+		return fmt.Errorf("failed to marshal IP discovery job: %w", err)
+	}
+
+	// Publish to ip_discovery_queue stream
+	_, err = s.redis.XAdd(ctx, &redis.XAddArgs{
+		Stream: shared.StreamIPDiscoveryQueue,
+		Values: map[string]interface{}{"data": string(data)},
+	}).Result()
+
+	if err != nil {
+		return fmt.Errorf("failed to publish to Redis stream: %w", err)
+	}
+
 	return nil
 }
