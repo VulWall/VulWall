@@ -1,45 +1,103 @@
-# VulWall Scanners
+# VulWall NightWatch
 
-VulWall Scanners is a modular, vertically-sliced Go monorepo architecture for security scanning services. Each feature (active recon, passive recon) is a self-contained service that can be built and deployed independently while sharing common infrastructure. Currently focused on infrastructure setup with plans to add vulnerability scanning and report generation.
+VulWall NightWatch is an **asset discovery platform** built with a vertically-sliced Go monorepo architecture. The platform discovers and tracks security assets (domains, subdomains, IPs, ports) across organizations using a distributed discovery + ingestion pipeline.
 
 ## Architecture
 
-### Vertical Slice Monolith
+### Discovery + Ingestion Pattern
+
+NightWatch uses a **separation of concerns** architecture where:
+- **Discovery services** find assets and publish findings to Redis streams (NO MongoDB access)
+- **Ingestion service** is the single source of truth for MongoDB persistence (vertical slice architecture)
 
 ```
-VulWall.Scanners/
-├── cmd/                    # Entry points for each service
-│   ├── active-recon/
-│   └── passive-recon/
+┌──────────────────────────────────────────────────────────────────┐
+│                    NightWatch Architecture                        │
+└──────────────────────────────────────────────────────────────────┘
+
+DOMAIN DISCOVERY:
+Job → domain_discovery_queue → Domain Discovery Service (Shodan)
+  ↓
+Findings → domain_discovery_results → Domain Ingestion
+  ↓
+MongoDB: discoveries (domain, subdomain, ip) + org_assets
+
+PORT DISCOVERY:
+Job → ip_discovery_queue → Port Discovery Service (TCP Scanner)
+  ↓
+Findings → ip_discovery_results → Port Ingestion
+  ↓
+MongoDB: discoveries (port) + org_assets
+```
+
+### Project Structure
+
+```
+VulWall.NightWatch/
+├── cmd/                          # Entry points for each service
+│   ├── domain-discovery/         # Shodan subdomain discovery
+│   ├── port-discovery/           # TCP port scanner
+│   ├── ingestion/                # MongoDB persistence orchestrator
+│   ├── active-recon/             # Active reconnaissance (future)
+│   └── passive-recon/            # Passive reconnaissance (future)
 ├── internal/
-│   ├── core/              # Shared infrastructure
-│   │   ├── config/        # Configuration loader
-│   │   ├── logger/        # Logging setup
-│   │   ├── mongox/        # MongoDB connector
-│   │   └── redisx/        # Redis client wrapper
-│   ├── shared/            # Domain models and constants
-│   └── slices/            # Independent vertical slices
-│       ├── active_recon/
-│       └── passive_recon/
-├── ops/                   # Docker and deployment files
-│   ├── Dockerfile.active-recon
-│   ├── Dockerfile.passive-recon
+│   ├── core/                     # Shared infrastructure
+│   │   ├── bootstrap/            # Common service initialization
+│   │   ├── config/               # Configuration loader
+│   │   ├── logger/               # Zap logger setup
+│   │   ├── mongox/               # MongoDB connection + indexes
+│   │   └── redisx/               # Redis client + consumer groups
+│   ├── shared/                   # Cross-cutting concerns
+│   │   ├── models.go             # Shared models (DiscoveryJob, Discovery, etc.)
+│   │   └── constants.go          # Shared constants (streams, collections)
+│   ├── discoveries/              # Discovery services (NO MongoDB)
+│   │   ├── domain_discovery/     # Shodan subdomain discovery
+│   │   │   ├── constants.go      # Consumer group name
+│   │   │   ├── service.go        # Discovery logic
+│   │   │   ├── consumer.go       # Redis consumer
+│   │   │   └── shodan/           # Shodan API client
+│   │   ├── port_discovery/       # Port scanner
+│   │   │   ├── constants.go      # Consumer group + common ports
+│   │   │   ├── service.go        # Port scanning logic
+│   │   │   ├── consumer.go       # Redis consumer
+│   │   │   └── scanner/          # TCP connect scanner
+│   │   ├── active_recon/         # Active recon (planned)
+│   │   └── passive_recon/        # Passive recon (planned)
+│   └── ingestion/                # Ingestion service (vertical slices)
+│       ├── orchestrator.go       # Runs all consumers concurrently
+│       ├── domain_ingestion/     # Domain/subdomain/IP persistence
+│       │   ├── constants.go
+│       │   ├── service.go        # discoveries + org_assets persistence
+│       │   └── consumer.go
+│       └── port_ingestion/       # Port persistence
+│           ├── constants.go
+│           ├── service.go        # discoveries + org_assets persistence
+│           └── consumer.go
+├── ops/                          # Docker and deployment files
+│   ├── Dockerfile.domain-discovery
+│   ├── Dockerfile.port-discovery
+│   ├── Dockerfile.ingestion
 │   └── docker-compose.yml
-├── bin/                   # Compiled binaries (gitignored)
+├── bin/                          # Compiled binaries (gitignored)
 ├── .env.example
 ├── Makefile
 └── go.mod
 ```
 
-**Note**: Currently infrastructure-focused. Additional slices (vuln_scan, report_gen) and external scanning tool integrations will be added as the project evolves.
+### Key Architectural Principles
 
-### Key Benefits
-
-- **Single Codebase**: Unified models, shared infrastructure, single go.mod
-- **Independent Scaling**: Each service compiles to its own binary
-- **Low Coupling**: Each slice owns its logic and dependencies
-- **Easy Local Dev**: Run services individually with `go run`
-- **Microservice-Ready**: Deploy as separate containers when needed
+- **Organization-scoped**: All jobs require `org_id` (GUID) - consumers skip jobs without it
+- **Unified asset storage**: ALL assets (domains, subdomains, IPs, ports) in single `discoveries` collection
+- **Type discrimination**: Uses `asset_type` field to distinguish 4 asset types
+- **Normalized design**: Assets stored WITHOUT org_id, relationships in separate `org_assets` collection
+- **Hierarchical relationships**: Domain → Subdomain → IP → Port via `parent_id` fields
+- **Two status fields**:
+  - `discovery.status` = technical state (active/inactive)
+  - `org_assets.status` = organizational state (confirmed/pending/dismissed)
+- **History tracking**:
+  - Domains/subdomains: IP resolution history
+  - Ports: Service change history
+- **Source attribution**: Every asset tracks its discovery source
 
 ## Getting Started
 
@@ -49,19 +107,20 @@ VulWall.Scanners/
 - Docker and Docker Compose (for containerized deployment)
 - **Cloud Redis** (Redis Cloud, Upstash, AWS ElastiCache, etc.)
 - **Cloud MongoDB** (MongoDB Atlas, AWS DocumentDB, etc.)
+- **Shodan API Key** (for domain discovery service)
 
 ### Installation
 
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd VulWall.Scanners
+cd VulWall.NightWatch
 ```
 
 2. Copy the environment file and configure your cloud credentials:
 ```bash
 cp .env.example .env
-# Edit .env with your cloud Redis and MongoDB credentials
+# Edit .env with your cloud Redis, MongoDB, and Shodan API credentials
 ```
 
 3. Install dependencies:
@@ -73,16 +132,16 @@ make deps
 
 #### Option 1: Using Docker Compose (Recommended)
 
-Ensure your `.env` file has valid cloud Redis and MongoDB credentials, then start services:
-
+Start all services:
 ```bash
 make docker-up
 ```
 
 Scale specific workers:
 ```bash
-make docker-scale-passive N=4
-make docker-scale-active N=2
+make docker-scale-domain-discovery N=2
+make docker-scale-port-discovery N=5
+make docker-scale-ingestion N=3
 ```
 
 View logs:
@@ -97,14 +156,21 @@ make docker-down
 
 #### Option 2: Running Individually (Local Development)
 
-Ensure your `.env` file is configured with cloud credentials, then run services directly:
+You need to run at least 2 services for the pipeline to work:
 
+**Terminal 1 - Domain Discovery:**
 ```bash
-# Run passive reconnaissance service
-make run-passive
+make run-domain-discovery
+```
 
-# Run active reconnaissance service (in another terminal)
-make run-active
+**Terminal 2 - Port Discovery:**
+```bash
+make run-port-discovery
+```
+
+**Terminal 3 - Ingestion (REQUIRED):**
+```bash
+make run-ingestion
 ```
 
 ### Building
@@ -114,112 +180,294 @@ Build all services:
 make build
 ```
 
-Build specific service:
+Build specific services:
 ```bash
-make build-passive
-make build-active
+make build-domain-discovery
+make build-port-discovery
+make build-ingestion
 ```
 
 The binaries will be created in the `bin/` directory.
 
 ## Usage
 
-### Scan Job Format
+### Discovery Job Formats
 
-Jobs are published to Redis streams. Example passive recon job:
+#### Domain Discovery Job
+
+Triggers subdomain discovery via Shodan:
 
 ```json
 {
-  "scan_id": "scan-123",
-  "type": "passive_recon",
-  "domain": "example.com",
-  "user_id": "user-456",
-  "options": {
-    "aggressive": false,
-    "threads": 10,
-    "timeout": 300,
-    "tags": ["production"]
-  },
-  "created": "2025-10-11T10:00:00Z"
+  "trace_id": "trace-123",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
+  "host": "example.com",
+  "created": "2025-10-20T10:00:00Z"
 }
 ```
+
+**Required fields:**
+- `org_id` - Organization GUID (jobs without this are skipped)
+- `host` - Domain to discover
+
+#### Port Discovery Job
+
+Triggers port scanning on an IP:
+
+```json
+{
+  "trace_id": "trace-456",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
+  "ip": "8.8.8.8",
+  "created": "2025-10-20T10:00:00Z"
+}
+```
+
+**Required fields:**
+- `org_id` - Organization GUID (jobs without this are skipped)
+- `ip` - IP address to scan
 
 ### Publishing Jobs to Redis
 
+#### Trigger Domain Discovery
+
 ```bash
-# Publish a passive recon job
-redis-cli XADD passive_recon * data '{"scan_id":"scan-123","type":"passive_recon","domain":"example.com","user_id":"user-456","options":{"threads":10,"timeout":300},"created":"2025-10-11T10:00:00Z"}'
-
-# Publish an active recon job
-redis-cli XADD active_recon * data '{"scan_id":"scan-124","type":"active_recon","domain":"example.com","user_id":"user-456","options":{"aggressive":false,"ports":[80,443,22],"threads":5,"timeout":600},"created":"2025-10-11T10:00:00Z"}'
+redis-cli XADD domain_discovery_queue * data '{
+  "trace_id": "test-001",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
+  "host": "example.com",
+  "created": "2025-10-20T15:00:00Z"
+}'
 ```
 
-### Scan Results
+**What happens:**
+1. Domain discovery service finds subdomains using Shodan
+2. For each domain/subdomain, resolves IP address
+3. Publishes findings to `domain_discovery_results`
+4. Domain ingestion consumer stores in MongoDB:
+   - Creates domain/subdomain records in `discoveries` (asset_type: "domain" or "subdomain")
+   - Creates IP records in `discoveries` (asset_type: "ip")
+   - Creates `org_assets` links for organization relationships
+   - Tracks IP resolution history
+   - **Automatically triggers port scanning for new IPs**
 
-Results are stored in MongoDB in the `scan_results` collection:
+#### Trigger Port Discovery
 
-```json
-{
-  "scan_id": "scan-123",
-  "type": "passive_recon",
-  "status": "completed",
-  "results": {
-    "subdomains": ["www.example.com", "api.example.com"],
-    "dns_records": {
-      "A": "192.0.2.1",
-      "MX": "mail.example.com"
-    },
-    "technologies": [
-      {
-        "name": "Cloudflare",
-        "categories": ["CDN", "Security"],
-        "confidence": 95
-      }
-    ]
-  },
-  "started_at": "2025-10-11T10:00:00Z",
-  "completed_at": "2025-10-11T10:00:05Z",
-  "duration": 5.2
-}
+```bash
+redis-cli XADD ip_discovery_queue * data '{
+  "trace_id": "test-002",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
+  "ip": "8.8.8.8",
+  "created": "2025-10-20T15:00:00Z"
+}'
 ```
+
+**What happens:**
+1. Port discovery service scans 23 common ports (TCP connect, 2s timeout)
+2. For each open port, publishes finding to `ip_discovery_results`
+3. Port ingestion consumer stores in MongoDB:
+   - Ensures IP record exists in `discoveries`
+   - Creates port records in `discoveries` (asset_type: "port")
+   - Tracks service changes (banner, service_name, product, version)
+   - Creates `org_assets` links for both IP and port
+
+### Querying Results
+
+#### Find All Assets for an Organization
+
+```javascript
+// MongoDB aggregation
+db.org_assets.aggregate([
+  { $match: { org_id: "550e8400-e29b-41d4-a716-446655440000" } },
+  { $lookup: {
+      from: "discoveries",
+      localField: "asset_id",
+      foreignField: "_id",
+      as: "discovery"
+  }},
+  { $unwind: "$discovery" }
+])
+```
+
+#### Find All Ports for an Organization
+
+```javascript
+db.org_assets.aggregate([
+  { $match: { org_id: "550e8400-e29b-41d4-a716-446655440000" } },
+  { $lookup: {
+      from: "discoveries",
+      localField: "asset_id",
+      foreignField: "_id",
+      as: "discovery"
+  }},
+  { $unwind: "$discovery" },
+  { $match: { "discovery.asset_type": "port" } }
+])
+```
+
+#### Query Domain Hierarchy
+
+```javascript
+// Find all subdomains of a domain
+db.discoveries.find({
+  asset_type: "subdomain",
+  parent_id: "domain-uuid-here"
+})
+
+// Find all IPs resolved from a domain/subdomain
+db.discoveries.find({
+  asset_type: "ip",
+  parent_id: "domain-or-subdomain-uuid-here"
+})
+
+// Find all ports on an IP
+db.discoveries.find({
+  asset_type: "port",
+  parent_id: "ip-uuid-here"
+})
+```
+
+## Configuration
+
+Configuration is loaded from environment variables or `.env` file:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `REDIS_ADDR` | Cloud Redis endpoint | `redis-12345.cloud.redislabs.com:12345` |
+| `REDIS_PASSWORD` | Redis authentication password | `your-redis-password` |
+| `REDIS_DB` | Redis database number | `0` |
+| `MONGO_URI` | MongoDB Atlas/Cloud connection string | `mongodb+srv://user:pass@cluster.mongodb.net/` |
+| `MONGO_DB` | MongoDB database name | `vulwall` |
+| `SHODAN_API_KEY` | Shodan API key for subdomain discovery | `your-shodan-api-key` |
+| `ENVIRONMENT` | Environment (development/production) | `development` |
+
+## Services
+
+### 1. Domain Discovery Service
+
+**Purpose**: Discovers subdomains and resolves IPs using Shodan API
+
+**Stream**: Consumes from `domain_discovery_queue` (consumer group: `shodan_subdomain_service`)
+
+**Output**: Publishes to `domain_discovery_results`
+
+**Scaling**: `make docker-scale-domain-discovery N=2`
+
+### 2. Port Discovery Service
+
+**Purpose**: Scans 23 common TCP ports on target IPs
+
+**Stream**: Consumes from `ip_discovery_queue` (consumer group: `port_discovery_service`)
+
+**Output**: Publishes to `ip_discovery_results`
+
+**Scaling**: `make docker-scale-port-discovery N=5`
+
+### 3. Ingestion Service
+
+**Purpose**: Single source of truth for MongoDB persistence (runs 2 concurrent consumers)
+
+**Architecture**: Vertical slice with concurrent consumers:
+- **domain_ingestion** - Processes domains, subdomains, and IPs
+- **port_ingestion** - Processes ports
+
+**Scaling**: `make docker-scale-ingestion N=3`
+
+### 4. Active Recon Service (Planned)
+
+**Purpose**: Active reconnaissance scanning
+
+**Status**: 🚧 Infrastructure ready, implementation pending
+
+### 5. Passive Recon Service (Planned)
+
+**Purpose**: Passive reconnaissance scanning
+
+**Status**: 🚧 Infrastructure ready, implementation pending
+
+## Redis Streams
+
+### Streams and Consumer Groups
+
+| Stream | Direction | Consumer Groups | Purpose |
+|--------|-----------|-----------------|---------|
+| `domain_discovery_queue` | Input | `shodan_subdomain_service` | Domain discovery jobs |
+| `domain_discovery_results` | Output | `domain_ingestion_group` | Domain discovery findings |
+| `ip_discovery_queue` | Input | `port_discovery_service` | IP port discovery jobs |
+| `ip_discovery_results` | Output | `port_ingestion_group` | IP port discovery findings |
+
+### Monitoring Streams
+
+```bash
+# View pending messages
+redis-cli XPENDING domain_discovery_queue shodan_subdomain_service
+
+# View stream length
+redis-cli XLEN domain_discovery_queue
+
+# View recent messages
+redis-cli XRANGE domain_discovery_results - + COUNT 10
+```
+
+## MongoDB Collections
+
+### `discoveries` Collection
+
+Global asset registry storing ALL discovered assets (NO org_id):
+
+**Asset Types:**
+- `domain` - Root domains (e.g., "example.com")
+- `subdomain` - Subdomains (e.g., "api.example.com")
+- `ip` - IP addresses
+- `port` - Open ports with service information
+
+**Key Fields:**
+- `_id` - UUID
+- `asset_type` - Type discrimination ("domain", "subdomain", "ip", "port")
+- `source` - Discovery source ("shodan", "port_discovery", etc.)
+- `status` - Technical state (active, inactive, unknown)
+- `parent_id` - Parent asset ID (for hierarchy)
+- `resolution_history` - IP resolution changes (domains/subdomains only)
+- `previous_services` - Service change history (ports only)
+
+**Indexes:**
+- `idx_asset_type_domain` - Find domains by name
+- `idx_asset_type_subdomain` - Find subdomains by name
+- `idx_asset_type_ip` - Find IPs
+- `idx_asset_type_ip_port_protocol` - Find ports (compound)
+- `idx_parent_id_asset_type` - Find children by parent
+- `idx_status_asset_type` - Filter by status
+- `idx_last_seen` - Time-based queries
+- `idx_source_asset_type` - Filter by source
+
+### `org_assets` Collection
+
+Org-to-asset relationship links (many-to-many):
+
+**Key Fields:**
+- `_id` - UUID
+- `org_id` - Organization GUID
+- `asset_id` - References `discoveries._id`
+- `status` - Organizational state (confirmed, pending, dismissed)
+- `assigned_at` - When asset was assigned to org
+
+**Indexes:**
+- `idx_org_id_asset_id` - UNIQUE, prevents duplicate links
+- `idx_org_id_status` - Find all assets for an org
+- `idx_asset_id` - Find all orgs that have a specific asset
 
 ## Development
 
-### Project Structure
+### Adding a New Discovery Service
 
-- **`cmd/`**: Entry points for each service binary
-- **`internal/core/`**: Shared infrastructure (Redis, MongoDB, logging, config)
-- **`internal/shared/`**: Common models and constants
-- **`internal/slices/`**: Vertical slices - each is a bounded context
-- **`ops/`**: Docker and deployment configuration files
-- **`bin/`**: Compiled binaries (created by build, gitignored)
+See [CLAUDE.md](CLAUDE.md) for detailed instructions on adding new discovery tools (e.g., nmap, masscan).
 
-### Adding a New Service
-
-1. Create new directory in `internal/slices/`:
-```bash
-mkdir -p internal/slices/new_service
-```
-
-2. Create service implementation:
-   - `service.go` - Core business logic
-   - `consumer.go` - Redis stream consumer
-   - `types.go` - Service-specific types (optional)
-
-3. Create entry point in `cmd/`:
-```bash
-mkdir -p cmd/new-service
-```
-
-4. Add constants to `internal/shared/constants.go`:
-```go
-const (
-    StreamNewService = "new_service"
-    GroupNewService  = "new_service_group"
-)
-```
-
-5. Create `ops/Dockerfile.new-service` and add service to `ops/docker-compose.yml`
+**Quick overview:**
+1. Create service directory in `internal/discoveries/`
+2. Implement service, consumer, and tool-specific client
+3. Use shared models (`DiscoveryJob`, `DiscoveryFinding`)
+4. Publish findings with `source` field
+5. NO MongoDB access (ingestion service handles persistence)
 
 ### Testing
 
@@ -250,54 +498,11 @@ Run static analysis:
 make vet
 ```
 
-## Configuration
-
-Configuration is loaded from environment variables or `.env` file. **This project uses cloud-hosted Redis and MongoDB** - configure your cloud provider credentials below:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `REDIS_ADDR` | Cloud Redis endpoint | `redis-12345.c1.us-east-1-1.ec2.cloud.redislabs.com:12345` |
-| `REDIS_PASSWORD` | Redis authentication password | `your-redis-password` |
-| `REDIS_DB` | Redis database number | `0` |
-| `MONGO_URI` | MongoDB Atlas/Cloud connection string | `mongodb+srv://user:pass@cluster.mongodb.net/` |
-| `MONGO_DB` | MongoDB database name | `vulwall` |
-| `SERVICE_NAME` | Service identifier | `vulwall-scanner` |
-| `ENVIRONMENT` | Environment (development/production) | `development` |
-
-## Redis Streams
-
-### Streams and Consumer Groups
-
-| Service | Stream Name | Consumer Group | Status |
-|---------|-------------|----------------|--------|
-| Passive Recon | `passive_recon` | `passive_recon_group` | ✅ Implemented |
-| Active Recon | `active_recon` | `active_recon_group` | ✅ Implemented |
-| Vuln Scan | `vuln_scan` | `vuln_scan_group` | 🚧 Planned |
-| Report Gen | `report_gen` | `report_gen_group` | 🚧 Planned |
-
-### Monitoring Streams
-
-```bash
-# View pending messages
-redis-cli XPENDING passive_recon passive_recon_group
-
-# View stream length
-redis-cli XLEN passive_recon
-
-# View recent messages
-redis-cli XRANGE passive_recon - + COUNT 10
-```
-
-## MongoDB Collections
-
-- **`scan_jobs`**: Scan job metadata
-- **`scan_results`**: Scan results and findings
-
 ## Deployment
 
 ### Docker Production Build
 
-All Docker files are located in the `ops/` directory. The Makefile handles the correct paths automatically.
+All Docker files are located in the `ops/` directory:
 
 ```bash
 # Build optimized production images
@@ -305,17 +510,21 @@ make docker-build
 
 # Deploy with specific replicas
 make docker-up
-make docker-scale-passive N=4
-make docker-scale-active N=2
+make docker-scale-domain-discovery N=2
+make docker-scale-port-discovery N=5
+make docker-scale-ingestion N=3
 ```
 
 Or use docker-compose directly:
 ```bash
 docker-compose -f ops/docker-compose.yml build
-docker-compose -f ops/docker-compose.yml up -d --scale passive-recon=4 --scale active-recon=2
+docker-compose -f ops/docker-compose.yml up -d \
+  --scale domain-discovery=2 \
+  --scale port-discovery=5 \
+  --scale ingestion=3
 ```
 
-### Kubernetes (Future)
+### Kubernetes (Planned)
 
 Each service can be deployed as a separate Kubernetes Deployment with:
 - HorizontalPodAutoscaler for auto-scaling
@@ -324,17 +533,57 @@ Each service can be deployed as a separate Kubernetes Deployment with:
 
 ## Roadmap
 
-- [ ] Implement vulnerability scanning slice
-- [ ] Implement report generation slice
-- [ ] Add REST API service for job management
-- [ ] Add message schema validation
-- [ ] Add Prometheus metrics
-- [ ] Add health check endpoints
-- [ ] Implement retry logic with dead letter queues
-- [ ] Add rate limiting
-- [ ] Integrate actual scanning tools (nmap, subfinder, nuclei, etc.)
-- [ ] Add Kubernetes manifests
-- [ ] Add integration tests
+**Discovery Services:**
+- [x] Domain discovery (Shodan)
+- [x] Port discovery (TCP scanner)
+- [ ] Subdomain enumeration (amass, subfinder)
+- [ ] Service detection (nmap service scan)
+- [ ] Vulnerability scanning (nuclei, nessus)
+- [ ] Screenshot capture (aquatone, gowitness)
+
+**Platform Features:**
+- [x] Unified asset storage with type discrimination
+- [x] Org-to-asset relationship tracking
+- [x] IP resolution history tracking
+- [x] Service change history tracking
+- [x] MongoDB indexes for performance
+- [ ] REST API for job management
+- [ ] GraphQL API for asset queries
+- [ ] Web UI for asset visualization
+- [ ] Asset tagging and categorization
+- [ ] Asset risk scoring
+- [ ] Notification system (Slack, webhooks)
+- [ ] Scheduled discovery jobs
+- [ ] Asset expiration and cleanup
+
+**Infrastructure:**
+- [x] Bootstrap pattern for service initialization
+- [x] Vertical slice ingestion architecture
+- [x] Redis streams for job distribution
+- [x] MongoDB for asset persistence
+- [ ] Prometheus metrics
+- [ ] Health check endpoints
+- [ ] Distributed tracing (OpenTelemetry)
+- [ ] Rate limiting
+- [ ] Dead letter queues
+- [ ] Kubernetes manifests
+- [ ] Helm charts
+- [ ] Integration tests
+- [ ] Load testing
+
+## Architecture Decisions
+
+For detailed architectural guidance and patterns, see [CLAUDE.md](CLAUDE.md).
+
+**Key decisions:**
+- **Discovery + Ingestion separation** - Discovery services focus on finding assets, ingestion service handles all MongoDB writes
+- **Vertical slice ingestion** - Each ingestion slice (domain_ingestion, port_ingestion) runs concurrently
+- **Type discrimination** - Single `discoveries` collection with `asset_type` field (4 types)
+- **Normalized org relationships** - Assets stored without org_id, relationships in separate `org_assets` collection
+- **Two status fields** - `discovery.status` (technical) vs `org_assets.status` (organizational)
+- **Parallel consumer groups** - Multiple discovery tools can process the same job simultaneously
+- **History tracking** - IP resolution changes and service changes tracked over time
+- **Go-based indexes** - Indexes created at ingestion service startup (idempotent, no migrations needed)
 
 ## License
 
