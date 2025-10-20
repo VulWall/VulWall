@@ -12,7 +12,6 @@ const (
 	CollectionAttackSurface    = "attack_surface"
 	CollectionOrgAttackSurface = "org_attack_surface"
 	CollectionOrgAssets        = "org_assets" // Unified collection for domains and IPs
-	CollectionOrgDomains       = "org_domains" // DEPRECATED: Use CollectionOrgAssets instead
 
 	// Redis Streams - Domain Discovery
 	StreamDomainDiscoveryQueue   = "domain_discovery_queue"   // Input stream for domain discovery jobs

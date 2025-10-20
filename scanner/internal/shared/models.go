@@ -80,16 +80,6 @@ type OrgAsset struct {
 	ParentDomains []string `json:"parent_domains,omitempty" bson:"parent_domains,omitempty"` // Quick reference to parent domain names
 }
 
-// OrgDomain represents a domain discovered for an organization
-// DEPRECATED: Use OrgAsset with asset_type = "domain" instead
-// Kept for backward compatibility during migration
-type OrgDomain struct {
-	ID                string              `json:"_id" bson:"_id"`
-	OrgID             string              `json:"org_id" bson:"org_id"`
-	Domain            string              `json:"domain" bson:"domain"`
-	Source            string              `json:"source" bson:"source"` // "shodan", "nmap", etc.
-	ResolutionHistory []ResolutionHistory `json:"resolution_history" bson:"resolution_history"`
-}
 
 // IPDiscoveryJob represents a job to discover open ports on an IP address
 // This is consumed by port discovery services (port_discovery, etc.)

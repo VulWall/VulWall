@@ -38,7 +38,7 @@ VulWall.Engine/
 │   │   ├── orchestrator.go      # Runs all consumers concurrently
 │   │   ├── domain_ingestion/    # Domain ingestion slice
 │   │   │   ├── constants.go     # Consumer group
-│   │   │   ├── service.go       # org_domains persistence
+│   │   │   ├── service.go       # org_assets persistence (domains and IPs)
 │   │   │   └── consumer.go      # Consumes domain_discovery_results
 │   │   └── port_ingestion/      # Port ingestion slice
 │   │       ├── constants.go     # Consumer group
@@ -129,7 +129,7 @@ DOMAIN DISCOVERY FLOW:
    └─→ Publishes to domain_discovery_results (source="shodan")
 
 3. Domain Ingestion Consumer
-   └─→ Persists to org_domains collection
+   └─→ Persists to org_assets collection
        ├─→ Stores domains with IP resolution history
        └─→ Tracks IP changes over time
 
@@ -167,7 +167,7 @@ INGESTION SERVICE ARCHITECTURE:
 - Shared asset models:
   - `AttackSurfaceAsset` (port/service assets)
   - `OrgAttackSurface` (org-to-asset relationships)
-  - `OrgDomain` (domain assets with IP history)
+  - `OrgAsset` (unified domain and IP assets with type discrimination)
 - Common data structures for inter-service communication
 
 ✅ **Put in `internal/shared/constants.go`:**
@@ -175,7 +175,7 @@ INGESTION SERVICE ARCHITECTURE:
   - `StreamDomainDiscoveryQueue`, `StreamDomainDiscoveryResults`
   - `StreamIPDiscoveryQueue`, `StreamIPDiscoveryResults`
 - Shared collection names:
-  - `CollectionAttackSurface`, `CollectionOrgAttackSurface`, `CollectionOrgDomains`
+  - `CollectionOrgAssets`, `CollectionAttackSurface`, `CollectionOrgAttackSurface`
 - Protocol/status constants used by multiple services
 - Org asset status constants (confirmed, pending, dismissed)
 - Target type constants
@@ -208,7 +208,7 @@ Input Stream: domain_discovery_queue
         ↓
         All publish findings to: domain_discovery_results
         ↓
-    Ingestion Service → MongoDB (org_domains collection for Shodan only)
+    Ingestion Service → MongoDB (org_assets collection for Shodan only)
 ```
 
 **Key Benefits:**
@@ -230,7 +230,7 @@ Input Stream: domain_discovery_queue
 6. Ingestion service consumes from `domain_discovery_results`
 7. Ingestion service validates `source` is present (skip if missing)
 8. Ingestion service currently only processes Shodan domain discoveries:
-   - Shodan domains (with IP, no port) → `org_domains` with IP resolution history
+   - Shodan domains (with IP, no port) → `org_assets` with IP resolution history
    - Non-Shodan findings → skipped (logged at debug level)
 
 ## Common Commands
@@ -406,13 +406,13 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
 - `mongox/client.go` - MongoDB connection manager
 
 ### Shared Package (`internal/shared/`)
-- `models.go` - Models used by 2+ services (DiscoveryJob, DiscoveryFinding, AttackSurfaceAsset, OrgDomain, ResolutionHistory)
+- `models.go` - Models used by 2+ services (DiscoveryJob, DiscoveryFinding, AttackSurfaceAsset, OrgAsset, ResolutionHistory)
 - `constants.go` - Constants used by 2+ services (streams, collections, protocols, statuses)
 
 ### Ingestion Service (`internal/ingestion/`)
 - `constants.go` - Consumer group name for ingestion service
 - `service.go` - MongoDB persistence logic with dual routing:
-  - `processOrgDomain()` - Stores Shodan domains in `org_domains` with IP resolution history
+  - `processOrgAsset()` - Stores Shodan domains and IPs in `org_assets` with type discrimination
   - `processAttackSurface()` - Stores port-based findings in `attack_surface`
   - Source validation (skip findings without `source` field)
 - `consumer.go` - Redis consumer for domain_discovery_results stream
@@ -603,7 +603,6 @@ type OrgAttackSurface struct {
 - `shared.CollectionOrgAssets = "org_assets"` - Unified domains and IPs with type discrimination
 - `shared.CollectionAttackSurface = "attack_surface"` - Port-based assets (NO org_id stored here)
 - `shared.CollectionOrgAttackSurface = "org_attack_surface"` - Org-to-port relationships
-- `shared.CollectionOrgDomains = "org_domains"` - DEPRECATED: Use CollectionOrgAssets instead
 
 **Asset Types (for OrgAsset.AssetType):**
 - `shared.AssetTypeDomain = "domain"` - Domain asset type
@@ -662,7 +661,7 @@ redis-cli XADD domain_discovery_queue * data '{
 # Result:
 # 1. Domain discovery service finds subdomains and resolves IPs
 # 2. Findings published to domain_discovery_results with org_id and source="shodan"
-# 3. Domain ingestion consumer stores in org_domains collection with IP resolution history
+# 3. Domain ingestion consumer stores in org_assets collection with IP resolution history
 ```
 
 ### Port Discovery (TCP Scanner)
@@ -751,7 +750,7 @@ db.org_attack_surface.aggregate([
 ### Discovery Services Pattern
 - **Organization-scoped** - All jobs require `org_id` (GUID), consumers skip jobs without it
 - **Two discovery flows:**
-  - **Domain discovery:** `domain_discovery_queue` → `domain_discovery_results` → `org_domains`
+  - **Domain discovery:** `domain_discovery_queue` → `domain_discovery_results` → `org_assets`
   - **Port discovery:** `ip_discovery_queue` → `ip_discovery_results` → `attack_surface` + `org_attack_surface`
 - **Independent scaling** - Scale each discovery tool independently (e.g., 5 domain workers, 10 port workers)
 - **Unique consumer groups** - Each tool has its own group:
@@ -760,7 +759,7 @@ db.org_attack_surface.aggregate([
 - **Shared models** - All use appropriate shared job/finding models
 - **Source validation** - Ingestion service requires `source` field, skips findings without it
 - **Vertical slice ingestion** - Each ingestion type runs concurrently:
-  - **domain_ingestion** - Shodan domains → `org_domains` with IP resolution history
+  - **domain_ingestion** - Shodan domains → `org_assets` with IP resolution history
   - **port_ingestion** - Port scans → `attack_surface` + `org_attack_surface` (normalized design)
 - **IP resolution tracking** - Domain discovery resolves IPs, ingestion tracks changes over time
 - **Source attribution** - Use `source` field to identify which tool discovered the asset
@@ -785,7 +784,7 @@ internal/discoveries/shodan_discovery/
    - Publishes finding to `domain_discovery_results` with `org_id`, `source="shodan"`, and `ip`
 5. Domain ingestion consumer validates `source` is present (skips if missing)
 6. For Shodan findings (with IP, no port):
-   - Stores in `org_domains` collection
+   - Stores in `org_assets` collection
    - Tracks IP resolution history
    - If IP changed: closes old resolution, adds new one
 
