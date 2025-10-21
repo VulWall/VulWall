@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  domain-discovery:
+    build:
+      context: ../..
+      dockerfile: ops/domain-discovery/Dockerfile
+    container_name: nightwatch-domain-discovery
+    restart: unless-stopped
+    environment:
+      # Redis Configuration (connects to core network Redis)
+      - REDIS_ADDR=${REDIS_ADDR:-nightwatch-redis:6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-changeme}
+      - REDIS_DB=${REDIS_DB:-0}
+
+      # MongoDB Configuration
+      - MONGO_URI=${MONGO_URI}
+      - MONGO_DB=${MONGO_DB:-vulwall}
+
+      # Service Configuration
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - SHODAN_API_KEY=${SHODAN_API_KEY}
+    networks:
+      - core-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "domain-discovery"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  core-network:
+    external: true
