@@ -14,11 +14,11 @@ services:
     networks:
       - core-network
     healthcheck:
-      test: ["CMD", "pgrep", "-x", "domain-discovery"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      test: ["CMD", "pgrep", "-f", "domain-discovery"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     logging:
       driver: "json-file"
       options:
