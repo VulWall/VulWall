@@ -8,17 +8,8 @@ services:
     container_name: nightwatch-port-discovery
     restart: unless-stopped
     environment:
-      # Redis Configuration (connects to core network Redis)
-      - REDIS_ADDR=${REDIS_ADDR:-nightwatch-redis:6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-changeme}
-      - REDIS_DB=${REDIS_DB:-0}
-
-      # MongoDB Configuration
+      - REDIS_URL=${REDIS_URL}
       - MONGO_URI=${MONGO_URI}
-      - MONGO_DB=${MONGO_DB:-vulwall}
-
-      # Service Configuration
-      - ENVIRONMENT=${ENVIRONMENT:-production}
     networks:
       - core-network
     healthcheck:
