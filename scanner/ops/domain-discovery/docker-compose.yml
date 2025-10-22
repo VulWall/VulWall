@@ -7,10 +7,13 @@ services:
       dockerfile: ops/domain-discovery/Dockerfile
     container_name: nightwatch-domain-discovery
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - REDIS_URI=${REDIS_URI}
       - MONGO_URI=${MONGO_URI}
       - SHODAN_API_KEY=${SHODAN_API_KEY}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
     networks:
       - core-network
     healthcheck:
