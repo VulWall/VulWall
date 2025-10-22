@@ -1,4 +1,4 @@
-.PHONY: help build run test clean docker-build docker-up docker-down
+.PHONY: help build run test clean docker-build docker-up docker-down prod-setup prod-deploy-all prod-deploy-domain prod-deploy-ingestion prod-deploy-port prod-stop-all prod-stop-service prod-restart-service prod-logs prod-status
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -99,3 +99,70 @@ fmt: ## Format code
 
 vet: ## Run go vet
 	@go vet ./...
+
+# Production Deployment Targets
+
+prod-setup: ## Setup production environment (create network)
+	@ops/scripts/setup-network.sh
+
+prod-deploy-all: ## Deploy all services to production (usage: make prod-deploy-all [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-all.sh $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-all.sh; \
+	fi
+
+prod-deploy-domain: ## Deploy domain-discovery service (usage: make prod-deploy-domain [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh domain-discovery $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh domain-discovery; \
+	fi
+
+prod-deploy-ingestion: ## Deploy ingestion service (usage: make prod-deploy-ingestion [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh ingestion $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh ingestion; \
+	fi
+
+prod-deploy-port: ## Deploy port-discovery service (usage: make prod-deploy-port [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh port-discovery $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh port-discovery; \
+	fi
+
+prod-stop-all: ## Stop all production services
+	@ops/scripts/stop-all.sh
+
+prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SERVICE=domain-discovery)
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "Error: SERVICE parameter is required"; \
+		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
+		echo "Available services: domain-discovery, ingestion, port-discovery"; \
+		exit 1; \
+	fi
+	@ops/scripts/stop-service.sh $(SERVICE)
+
+prod-restart-service: ## Restart a specific service (usage: make prod-restart-service SERVICE=domain-discovery [PROJECT=name] [CONFIG=prd])
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "Error: SERVICE parameter is required"; \
+		echo "Usage: make prod-restart-service SERVICE=<service-name>"; \
+		exit 1; \
+	fi
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/restart-service.sh $(SERVICE) $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/restart-service.sh $(SERVICE); \
+	fi
+
+prod-logs: ## View logs from services (usage: make prod-logs [SERVICE=name] [OPTS=-f])
+	@if [ -n "$(SERVICE)" ]; then \
+		ops/scripts/logs.sh $(SERVICE) $(OPTS); \
+	else \
+		ops/scripts/logs.sh $(OPTS); \
+	fi
+
+prod-status: ## Check status of all production services
+	@ops/scripts/status.sh
