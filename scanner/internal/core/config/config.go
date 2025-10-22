@@ -24,7 +24,7 @@ func Load() (*Config, error) {
 		MongoURI:     getEnv("MONGO_URI", "mongodb://localhost:27017"),
 		MongoDB:      getEnv("MONGO_DB", "VulWall-Dev"),
 		ServiceName:  getEnv("SERVICE_NAME", "vulwall-scanner"),
-		Environment:  getEnv("ENVIRONMENT", "development"),
+		Environment:  getEnv("DOPPLER_ENVIRONMENT", "development"),
 		ShodanAPIKey: getEnv("SHODAN_API_KEY", ""),
 	}, nil
 }

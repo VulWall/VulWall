@@ -12,7 +12,6 @@ services:
     environment:
       - REDIS_URI=${REDIS_URI}
       - MONGO_URI=${MONGO_URI}
-      - ENVIRONMENT=${ENVIRONMENT:-production}
     networks:
       - core-network
     healthcheck:
