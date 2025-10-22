@@ -54,7 +54,7 @@ cd ../..
 Make sure your Doppler configs have these secrets:
 
 **All services:**
-- `REDIS_URL`
+- `REDIS_URI`
 - `MONGO_URI`
 - `ENVIRONMENT`
 
@@ -172,8 +172,8 @@ make prod-restart-service SERVICE=domain-discovery
 
 ```bash
 # Test Redis
-REDIS_URL=$(doppler secrets get REDIS_URL --plain)
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" PING
+REDIS_URI=$(doppler secrets get REDIS_URI --plain)
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" PING
 
 # Test MongoDB
 MONGO_URI=$(doppler secrets get MONGO_URI --plain)

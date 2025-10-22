@@ -59,7 +59,7 @@ This project uses **Doppler** for production secrets:
 - Each service has its own Doppler configuration
 
 Required secrets:
-- `REDIS_URL` - Redis Cloud connection string
+- `REDIS_URI` - Redis Cloud connection string
 - `MONGO_URI` - MongoDB Atlas connection string
 - `SHODAN_API_KEY` - Shodan API key (domain-discovery only)
 - `ENVIRONMENT` - Environment name (production)
@@ -143,7 +143,7 @@ Prefer shell scripts? All Makefile targets are wrappers around scripts:
 - **Directory:** `ops/domain-discovery/`
 - **Input:** `domain_discovery_queue` Redis stream
 - **Output:** `domain_discovery_results` Redis stream
-- **Secrets:** `REDIS_URL`, `MONGO_URI`, `SHODAN_API_KEY`
+- **Secrets:** `REDIS_URI`, `MONGO_URI`, `SHODAN_API_KEY`
 
 ### Ingestion
 
@@ -152,7 +152,7 @@ Prefer shell scripts? All Makefile targets are wrappers around scripts:
 - **Directory:** `ops/ingestion/`
 - **Input:** `domain_discovery_results`, `ip_discovery_results` Redis streams
 - **Output:** MongoDB `discoveries` and `org_assets` collections
-- **Secrets:** `REDIS_URL`, `MONGO_URI`
+- **Secrets:** `REDIS_URI`, `MONGO_URI`
 
 ### Port Discovery
 
@@ -161,7 +161,7 @@ Prefer shell scripts? All Makefile targets are wrappers around scripts:
 - **Directory:** `ops/port-discovery/`
 - **Input:** `ip_discovery_queue` Redis stream
 - **Output:** `ip_discovery_results` Redis stream
-- **Secrets:** `REDIS_URL`, `MONGO_URI`
+- **Secrets:** `REDIS_URI`, `MONGO_URI`
 
 ## Deployment Workflow
 
@@ -219,12 +219,12 @@ make prod-logs SERVICE=port-discovery OPTS="--tail=100"
 ### Redis Monitoring
 
 ```bash
-# Get Redis URL
-REDIS_URL=$(doppler secrets get REDIS_URL --plain)
+# Get Redis URI
+REDIS_URI=$(doppler secrets get REDIS_URI --plain)
 
 # Check queue lengths
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" XLEN domain_discovery_queue
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" XLEN ip_discovery_queue
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XLEN domain_discovery_queue
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XLEN ip_discovery_queue
 ```
 
 ### MongoDB Monitoring

@@ -7,7 +7,7 @@ import (
 )
 
 type Config struct {
-	RedisURL     string
+	RedisURI     string
 	MongoURI     string
 	MongoDB      string
 	ServiceName  string
@@ -20,7 +20,7 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	return &Config{
-		RedisURL:     getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		RedisURI:     getEnv("REDIS_URI", "redis://localhost:6379/0"),
 		MongoURI:     getEnv("MONGO_URI", "mongodb://localhost:27017"),
 		MongoDB:      getEnv("MONGO_DB", "VulWall-Dev"),
 		ServiceName:  getEnv("SERVICE_NAME", "vulwall-scanner"),

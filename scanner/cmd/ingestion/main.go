@@ -40,7 +40,7 @@ func main() {
 	defer redisClient.Close()
 
 	logger.Log.Info("Connected to Redis",
-		zap.String("url", cfg.RedisURL),
+		zap.String("uri", cfg.RedisURI),
 	)
 
 	// Initialize MongoDB client

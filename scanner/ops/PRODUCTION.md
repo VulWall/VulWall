@@ -133,7 +133,7 @@ For each service config, add the following secrets:
 
 **All Services:**
 ```
-REDIS_URL=redis://:<password>@<host>:<port>/<db>
+REDIS_URI=redis://:<password>@<host>:<port>/<db>
 MONGO_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority
 ENVIRONMENT=production
 ```
@@ -334,18 +334,18 @@ docker stats --filter "name=nightwatch"
 ### Redis Streams (Check Queue Lengths)
 
 ```bash
-# Get REDIS_URL from Doppler
-REDIS_URL=$(doppler secrets get REDIS_URL --plain --project vulwall-nightwatch --config prd)
+# Get REDIS_URI from Doppler
+REDIS_URI=$(doppler secrets get REDIS_URI --plain --project vulwall-nightwatch --config prd)
 
 # Check queue lengths
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" XLEN domain_discovery_queue
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" XLEN ip_discovery_queue
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" XLEN domain_discovery_results
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" XLEN ip_discovery_results
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XLEN domain_discovery_queue
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XLEN ip_discovery_queue
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XLEN domain_discovery_results
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XLEN ip_discovery_results
 
 # Check consumer groups
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" XINFO GROUPS domain_discovery_queue
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" XINFO GROUPS ip_discovery_queue
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XINFO GROUPS domain_discovery_queue
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XINFO GROUPS ip_discovery_queue
 ```
 
 ### MongoDB Queries
@@ -455,8 +455,8 @@ docker restart nightwatch-domain-discovery
 
 ```bash
 # Test Redis connection
-REDIS_URL=$(doppler secrets get REDIS_URL --plain --project vulwall-nightwatch --config prd)
-docker run --rm redis:alpine redis-cli -u "$REDIS_URL" PING
+REDIS_URI=$(doppler secrets get REDIS_URI --plain --project vulwall-nightwatch --config prd)
+docker run --rm redis:alpine redis-cli -u "$REDIS_URI" PING
 
 # Expected output: PONG
 ```

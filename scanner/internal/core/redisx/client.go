@@ -11,7 +11,7 @@ import (
 
 func NewClient(cfg *config.Config) (*redis.Client, error) {
 	// Parse Redis URL
-	opts, err := redis.ParseURL(cfg.RedisURL)
+	opts, err := redis.ParseURL(cfg.RedisURI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Redis URL: %w", err)
 	}
