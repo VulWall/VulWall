@@ -21,11 +21,16 @@ VulWall Engine is a **vertically-sliced Go monorepo** for security scanning serv
 ```
 VulWall.Engine/
 ├── cmd/                    # Entry points for each service
-│   ├── active-recon/
-│   ├── passive-recon/
-│   ├── domain-discovery/   # Domain discovery service (Shodan)
-│   ├── port-discovery/     # Port discovery service (TCP scanner)
-│   └── ingestion/          # Ingestion orchestrator (MongoDB persistence)
+│   ├── discoveries/        # Discovery services entry points
+│   │   ├── domain-discovery/
+│   │   │   └── main.go
+│   │   └── port-discovery/
+│   │       └── main.go
+│   ├── active_recon/       # Active recon services entry points
+│   │   ├── nuclei-scanner/
+│   │   │   └── main.go
+│   └── ingestion/          # Ingestion orchestrator entry point
+│       └── main.go
 ├── internal/
 │   ├── core/              # Shared infrastructure
 │   │   ├── bootstrap/     # Common service bootstrapping
@@ -42,39 +47,44 @@ VulWall.Engine/
 │   │   │   ├── constants.go     # Consumer group
 │   │   │   ├── service.go       # discoveries + org_assets persistence (domains, subdomains, IPs)
 │   │   │   └── consumer.go      # Consumes domain_discovery_results
-│   │   └── port_ingestion/      # Port ingestion slice
+│   │   ├── port_ingestion/      # Port ingestion slice
+│   │   │   ├── constants.go     # Consumer group
+│   │   │   ├── service.go       # discoveries + org_assets persistence (ports)
+│   │   │   └── consumer.go      # Consumes ip_discovery_results
+│   │   └── findings_ingestion/  # Findings ingestion slice
 │   │       ├── constants.go     # Consumer group
-│   │       ├── service.go       # discoveries + org_assets persistence (ports)
-│   │       └── consumer.go      # Consumes ip_discovery_results
-│   └── discoveries/       # Discovery services (no MongoDB access)
-│       ├── active_recon/
-│       │   ├── models.go       # Service-specific models
-│       │   ├── constants.go    # Service-specific constants
-│       │   ├── service.go      # Business logic
-│       │   └── consumer.go     # Redis consumer
-│       ├── passive_recon/
-│       │   ├── models.go
-│       │   ├── constants.go
-│       │   ├── service.go
-│       │   └── consumer.go
-│       ├── domain_discovery/   # Shodan domain discovery
-│       │   ├── constants.go    # Consumer group name only
-│       │   ├── service.go      # Discovery logic
-│       │   ├── consumer.go     # Redis consumer
-│       │   └── shodan/         # Shodan-specific client
-│       │       └── client.go   # Shodan API client
-│       └── port_discovery/     # Port scanner
-│           ├── constants.go    # Consumer group + common ports array
-│           ├── service.go      # Port scanning logic
-│           ├── consumer.go     # Redis consumer
-│           └── scanner/        # Simple TCP scanner
-│               └── scanner.go  # TCP connect with 2s timeout
+│   │       ├── service.go       # findings persistence (security vulnerabilities)
+│   │       └── consumer.go      # Consumes security_findings
+│   ├── discoveries/       # Discovery services (no MongoDB access)
+│   │   ├── domain_discovery/   # Shodan domain discovery
+│   │   │   ├── constants.go    # Consumer group name only
+│   │   │   ├── service.go      # Discovery logic
+│   │   │   ├── consumer.go     # Redis consumer
+│   │   │   └── shodan/         # Shodan-specific client
+│   │   │       └── client.go   # Shodan API client
+│   │   └── port_discovery/     # Port scanner
+│   │       ├── constants.go    # Consumer group + common ports array
+│   │       ├── service.go      # Port scanning logic
+│   │       ├── consumer.go     # Redis consumer
+│   │       └── scanner/        # Simple TCP scanner
+│   │           └── scanner.go  # TCP connect with 2s timeout
+│   └── active_recon/      # Active reconnaissance services
+│       ├── nuclei_scanner/     # Nuclei vulnerability scanner
+│       │   ├── constants.go    # Consumer group
+│       │   ├── models.go       # Nuclei output models
+│       │   ├── service.go      # Nuclei scanning logic
+       │   └── consumer.go     # Dual-stream consumer (domain + IP results)
 ├── ops/                   # Docker and deployment files
-│   ├── Dockerfile.active-recon
-│   ├── Dockerfile.passive-recon
-│   ├── Dockerfile.domain-discovery
-│   ├── Dockerfile.port-discovery
-│   ├── Dockerfile.ingestion
+│   ├── active_recon/
+│   │   └── nuclei-scanner/
+│   │       └── Dockerfile
+│   ├── domain-discovery/
+│   │   └── Dockerfile
+│   ├── port-discovery/
+│   │   └── Dockerfile
+│   ├── ingestion/
+│   │   └── Dockerfile
+│   ├── scripts/           # Deployment scripts
 │   └── docker-compose.yml
 ├── scripts/               # Test and utility scripts
 ├── bin/                   # Compiled binaries (gitignored)
@@ -153,10 +163,28 @@ PORT DISCOVERY FLOW:
        │   └─→ Stores banner, service_name, product, version
        └─→ org_assets collection (org-to-asset relationship link)
 
+SECURITY FINDINGS FLOW (NUCLEI SCANNER):
+1. Nuclei Scanner Consumes from TWO streams:
+   ├─→ domain_discovery_results (domains/subdomains/IPs)
+   └─→ ip_discovery_results (ports)
+
+2. Nuclei Scanner Service
+   ├─→ Runs Nuclei vulnerability scan on each discovered asset
+   ├─→ Parses Nuclei JSON output
+   └─→ Publishes to security_findings stream (source="nuclei")
+
+3. Findings Ingestion Consumer
+   └─→ Persists to findings collection:
+       ├─→ Deduplicates by (org_id, discovery_id, finding_type, title)
+       ├─→ Updates last_detected timestamp on duplicates
+       ├─→ Reopens resolved findings if detected again
+       └─→ Stores full Nuclei metadata
+
 INGESTION SERVICE ARCHITECTURE:
-├─→ Orchestrator starts both consumers concurrently
+├─→ Orchestrator starts THREE consumers concurrently
 ├─→ domain_ingestion: consumes domain_discovery_results
-└─→ port_ingestion: consumes ip_discovery_results
+├─→ port_ingestion: consumes ip_discovery_results
+└─→ findings_ingestion: consumes security_findings
 ```
 
 ### Model Ownership Rules
@@ -171,6 +199,7 @@ INGESTION SERVICE ARCHITECTURE:
 - Shared finding formats:
   - `DiscoveryFinding` (domain discovery findings)
   - `IPDiscoveryFinding` (port discovery findings)
+  - `SecurityFinding` (security vulnerabilities from scanners)
 - Shared asset models:
   - `Discovery` (unified asset model for all 4 types: domain, subdomain, ip, port)
   - `OrgAssetLink` (org-to-asset relationship links)
@@ -182,10 +211,14 @@ INGESTION SERVICE ARCHITECTURE:
 - Shared stream names:
   - `StreamDomainDiscoveryQueue`, `StreamDomainDiscoveryResults`
   - `StreamIPDiscoveryQueue`, `StreamIPDiscoveryResults`
+  - `StreamSecurityFindings` - Security findings from scanners
 - Shared collection names:
   - `CollectionDiscoveries` - Global asset registry
   - `CollectionOrgAssets` - Org-to-asset relationship links
+  - `CollectionFindings` - Security findings/vulnerabilities
 - Asset type constants (domain, subdomain, ip, port)
+- Finding severity constants (info, low, medium, high, critical)
+- Finding status constants (open, resolved)
 - Protocol/status constants used by multiple services
 - Discovery asset status (technical state: active, inactive, unknown)
 - Org asset link status (organizational state: confirmed, pending, dismissed)
@@ -250,30 +283,27 @@ Input Stream: domain_discovery_queue
 ### Building Services
 ```bash
 make build                      # Build all services
-make build-passive              # Build passive-recon only
-make build-active               # Build active-recon only
 make build-domain-discovery     # Build domain-discovery only
 make build-port-discovery       # Build port-discovery only
+make build-nuclei-scanner       # Build nuclei-scanner only
 make build-ingestion            # Build ingestion only
 ```
 
 ### Running Locally
 ```bash
-make run-passive                # Run passive-recon service
-make run-active                 # Run active-recon service
 make run-domain-discovery       # Run domain-discovery service
 make run-port-discovery         # Run port-discovery service
-make run-ingestion              # Run ingestion service (both consumers)
+make run-nuclei-scanner         # Run nuclei-scanner service
+make run-ingestion              # Run ingestion service (all consumers)
 ```
 
 ### Docker Operations
 ```bash
 make docker-up                         # Start all services
 make docker-down                       # Stop all services
-make docker-scale-passive N=4          # Scale passive workers to 4
-make docker-scale-active N=3           # Scale active workers to 3
 make docker-scale-domain-discovery N=2 # Scale domain-discovery workers to 2
 make docker-scale-port-discovery N=5   # Scale port-discovery workers to 5
+make docker-scale-nuclei-scanner N=3   # Scale nuclei-scanner workers to 3
 make docker-scale-ingestion N=3        # Scale ingestion workers to 3
 make docker-logs                       # View logs
 ```
@@ -621,10 +651,12 @@ type OrgAssetLink struct {
 - `shared.StreamDomainDiscoveryResults = "domain_discovery_results"` - Output stream for domain discovery findings (requires `source`)
 - `shared.StreamIPDiscoveryQueue = "ip_discovery_queue"` - Input stream for IP port discovery jobs (requires `org_id`)
 - `shared.StreamIPDiscoveryResults = "ip_discovery_results"` - Output stream for IP port discovery findings (requires `source`)
+- `shared.StreamSecurityFindings = "security_findings"` - Output stream for security findings from scanners (requires `source`)
 
 **Collection Names:**
 - `shared.CollectionDiscoveries = "discoveries"` - Global asset registry (all 4 asset types, NO org_id)
 - `shared.CollectionOrgAssets = "org_assets"` - Org-to-asset relationship links
+- `shared.CollectionFindings = "findings"` - Security findings/vulnerabilities
 
 **Asset Types (for Discovery.AssetType):**
 - `shared.AssetTypeDomain = "domain"` - Domain asset type
@@ -647,6 +679,63 @@ type OrgAssetLink struct {
 - `shared.OrgAssetStatusConfirmed` - Asset confirmed to belong to org
 - `shared.OrgAssetStatusPending` - Asset pending verification
 - `shared.OrgAssetStatusDismissed` - Asset dismissed/not relevant to org
+
+**Finding Severity Levels:**
+- `shared.SeverityInfo` - Informational finding
+- `shared.SeverityLow` - Low severity vulnerability
+- `shared.SeverityMedium` - Medium severity vulnerability
+- `shared.SeverityHigh` - High severity vulnerability
+- `shared.SeverityCritical` - Critical severity vulnerability
+
+**Finding Status:**
+- `shared.FindingStatusOpen` - Finding is currently open
+- `shared.FindingStatusResolved` - Finding has been resolved
+
+### Security Findings Model
+
+**SecurityFinding** - Represents security vulnerabilities discovered by scanning tools:
+```go
+type SecurityFinding struct {
+    TraceID      string                 // Request tracing
+    OrgID        string                 // REQUIRED: organization GUID
+    Source       string                 // REQUIRED: "nuclei", etc. (validated by ingestion)
+    DiscoveryID  string                 // Links to Discovery._id
+    FindingType  string                 // Type of finding (e.g., "cve-2021-1234", "xss")
+    Severity     string                 // info, low, medium, high, critical
+    Title        string                 // Short title
+    Description  string                 // Detailed description
+    Metadata     map[string]interface{} // Scanner-specific data
+    Status       string                 // open, resolved
+    Timestamp    time.Time              // When finding was discovered
+}
+```
+
+**Findings Collection Schema (MongoDB):**
+```javascript
+{
+  _id: "uuid",
+  org_id: "uuid",                  // Organization GUID
+  discovery_id: "uuid",            // References discoveries._id
+  finding_type: "string",          // Type identifier (template ID, CVE, etc.)
+  severity: "string",              // info, low, medium, high, critical
+  source: "string",                // Scanner source (e.g., "nuclei")
+  title: "string",                 // Short title
+  description: "string",           // Detailed description
+  metadata: {},                    // Scanner-specific data (Nuclei output, etc.)
+  status: "string",                // open, resolved
+  first_detected: "date",          // When first discovered
+  last_detected: "date",           // When last seen
+  resolved_at: "date" (optional)   // When resolved (null if open)
+}
+```
+
+**Key Design Decisions:**
+- ✅ **Deduplication:** Findings deduplicated by (org_id, discovery_id, finding_type, title)
+- ✅ **Temporal tracking:** Both first_detected and last_detected timestamps
+- ✅ **Reopening resolved findings:** If a resolved finding is detected again, it's reopened automatically
+- ✅ **Full metadata preservation:** All scanner-specific data preserved in metadata field
+- ✅ **Links to assets:** discovery_id links back to the asset in discoveries collection
+- ✅ **Source attribution:** Source field tracks which scanner produced the finding
 
 ## Configuration
 

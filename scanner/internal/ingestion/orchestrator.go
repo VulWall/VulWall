@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/ingestion/domain_ingestion"
+	"github.com/vulwall/scanners/internal/ingestion/findings_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/port_ingestion"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
@@ -34,7 +35,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 
 	// Create wait group to manage goroutines
 	var wg sync.WaitGroup
-	errChan := make(chan error, 2) // Buffer for 2 consumers
+	errChan := make(chan error, 3) // Buffer for 3 consumers
 
 	// Start domain ingestion consumer
 	wg.Add(1)
@@ -59,6 +60,19 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		if err := portConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Port ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("port ingestion: %w", err)
+		}
+	}()
+
+	// Start findings ingestion consumer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		o.logger.Info("Starting findings ingestion consumer")
+
+		findingsConsumer := findings_ingestion.NewConsumer(o.redis, o.db, o.logger)
+		if err := findingsConsumer.Start(ctx); err != nil && err != context.Canceled {
+			o.logger.Error("Findings ingestion consumer failed", zap.Error(err))
+			errChan <- fmt.Errorf("findings ingestion: %w", err)
 		}
 	}()
 

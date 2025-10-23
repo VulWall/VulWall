@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o port-discovery ./cmd/port-discovery
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o port-discovery ./cmd/discoveries/port-discovery
 
 # Final stage
 FROM alpine:latest

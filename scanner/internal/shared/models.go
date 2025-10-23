@@ -124,3 +124,19 @@ type OrgAssetLink struct {
 	Status     string    `json:"status" bson:"status"`         // "confirmed", "pending", "dismissed"
 	AssignedAt time.Time `json:"assigned_at" bson:"assigned_at"` // When the asset was assigned to this org
 }
+
+// SecurityFinding represents a security vulnerability or finding from scanning tools
+// Published to security_findings stream and persisted to findings collection
+type SecurityFinding struct {
+	TraceID      string                 `json:"trace_id" bson:"trace_id"`
+	OrgID        string                 `json:"org_id" bson:"org_id"`                   // Organization GUID
+	Source       string                 `json:"source" bson:"source"`                   // Scanner source (e.g., "nuclei")
+	DiscoveryID  string                 `json:"discovery_id" bson:"discovery_id"`       // Links to Discovery._id
+	FindingType  string                 `json:"finding_type" bson:"finding_type"`       // Type of finding (e.g., "xss", "sqli", "cve-2021-1234")
+	Severity     string                 `json:"severity" bson:"severity"`               // info, low, medium, high, critical
+	Title        string                 `json:"title" bson:"title"`                     // Short title
+	Description  string                 `json:"description" bson:"description"`         // Detailed description
+	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"` // Scanner-specific data
+	Status       string                 `json:"status" bson:"status"`                   // open, resolved
+	Timestamp    time.Time              `json:"timestamp" bson:"timestamp"`             // When finding was discovered
+}
