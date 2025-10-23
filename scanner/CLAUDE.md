@@ -29,10 +29,6 @@ VulWall.Engine/
 │   ├── active_recon/       # Active recon services entry points
 │   │   ├── nuclei-scanner/
 │   │   │   └── main.go
-│   │   ├── active-recon/
-│   │   │   └── main.go
-│   │   └── passive-recon/
-│   │       └── main.go
 │   └── ingestion/          # Ingestion orchestrator entry point
 │       └── main.go
 ├── internal/
@@ -77,17 +73,7 @@ VulWall.Engine/
 │       │   ├── constants.go    # Consumer group
 │       │   ├── models.go       # Nuclei output models
 │       │   ├── service.go      # Nuclei scanning logic
-│       │   └── consumer.go     # Dual-stream consumer (domain + IP results)
-│       ├── passive_recon/
-│       │   ├── models.go
-│       │   ├── constants.go
-│       │   ├── service.go
-│       │   └── consumer.go
-│       └── active_recon/       # Legacy active recon (to be refactored)
-│           ├── models.go
-│           ├── constants.go
-│           ├── service.go
-│           └── consumer.go
+       │   └── consumer.go     # Dual-stream consumer (domain + IP results)
 ├── ops/                   # Docker and deployment files
 │   ├── active_recon/
 │   │   └── nuclei-scanner/
@@ -98,8 +84,6 @@ VulWall.Engine/
 │   │   └── Dockerfile
 │   ├── ingestion/
 │   │   └── Dockerfile
-│   ├── Dockerfile.active-recon   # Legacy
-│   ├── Dockerfile.passive-recon  # Legacy
 │   ├── scripts/           # Deployment scripts
 │   └── docker-compose.yml
 ├── scripts/               # Test and utility scripts
@@ -299,8 +283,6 @@ Input Stream: domain_discovery_queue
 ### Building Services
 ```bash
 make build                      # Build all services
-make build-passive              # Build passive-recon only
-make build-active               # Build active-recon only
 make build-domain-discovery     # Build domain-discovery only
 make build-port-discovery       # Build port-discovery only
 make build-nuclei-scanner       # Build nuclei-scanner only
@@ -309,8 +291,6 @@ make build-ingestion            # Build ingestion only
 
 ### Running Locally
 ```bash
-make run-passive                # Run passive-recon service
-make run-active                 # Run active-recon service
 make run-domain-discovery       # Run domain-discovery service
 make run-port-discovery         # Run port-discovery service
 make run-nuclei-scanner         # Run nuclei-scanner service
@@ -321,8 +301,6 @@ make run-ingestion              # Run ingestion service (all consumers)
 ```bash
 make docker-up                         # Start all services
 make docker-down                       # Stop all services
-make docker-scale-passive N=4          # Scale passive workers to 4
-make docker-scale-active N=3           # Scale active workers to 3
 make docker-scale-domain-discovery N=2 # Scale domain-discovery workers to 2
 make docker-scale-port-discovery N=5   # Scale port-discovery workers to 5
 make docker-scale-nuclei-scanner N=3   # Scale nuclei-scanner workers to 3
