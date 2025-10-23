@@ -70,12 +70,12 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 // runNucleiScan executes Nuclei scanner on the target
 func (s *Service) runNucleiScan(ctx context.Context, target string) ([]NucleiOutput, error) {
 	// Build Nuclei command
-	// -json: JSON output
-	// -silent: suppress banner
 	// -u: target URL
+	// -j: JSONL output (one JSON per line)
+	// -silent: suppress banner and update check
 	cmd := exec.CommandContext(ctx, "nuclei",
 		"-u", target,
-		"-json",
+		"-j",
 		"-silent",
 	)
 
