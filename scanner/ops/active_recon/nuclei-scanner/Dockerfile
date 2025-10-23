@@ -17,5 +17,6 @@ WORKDIR /root/
 # Copy the Go binary from builder
 COPY --from=builder /app/nuclei-scanner .
 
-# Run the binary
-CMD ["./nuclei-scanner"]
+# Override the default entrypoint and run our scanner binary
+ENTRYPOINT ["./nuclei-scanner"]
+CMD []
