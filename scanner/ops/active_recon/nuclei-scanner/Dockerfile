@@ -17,16 +17,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o nuclei-scanner ./
 FROM alpine:latest
 
 # Install ca-certificates and dependencies for Nuclei
-RUN apk --no-cache add ca-certificates wget unzip
+RUN apk --no-cache add ca-certificates wget unzip curl bash
 
 WORKDIR /root/
 
-# Install Nuclei
-RUN wget -q https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_linux_amd64.zip && \
-    unzip nuclei_linux_amd64.zip && \
-    mv nuclei /usr/local/bin/ && \
-    rm nuclei_linux_amd64.zip && \
-    chmod +x /usr/local/bin/nuclei
+# Install Nuclei using the official installation script
+RUN wget -qO - https://raw.githubusercontent.com/projectdiscovery/nuclei/main/install.sh | sh -s -- -b /usr/local/bin
 
 # Update Nuclei templates
 RUN nuclei -update-templates
