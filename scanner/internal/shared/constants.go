@@ -11,6 +11,7 @@ const (
 	CollectionScanResults = "scan_results"
 	CollectionDiscoveries = "discoveries" // Global asset registry (domains, subdomains, IPs, ports)
 	CollectionOrgAssets   = "org_assets"  // Org-to-asset relationship links
+	CollectionFindings    = "findings"    // Security findings from scanning tools
 
 	// Redis Streams - Domain Discovery
 	StreamDomainDiscoveryQueue   = "domain_discovery_queue"   // Input stream for domain discovery jobs
@@ -19,6 +20,9 @@ const (
 	// Redis Streams - IP/Port Discovery
 	StreamIPDiscoveryQueue   = "ip_discovery_queue"   // Input stream for IP port discovery jobs
 	StreamIPDiscoveryResults = "ip_discovery_results" // Output stream for IP port discovery findings (consumed by ingestion service)
+
+	// Redis Streams - Security Findings
+	StreamSecurityFindings = "security_findings" // Output stream for security findings from scanning tools (consumed by findings ingestion)
 
 	// Asset Types (for Discovery.AssetType)
 	AssetTypeDomain    = "domain"
@@ -46,4 +50,15 @@ const (
 	TargetTypeDomain = "domain"
 	TargetTypeIP     = "ip"
 	TargetTypeCIDR   = "cidr"
+
+	// Finding Severity Levels
+	SeverityInfo     = "info"
+	SeverityLow      = "low"
+	SeverityMedium   = "medium"
+	SeverityHigh     = "high"
+	SeverityCritical = "critical"
+
+	// Finding Status
+	FindingStatusOpen     = "open"
+	FindingStatusResolved = "resolved"
 )

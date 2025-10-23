@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o domain-discovery ./cmd/domain-discovery
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o domain-discovery ./cmd/discoveries/domain-discovery
 
 # Final stage
 FROM alpine:latest

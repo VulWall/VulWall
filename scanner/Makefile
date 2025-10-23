@@ -8,43 +8,51 @@ help: ## Show this help message
 
 build: ## Build all services
 	@echo "Building passive-recon..."
-	@go build -o bin/passive-recon ./cmd/passive-recon
+	@go build -o bin/passive-recon ./cmd/active_recon/passive-recon
 	@echo "Building active-recon..."
-	@go build -o bin/active-recon ./cmd/active-recon
+	@go build -o bin/active-recon ./cmd/active_recon/active-recon
 	@echo "Building domain-discovery..."
-	@go build -o bin/domain-discovery ./cmd/domain-discovery
+	@go build -o bin/domain-discovery ./cmd/discoveries/domain-discovery
 	@echo "Building port-discovery..."
-	@go build -o bin/port-discovery ./cmd/port-discovery
+	@go build -o bin/port-discovery ./cmd/discoveries/port-discovery
+	@echo "Building nuclei-scanner..."
+	@go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Build complete!"
 
 build-passive: ## Build passive-recon service
-	@go build -o bin/passive-recon ./cmd/passive-recon
+	@go build -o bin/passive-recon ./cmd/active_recon/passive-recon
 
 build-active: ## Build active-recon service
-	@go build -o bin/active-recon ./cmd/active-recon
+	@go build -o bin/active-recon ./cmd/active_recon/active-recon
 
 build-domain-discovery: ## Build domain-discovery service
-	@go build -o bin/domain-discovery ./cmd/domain-discovery
+	@go build -o bin/domain-discovery ./cmd/discoveries/domain-discovery
 
 build-port-discovery: ## Build port-discovery service
-	@go build -o bin/port-discovery ./cmd/port-discovery
+	@go build -o bin/port-discovery ./cmd/discoveries/port-discovery
+
+build-nuclei-scanner: ## Build nuclei-scanner service
+	@go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
 
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
 
 run-passive: ## Run passive-recon service locally
-	@go run ./cmd/passive-recon/main.go
+	@go run ./cmd/active_recon/passive-recon/main.go
 
 run-active: ## Run active-recon service locally
-	@go run ./cmd/active-recon/main.go
+	@go run ./cmd/active_recon/active-recon/main.go
 
 run-domain-discovery: ## Run domain-discovery service locally
-	@go run ./cmd/domain-discovery/main.go
+	@go run ./cmd/discoveries/domain-discovery/main.go
 
 run-port-discovery: ## Run port-discovery service locally
-	@go run ./cmd/port-discovery/main.go
+	@go run ./cmd/discoveries/port-discovery/main.go
+
+run-nuclei-scanner: ## Run nuclei-scanner service locally
+	@go run ./cmd/active_recon/nuclei-scanner/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
@@ -86,6 +94,9 @@ docker-scale-domain-discovery: ## Scale domain-discovery workers (usage: make do
 
 docker-scale-port-discovery: ## Scale port-discovery workers (usage: make docker-scale-port-discovery N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale port-discovery=$(N)
+
+docker-scale-nuclei-scanner: ## Scale nuclei-scanner workers (usage: make docker-scale-nuclei-scanner N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale nuclei-scanner=$(N)
 
 docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ingestion N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
