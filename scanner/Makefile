@@ -1,4 +1,4 @@
-.PHONY: help build run test clean docker-build docker-up docker-down prod-setup prod-deploy-all prod-deploy-domain prod-deploy-ingestion prod-deploy-port prod-stop-all prod-stop-service prod-restart-service prod-logs prod-status
+.PHONY: help build run test clean docker-build docker-up docker-down prod-setup prod-deploy-all prod-deploy-domain prod-deploy-ingestion prod-deploy-port prod-deploy-nuclei prod-stop-all prod-stop-service prod-restart-service prod-logs prod-status
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -120,6 +120,13 @@ prod-deploy-port: ## Deploy port-discovery service (usage: make prod-deploy-port
 		ops/scripts/deploy-service.sh port-discovery $(PROJECT) $(CONFIG); \
 	else \
 		ops/scripts/deploy-service.sh port-discovery; \
+	fi
+
+prod-deploy-nuclei: ## Deploy nuclei-scanner service (usage: make prod-deploy-nuclei [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh nuclei-scanner $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh nuclei-scanner; \
 	fi
 
 prod-stop-all: ## Stop all production services
