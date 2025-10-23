@@ -111,6 +111,7 @@ type ServiceHistoryEntry struct {
 	ServiceName string     `json:"service_name" bson:"service_name"`
 	Product     *string    `json:"product,omitempty" bson:"product,omitempty"`
 	Version     *string    `json:"version,omitempty" bson:"version,omitempty"`
+	Banner      *string    `json:"banner,omitempty" bson:"banner,omitempty"`
 	LastSeen    time.Time  `json:"last_seen" bson:"last_seen"`
 }
 

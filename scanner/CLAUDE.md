@@ -570,6 +570,7 @@ type ServiceHistoryEntry struct {
     ServiceName string     // Service name
     Product     *string    // Product name
     Version     *string    // Version string
+    Banner      *string    // Raw service banner
     LastSeen    time.Time  // When this service was last seen
 }
 ```
@@ -829,7 +830,7 @@ db.discoveries.find({
   - **port_ingestion** - Processes ports → `discoveries` + `org_assets`
 - **History tracking:**
   - Domain/subdomain ingestion tracks IP resolution changes over time
-  - Port ingestion tracks service changes over time (previous_services array)
+  - Port ingestion tracks service changes: archives complete service state (service_name, product, version, banner) to previous_services array when ANY characteristic changes
 - **Source attribution** - Use `source` field to identify which tool discovered the asset
 - **Normalized org relationships** - All assets stored without org_id in `discoveries`, relationships in separate `org_assets` collection
 - **Type discrimination** - Single `discoveries` collection uses `asset_type` field to distinguish 4 asset types
@@ -881,6 +882,6 @@ internal/discoveries/port_discovery/
 6. For port findings:
    - Ensures IP record exists in `discoveries` (creates if not found)
    - Stores port in `discoveries` collection (asset_type: "port", parent_id: ip_id)
-   - Tracks service changes: if service_name changed, archives old service to previous_services array
+   - Tracks service changes: if ANY characteristic changes (service_name, product, version, or banner), archives complete old service state to previous_services array
    - Creates `org_assets` links for both IP and port
    - If port exists: updates `last_seen`, merges metadata, and updates service fields

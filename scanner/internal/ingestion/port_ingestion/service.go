@@ -235,15 +235,46 @@ func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDisc
 func (s *Service) updatePortDiscovery(ctx context.Context, discovery *shared.Discovery, finding shared.IPDiscoveryFinding, timestamp time.Time) error {
 	collection := s.db.Collection(shared.CollectionDiscoveries)
 
-	// Check if service has changed
+	// Extract current service characteristics
 	currentService := ""
 	if discovery.ServiceName != nil {
 		currentService = *discovery.ServiceName
 	}
 
+	currentProduct := ""
+	if discovery.Product != nil {
+		currentProduct = *discovery.Product
+	}
+
+	currentVersion := ""
+	if discovery.Version != nil {
+		currentVersion = *discovery.Version
+	}
+
+	currentBanner := ""
+	if discovery.Banner != nil {
+		currentBanner = *discovery.Banner
+	}
+
+	// Extract new service characteristics
 	newService := ""
 	if finding.ServiceName != nil {
 		newService = *finding.ServiceName
+	}
+
+	newProduct := ""
+	if finding.Product != nil {
+		newProduct = *finding.Product
+	}
+
+	newVersion := ""
+	if finding.Version != nil {
+		newVersion = *finding.Version
+	}
+
+	newBanner := ""
+	if finding.Banner != nil {
+		newBanner = *finding.Banner
 	}
 
 	update := bson.M{
@@ -253,13 +284,38 @@ func (s *Service) updatePortDiscovery(ctx context.Context, discovery *shared.Dis
 		},
 	}
 
-	// If service changed, archive the old one and update to new
+	// Check if ANY service characteristic has changed
+	serviceChanged := false
+	changes := []string{}
+
 	if currentService != newService && currentService != "" {
+		serviceChanged = true
+		changes = append(changes, "service: "+currentService+"→"+newService)
+	}
+
+	if currentProduct != newProduct && currentProduct != "" {
+		serviceChanged = true
+		changes = append(changes, "product: "+currentProduct+"→"+newProduct)
+	}
+
+	if currentVersion != newVersion && currentVersion != "" {
+		serviceChanged = true
+		changes = append(changes, "version: "+currentVersion+"→"+newVersion)
+	}
+
+	if currentBanner != newBanner && currentBanner != "" {
+		serviceChanged = true
+		changes = append(changes, "banner changed")
+	}
+
+	// If ANY characteristic changed, archive the complete old service state
+	if serviceChanged {
 		// Add current service to history
 		historyEntry := shared.ServiceHistoryEntry{
 			ServiceName: currentService,
 			Product:     discovery.Product,
 			Version:     discovery.Version,
+			Banner:      discovery.Banner,
 			LastSeen:    timestamp,
 		}
 
@@ -267,12 +323,11 @@ func (s *Service) updatePortDiscovery(ctx context.Context, discovery *shared.Dis
 			"previous_services": historyEntry,
 		}
 
-		s.logger.Info("Service changed on port",
+		s.logger.Info("Service characteristics changed on port",
 			zap.String("discovery_id", discovery.ID),
 			zap.String("ip", *discovery.IP),
 			zap.Int("port", *discovery.Port),
-			zap.String("old_service", currentService),
-			zap.String("new_service", newService),
+			zap.Strings("changes", changes),
 		)
 	}
 
