@@ -7,10 +7,6 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 build: ## Build all services
-	@echo "Building passive-recon..."
-	@go build -o bin/passive-recon ./cmd/active_recon/passive-recon
-	@echo "Building active-recon..."
-	@go build -o bin/active-recon ./cmd/active_recon/active-recon
 	@echo "Building domain-discovery..."
 	@go build -o bin/domain-discovery ./cmd/discoveries/domain-discovery
 	@echo "Building port-discovery..."
@@ -20,12 +16,6 @@ build: ## Build all services
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Build complete!"
-
-build-passive: ## Build passive-recon service
-	@go build -o bin/passive-recon ./cmd/active_recon/passive-recon
-
-build-active: ## Build active-recon service
-	@go build -o bin/active-recon ./cmd/active_recon/active-recon
 
 build-domain-discovery: ## Build domain-discovery service
 	@go build -o bin/domain-discovery ./cmd/discoveries/domain-discovery
@@ -38,12 +28,6 @@ build-nuclei-scanner: ## Build nuclei-scanner service
 
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
-
-run-passive: ## Run passive-recon service locally
-	@go run ./cmd/active_recon/passive-recon/main.go
-
-run-active: ## Run active-recon service locally
-	@go run ./cmd/active_recon/active-recon/main.go
 
 run-domain-discovery: ## Run domain-discovery service locally
 	@go run ./cmd/discoveries/domain-discovery/main.go
@@ -82,12 +66,6 @@ docker-down: ## Stop all services
 
 docker-logs: ## View logs from all services
 	@docker-compose -f ops/docker-compose.yml logs -f
-
-docker-scale-passive: ## Scale passive-recon workers (usage: make docker-scale-passive N=5)
-	@docker-compose -f ops/docker-compose.yml up -d --scale passive-recon=$(N)
-
-docker-scale-active: ## Scale active-recon workers (usage: make docker-scale-active N=3)
-	@docker-compose -f ops/docker-compose.yml up -d --scale active-recon=$(N)
 
 docker-scale-domain-discovery: ## Scale domain-discovery workers (usage: make docker-scale-domain-discovery N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale domain-discovery=$(N)
