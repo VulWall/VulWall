@@ -79,8 +79,8 @@ func (s *Service) runNucleiScan(ctx context.Context, target string) ([]NucleiOut
 		"-silent",
 	)
 
-	// Execute command
-	output, err := cmd.Output()
+	// Execute command and capture both stdout and stderr
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Check if it's a context cancellation
 		if ctx.Err() != nil {
@@ -88,6 +88,13 @@ func (s *Service) runNucleiScan(ctx context.Context, target string) ([]NucleiOut
 		}
 		// Nuclei returns exit code 1 when no findings, which is not an error
 		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Log the stderr output for debugging
+			s.logger.Debug("Nuclei command stderr",
+				zap.String("target", target),
+				zap.Int("exit_code", exitErr.ExitCode()),
+				zap.String("output", string(output)),
+			)
+
 			if exitErr.ExitCode() == 1 && len(output) == 0 {
 				s.logger.Debug("Nuclei found no vulnerabilities",
 					zap.String("target", target),
@@ -95,7 +102,7 @@ func (s *Service) runNucleiScan(ctx context.Context, target string) ([]NucleiOut
 				return []NucleiOutput{}, nil
 			}
 		}
-		return nil, fmt.Errorf("nuclei command failed: %w", err)
+		return nil, fmt.Errorf("nuclei command failed: %w (output: %s)", err, string(output))
 	}
 
 	// Parse Nuclei JSON output (JSONL format - one JSON per line)
