@@ -37,7 +37,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	)
 
 	// Run Nuclei scan
-	findings, err := s.runNucleiScan(ctx, target.Target)
+	findings, err := s.runNucleiScan(ctx, target.Target, "low,medium,high,critical")
 	if err != nil {
 		s.logger.Error("Nuclei scan failed",
 			zap.String("target", target.Target),
@@ -68,7 +68,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 }
 
 // runNucleiScan executes Nuclei scanner on the target
-func (s *Service) runNucleiScan(ctx context.Context, target string) ([]NucleiOutput, error) {
+func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([]NucleiOutput, error) {
 	// Build Nuclei command
 	// -u: target URL
 	// -j: JSONL output (one JSON per line)
@@ -77,6 +77,7 @@ func (s *Service) runNucleiScan(ctx context.Context, target string) ([]NucleiOut
 		"-u", target,
 		"-j",
 		"-silent",
+		"-severity", severity,
 	)
 
 	// Execute command and capture both stdout and stderr
