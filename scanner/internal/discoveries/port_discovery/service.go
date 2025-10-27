@@ -50,6 +50,9 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 	// Publish findings for each open port
 	now := time.Now()
 	for _, portResult := range openPorts {
+		// Generate deterministic ID for this port
+		portID := shared.GeneratePortID(job.IP, portResult.Port, shared.ProtocolTCP)
+
 		// Set banner if available
 		var banner *string
 		if portResult.Banner != "" {
@@ -57,16 +60,17 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 		}
 
 		finding := shared.IPDiscoveryFinding{
-			TraceID:   job.TraceID,
-			OrgID:     job.OrgID,
-			Source:    "port_discovery",
-			IP:        job.IP,
-			Port:      portResult.Port,
-			Protocol:  shared.ProtocolTCP,
-			Status:    shared.AssetStatusActive,
-			Banner:    banner,
-			Metadata:  nil, // Keep field for future extensibility
-			Timestamp: now,
+			DiscoveryID: portID,
+			TraceID:     job.TraceID,
+			OrgID:       job.OrgID,
+			Source:      "port_discovery",
+			IP:          job.IP,
+			Port:        portResult.Port,
+			Protocol:    shared.ProtocolTCP,
+			Status:      shared.AssetStatusActive,
+			Banner:      banner,
+			Metadata:    nil, // Keep field for future extensibility
+			Timestamp:   now,
 		}
 
 		if err := s.publishFinding(ctx, finding); err != nil {

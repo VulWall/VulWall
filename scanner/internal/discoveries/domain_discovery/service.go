@@ -47,19 +47,29 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		}
 	}
 
+	// Determine asset type and generate deterministic ID
+	assetType := shared.DetermineDomainAssetType(job.Host, job.ParentID)
+	var discoveryID string
+	if assetType == shared.AssetTypeDomain {
+		discoveryID = shared.GenerateDomainID(job.Host)
+	} else {
+		discoveryID = shared.GenerateSubdomainID(job.Host)
+	}
+
 	// Publish root asset finding
 	if err := s.publishFinding(ctx, shared.DiscoveryFinding{
-		TraceID:   job.TraceID,
-		OrgID:     job.OrgID,
-		Source:    "shodan",
-		ParentID:  job.ParentID,
-		Host:      job.Host,
-		IP:        resolvedIP,
-		Port:      job.Port,
-		Protocol:  job.Protocol,
-		Status:    shared.AssetStatusActive,
-		Metadata:  job.Metadata,
-		Timestamp: now,
+		DiscoveryID: discoveryID,
+		TraceID:     job.TraceID,
+		OrgID:       job.OrgID,
+		Source:      "shodan",
+		ParentID:    job.ParentID,
+		Host:        job.Host,
+		IP:          resolvedIP,
+		Port:        job.Port,
+		Protocol:    job.Protocol,
+		Status:      shared.AssetStatusActive,
+		Metadata:    job.Metadata,
+		Timestamp:   now,
 	}); err != nil {
 		return err
 	}
@@ -124,19 +134,23 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID, orgID, domain
 			)
 		}
 
+		// Generate deterministic ID for subdomain
+		subdomainID := shared.GenerateSubdomainID(fullSubdomain)
+
 		// Publish subdomain finding
 		if err := s.publishFinding(ctx, shared.DiscoveryFinding{
-			TraceID:   traceID,
-			OrgID:     orgID,
-			Source:    "shodan",
-			ParentID:  &parentHost,
-			Host:      fullSubdomain,
-			IP:        resolvedIP,
-			Port:      nil,
-			Protocol:  nil,
-			Status:    shared.AssetStatusActive,
-			Metadata:  nil, // Keep field for future extensibility
-			Timestamp: now,
+			DiscoveryID: subdomainID,
+			TraceID:     traceID,
+			OrgID:       orgID,
+			Source:      "shodan",
+			ParentID:    &parentHost,
+			Host:        fullSubdomain,
+			IP:          resolvedIP,
+			Port:        nil,
+			Protocol:    nil,
+			Status:      shared.AssetStatusActive,
+			Metadata:    nil, // Keep field for future extensibility
+			Timestamp:   now,
 		}); err != nil {
 			s.logger.Error("Failed to publish subdomain finding",
 				zap.String("subdomain", fullSubdomain),

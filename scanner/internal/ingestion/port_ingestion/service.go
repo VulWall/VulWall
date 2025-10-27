@@ -94,8 +94,8 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 	err := collection.FindOne(ctx, filter).Decode(&existingIPDiscovery)
 
 	if err == mongo.ErrNoDocuments {
-		// Create new IP discovery
-		ipDiscoveryID := uuid.New().String()
+		// Create new IP discovery using deterministic ID
+		ipDiscoveryID := shared.GenerateIPID(finding.IP)
 		newIPDiscovery := shared.Discovery{
 			ID:        ipDiscoveryID,
 			AssetType: shared.AssetTypeIP,
@@ -173,10 +173,9 @@ func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDisc
 	err := collection.FindOne(ctx, filter).Decode(&existingPortDiscovery)
 
 	if err == mongo.ErrNoDocuments {
-		// Create new port discovery
-		portDiscoveryID := uuid.New().String()
+		// Create new port discovery using the deterministic ID from the finding
 		newPortDiscovery := shared.Discovery{
-			ID:          portDiscoveryID,
+			ID:          finding.DiscoveryID, // Use provided deterministic ID
 			AssetType:   shared.AssetTypePort,
 			Source:      finding.Source,
 			Status:      finding.Status,
@@ -207,12 +206,12 @@ func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDisc
 		}
 
 		s.logger.Info("Created new port discovery",
-			zap.String("discovery_id", portDiscoveryID),
+			zap.String("discovery_id", finding.DiscoveryID),
 			zap.String("ip", finding.IP),
 			zap.Int("port", finding.Port),
 			zap.String("protocol", finding.Protocol),
 		)
-		return portDiscoveryID, nil
+		return finding.DiscoveryID, nil
 	}
 
 	if err != nil {

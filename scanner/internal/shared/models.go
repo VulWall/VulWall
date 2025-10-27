@@ -21,17 +21,18 @@ type DiscoveryJob struct {
 // DiscoveryFinding represents a discovery result from any discovery service
 // This is published to domain_discovery_results by all domain discovery services
 type DiscoveryFinding struct {
-	TraceID   string                 `json:"trace_id" bson:"trace_id"`
-	OrgID     string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
-	Source    string                 `json:"source" bson:"source"` // "shodan", "nmap", "masscan", etc.
-	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
-	Host      string                 `json:"host" bson:"host"`
-	IP        *string                `json:"ip,omitempty" bson:"ip,omitempty"` // IP address (if resolved)
-	Port      *int                   `json:"port,omitempty" bson:"port,omitempty"`
-	Protocol  *string                `json:"protocol,omitempty" bson:"protocol,omitempty"`
-	Status    string                 `json:"status" bson:"status"` // active, inactive, unknown
-	Metadata  map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
-	Timestamp time.Time              `json:"timestamp" bson:"timestamp"`
+	DiscoveryID string                 `json:"discovery_id" bson:"discovery_id"` // Deterministic UUID for this discovery
+	TraceID     string                 `json:"trace_id" bson:"trace_id"`
+	OrgID       string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
+	Source      string                 `json:"source" bson:"source"` // "shodan", "nmap", "masscan", etc.
+	ParentID    *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
+	Host        string                 `json:"host" bson:"host"`
+	IP          *string                `json:"ip,omitempty" bson:"ip,omitempty"` // IP address (if resolved)
+	Port        *int                   `json:"port,omitempty" bson:"port,omitempty"`
+	Protocol    *string                `json:"protocol,omitempty" bson:"protocol,omitempty"`
+	Status      string                 `json:"status" bson:"status"` // active, inactive, unknown
+	Metadata    map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+	Timestamp   time.Time              `json:"timestamp" bson:"timestamp"`
 }
 
 // IPDiscoveryJob represents a job to discover open ports on an IP address
@@ -49,6 +50,7 @@ type IPDiscoveryJob struct {
 // IPDiscoveryFinding represents a discovered open port on an IP
 // This is published to ip_discovery_results by port discovery services
 type IPDiscoveryFinding struct {
+	DiscoveryID string                 `json:"discovery_id" bson:"discovery_id"` // Deterministic UUID for this port discovery
 	TraceID     string                 `json:"trace_id" bson:"trace_id"`
 	OrgID       string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
 	Source      string                 `json:"source" bson:"source"` // "port_discovery", etc.

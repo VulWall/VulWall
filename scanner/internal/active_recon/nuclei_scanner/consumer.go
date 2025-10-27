@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -232,14 +231,11 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 		target = finding.Host
 	}
 
-	// Create scan target
-	// Note: We don't have discovery_id from findings yet - it will be created by ingestion
-	// For now, we'll use a combination of org_id + host + ip as identifier
-	discoveryID := c.generateDiscoveryID(finding)
-
+	// Create scan target using the discovery_id from the finding
+	// The discovery service already generated a deterministic ID for this asset
 	scanTarget := ScanTarget{
 		Target:      target,
-		DiscoveryID: discoveryID,
+		DiscoveryID: finding.DiscoveryID, // Use the ID from the finding
 		TraceID:     finding.TraceID,
 		OrgID:       finding.OrgID,
 	}
@@ -277,12 +273,11 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 	}
 	target := fmt.Sprintf("%s://%s:%d", protocol, finding.IP, finding.Port)
 
-	// Generate discovery ID (will be replaced with actual ID from ingestion)
-	discoveryID := c.generateIPDiscoveryID(finding)
-
+	// Use the discovery_id from the finding
+	// The port scanner already generated a deterministic ID for this port
 	scanTarget := ScanTarget{
 		Target:      target,
-		DiscoveryID: discoveryID,
+		DiscoveryID: finding.DiscoveryID, // Use the ID from the finding
 		TraceID:     finding.TraceID,
 		OrgID:       finding.OrgID,
 	}
@@ -291,17 +286,3 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 	return c.service.ProcessDiscovery(ctx, scanTarget)
 }
 
-// generateDiscoveryID creates a deterministic ID from domain finding
-// This is temporary until we can query the actual discovery_id from MongoDB
-func (c *Consumer) generateDiscoveryID(finding shared.DiscoveryFinding) string {
-	parts := []string{finding.OrgID, finding.Host}
-	if finding.IP != nil {
-		parts = append(parts, *finding.IP)
-	}
-	return strings.Join(parts, "-")
-}
-
-// generateIPDiscoveryID creates a deterministic ID from IP finding
-func (c *Consumer) generateIPDiscoveryID(finding shared.IPDiscoveryFinding) string {
-	return fmt.Sprintf("%s-%s-%d", finding.OrgID, finding.IP, finding.Port)
-}

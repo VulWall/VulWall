@@ -3,7 +3,6 @@ package domain_ingestion
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -57,29 +56,11 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 		return nil
 	}
 
-	// Determine if this is a domain or subdomain
-	assetType := s.determineAssetType(finding.Host, finding.ParentID)
+	// Determine if this is a domain or subdomain using shared logic
+	assetType := shared.DetermineDomainAssetType(finding.Host, finding.ParentID)
 
 	// Process the discovery
 	return s.processDiscovery(ctx, finding, assetType)
-}
-
-// determineAssetType determines if a host is a domain or subdomain
-func (s *Service) determineAssetType(host string, parentID *string) string {
-	// If parentID is specified, it's explicitly a subdomain
-	if parentID != nil && *parentID != "" {
-		return shared.AssetTypeSubdomain
-	}
-
-	// Count dots to determine if subdomain
-	// example.com = 1 dot = domain
-	// api.example.com = 2 dots = subdomain
-	dotCount := strings.Count(host, ".")
-	if dotCount > 1 {
-		return shared.AssetTypeSubdomain
-	}
-
-	return shared.AssetTypeDomain
 }
 
 // processDiscovery processes a domain/subdomain discovery and stores in discoveries collection
@@ -156,10 +137,9 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 	err := collection.FindOne(ctx, filter).Decode(&existingDiscovery)
 
 	if err == mongo.ErrNoDocuments {
-		// Create new discovery
-		discoveryID := uuid.New().String()
+		// Create new discovery using the deterministic ID from the finding
 		newDiscovery := shared.Discovery{
-			ID:        discoveryID,
+			ID:        finding.DiscoveryID, // Use provided deterministic ID
 			AssetType: assetType,
 			Source:    finding.Source,
 			Status:    finding.Status,
@@ -196,12 +176,12 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 		}
 
 		s.logger.Info("Created new discovery",
-			zap.String("discovery_id", discoveryID),
+			zap.String("discovery_id", finding.DiscoveryID),
 			zap.String("asset_type", assetType),
 			zap.String("host", finding.Host),
 			zap.String("ip", *finding.IP),
 		)
-		return discoveryID, nil
+		return finding.DiscoveryID, nil
 	}
 
 	if err != nil {
@@ -326,8 +306,8 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 	err := collection.FindOne(ctx, filter).Decode(&existingIPDiscovery)
 
 	if err == mongo.ErrNoDocuments {
-		// Create new IP discovery
-		ipDiscoveryID := uuid.New().String()
+		// Create new IP discovery using deterministic ID
+		ipDiscoveryID := shared.GenerateIPID(*finding.IP)
 		newIPDiscovery := shared.Discovery{
 			ID:        ipDiscoveryID,
 			AssetType: shared.AssetTypeIP,
