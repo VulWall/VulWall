@@ -1,10 +1,14 @@
 package testssl_scanner
 
 // TestSSLOutput represents the JSON output from testssl.sh scanner
-// testssl.sh outputs JSON with findings array
+// testssl.sh outputs JSON with metadata and findings array
 type TestSSLOutput struct {
-	ScanResult []TestSSLFinding `json:"scanResult"`
-	ScanTime   string           `json:"scanTime,omitempty"`
+	Invocation string           `json:"Invocation,omitempty"` // Command invocation
+	At         string           `json:"at,omitempty"`         // Hostname/OpenSSL path
+	Version    string           `json:"version,omitempty"`    // testssl.sh version
+	OpenSSL    string           `json:"openssl,omitempty"`    // OpenSSL version info
+	StartTime  int64            `json:"startTime,omitempty"`  // Unix timestamp
+	ScanResult []TestSSLFinding `json:"scanResult"`           // Array of findings
 }
 
 // TestSSLFinding represents a single finding from testssl.sh
