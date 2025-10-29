@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -69,21 +70,29 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 
 // runTestSSLScan executes testssl.sh scanner on the target
 func (s *Service) runTestSSLScan(ctx context.Context, target string) ([]TestSSLFinding, error) {
+	// Create temporary file for JSON output
+	// testssl.sh's --jsonfile writes to a file, not stdout
+	tmpFile, err := os.CreateTemp("", "testssl-*.json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpPath) // Clean up temp file
+
 	// Build testssl.sh command
-	// --jsonfile-pretty -: output JSON to stdout (pretty format avoids file creation issues)
+	// --jsonfile-pretty: output JSON to file (pretty format for readability)
 	// --quiet: suppress banner and progress
 	// --warnings off: don't show warnings
-	// --append: append to output file if it exists (avoids the "-" file error)
 	// Target format: host:port
 	cmd := exec.CommandContext(ctx, "testssl.sh",
-		"--jsonfile-pretty", "-",
+		"--jsonfile-pretty", tmpPath,
 		"--quiet",
 		"--warnings", "off",
-		"--append",
 		target,
 	)
 
-	// Execute command and capture output
+	// Execute command and capture stderr/stdout for error reporting
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Check if it's a context cancellation
@@ -98,9 +107,19 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string) ([]TestSSLF
 				zap.String("output", string(output)),
 			)
 
-			// If we got output, try to parse it anyway
-			if len(output) > 0 {
-				return s.parseTestSSLOutput(output)
+			// Exit codes 240-254 are fatal errors (connection issues, etc.)
+			if exitErr.ExitCode() >= 240 {
+				s.logger.Warn("testssl.sh fatal error",
+					zap.String("target", target),
+					zap.Int("exit_code", exitErr.ExitCode()),
+				)
+				// Return empty findings for fatal errors (target not reachable, etc.)
+				return []TestSSLFinding{}, nil
+			}
+
+			// Try to read JSON file anyway - testssl.sh may have written findings
+			if jsonData, readErr := os.ReadFile(tmpPath); readErr == nil && len(jsonData) > 0 {
+				return s.parseTestSSLOutput(jsonData)
 			}
 
 			// No findings
@@ -112,7 +131,13 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string) ([]TestSSLF
 		return nil, fmt.Errorf("testssl.sh command failed: %w (output: %s)", err, string(output))
 	}
 
-	return s.parseTestSSLOutput(output)
+	// Read JSON output from temp file
+	jsonData, err := os.ReadFile(tmpPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read JSON output: %w", err)
+	}
+
+	return s.parseTestSSLOutput(jsonData)
 }
 
 // parseTestSSLOutput parses testssl.sh JSON output
