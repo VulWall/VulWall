@@ -15,6 +15,8 @@ build: ## Build all services
 	@go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
 	@echo "Building nikto-scanner..."
 	@go build -o bin/nikto-scanner ./cmd/active_recon/nikto-scanner
+	@echo "Building testssl-scanner..."
+	@go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Build complete!"
@@ -31,6 +33,9 @@ build-nuclei-scanner: ## Build nuclei-scanner service
 build-nikto-scanner: ## Build nikto-scanner service
 	@go build -o bin/nikto-scanner ./cmd/active_recon/nikto-scanner
 
+build-testssl-scanner: ## Build testssl-scanner service
+	@go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
+
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
 
@@ -45,6 +50,9 @@ run-nuclei-scanner: ## Run nuclei-scanner service locally
 
 run-nikto-scanner: ## Run nikto-scanner service locally
 	@go run ./cmd/active_recon/nikto-scanner/main.go
+
+run-testssl-scanner: ## Run testssl-scanner service locally
+	@go run ./cmd/active_recon/testssl-scanner/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
@@ -86,6 +94,9 @@ docker-scale-nuclei-scanner: ## Scale nuclei-scanner workers (usage: make docker
 
 docker-scale-nikto-scanner: ## Scale nikto-scanner workers (usage: make docker-scale-nikto-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale nikto-scanner=$(N)
+
+docker-scale-testssl-scanner: ## Scale testssl-scanner workers (usage: make docker-scale-testssl-scanner N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale testssl-scanner=$(N)
 
 docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ingestion N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
@@ -147,6 +158,13 @@ prod-deploy-nikto: ## Deploy nikto-scanner service (usage: make prod-deploy-nikt
 		ops/scripts/deploy-service.sh nikto-scanner; \
 	fi
 
+prod-deploy-testssl: ## Deploy testssl-scanner service (usage: make prod-deploy-testssl [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh testssl-scanner $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh testssl-scanner; \
+	fi
+
 prod-stop-all: ## Stop all production services
 	@ops/scripts/stop-all.sh
 
@@ -154,7 +172,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner"; \
+		echo "Available services: domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)
