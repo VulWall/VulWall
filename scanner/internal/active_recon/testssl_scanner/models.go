@@ -7,7 +7,7 @@ type TestSSLOutput struct {
 	At         string           `json:"at,omitempty"`         // Hostname/OpenSSL path
 	Version    string           `json:"version,omitempty"`    // testssl.sh version
 	OpenSSL    string           `json:"openssl,omitempty"`    // OpenSSL version info
-	StartTime  int64            `json:"startTime,omitempty"`  // Unix timestamp
+	StartTime  string           `json:"startTime,omitempty"`  // Unix timestamp (as string, testssl.sh is inconsistent)
 	ScanResult []TestSSLFinding `json:"scanResult"`           // Array of findings
 }
 
