@@ -142,15 +142,15 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string) ([]TestSSLF
 
 // parseTestSSLOutput parses testssl.sh JSON output
 func (s *Service) parseTestSSLOutput(output []byte) ([]TestSSLFinding, error) {
-	// testssl.sh with --jsonfile-pretty outputs a JSON array of findings
-	// Format: [ { "id": "...", "severity": "...", ... }, { ... } ]
+	// testssl.sh with --jsonfile-pretty outputs JSON with metadata + scanResult array
+	// Format: { "Invocation": "...", "version": "...", "scanResult": [ {...}, {...} ] }
 	if len(output) == 0 {
 		return []TestSSLFinding{}, nil
 	}
 
-	// Parse as array of findings directly
-	var findings []TestSSLFinding
-	if err := json.Unmarshal(output, &findings); err != nil {
+	// Parse the full testssl.sh output structure
+	var testsslOutput TestSSLOutput
+	if err := json.Unmarshal(output, &testsslOutput); err != nil {
 		s.logger.Warn("Failed to parse testssl.sh JSON output",
 			zap.Error(err),
 			zap.String("output_preview", string(output[:min(len(output), 500)])),
@@ -160,7 +160,7 @@ func (s *Service) parseTestSSLOutput(output []byte) ([]TestSSLFinding, error) {
 
 	// Filter findings: only include those with severity and not just "OK"
 	var filteredFindings []TestSSLFinding
-	for _, finding := range findings {
+	for _, finding := range testsslOutput.ScanResult {
 		// Skip informational findings (severity "OK" or "INFO")
 		// We only want actual security issues: LOW, MEDIUM, HIGH, CRITICAL
 		if finding.Severity != "" && finding.Severity != "OK" && finding.Severity != "INFO" {
