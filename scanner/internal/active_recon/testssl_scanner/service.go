@@ -70,14 +70,16 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 // runTestSSLScan executes testssl.sh scanner on the target
 func (s *Service) runTestSSLScan(ctx context.Context, target string) ([]TestSSLFinding, error) {
 	// Build testssl.sh command
-	// --jsonfile -: output JSON to stdout
+	// --jsonfile-pretty -: output JSON to stdout (pretty format avoids file creation issues)
 	// --quiet: suppress banner and progress
 	// --warnings off: don't show warnings
+	// --append: append to output file if it exists (avoids the "-" file error)
 	// Target format: host:port
 	cmd := exec.CommandContext(ctx, "testssl.sh",
-		"--jsonfile", "-",
+		"--jsonfile-pretty", "-",
 		"--quiet",
 		"--warnings", "off",
+		"--append",
 		target,
 	)
 
