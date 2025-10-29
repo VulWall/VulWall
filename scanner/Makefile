@@ -13,6 +13,8 @@ build: ## Build all services
 	@go build -o bin/port-discovery ./cmd/discoveries/port-discovery
 	@echo "Building nuclei-scanner..."
 	@go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
+	@echo "Building nikto-scanner..."
+	@go build -o bin/nikto-scanner ./cmd/active_recon/nikto-scanner
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Build complete!"
@@ -26,6 +28,9 @@ build-port-discovery: ## Build port-discovery service
 build-nuclei-scanner: ## Build nuclei-scanner service
 	@go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
 
+build-nikto-scanner: ## Build nikto-scanner service
+	@go build -o bin/nikto-scanner ./cmd/active_recon/nikto-scanner
+
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
 
@@ -37,6 +42,9 @@ run-port-discovery: ## Run port-discovery service locally
 
 run-nuclei-scanner: ## Run nuclei-scanner service locally
 	@go run ./cmd/active_recon/nuclei-scanner/main.go
+
+run-nikto-scanner: ## Run nikto-scanner service locally
+	@go run ./cmd/active_recon/nikto-scanner/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
@@ -75,6 +83,9 @@ docker-scale-port-discovery: ## Scale port-discovery workers (usage: make docker
 
 docker-scale-nuclei-scanner: ## Scale nuclei-scanner workers (usage: make docker-scale-nuclei-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale nuclei-scanner=$(N)
+
+docker-scale-nikto-scanner: ## Scale nikto-scanner workers (usage: make docker-scale-nikto-scanner N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale nikto-scanner=$(N)
 
 docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ingestion N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
@@ -129,6 +140,13 @@ prod-deploy-nuclei: ## Deploy nuclei-scanner service (usage: make prod-deploy-nu
 		ops/scripts/deploy-service.sh nuclei-scanner; \
 	fi
 
+prod-deploy-nikto: ## Deploy nikto-scanner service (usage: make prod-deploy-nikto [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh nikto-scanner $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh nikto-scanner; \
+	fi
+
 prod-stop-all: ## Stop all production services
 	@ops/scripts/stop-all.sh
 
@@ -136,7 +154,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: domain-discovery, ingestion, port-discovery, nuclei-scanner"; \
+		echo "Available services: domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)
