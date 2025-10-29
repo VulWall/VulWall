@@ -37,8 +37,8 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		zap.String("org_id", target.OrgID),
 	)
 
-	// Run testssl.sh scan
-	findings, err := s.runTestSSLScan(ctx, target.Target)
+	// Run testssl.sh scan (LOW severity and above - excludes INFO)
+	findings, err := s.runTestSSLScan(ctx, target.Target, "LOW")
 	if err != nil {
 		s.logger.Error("testssl.sh scan failed",
 			zap.String("target", target.Target),
@@ -69,7 +69,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 }
 
 // runTestSSLScan executes testssl.sh scanner on the target
-func (s *Service) runTestSSLScan(ctx context.Context, target string) ([]TestSSLFinding, error) {
+func (s *Service) runTestSSLScan(ctx context.Context, target string, severity string) ([]TestSSLFinding, error) {
 	// Create temporary file for JSON output
 	// testssl.sh's --jsonfile writes to a file, not stdout
 	tmpFile, err := os.CreateTemp("", "testssl-*.json")
@@ -84,11 +84,15 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string) ([]TestSSLF
 	// --jsonfile-pretty: output JSON to file (pretty format for readability)
 	// --quiet: suppress banner and progress
 	// --warnings off: don't show warnings
+	// -U: scan for vulnerabilities only (not all checks)
+	// --severity: filter by severity (LOW, MEDIUM, HIGH, CRITICAL)
 	// Target format: host:port
 	cmd := exec.CommandContext(ctx, "testssl.sh",
 		"--jsonfile-pretty", tmpPath,
 		"--quiet",
 		"--warnings", "off",
+		"-U", // Vulnerabilities only (BEAST, POODLE, Heartbleed, etc.)
+		"--severity", severity, // Configurable minimum severity threshold
 		target,
 	)
 
