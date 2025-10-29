@@ -143,7 +143,7 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string) ([]TestSSLF
 // parseTestSSLOutput parses testssl.sh JSON output
 func (s *Service) parseTestSSLOutput(output []byte) ([]TestSSLFinding, error) {
 	// testssl.sh with --jsonfile-pretty outputs JSON with metadata + scanResult array
-	// Format: { "Invocation": "...", "version": "...", "scanResult": [ {...}, {...} ] }
+	// Format: { "Invocation": "...", "scanResult": [ { "vulnerabilities": [...], "headerResponse": [...] } ] }
 	if len(output) == 0 {
 		return []TestSSLFinding{}, nil
 	}
@@ -158,15 +158,30 @@ func (s *Service) parseTestSSLOutput(output []byte) ([]TestSSLFinding, error) {
 		return nil, fmt.Errorf("failed to parse testssl.sh JSON: %w", err)
 	}
 
-	// Filter findings: only include those with severity and not just "OK"
+	// Collect findings from all scan results
+	var allFindings []TestSSLFinding
+	for _, scanResult := range testsslOutput.ScanResult {
+		// Extract vulnerabilities (BEAST, POODLE, Heartbleed, etc.)
+		allFindings = append(allFindings, scanResult.Vulnerabilities...)
+
+		// Extract HTTP header security issues (HSTS, missing headers, etc.)
+		allFindings = append(allFindings, scanResult.HeaderResponse...)
+	}
+
+	// Filter findings: only include actual security issues
 	var filteredFindings []TestSSLFinding
-	for _, finding := range testsslOutput.ScanResult {
+	for _, finding := range allFindings {
 		// Skip informational findings (severity "OK" or "INFO")
 		// We only want actual security issues: LOW, MEDIUM, HIGH, CRITICAL
 		if finding.Severity != "" && finding.Severity != "OK" && finding.Severity != "INFO" {
 			filteredFindings = append(filteredFindings, finding)
 		}
 	}
+
+	s.logger.Debug("Parsed testssl.sh findings",
+		zap.Int("total_findings", len(allFindings)),
+		zap.Int("security_issues", len(filteredFindings)),
+	)
 
 	return filteredFindings, nil
 }
@@ -187,8 +202,7 @@ func (s *Service) convertToSecurityFinding(testSSLFinding TestSSLFinding, target
 	// Build metadata with all testssl.sh-specific data
 	metadata := map[string]interface{}{
 		"test_id": testSSLFinding.ID,
-		"ip":      testSSLFinding.IP,
-		"port":    testSSLFinding.Port,
+		"target":  target.Target, // e.g., "example.com:443"
 	}
 
 	if testSSLFinding.CWE != "" {
@@ -198,7 +212,7 @@ func (s *Service) convertToSecurityFinding(testSSLFinding TestSSLFinding, target
 		metadata["cve"] = testSSLFinding.CVE
 	}
 
-	// Build title from test ID and finding
+	// Build title from test ID - make it descriptive
 	title := fmt.Sprintf("TLS/SSL: %s", testSSLFinding.ID)
 	if len(title) > 100 {
 		title = title[:97] + "..."
@@ -209,7 +223,7 @@ func (s *Service) convertToSecurityFinding(testSSLFinding TestSSLFinding, target
 		OrgID:       target.OrgID,
 		Source:      "testssl",
 		DiscoveryID: target.DiscoveryID,
-		FindingType: testSSLFinding.ID, // Use test ID as finding type
+		FindingType: testSSLFinding.ID, // Use test ID as finding type (e.g., "BREACH", "heartbleed")
 		Severity:    severity,
 		Title:       title,
 		Description: testSSLFinding.Finding,
