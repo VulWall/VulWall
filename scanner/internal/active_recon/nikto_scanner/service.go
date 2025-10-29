@@ -114,10 +114,9 @@ func (s *Service) runNiktoScan(ctx context.Context, target string) ([]NiktoVuln,
 
 // parseNiktoOutput parses Nikto JSON output
 func (s *Service) parseNiktoOutput(output []byte) ([]NiktoVuln, error) {
-	// Nikto's JSON output format can vary between versions
-	// Try to parse as NiktoOutput structure
-	var niktoOutput NiktoOutput
-	if err := json.Unmarshal(output, &niktoOutput); err != nil {
+	// Nikto's JSON output is an array of scan results
+	var niktoOutputs []NiktoOutput
+	if err := json.Unmarshal(output, &niktoOutputs); err != nil {
 		s.logger.Warn("Failed to parse Nikto JSON output",
 			zap.Error(err),
 			zap.String("output", string(output)),
@@ -125,7 +124,14 @@ func (s *Service) parseNiktoOutput(output []byte) ([]NiktoVuln, error) {
 		return nil, fmt.Errorf("failed to parse Nikto output: %w", err)
 	}
 
-	return niktoOutput.Vulnerabilities, nil
+	// Nikto returns an array, but we typically scan one target at a time
+	// Collect all vulnerabilities from all results
+	var allVulns []NiktoVuln
+	for _, result := range niktoOutputs {
+		allVulns = append(allVulns, result.Vulnerabilities...)
+	}
+
+	return allVulns, nil
 }
 
 // convertToSecurityFinding converts Nikto vulnerability to SecurityFinding model

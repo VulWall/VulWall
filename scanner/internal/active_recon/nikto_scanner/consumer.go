@@ -214,30 +214,60 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	// Build target URL based on discovery type
 	// Nikto is a web scanner, so we only scan HTTP/HTTPS targets
 	var target string
+	var discoveryID string
+
 	if finding.IP != nil && *finding.IP != "" {
 		// If we have an IP, scan the IP
 		if finding.Port != nil && *finding.Port > 0 {
 			// Port-specific scan - determine protocol
-			protocol := "http"
+			httpProtocol := "http"
 			if isHTTPSPort(*finding.Port) {
-				protocol = "https"
+				httpProtocol = "https"
 			}
-			target = fmt.Sprintf("%s://%s:%d", protocol, *finding.IP, *finding.Port)
+			target = fmt.Sprintf("%s://%s:%d", httpProtocol, *finding.IP, *finding.Port)
+
+			// Generate discovery ID for port (use finding.DiscoveryID if present, otherwise generate)
+			if finding.DiscoveryID != "" {
+				discoveryID = finding.DiscoveryID
+			} else if finding.Protocol != nil {
+				discoveryID = shared.GeneratePortID(*finding.IP, *finding.Port, *finding.Protocol)
+			} else {
+				// Default to TCP if protocol not specified
+				discoveryID = shared.GeneratePortID(*finding.IP, *finding.Port, "tcp")
+			}
 		} else {
-			// IP-only scan - scan both HTTP and HTTPS
-			// For now, default to HTTP
+			// IP-only scan
 			target = fmt.Sprintf("http://%s", *finding.IP)
+
+			// Generate discovery ID for IP
+			if finding.DiscoveryID != "" {
+				discoveryID = finding.DiscoveryID
+			} else {
+				discoveryID = shared.GenerateIPID(*finding.IP)
+			}
 		}
 	} else {
-		// Domain/subdomain scan - scan both HTTP and HTTPS
-		// For now, default to HTTP (Nikto will redirect if needed)
+		// Domain/subdomain scan
 		target = fmt.Sprintf("http://%s", finding.Host)
+
+		// Generate discovery ID for domain/subdomain
+		if finding.DiscoveryID != "" {
+			discoveryID = finding.DiscoveryID
+		} else {
+			// Determine if it's a domain or subdomain
+			assetType := shared.DetermineDomainAssetType(finding.Host, finding.ParentID)
+			if assetType == shared.AssetTypeSubdomain {
+				discoveryID = shared.GenerateSubdomainID(finding.Host)
+			} else {
+				discoveryID = shared.GenerateDomainID(finding.Host)
+			}
+		}
 	}
 
-	// Create scan target using the discovery_id from the finding
+	// Create scan target
 	scanTarget := ScanTarget{
 		Target:      target,
-		DiscoveryID: finding.DiscoveryID,
+		DiscoveryID: discoveryID,
 		TraceID:     finding.TraceID,
 		OrgID:       finding.OrgID,
 	}
@@ -278,16 +308,24 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 	}
 
 	// Build target URL
-	protocol := "http"
+	httpProtocol := "http"
 	if isHTTPSPort(finding.Port) {
-		protocol = "https"
+		httpProtocol = "https"
 	}
-	target := fmt.Sprintf("%s://%s:%d", protocol, finding.IP, finding.Port)
+	target := fmt.Sprintf("%s://%s:%d", httpProtocol, finding.IP, finding.Port)
 
-	// Use the discovery_id from the finding
+	// Generate discovery ID for the port (use finding.DiscoveryID if present, otherwise generate)
+	var discoveryID string
+	if finding.DiscoveryID != "" {
+		discoveryID = finding.DiscoveryID
+	} else {
+		// Use the protocol from the finding, defaulting to TCP for web ports
+		discoveryID = shared.GeneratePortID(finding.IP, finding.Port, finding.Protocol)
+	}
+
 	scanTarget := ScanTarget{
 		Target:      target,
-		DiscoveryID: finding.DiscoveryID,
+		DiscoveryID: discoveryID,
 		TraceID:     finding.TraceID,
 		OrgID:       finding.OrgID,
 	}
