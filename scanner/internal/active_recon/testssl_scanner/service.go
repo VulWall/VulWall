@@ -142,33 +142,41 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string) ([]TestSSLF
 
 // parseTestSSLOutput parses testssl.sh JSON output
 func (s *Service) parseTestSSLOutput(output []byte) ([]TestSSLFinding, error) {
-	// testssl.sh outputs JSONL (JSON Lines) format - one JSON object per line
-	// Each line can be a finding
-	var allFindings []TestSSLFinding
+	// testssl.sh with --jsonfile-pretty outputs a JSON array of findings
+	// Format: [ { "id": "...", "severity": "...", ... }, { ... } ]
+	if len(output) == 0 {
+		return []TestSSLFinding{}, nil
+	}
 
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
+	// Parse as array of findings directly
+	var findings []TestSSLFinding
+	if err := json.Unmarshal(output, &findings); err != nil {
+		s.logger.Warn("Failed to parse testssl.sh JSON output",
+			zap.Error(err),
+			zap.String("output_preview", string(output[:min(len(output), 500)])),
+		)
+		return nil, fmt.Errorf("failed to parse testssl.sh JSON: %w", err)
+	}
 
-		var finding TestSSLFinding
-		if err := json.Unmarshal([]byte(line), &finding); err != nil {
-			s.logger.Debug("Failed to parse testssl.sh output line",
-				zap.String("line", line),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		// Only include findings with severity (filter out info messages)
-		if finding.Severity != "" && finding.Severity != "OK" {
-			allFindings = append(allFindings, finding)
+	// Filter findings: only include those with severity and not just "OK"
+	var filteredFindings []TestSSLFinding
+	for _, finding := range findings {
+		// Skip informational findings (severity "OK" or "INFO")
+		// We only want actual security issues: LOW, MEDIUM, HIGH, CRITICAL
+		if finding.Severity != "" && finding.Severity != "OK" && finding.Severity != "INFO" {
+			filteredFindings = append(filteredFindings, finding)
 		}
 	}
 
-	return allFindings, nil
+	return filteredFindings, nil
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // convertToSecurityFinding converts testssl.sh finding to SecurityFinding model
