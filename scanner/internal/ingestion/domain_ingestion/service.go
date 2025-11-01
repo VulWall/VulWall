@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"

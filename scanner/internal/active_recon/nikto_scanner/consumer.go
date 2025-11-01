@@ -230,10 +230,10 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 			if finding.DiscoveryID != "" {
 				discoveryID = finding.DiscoveryID
 			} else if finding.Protocol != nil {
-				discoveryID = shared.GeneratePortID(*finding.IP, *finding.Port, *finding.Protocol)
+				discoveryID = shared.GeneratePortID(finding.OrgID, *finding.IP, *finding.Port, *finding.Protocol)
 			} else {
 				// Default to TCP if protocol not specified
-				discoveryID = shared.GeneratePortID(*finding.IP, *finding.Port, "tcp")
+				discoveryID = shared.GeneratePortID(finding.OrgID, *finding.IP, *finding.Port, "tcp")
 			}
 		} else {
 			// IP-only scan
@@ -243,7 +243,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 			if finding.DiscoveryID != "" {
 				discoveryID = finding.DiscoveryID
 			} else {
-				discoveryID = shared.GenerateIPID(*finding.IP)
+				discoveryID = shared.GenerateIPID(finding.OrgID, *finding.IP)
 			}
 		}
 	} else {
@@ -257,9 +257,9 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 			// Determine if it's a domain or subdomain
 			assetType := shared.DetermineDomainAssetType(finding.Host, finding.ParentID)
 			if assetType == shared.AssetTypeSubdomain {
-				discoveryID = shared.GenerateSubdomainID(finding.Host)
+				discoveryID = shared.GenerateSubdomainID(finding.OrgID, finding.Host)
 			} else {
-				discoveryID = shared.GenerateDomainID(finding.Host)
+				discoveryID = shared.GenerateDomainID(finding.OrgID, finding.Host)
 			}
 		}
 	}
@@ -320,7 +320,7 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 		discoveryID = finding.DiscoveryID
 	} else {
 		// Use the protocol from the finding, defaulting to TCP for web ports
-		discoveryID = shared.GeneratePortID(finding.IP, finding.Port, finding.Protocol)
+		discoveryID = shared.GeneratePortID(finding.OrgID, finding.IP, finding.Port, finding.Protocol)
 	}
 
 	scanTarget := ScanTarget{
