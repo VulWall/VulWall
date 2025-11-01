@@ -60,6 +60,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	if err := s.publishFinding(ctx, shared.DiscoveryFinding{
 		DiscoveryID: discoveryID,
 		TraceID:     job.TraceID,
+		ScanID:      job.ScanID,  // Pass through scan_id
 		OrgID:       job.OrgID,
 		Source:      "shodan",
 		ParentID:    job.ParentID,
@@ -77,7 +78,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	// Trigger Shodan subdomain discovery for root domains (no parent, no port)
 	if job.ParentID == nil && job.Port == nil && s.isDomain(job.Host) {
 		go func() {
-			if err := s.discoverSubdomains(context.Background(), job.TraceID, job.OrgID, job.Host); err != nil {
+			if err := s.discoverSubdomains(context.Background(), job.TraceID, job.ScanID, job.OrgID, job.Host); err != nil {
 				s.logger.Error("Shodan subdomain discovery failed",
 					zap.String("host", job.Host),
 					zap.Error(err),
@@ -90,7 +91,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 }
 
 // discoverSubdomains uses Shodan to discover and publish subdomain findings
-func (s *Service) discoverSubdomains(ctx context.Context, traceID, orgID, domain string) error {
+func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID *string, orgID, domain string) error {
 	s.logger.Info("Starting Shodan subdomain discovery",
 		zap.String("trace_id", traceID),
 		zap.String("org_id", orgID),
@@ -141,6 +142,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID, orgID, domain
 		if err := s.publishFinding(ctx, shared.DiscoveryFinding{
 			DiscoveryID: subdomainID,
 			TraceID:     traceID,
+			ScanID:      scanID,  // Pass through scan_id
 			OrgID:       orgID,
 			Source:      "shodan",
 			ParentID:    &parentHost,

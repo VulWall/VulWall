@@ -62,6 +62,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 		finding := shared.IPDiscoveryFinding{
 			DiscoveryID: portID,
 			TraceID:     job.TraceID,
+			ScanID:      job.ScanID,  // Pass through scan_id
 			OrgID:       job.OrgID,
 			Source:      "port_discovery",
 			IP:          job.IP,

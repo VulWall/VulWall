@@ -9,7 +9,8 @@ import "time"
 // This is the shared job format consumed by all discovery providers (Shodan, Nmap, Masscan, etc.)
 type DiscoveryJob struct {
 	TraceID  string                 `json:"trace_id" bson:"trace_id"`
-	OrgID    string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
+	ScanID   *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
+	OrgID    string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
 	ParentID *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host     string                 `json:"host" bson:"host"`
 	Port     *int                   `json:"port,omitempty" bson:"port,omitempty"`
@@ -23,8 +24,9 @@ type DiscoveryJob struct {
 type DiscoveryFinding struct {
 	DiscoveryID string                 `json:"discovery_id" bson:"discovery_id"` // Deterministic UUID for this discovery
 	TraceID     string                 `json:"trace_id" bson:"trace_id"`
-	OrgID       string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
-	Source      string                 `json:"source" bson:"source"` // "shodan", "nmap", "masscan", etc.
+	ScanID      *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
+	OrgID       string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
+	Source      string                 `json:"source" bson:"source"`                       // "shodan", "nmap", "masscan", etc.
 	ParentID    *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host        string                 `json:"host" bson:"host"`
 	IP          *string                `json:"ip,omitempty" bson:"ip,omitempty"` // IP address (if resolved)
@@ -39,7 +41,8 @@ type DiscoveryFinding struct {
 // This is consumed by port discovery services (port_discovery, etc.)
 type IPDiscoveryJob struct {
 	TraceID   string                 `json:"trace_id" bson:"trace_id"`
-	OrgID     string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
+	ScanID    *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
+	OrgID     string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
 	ParentID  *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"` // Parent IP discovery ID
 	IP        string                 `json:"ip" bson:"ip"`                                     // Target IP address
 	PortRange *string                `json:"port_range,omitempty" bson:"port_range,omitempty"` // Optional: "1-1000" or "80,443,22"
@@ -52,8 +55,9 @@ type IPDiscoveryJob struct {
 type IPDiscoveryFinding struct {
 	DiscoveryID string                 `json:"discovery_id" bson:"discovery_id"` // Deterministic UUID for this port discovery
 	TraceID     string                 `json:"trace_id" bson:"trace_id"`
-	OrgID       string                 `json:"org_id" bson:"org_id"` // Required: organization GUID
-	Source      string                 `json:"source" bson:"source"` // "port_discovery", etc.
+	ScanID      *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
+	OrgID       string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
+	Source      string                 `json:"source" bson:"source"`                       // "port_discovery", etc.
 	ParentID    *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"` // Parent IP discovery ID
 	IP          string                 `json:"ip" bson:"ip"`
 	Port        int                    `json:"port" bson:"port"`
@@ -72,13 +76,14 @@ type IPDiscoveryFinding struct {
 // Each organization has separate discovery records (no deduplication across orgs)
 type Discovery struct {
 	ID             string    `json:"_id" bson:"_id"`
-	OrgID          string    `json:"org_id" bson:"org_id"`                           // Organization GUID
-	AssetType      string    `json:"asset_type" bson:"asset_type"`                   // "domain", "subdomain", "ip", "port"
-	Source         string    `json:"source" bson:"source"`                           // Discovery source
-	Status         string    `json:"status" bson:"status"`                           // active, inactive, unknown (technical state)
-	OrgAssetStatus string    `json:"org_asset_status" bson:"org_asset_status"`       // "confirmed", "pending", "dismissed" (organizational state)
-	AssignedAt     time.Time `json:"assigned_at" bson:"assigned_at"`                 // When assigned to org
-	ParentID       *string   `json:"parent_id,omitempty" bson:"parent_id,omitempty"` // Parent asset ID (org-scoped)
+	OrgID          string    `json:"org_id" bson:"org_id"`                                   // Organization GUID
+	ScanID         *string   `json:"scan_id,omitempty" bson:"scan_id,omitempty"`             // Optional: scan identifier for linking to UI scans
+	AssetType      string    `json:"asset_type" bson:"asset_type"`                           // "domain", "subdomain", "ip", "port"
+	Source         string    `json:"source" bson:"source"`                                   // Discovery source
+	Status         string    `json:"status" bson:"status"`                                   // active, inactive, unknown (technical state)
+	OrgAssetStatus string    `json:"org_asset_status" bson:"org_asset_status"`               // "confirmed", "pending", "dismissed" (organizational state)
+	AssignedAt     time.Time `json:"assigned_at" bson:"assigned_at"`                         // When assigned to org
+	ParentID       *string   `json:"parent_id,omitempty" bson:"parent_id,omitempty"`         // Parent asset ID (org-scoped)
 	FirstSeen      time.Time `json:"first_seen" bson:"first_seen"`
 	LastSeen       time.Time `json:"last_seen" bson:"last_seen"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
@@ -126,14 +131,15 @@ type ServiceHistoryEntry struct {
 // Published to security_findings stream and persisted to findings collection
 type SecurityFinding struct {
 	TraceID      string                 `json:"trace_id" bson:"trace_id"`
-	OrgID        string                 `json:"org_id" bson:"org_id"`                   // Organization GUID
-	Source       string                 `json:"source" bson:"source"`                   // Scanner source (e.g., "nuclei")
-	DiscoveryID  string                 `json:"discovery_id" bson:"discovery_id"`       // Links to Discovery._id
-	FindingType  string                 `json:"finding_type" bson:"finding_type"`       // Type of finding (e.g., "xss", "sqli", "cve-2021-1234")
-	Severity     string                 `json:"severity" bson:"severity"`               // info, low, medium, high, critical
-	Title        string                 `json:"title" bson:"title"`                     // Short title
-	Description  string                 `json:"description" bson:"description"`         // Detailed description
+	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
+	OrgID        string                 `json:"org_id" bson:"org_id"`                       // Organization GUID
+	Source       string                 `json:"source" bson:"source"`                       // Scanner source (e.g., "nuclei")
+	DiscoveryID  string                 `json:"discovery_id" bson:"discovery_id"`           // Links to Discovery._id
+	FindingType  string                 `json:"finding_type" bson:"finding_type"`           // Type of finding (e.g., "xss", "sqli", "cve-2021-1234")
+	Severity     string                 `json:"severity" bson:"severity"`                   // info, low, medium, high, critical
+	Title        string                 `json:"title" bson:"title"`                         // Short title
+	Description  string                 `json:"description" bson:"description"`             // Detailed description
 	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"` // Scanner-specific data
-	Status       string                 `json:"status" bson:"status"`                   // open, resolved
-	Timestamp    time.Time              `json:"timestamp" bson:"timestamp"`             // When finding was discovered
+	Status       string                 `json:"status" bson:"status"`                       // open, resolved
+	Timestamp    time.Time              `json:"timestamp" bson:"timestamp"`                 // When finding was discovered
 }

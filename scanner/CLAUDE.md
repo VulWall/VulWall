@@ -487,6 +487,7 @@ internal/discoveries/[service_name]/
 ```go
 type DiscoveryJob struct {
     TraceID  string                 // Request tracing
+    ScanID   *string                // Optional: scan identifier for linking to UI scans
     OrgID    string                 // REQUIRED: organization GUID (validated by consumers)
     ParentID *string                // Parent asset ID (for recursive discovery)
     Host     string                 // Domain or IP to discover
@@ -498,11 +499,13 @@ type DiscoveryJob struct {
 ```
 
 **⚠️ IMPORTANT:** Discovery consumers MUST validate `org_id` is present and skip jobs without it.
+**Note:** `scan_id` is optional - supports both UI-initiated scans (with scan_id) and automated/background scans (without scan_id).
 
 **DiscoveryFinding** - Common finding format published by all discovery services (output):
 ```go
 type DiscoveryFinding struct {
     TraceID   string                 // Request tracing
+    ScanID    *string                // Optional: scan identifier for linking to UI scans
     OrgID     string                 // REQUIRED: organization GUID (passed from job)
     Source    string                 // REQUIRED: "shodan", "nmap", "masscan", etc. (validated by ingestion)
     ParentID  *string                // Parent asset ID
@@ -522,6 +525,7 @@ type DiscoveryFinding struct {
 ```go
 type IPDiscoveryJob struct {
     TraceID   string                 // Request tracing
+    ScanID    *string                // Optional: scan identifier for linking to UI scans
     OrgID     string                 // REQUIRED: organization GUID (validated by consumers)
     ParentID  *string                // Parent asset ID
     IP        string                 // Target IP address
@@ -535,6 +539,7 @@ type IPDiscoveryJob struct {
 ```go
 type IPDiscoveryFinding struct {
     TraceID     string                 // Request tracing
+    ScanID      *string                // Optional: scan identifier for linking to UI scans
     OrgID       string                 // REQUIRED: organization GUID (passed from job)
     Source      string                 // REQUIRED: "port_discovery", etc. (validated by ingestion)
     ParentID    *string                // Parent asset ID
@@ -556,6 +561,7 @@ type IPDiscoveryFinding struct {
 type Discovery struct {
     ID             string    // UUID (org-scoped deterministic ID)
     OrgID          string    // Organization GUID
+    ScanID         *string   // Optional: scan identifier for linking to UI scans
     AssetType      string    // "domain", "subdomain", "ip", or "port" (type discrimination)
     Source         string    // Discovery source ("shodan", "port_discovery", etc.)
     Status         string    // active, inactive, unknown (technical state)
@@ -682,6 +688,7 @@ type ServiceHistoryEntry struct {
 ```go
 type SecurityFinding struct {
     TraceID      string                 // Request tracing
+    ScanID       *string                // Optional: scan identifier for linking to UI scans
     OrgID        string                 // REQUIRED: organization GUID
     Source       string                 // REQUIRED: "nuclei", etc. (validated by ingestion)
     DiscoveryID  string                 // Links to Discovery._id
@@ -750,7 +757,16 @@ See `.env.example` for full list and examples.
 To trigger domain discovery:
 
 ```bash
-# ✅ VALID: Job with org_id (will be processed)
+# ✅ VALID: Job with org_id and scan_id (UI-initiated scan)
+redis-cli XADD domain_discovery_queue * data '{
+  "trace_id": "trace-123",
+  "scan_id": "scan-abc-456",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
+  "host": "example.com",
+  "created": "2025-10-15T10:00:00Z"
+}'
+
+# ✅ ALSO VALID: Job without scan_id (automated/background scan)
 redis-cli XADD domain_discovery_queue * data '{
   "trace_id": "trace-123",
   "org_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -760,8 +776,8 @@ redis-cli XADD domain_discovery_queue * data '{
 
 # Result:
 # 1. Domain discovery service finds subdomains and resolves IPs
-# 2. Findings published to domain_discovery_results with org_id and source="shodan"
-# 3. Domain ingestion consumer stores in discoveries collection (with org_id):
+# 2. Findings published to domain_discovery_results with org_id, scan_id (if provided), and source="shodan"
+# 3. Domain ingestion consumer stores in discoveries collection (with org_id and scan_id):
 #    - Domains/subdomains with asset_type="domain"/"subdomain", org_asset_status="confirmed", IP resolution history
 #    - IPs with asset_type="ip", org_asset_status="confirmed", as separate records with parent_id
 ```
@@ -771,9 +787,10 @@ redis-cli XADD domain_discovery_queue * data '{
 To trigger port discovery:
 
 ```bash
-# ✅ VALID: Job with org_id (will be processed)
+# ✅ VALID: Job with org_id and scan_id (UI-initiated scan)
 redis-cli XADD ip_discovery_queue * data '{
   "trace_id": "trace-456",
+  "scan_id": "scan-abc-456",
   "org_id": "550e8400-e29b-41d4-a716-446655440000",
   "ip": "8.8.8.8",
   "created": "2025-10-15T10:00:00Z"
@@ -781,8 +798,8 @@ redis-cli XADD ip_discovery_queue * data '{
 
 # Result:
 # 1. Port discovery service scans 23 common ports (TCP connect, 2s timeout)
-# 2. For each open port, finding published to ip_discovery_results with source="port_discovery"
-# 3. Port ingestion consumer stores in discoveries collection (with org_id):
+# 2. For each open port, finding published to ip_discovery_results with scan_id and source="port_discovery"
+# 3. Port ingestion consumer stores in discoveries collection (with org_id and scan_id):
 #    - Ensures IP record exists with asset_type="ip", org_asset_status="confirmed"
 #    - Creates/updates port with asset_type="port", org_asset_status="confirmed", banner, service_name, product, version
 ```
@@ -848,6 +865,50 @@ db.discoveries.find({
   org_id: "550e8400-e29b-41d4-a716-446655440000",
   asset_type: "port",
   parent_id: "ip-uuid-here"
+})
+```
+
+**Query discoveries from a specific scan:**
+```javascript
+// Find all discoveries from scan-abc-456
+db.discoveries.find({
+  org_id: "550e8400-e29b-41d4-a716-446655440000",
+  scan_id: "scan-abc-456"
+})
+
+// Count discoveries by asset type for a scan
+db.discoveries.aggregate([
+  {
+    $match: {
+      org_id: "550e8400-e29b-41d4-a716-446655440000",
+      scan_id: "scan-abc-456"
+    }
+  },
+  {
+    $group: {
+      _id: "$asset_type",
+      count: { $sum: 1 }
+    }
+  }
+])
+
+// Find discoveries from scan, sorted by discovery time
+db.discoveries.find({
+  org_id: "550e8400-e29b-41d4-a716-446655440000",
+  scan_id: "scan-abc-456"
+}).sort({ assigned_at: -1 })
+
+// Find all security findings from a scan
+db.findings.find({
+  org_id: "550e8400-e29b-41d4-a716-446655440000",
+  scan_id: "scan-abc-456"
+})
+
+// Compare discoveries between two scans (new assets in latest scan)
+db.discoveries.find({
+  org_id: "550e8400-e29b-41d4-a716-446655440000",
+  scan_id: "scan-xyz-789",  // Latest scan
+  first_seen: { $gte: ISODate("2025-11-01T10:00:00Z") }  // After previous scan
 })
 ```
 

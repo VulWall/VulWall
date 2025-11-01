@@ -90,6 +90,11 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 			"last_detected":   now,
 		}
 
+		// Add scan_id if present
+		if finding.ScanID != nil {
+			findingDoc["scan_id"] = finding.ScanID
+		}
+
 		_, err := collection.InsertOne(ctx, findingDoc)
 		if err != nil {
 			return fmt.Errorf("failed to insert finding: %w", err)
@@ -116,6 +121,11 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 			"severity":      finding.Severity,  // Update severity in case it changed
 			"description":   finding.Description, // Update description
 		},
+	}
+
+	// Update scan_id if present
+	if finding.ScanID != nil {
+		update["$set"].(bson.M)["scan_id"] = finding.ScanID
 	}
 
 	// If finding was previously resolved, reopen it

@@ -79,6 +79,7 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 		newIPDiscovery := shared.Discovery{
 			ID:             ipDiscoveryID,
 			OrgID:          finding.OrgID,                   // Organization GUID
+			ScanID:         finding.ScanID,                  // Optional: scan identifier
 			AssetType:      shared.AssetTypeIP,
 			Source:         finding.Source,
 			Status:         finding.Status,
@@ -117,10 +118,11 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 		return "", err
 	}
 
-	// IP exists - update last_seen
+	// IP exists - update last_seen and scan_id
 	update := bson.M{
 		"$set": bson.M{
 			"last_seen": timestamp,
+			"scan_id":   finding.ScanID,
 		},
 	}
 
@@ -161,6 +163,7 @@ func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDisc
 		newPortDiscovery := shared.Discovery{
 			ID:             finding.DiscoveryID,                // Use provided deterministic ID (org-scoped)
 			OrgID:          finding.OrgID,                      // Organization GUID
+			ScanID:         finding.ScanID,                     // Optional: scan identifier
 			AssetType:      shared.AssetTypePort,
 			Source:         finding.Source,
 			Status:         finding.Status,
@@ -267,6 +270,7 @@ func (s *Service) updatePortDiscovery(ctx context.Context, discovery *shared.Dis
 		"$set": bson.M{
 			"last_seen": timestamp,
 			"status":    finding.Status,
+			"scan_id":   finding.ScanID,
 		},
 	}
 
@@ -374,6 +378,10 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 		"assigned_at":      discovery.AssignedAt,
 		"first_seen":       discovery.FirstSeen,
 		"last_seen":        discovery.LastSeen,
+	}
+
+	if discovery.ScanID != nil {
+		doc["scan_id"] = discovery.ScanID
 	}
 
 	if discovery.ParentID != nil {

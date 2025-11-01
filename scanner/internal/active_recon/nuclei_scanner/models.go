@@ -28,8 +28,9 @@ type NucleiInfo struct {
 
 // ScanTarget represents a target to be scanned by Nuclei
 type ScanTarget struct {
-	Target      string // URL or IP to scan
-	DiscoveryID string // Links back to Discovery._id
+	Target      string  // URL or IP to scan
+	DiscoveryID string  // Links back to Discovery._id
 	TraceID     string
+	ScanID      *string // Optional: scan identifier for linking to UI scans
 	OrgID       string
 }

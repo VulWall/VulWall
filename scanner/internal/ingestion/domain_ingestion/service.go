@@ -122,6 +122,7 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 		newDiscovery := shared.Discovery{
 			ID:             finding.DiscoveryID,                // Use provided deterministic ID (org-scoped)
 			OrgID:          finding.OrgID,                      // Organization GUID
+			ScanID:         finding.ScanID,                     // Optional: scan identifier
 			AssetType:      assetType,
 			Source:         finding.Source,
 			Status:         finding.Status,
@@ -177,7 +178,7 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 	}
 
 	// Discovery exists - update resolution history
-	if err := s.updateResolutionHistory(ctx, &existingDiscovery, *finding.IP, timestamp); err != nil {
+	if err := s.updateResolutionHistory(ctx, &existingDiscovery, finding, *finding.IP, timestamp); err != nil {
 		return "", err
 	}
 
@@ -185,18 +186,19 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 }
 
 // updateResolutionHistory updates the IP resolution history for a domain/subdomain
-func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared.Discovery, newIP string, timestamp time.Time) error {
+func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared.Discovery, finding shared.DiscoveryFinding, newIP string, timestamp time.Time) error {
 	collection := s.db.Collection(shared.CollectionDiscoveries)
 
 	// Check if IP has changed
 	if len(discovery.ResolutionHistory) > 0 {
 		lastResolution := discovery.ResolutionHistory[len(discovery.ResolutionHistory)-1]
 
-		// If IP unchanged, just update last_seen
+		// If IP unchanged, just update last_seen and scan_id
 		if lastResolution.IP == newIP && lastResolution.LastSeen == nil {
 			update := bson.M{
 				"$set": bson.M{
 					"last_seen": timestamp,
+					"scan_id":   finding.ScanID,
 				},
 			}
 			_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, update)
@@ -221,6 +223,7 @@ func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared
 				"$set": bson.M{
 					"resolution_history." + fmt.Sprint(len(discovery.ResolutionHistory)-1) + ".last_seen": timestamp,
 					"last_seen": timestamp,
+					"scan_id":   finding.ScanID,
 				},
 				"$push": bson.M{
 					"resolution_history": shared.ResolutionHistoryEntry{
@@ -260,6 +263,7 @@ func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared
 		},
 		"$set": bson.M{
 			"last_seen": timestamp,
+			"scan_id":   finding.ScanID,
 		},
 	}
 
@@ -296,6 +300,7 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 		newIPDiscovery := shared.Discovery{
 			ID:             ipDiscoveryID,
 			OrgID:          finding.OrgID,                   // Organization GUID
+			ScanID:         finding.ScanID,                  // Optional: scan identifier
 			AssetType:      shared.AssetTypeIP,
 			Source:         finding.Source,
 			Status:         finding.Status,
@@ -335,10 +340,11 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 		return "", false, err
 	}
 
-	// IP exists - just update last_seen
+	// IP exists - just update last_seen and scan_id
 	update := bson.M{
 		"$set": bson.M{
 			"last_seen": timestamp,
+			"scan_id":   finding.ScanID,
 		},
 	}
 
@@ -362,6 +368,7 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.DiscoveryFinding, ipDiscoveryID string) error {
 	ipJob := shared.IPDiscoveryJob{
 		TraceID:  finding.TraceID,
+		ScanID:   finding.ScanID,                        // Pass through scan_id
 		OrgID:    finding.OrgID,
 		ParentID: &ipDiscoveryID,
 		IP:       *finding.IP,
@@ -391,6 +398,10 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 		"assigned_at":      discovery.AssignedAt,
 		"first_seen":       discovery.FirstSeen,
 		"last_seen":        discovery.LastSeen,
+	}
+
+	if discovery.ScanID != nil {
+		doc["scan_id"] = discovery.ScanID
 	}
 
 	if discovery.ParentID != nil {

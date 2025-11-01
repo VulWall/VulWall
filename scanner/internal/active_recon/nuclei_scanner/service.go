@@ -161,6 +161,7 @@ func (s *Service) convertToSecurityFinding(nucleiOutput NucleiOutput, target Sca
 
 	return shared.SecurityFinding{
 		TraceID:     target.TraceID,
+		ScanID:      target.ScanID,  // Pass through scan_id
 		OrgID:       target.OrgID,
 		Source:      "nuclei",
 		DiscoveryID: target.DiscoveryID,

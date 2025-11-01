@@ -237,6 +237,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 		Target:      target,
 		DiscoveryID: finding.DiscoveryID, // Use the ID from the finding
 		TraceID:     finding.TraceID,
+		ScanID:      finding.ScanID,      // Pass through scan_id
 		OrgID:       finding.OrgID,
 	}
 
@@ -279,6 +280,7 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 		Target:      target,
 		DiscoveryID: finding.DiscoveryID, // Use the ID from the finding
 		TraceID:     finding.TraceID,
+		ScanID:      finding.ScanID,      // Pass through scan_id
 		OrgID:       finding.OrgID,
 	}
 
