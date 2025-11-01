@@ -77,7 +77,7 @@ type IPDiscoveryFinding struct {
 type Discovery struct {
 	ID             string    `json:"_id" bson:"_id"`
 	OrgID          string    `json:"org_id" bson:"org_id"`                                   // Organization GUID
-	ScanID         *string   `json:"scan_id,omitempty" bson:"scan_id,omitempty"`             // Optional: scan identifier for linking to UI scans
+	ScanIDs        []string  `json:"scan_ids,omitempty" bson:"scan_ids,omitempty"`           // Array of scan identifiers that detected this asset
 	AssetType      string    `json:"asset_type" bson:"asset_type"`                           // "domain", "subdomain", "ip", "port"
 	Source         string    `json:"source" bson:"source"`                                   // Discovery source
 	Status         string    `json:"status" bson:"status"`                                   // active, inactive, unknown (technical state)
@@ -131,7 +131,7 @@ type ServiceHistoryEntry struct {
 // Published to security_findings stream and persisted to findings collection
 type SecurityFinding struct {
 	TraceID      string                 `json:"trace_id" bson:"trace_id"`
-	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
+	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier from current scan (for stream messages)
 	OrgID        string                 `json:"org_id" bson:"org_id"`                       // Organization GUID
 	Source       string                 `json:"source" bson:"source"`                       // Scanner source (e.g., "nuclei")
 	DiscoveryID  string                 `json:"discovery_id" bson:"discovery_id"`           // Links to Discovery._id

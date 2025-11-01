@@ -561,7 +561,7 @@ type IPDiscoveryFinding struct {
 type Discovery struct {
     ID             string    // UUID (org-scoped deterministic ID)
     OrgID          string    // Organization GUID
-    ScanID         *string   // Optional: scan identifier for linking to UI scans
+    ScanIDs        []string  // Array of scan identifiers that detected this asset
     AssetType      string    // "domain", "subdomain", "ip", or "port" (type discrimination)
     Source         string    // Discovery source ("shodan", "port_discovery", etc.)
     Status         string    // active, inactive, unknown (technical state)
@@ -630,6 +630,13 @@ type ServiceHistoryEntry struct {
 - ✅ **History tracking:**
   - Domains and subdomains: IP resolution history (tracks when IPs change)
   - Ports: Service change history (tracks when services change)
+  - Scan history: `scan_ids` array tracks all scans that detected each asset
+- ✅ **Scan tracking with arrays:**
+  - Jobs have single `scan_id` (optional) - represents current scan execution
+  - Discoveries accumulate `scan_ids` array - tracks all scans that found this asset
+  - Findings accumulate `scan_ids` array - tracks all scans that detected this vulnerability
+  - Uses MongoDB `$addToSet` to prevent duplicate scan IDs
+  - Enables queries like "assets found in scan X" or "assets found in both scans X and Y"
 - ✅ **Protocol-aware deduplication (org-scoped):**
   - `192.168.1.1:53/tcp` ≠ `192.168.1.1:53/udp` (different discoveries)
   - Assets unique by (org_id + type + identifying fields), enforced by unique indexes
@@ -715,6 +722,7 @@ type SecurityFinding struct {
   description: "string",           // Detailed description
   metadata: {},                    // Scanner-specific data (Nuclei output, etc.)
   status: "string",                // open, resolved
+  scan_ids: ["string"],            // Array of scan identifiers that detected this finding
   first_detected: "date",          // When first discovered
   last_detected: "date",           // When last seen
   resolved_at: "date" (optional)   // When resolved (null if open)
@@ -871,9 +879,10 @@ db.discoveries.find({
 **Query discoveries from a specific scan:**
 ```javascript
 // Find all discoveries from scan-abc-456
+// scan_ids is an array, so use direct value match (MongoDB handles array matching)
 db.discoveries.find({
   org_id: "550e8400-e29b-41d4-a716-446655440000",
-  scan_id: "scan-abc-456"
+  scan_ids: "scan-abc-456"
 })
 
 // Count discoveries by asset type for a scan
@@ -881,7 +890,7 @@ db.discoveries.aggregate([
   {
     $match: {
       org_id: "550e8400-e29b-41d4-a716-446655440000",
-      scan_id: "scan-abc-456"
+      scan_ids: "scan-abc-456"
     }
   },
   {
@@ -895,21 +904,49 @@ db.discoveries.aggregate([
 // Find discoveries from scan, sorted by discovery time
 db.discoveries.find({
   org_id: "550e8400-e29b-41d4-a716-446655440000",
-  scan_id: "scan-abc-456"
+  scan_ids: "scan-abc-456"
 }).sort({ assigned_at: -1 })
 
 // Find all security findings from a scan
 db.findings.find({
   org_id: "550e8400-e29b-41d4-a716-446655440000",
-  scan_id: "scan-abc-456"
+  scan_ids: "scan-abc-456"
 })
 
-// Compare discoveries between two scans (new assets in latest scan)
+// Find assets discovered in multiple scans (intersection)
 db.discoveries.find({
   org_id: "550e8400-e29b-41d4-a716-446655440000",
-  scan_id: "scan-xyz-789",  // Latest scan
-  first_seen: { $gte: ISODate("2025-11-01T10:00:00Z") }  // After previous scan
+  scan_ids: { $all: ["scan-abc-456", "scan-xyz-789"] }
 })
+
+// Find assets discovered ONLY in latest scan (not in previous)
+db.discoveries.find({
+  org_id: "550e8400-e29b-41d4-a716-446655440000",
+  scan_ids: "scan-xyz-789",
+  scan_ids: { $nin: ["scan-abc-456"] }  // Not in previous scan
+})
+
+// Compare scan results: count new vs existing assets
+db.discoveries.aggregate([
+  {
+    $match: {
+      org_id: "550e8400-e29b-41d4-a716-446655440000",
+      scan_ids: "scan-xyz-789"
+    }
+  },
+  {
+    $project: {
+      asset_type: 1,
+      is_new: { $eq: [{ $size: "$scan_ids" }, 1] }  // Only one scan ID = new
+    }
+  },
+  {
+    $group: {
+      _id: { asset_type: "$asset_type", is_new: "$is_new" },
+      count: { $sum: 1 }
+    }
+  }
+])
 ```
 
 ## Dependencies

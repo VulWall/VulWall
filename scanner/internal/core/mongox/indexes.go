@@ -157,30 +157,33 @@ func ensureDiscoveriesIndexes(ctx context.Context, db *mongo.Database, logger *z
 			},
 			Options: options.Index().SetName("idx_org_source_type"),
 		},
-		// Index for scan-based queries: org_id + scan_id + assigned_at (for finding discoveries from a specific scan, sorted by time)
+		// Index for scan-based queries: org_id + scan_ids + assigned_at
+		// MongoDB automatically creates multikey index for scan_ids array field
+		// Supports queries like: {org_id: X, scan_ids: "scan-123"}
 		{
 			Keys: bson.D{
 				{Key: "org_id", Value: 1},
-				{Key: "scan_id", Value: 1},
+				{Key: "scan_ids", Value: 1},
 				{Key: "assigned_at", Value: -1},
 			},
 			Options: options.Index().
 				SetName("idx_org_scan_time").
 				SetPartialFilterExpression(bson.D{
-					{Key: "scan_id", Value: bson.D{{Key: "$exists", Value: true}}},
+					{Key: "scan_ids", Value: bson.D{{Key: "$exists", Value: true}}},
 				}),
 		},
-		// Index for counting assets by type per scan: org_id + scan_id + asset_type
+		// Index for counting assets by type per scan: org_id + scan_ids + asset_type
+		// MongoDB automatically creates multikey index for scan_ids array field
 		{
 			Keys: bson.D{
 				{Key: "org_id", Value: 1},
-				{Key: "scan_id", Value: 1},
+				{Key: "scan_ids", Value: 1},
 				{Key: "asset_type", Value: 1},
 			},
 			Options: options.Index().
 				SetName("idx_org_scan_type").
 				SetPartialFilterExpression(bson.D{
-					{Key: "scan_id", Value: bson.D{{Key: "$exists", Value: true}}},
+					{Key: "scan_ids", Value: bson.D{{Key: "$exists", Value: true}}},
 				}),
 		},
 	}

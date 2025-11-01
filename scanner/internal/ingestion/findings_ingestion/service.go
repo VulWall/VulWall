@@ -75,6 +75,12 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 
 	if err == mongo.ErrNoDocuments {
 		// Finding doesn't exist, create new one
+		// Initialize scan_ids array
+		scanIDs := []string{}
+		if finding.ScanID != nil {
+			scanIDs = []string{*finding.ScanID}
+		}
+
 		findingDoc := bson.M{
 			"_id":             uuid.New().String(),
 			"org_id":          finding.OrgID,
@@ -90,9 +96,9 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 			"last_detected":   now,
 		}
 
-		// Add scan_id if present
-		if finding.ScanID != nil {
-			findingDoc["scan_id"] = finding.ScanID
+		// Add scan_ids array if present
+		if len(scanIDs) > 0 {
+			findingDoc["scan_ids"] = scanIDs
 		}
 
 		_, err := collection.InsertOne(ctx, findingDoc)
@@ -123,9 +129,11 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 		},
 	}
 
-	// Update scan_id if present
+	// Add scan_id to array if present
 	if finding.ScanID != nil {
-		update["$set"].(bson.M)["scan_id"] = finding.ScanID
+		update["$addToSet"] = bson.M{
+			"scan_ids": *finding.ScanID,
+		}
 	}
 
 	// If finding was previously resolved, reopen it

@@ -119,10 +119,16 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 
 	if err == mongo.ErrNoDocuments {
 		// Create new discovery using the deterministic ID from the finding
+		// Initialize scan_ids array
+		scanIDs := []string{}
+		if finding.ScanID != nil {
+			scanIDs = []string{*finding.ScanID}
+		}
+
 		newDiscovery := shared.Discovery{
 			ID:             finding.DiscoveryID,                // Use provided deterministic ID (org-scoped)
 			OrgID:          finding.OrgID,                      // Organization GUID
-			ScanID:         finding.ScanID,                     // Optional: scan identifier
+			ScanIDs:        scanIDs,                            // Array of scan identifiers
 			AssetType:      assetType,
 			Source:         finding.Source,
 			Status:         finding.Status,
@@ -193,13 +199,18 @@ func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared
 	if len(discovery.ResolutionHistory) > 0 {
 		lastResolution := discovery.ResolutionHistory[len(discovery.ResolutionHistory)-1]
 
-		// If IP unchanged, just update last_seen and scan_id
+		// If IP unchanged, just update last_seen and add scan_id to array
 		if lastResolution.IP == newIP && lastResolution.LastSeen == nil {
 			update := bson.M{
 				"$set": bson.M{
 					"last_seen": timestamp,
-					"scan_id":   finding.ScanID,
 				},
+			}
+			// Add scan_id to array if present
+			if finding.ScanID != nil {
+				update["$addToSet"] = bson.M{
+					"scan_ids": *finding.ScanID,
+				}
 			}
 			_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, update)
 			if err != nil {
@@ -223,7 +234,6 @@ func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared
 				"$set": bson.M{
 					"resolution_history." + fmt.Sprint(len(discovery.ResolutionHistory)-1) + ".last_seen": timestamp,
 					"last_seen": timestamp,
-					"scan_id":   finding.ScanID,
 				},
 				"$push": bson.M{
 					"resolution_history": shared.ResolutionHistoryEntry{
@@ -232,6 +242,12 @@ func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared
 						LastSeen:  nil, // Currently active
 					},
 				},
+			}
+			// Add scan_id to array if present
+			if finding.ScanID != nil {
+				update["$addToSet"] = bson.M{
+					"scan_ids": *finding.ScanID,
+				}
 			}
 
 			_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, update)
@@ -263,8 +279,13 @@ func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared
 		},
 		"$set": bson.M{
 			"last_seen": timestamp,
-			"scan_id":   finding.ScanID,
 		},
+	}
+	// Add scan_id to array if present
+	if finding.ScanID != nil {
+		update["$addToSet"] = bson.M{
+			"scan_ids": *finding.ScanID,
+		}
 	}
 
 	_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, update)
@@ -297,10 +318,16 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 	if err == mongo.ErrNoDocuments {
 		// Create new IP discovery using deterministic ID (org-scoped)
 		ipDiscoveryID := shared.GenerateIPID(finding.OrgID, *finding.IP)
+		// Initialize scan_ids array
+		scanIDs := []string{}
+		if finding.ScanID != nil {
+			scanIDs = []string{*finding.ScanID}
+		}
+
 		newIPDiscovery := shared.Discovery{
 			ID:             ipDiscoveryID,
 			OrgID:          finding.OrgID,                   // Organization GUID
-			ScanID:         finding.ScanID,                  // Optional: scan identifier
+			ScanIDs:        scanIDs,                         // Array of scan identifiers
 			AssetType:      shared.AssetTypeIP,
 			Source:         finding.Source,
 			Status:         finding.Status,
@@ -340,12 +367,17 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 		return "", false, err
 	}
 
-	// IP exists - just update last_seen and scan_id
+	// IP exists - just update last_seen and add scan_id to array
 	update := bson.M{
 		"$set": bson.M{
 			"last_seen": timestamp,
-			"scan_id":   finding.ScanID,
 		},
+	}
+	// Add scan_id to array if present
+	if finding.ScanID != nil {
+		update["$addToSet"] = bson.M{
+			"scan_ids": *finding.ScanID,
+		}
 	}
 
 	_, err = collection.UpdateOne(ctx, bson.M{"_id": existingIPDiscovery.ID}, update)
@@ -400,8 +432,8 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 		"last_seen":        discovery.LastSeen,
 	}
 
-	if discovery.ScanID != nil {
-		doc["scan_id"] = discovery.ScanID
+	if len(discovery.ScanIDs) > 0 {
+		doc["scan_ids"] = discovery.ScanIDs
 	}
 
 	if discovery.ParentID != nil {
