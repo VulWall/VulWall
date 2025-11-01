@@ -9,8 +9,7 @@ const (
 
 	// MongoDB Collections
 	CollectionScanResults = "scan_results"
-	CollectionDiscoveries = "discoveries" // Global asset registry (domains, subdomains, IPs, ports)
-	CollectionOrgAssets   = "org_assets"  // Org-to-asset relationship links
+	CollectionDiscoveries = "discoveries" // Org-scoped asset registry (domains, subdomains, IPs, ports)
 	CollectionFindings    = "findings"    // Security findings from scanning tools
 
 	// Redis Streams - Domain Discovery

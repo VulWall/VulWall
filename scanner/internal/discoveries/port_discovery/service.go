@@ -50,8 +50,8 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 	// Publish findings for each open port
 	now := time.Now()
 	for _, portResult := range openPorts {
-		// Generate deterministic ID for this port
-		portID := shared.GeneratePortID(job.IP, portResult.Port, shared.ProtocolTCP)
+		// Generate deterministic ID for this port (org-scoped)
+		portID := shared.GeneratePortID(job.OrgID, job.IP, portResult.Port, shared.ProtocolTCP)
 
 		// Set banner if available
 		var banner *string
