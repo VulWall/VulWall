@@ -47,13 +47,13 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		}
 	}
 
-	// Determine asset type and generate deterministic ID
+	// Determine asset type and generate deterministic ID (org-scoped)
 	assetType := shared.DetermineDomainAssetType(job.Host, job.ParentID)
 	var discoveryID string
 	if assetType == shared.AssetTypeDomain {
-		discoveryID = shared.GenerateDomainID(job.Host)
+		discoveryID = shared.GenerateDomainID(job.OrgID, job.Host)
 	} else {
-		discoveryID = shared.GenerateSubdomainID(job.Host)
+		discoveryID = shared.GenerateSubdomainID(job.OrgID, job.Host)
 	}
 
 	// Publish root asset finding
@@ -134,8 +134,8 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID, orgID, domain
 			)
 		}
 
-		// Generate deterministic ID for subdomain
-		subdomainID := shared.GenerateSubdomainID(fullSubdomain)
+		// Generate deterministic ID for subdomain (org-scoped)
+		subdomainID := shared.GenerateSubdomainID(orgID, fullSubdomain)
 
 		// Publish subdomain finding
 		if err := s.publishFinding(ctx, shared.DiscoveryFinding{

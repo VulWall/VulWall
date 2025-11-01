@@ -21,11 +21,6 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logger) 
 		return err
 	}
 
-	// Org assets collection indexes
-	if err := ensureOrgAssetsIndexes(ctx, db, logger); err != nil {
-		return err
-	}
-
 	logger.Info("All MongoDB indexes created successfully")
 	return nil
 }
@@ -34,90 +29,133 @@ func ensureDiscoveriesIndexes(ctx context.Context, db *mongo.Database, logger *z
 	collection := db.Collection(shared.CollectionDiscoveries)
 
 	indexes := []mongo.IndexModel{
-		// Index for finding domains by name
+		// UNIQUE: org_id + asset_type + domain (prevents duplicate domains per org)
 		{
 			Keys: bson.D{
+				{Key: "org_id", Value: 1},
 				{Key: "asset_type", Value: 1},
 				{Key: "domain", Value: 1},
 			},
 			Options: options.Index().
-				SetName("idx_asset_type_domain").
+				SetName("idx_org_asset_domain").
+				SetUnique(true).
 				SetPartialFilterExpression(bson.D{
 					{Key: "asset_type", Value: shared.AssetTypeDomain},
+					{Key: "domain", Value: bson.D{{Key: "$exists", Value: true}}},
 				}),
 		},
-		// Index for finding subdomains by name
+		// UNIQUE: org_id + asset_type + subdomain (prevents duplicate subdomains per org)
 		{
 			Keys: bson.D{
+				{Key: "org_id", Value: 1},
 				{Key: "asset_type", Value: 1},
 				{Key: "subdomain", Value: 1},
 			},
 			Options: options.Index().
-				SetName("idx_asset_type_subdomain").
+				SetName("idx_org_asset_subdomain").
+				SetUnique(true).
 				SetPartialFilterExpression(bson.D{
 					{Key: "asset_type", Value: shared.AssetTypeSubdomain},
+					{Key: "subdomain", Value: bson.D{{Key: "$exists", Value: true}}},
 				}),
 		},
-		// Index for finding IPs
+		// UNIQUE: org_id + asset_type + ip (prevents duplicate IPs per org)
 		{
 			Keys: bson.D{
+				{Key: "org_id", Value: 1},
 				{Key: "asset_type", Value: 1},
 				{Key: "ip", Value: 1},
 			},
 			Options: options.Index().
-				SetName("idx_asset_type_ip").
+				SetName("idx_org_asset_ip").
+				SetUnique(true).
 				SetPartialFilterExpression(bson.D{
 					{Key: "asset_type", Value: shared.AssetTypeIP},
+					{Key: "ip", Value: bson.D{{Key: "$exists", Value: true}}},
 				}),
 		},
-		// Index for finding ports by IP + port + protocol (compound unique)
+		// UNIQUE: org_id + asset_type + ip + port + protocol (prevents duplicate ports per org)
 		{
 			Keys: bson.D{
+				{Key: "org_id", Value: 1},
 				{Key: "asset_type", Value: 1},
 				{Key: "ip", Value: 1},
 				{Key: "port", Value: 1},
 				{Key: "protocol", Value: 1},
 			},
 			Options: options.Index().
-				SetName("idx_asset_type_ip_port_protocol").
+				SetName("idx_org_asset_port").
+				SetUnique(true).
 				SetPartialFilterExpression(bson.D{
 					{Key: "asset_type", Value: shared.AssetTypePort},
+					{Key: "ip", Value: bson.D{{Key: "$exists", Value: true}}},
+					{Key: "port", Value: bson.D{{Key: "$exists", Value: true}}},
+					{Key: "protocol", Value: bson.D{{Key: "$exists", Value: true}}},
 				}),
 		},
-		// Index for finding children by parent_id
+		// Query index: org_id + org_asset_status + asset_type (for filtering confirmed/pending/dismissed assets)
 		{
 			Keys: bson.D{
+				{Key: "org_id", Value: 1},
+				{Key: "org_asset_status", Value: 1},
+				{Key: "asset_type", Value: 1},
+			},
+			Options: options.Index().SetName("idx_org_status_type"),
+		},
+		// Query index: org_id + assigned_at (for sorting by assignment time)
+		{
+			Keys: bson.D{
+				{Key: "org_id", Value: 1},
+				{Key: "assigned_at", Value: -1},
+			},
+			Options: options.Index().SetName("idx_org_assigned"),
+		},
+		// Query index: org_id + asset_type (for finding all assets of a type for an org)
+		{
+			Keys: bson.D{
+				{Key: "org_id", Value: 1},
+				{Key: "asset_type", Value: 1},
+			},
+			Options: options.Index().SetName("idx_org_type"),
+		},
+		// Index for finding children by parent_id (org-scoped hierarchy)
+		{
+			Keys: bson.D{
+				{Key: "org_id", Value: 1},
 				{Key: "parent_id", Value: 1},
 				{Key: "asset_type", Value: 1},
 			},
 			Options: options.Index().
-				SetName("idx_parent_id_asset_type").
+				SetName("idx_org_parent_type").
 				SetPartialFilterExpression(bson.D{
 					{Key: "parent_id", Value: bson.D{{Key: "$exists", Value: true}}},
 				}),
 		},
-		// Index for filtering by status
+		// Index for filtering by technical status (org-scoped)
 		{
 			Keys: bson.D{
+				{Key: "org_id", Value: 1},
 				{Key: "status", Value: 1},
 				{Key: "asset_type", Value: 1},
 			},
-			Options: options.Index().SetName("idx_status_asset_type"),
+			Options: options.Index().SetName("idx_org_tech_status_type"),
 		},
-		// Index for time-based queries
+		// Index for time-based queries (org-scoped)
 		{
 			Keys: bson.D{
+				{Key: "org_id", Value: 1},
 				{Key: "last_seen", Value: -1},
 			},
-			Options: options.Index().SetName("idx_last_seen"),
+			Options: options.Index().SetName("idx_org_last_seen"),
 		},
-		// Index for source-based queries
+		// Index for source-based queries (org-scoped)
 		{
 			Keys: bson.D{
+				{Key: "org_id", Value: 1},
 				{Key: "source", Value: 1},
 				{Key: "asset_type", Value: 1},
 			},
-			Options: options.Index().SetName("idx_source_asset_type"),
+			Options: options.Index().SetName("idx_org_source_type"),
 		},
 	}
 
@@ -131,56 +169,5 @@ func ensureDiscoveriesIndexes(ctx context.Context, db *mongo.Database, logger *z
 	}
 
 	logger.Info("Created discoveries collection indexes")
-	return nil
-}
-
-func ensureOrgAssetsIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logger) error {
-	collection := db.Collection(shared.CollectionOrgAssets)
-
-	indexes := []mongo.IndexModel{
-		// Unique index: one org can only have one link to each asset
-		{
-			Keys: bson.D{
-				{Key: "org_id", Value: 1},
-				{Key: "asset_id", Value: 1},
-			},
-			Options: options.Index().
-				SetName("idx_org_id_asset_id").
-				SetUnique(true),
-		},
-		// Index for finding all assets for an org
-		{
-			Keys: bson.D{
-				{Key: "org_id", Value: 1},
-				{Key: "status", Value: 1},
-			},
-			Options: options.Index().SetName("idx_org_id_status"),
-		},
-		// Index for finding all orgs that have a specific asset
-		{
-			Keys: bson.D{
-				{Key: "asset_id", Value: 1},
-			},
-			Options: options.Index().SetName("idx_asset_id"),
-		},
-		// Index for time-based queries
-		{
-			Keys: bson.D{
-				{Key: "assigned_at", Value: -1},
-			},
-			Options: options.Index().SetName("idx_assigned_at"),
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	_, err := collection.Indexes().CreateMany(ctx, indexes)
-	if err != nil {
-		logger.Error("Failed to create org_assets indexes", zap.Error(err))
-		return err
-	}
-
-	logger.Info("Created org_assets collection indexes")
 	return nil
 }

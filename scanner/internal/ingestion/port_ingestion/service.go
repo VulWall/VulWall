@@ -45,36 +45,16 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 
 	now := time.Now()
 
-	// 1. Ensure IP discovery exists (create if not found)
+	// 1. Ensure IP discovery exists (create if not found with org_id)
 	ipDiscoveryID, err := s.ensureIPDiscovery(ctx, finding, now)
 	if err != nil {
 		return err
 	}
 
-	// 2. Create org_assets link for IP
-	if err := s.createOrgAssetLink(ctx, finding.OrgID, ipDiscoveryID, now); err != nil {
-		s.logger.Error("Failed to create org_assets link for IP",
-			zap.String("discovery_id", ipDiscoveryID),
-			zap.String("org_id", finding.OrgID),
-			zap.Error(err),
-		)
-		// Don't fail the entire operation
-	}
-
-	// 3. Upsert port discovery
-	portDiscoveryID, err := s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
+	// 2. Upsert port discovery (with org_id)
+	_, err = s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
 	if err != nil {
 		return err
-	}
-
-	// 4. Create org_assets link for port
-	if err := s.createOrgAssetLink(ctx, finding.OrgID, portDiscoveryID, now); err != nil {
-		s.logger.Error("Failed to create org_assets link for port",
-			zap.String("discovery_id", portDiscoveryID),
-			zap.String("org_id", finding.OrgID),
-			zap.Error(err),
-		)
-		// Don't fail the entire operation
 	}
 
 	return nil
@@ -84,8 +64,9 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscoveryFinding, timestamp time.Time) (string, error) {
 	collection := s.db.Collection(shared.CollectionDiscoveries)
 
-	// Check if IP discovery exists
+	// Check if IP discovery exists (org-scoped)
 	filter := bson.M{
+		"org_id":     finding.OrgID,
 		"asset_type": shared.AssetTypeIP,
 		"ip":         finding.IP,
 	}
@@ -94,18 +75,21 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 	err := collection.FindOne(ctx, filter).Decode(&existingIPDiscovery)
 
 	if err == mongo.ErrNoDocuments {
-		// Create new IP discovery using deterministic ID
-		ipDiscoveryID := shared.GenerateIPID(finding.IP)
+		// Create new IP discovery using deterministic ID (org-scoped)
+		ipDiscoveryID := shared.GenerateIPID(finding.OrgID, finding.IP)
 		newIPDiscovery := shared.Discovery{
-			ID:        ipDiscoveryID,
-			AssetType: shared.AssetTypeIP,
-			Source:    finding.Source,
-			Status:    finding.Status,
-			ParentID:  finding.ParentID, // From IPDiscoveryJob.ParentID
-			IP:        &finding.IP,
-			FirstSeen: timestamp,
-			LastSeen:  timestamp,
-			Metadata:  finding.Metadata,
+			ID:             ipDiscoveryID,
+			OrgID:          finding.OrgID,                   // Organization GUID
+			AssetType:      shared.AssetTypeIP,
+			Source:         finding.Source,
+			Status:         finding.Status,
+			OrgAssetStatus: shared.OrgAssetStatusConfirmed,  // Default to confirmed
+			AssignedAt:     timestamp,                       // When assigned to org
+			ParentID:       finding.ParentID,                // From IPDiscoveryJob.ParentID
+			IP:             &finding.IP,
+			FirstSeen:      timestamp,
+			LastSeen:       timestamp,
+			Metadata:       finding.Metadata,
 		}
 
 		doc := s.buildDiscoveryDocument(newIPDiscovery)
@@ -161,8 +145,9 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDiscoveryFinding, ipDiscoveryID string, timestamp time.Time) (string, error) {
 	collection := s.db.Collection(shared.CollectionDiscoveries)
 
-	// Check if port discovery already exists
+	// Check if port discovery already exists (org-scoped)
 	filter := bson.M{
+		"org_id":     finding.OrgID,
 		"asset_type": shared.AssetTypePort,
 		"ip":         finding.IP,
 		"port":       finding.Port,
@@ -175,21 +160,24 @@ func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDisc
 	if err == mongo.ErrNoDocuments {
 		// Create new port discovery using the deterministic ID from the finding
 		newPortDiscovery := shared.Discovery{
-			ID:          finding.DiscoveryID, // Use provided deterministic ID
-			AssetType:   shared.AssetTypePort,
-			Source:      finding.Source,
-			Status:      finding.Status,
-			ParentID:    &ipDiscoveryID,
-			IP:          &finding.IP,
-			Port:        &finding.Port,
-			Protocol:    &finding.Protocol,
-			Banner:      finding.Banner,
-			ServiceName: finding.ServiceName,
-			Product:     finding.Product,
-			Version:     finding.Version,
-			FirstSeen:   timestamp,
-			LastSeen:    timestamp,
-			Metadata:    finding.Metadata,
+			ID:             finding.DiscoveryID,                // Use provided deterministic ID (org-scoped)
+			OrgID:          finding.OrgID,                      // Organization GUID
+			AssetType:      shared.AssetTypePort,
+			Source:         finding.Source,
+			Status:         finding.Status,
+			OrgAssetStatus: shared.OrgAssetStatusConfirmed,     // Default to confirmed
+			AssignedAt:     timestamp,                          // When assigned to org
+			ParentID:       &ipDiscoveryID,
+			IP:             &finding.IP,
+			Port:           &finding.Port,
+			Protocol:       &finding.Protocol,
+			Banner:         finding.Banner,
+			ServiceName:    finding.ServiceName,
+			Product:        finding.Product,
+			Version:        finding.Version,
+			FirstSeen:      timestamp,
+			LastSeen:       timestamp,
+			Metadata:       finding.Metadata,
 			PreviousServices: []shared.ServiceHistoryEntry{}, // Empty initially
 		}
 
@@ -375,81 +363,18 @@ func (s *Service) updatePortDiscovery(ctx context.Context, discovery *shared.Dis
 	return nil
 }
 
-// createOrgAssetLink creates a link between an organization and a discovered asset
-func (s *Service) createOrgAssetLink(ctx context.Context, orgID, assetID string, timestamp time.Time) error {
-	collection := s.db.Collection(shared.CollectionOrgAssets)
-
-	// Check if link already exists
-	filter := bson.M{
-		"org_id":   orgID,
-		"asset_id": assetID,
-	}
-
-	var existingLink shared.OrgAssetLink
-	err := collection.FindOne(ctx, filter).Decode(&existingLink)
-
-	if err == mongo.ErrNoDocuments {
-		// Create new link
-		linkID := uuid.New().String()
-		newLink := shared.OrgAssetLink{
-			ID:         linkID,
-			OrgID:      orgID,
-			AssetID:    assetID,
-			Status:     shared.OrgAssetStatusConfirmed,
-			AssignedAt: timestamp,
-		}
-
-		doc := bson.M{
-			"_id":         newLink.ID,
-			"org_id":      newLink.OrgID,
-			"asset_id":    newLink.AssetID,
-			"status":      newLink.Status,
-			"assigned_at": newLink.AssignedAt,
-		}
-
-		_, err := collection.InsertOne(ctx, doc)
-		if err != nil {
-			s.logger.Error("Failed to create org_assets link",
-				zap.String("org_id", orgID),
-				zap.String("asset_id", assetID),
-				zap.Error(err),
-			)
-			return err
-		}
-
-		s.logger.Debug("Created org_assets link",
-			zap.String("org_id", orgID),
-			zap.String("asset_id", assetID),
-		)
-		return nil
-	}
-
-	if err != nil {
-		s.logger.Error("Failed to check existing org_assets link",
-			zap.String("org_id", orgID),
-			zap.String("asset_id", assetID),
-			zap.Error(err),
-		)
-		return err
-	}
-
-	// Link already exists
-	s.logger.Debug("Org_assets link already exists",
-		zap.String("org_id", orgID),
-		zap.String("asset_id", assetID),
-	)
-	return nil
-}
-
 // buildDiscoveryDocument builds a BSON document from a Discovery struct, excluding nil fields
 func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 	doc := bson.M{
-		"_id":        discovery.ID,
-		"asset_type": discovery.AssetType,
-		"source":     discovery.Source,
-		"status":     discovery.Status,
-		"first_seen": discovery.FirstSeen,
-		"last_seen":  discovery.LastSeen,
+		"_id":              discovery.ID,
+		"org_id":           discovery.OrgID,
+		"asset_type":       discovery.AssetType,
+		"source":           discovery.Source,
+		"status":           discovery.Status,
+		"org_asset_status": discovery.OrgAssetStatus,
+		"assigned_at":      discovery.AssignedAt,
+		"first_seen":       discovery.FirstSeen,
+		"last_seen":        discovery.LastSeen,
 	}
 
 	if discovery.ParentID != nil {

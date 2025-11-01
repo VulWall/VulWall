@@ -67,17 +67,21 @@ type IPDiscoveryFinding struct {
 	Timestamp   time.Time              `json:"timestamp" bson:"timestamp"`
 }
 
-// Discovery represents a discovered asset in the global discoveries collection
+// Discovery represents a discovered asset scoped to an organization
 // Uses type discrimination to store different asset types (domain, subdomain, ip, port)
+// Each organization has separate discovery records (no deduplication across orgs)
 type Discovery struct {
-	ID         string    `json:"_id" bson:"_id"`
-	AssetType  string    `json:"asset_type" bson:"asset_type"` // "domain", "subdomain", "ip", "port"
-	Source     string    `json:"source" bson:"source"`         // Discovery source
-	Status     string    `json:"status" bson:"status"`         // active, inactive, unknown
-	ParentID   *string   `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
-	FirstSeen  time.Time `json:"first_seen" bson:"first_seen"`
-	LastSeen   time.Time `json:"last_seen" bson:"last_seen"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+	ID             string    `json:"_id" bson:"_id"`
+	OrgID          string    `json:"org_id" bson:"org_id"`                           // Organization GUID
+	AssetType      string    `json:"asset_type" bson:"asset_type"`                   // "domain", "subdomain", "ip", "port"
+	Source         string    `json:"source" bson:"source"`                           // Discovery source
+	Status         string    `json:"status" bson:"status"`                           // active, inactive, unknown (technical state)
+	OrgAssetStatus string    `json:"org_asset_status" bson:"org_asset_status"`       // "confirmed", "pending", "dismissed" (organizational state)
+	AssignedAt     time.Time `json:"assigned_at" bson:"assigned_at"`                 // When assigned to org
+	ParentID       *string   `json:"parent_id,omitempty" bson:"parent_id,omitempty"` // Parent asset ID (org-scoped)
+	FirstSeen      time.Time `json:"first_seen" bson:"first_seen"`
+	LastSeen       time.Time `json:"last_seen" bson:"last_seen"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 
 	// Domain-specific fields (when asset_type = "domain")
 	Domain            *string                   `json:"domain,omitempty" bson:"domain,omitempty"`
@@ -117,15 +121,6 @@ type ServiceHistoryEntry struct {
 	LastSeen    time.Time  `json:"last_seen" bson:"last_seen"`
 }
 
-// OrgAssetLink represents the relationship between an organization and a discovered asset
-// This creates a many-to-many relationship (same asset can belong to multiple orgs)
-type OrgAssetLink struct {
-	ID         string    `json:"_id" bson:"_id"`
-	OrgID      string    `json:"org_id" bson:"org_id"`         // Organization GUID
-	AssetID    string    `json:"asset_id" bson:"asset_id"`     // References Discovery._id
-	Status     string    `json:"status" bson:"status"`         // "confirmed", "pending", "dismissed"
-	AssignedAt time.Time `json:"assigned_at" bson:"assigned_at"` // When the asset was assigned to this org
-}
 
 // SecurityFinding represents a security vulnerability or finding from scanning tools
 // Published to security_findings stream and persisted to findings collection
