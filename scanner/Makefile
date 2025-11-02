@@ -17,6 +17,8 @@ build: ## Build all services
 	@go build -o bin/nikto-scanner ./cmd/active_recon/nikto-scanner
 	@echo "Building testssl-scanner..."
 	@go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
+	@echo "Building webtechprofiler..."
+	@go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Build complete!"
@@ -36,6 +38,9 @@ build-nikto-scanner: ## Build nikto-scanner service
 build-testssl-scanner: ## Build testssl-scanner service
 	@go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
 
+build-webtechprofiler: ## Build webtechprofiler service
+	@go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
+
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
 
@@ -53,6 +58,9 @@ run-nikto-scanner: ## Run nikto-scanner service locally
 
 run-testssl-scanner: ## Run testssl-scanner service locally
 	@go run ./cmd/active_recon/testssl-scanner/main.go
+
+run-webtechprofiler: ## Run webtechprofiler service locally
+	@go run ./cmd/active_recon/webtechprofiler/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
@@ -97,6 +105,9 @@ docker-scale-nikto-scanner: ## Scale nikto-scanner workers (usage: make docker-s
 
 docker-scale-testssl-scanner: ## Scale testssl-scanner workers (usage: make docker-scale-testssl-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale testssl-scanner=$(N)
+
+docker-scale-webtechprofiler: ## Scale webtechprofiler workers (usage: make docker-scale-webtechprofiler N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale webtechprofiler=$(N)
 
 docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ingestion N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
@@ -163,6 +174,13 @@ prod-deploy-testssl: ## Deploy testssl-scanner service (usage: make prod-deploy-
 		ops/scripts/deploy-service.sh testssl-scanner $(PROJECT) $(CONFIG); \
 	else \
 		ops/scripts/deploy-service.sh testssl-scanner; \
+	fi
+
+prod-deploy-webtechprofiler: ## Deploy webtechprofiler service (usage: make prod-deploy-webtechprofiler [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh webtechprofiler $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh webtechprofiler; \
 	fi
 
 prod-stop-all: ## Stop all production services
