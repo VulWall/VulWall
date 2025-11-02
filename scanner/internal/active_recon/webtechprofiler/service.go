@@ -1,0 +1,182 @@
+package webtechprofiler
+
+import (
+	"context"
+	"crypto/tls"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/go-redis/redis/v8"
+	wappalyzer "github.com/projectdiscovery/wappalyzergo"
+	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/shared"
+	"go.uber.org/zap"
+)
+
+// Service represents the WebTechProfiler service
+type Service struct {
+	redis      *redis.Client
+	logger     *zap.Logger
+	wappalyzer *wappalyzer.Wappalyze
+	httpClient *http.Client
+}
+
+// NewService creates a new WebTechProfiler service
+func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error) {
+	// Initialize Wappalyzer (underlying technology detection library)
+	wappalyzerInstance, err := wappalyzer.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize wappalyzer: %w", err)
+	}
+
+	// Create HTTP client with timeout and TLS config
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Allow self-signed certificates
+			},
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     30 * time.Second,
+		},
+	}
+
+	return &Service{
+		redis:      redisClient,
+		logger:     logger,
+		wappalyzer: wappalyzerInstance,
+		httpClient: httpClient,
+	}, nil
+}
+
+// ProcessDiscovery processes a discovery target and detects web technologies
+func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
+	s.logger.Info("Processing discovery for WebTechProfiler scan",
+		zap.String("target", target.Target),
+		zap.String("discovery_id", target.DiscoveryID),
+		zap.String("org_id", target.OrgID),
+	)
+
+	// Scan both HTTP and HTTPS
+	protocols := []string{"http", "https"}
+	detectedTechs := make(map[string]TechDetection)
+
+	for _, protocol := range protocols {
+		url := fmt.Sprintf("%s://%s", protocol, target.Target)
+
+		// Detect technologies for this URL
+		techs, err := s.detectTechnologies(ctx, url)
+		if err != nil {
+			s.logger.Debug("Failed to scan URL",
+				zap.String("url", url),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		// Store unique technologies (deduplicate by name)
+		for tech := range techs {
+			if _, exists := detectedTechs[tech]; !exists {
+				detectedTechs[tech] = TechDetection{
+					Technology: tech,
+					URL:        url,
+				}
+			}
+		}
+	}
+
+	// Convert and publish findings
+	for _, tech := range detectedTechs {
+		finding := s.convertToSecurityFinding(tech, target)
+		if err := s.publishFinding(ctx, finding); err != nil {
+			s.logger.Error("Failed to publish finding",
+				zap.String("technology", tech.Technology),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		s.logger.Info("Published technology finding",
+			zap.String("technology", tech.Technology),
+			zap.String("url", tech.URL),
+			zap.String("org_id", target.OrgID),
+		)
+	}
+
+	return nil
+}
+
+// detectTechnologies fetches the webpage and detects technologies using Wappalyzer
+func (s *Service) detectTechnologies(ctx context.Context, url string) (map[string]struct{}, error) {
+	// Create request with context
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set user agent
+	req.Header.Set("User-Agent", "VulWall-Scanner/1.0")
+
+	// Fetch the webpage
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Use Wappalyzer to fingerprint technologies
+	fingerprints := s.wappalyzer.Fingerprint(resp.Header, body)
+
+	return fingerprints, nil
+}
+
+// convertToSecurityFinding converts a technology detection to a SecurityFinding
+func (s *Service) convertToSecurityFinding(tech TechDetection, target ScanTarget) shared.SecurityFinding {
+	// Determine severity based on technology name
+	severity := s.determineSeverity(tech.Technology)
+
+	// Create metadata
+	metadata := map[string]interface{}{
+		"technology": tech.Technology,
+		"url":        tech.URL,
+	}
+
+	// Create finding
+	finding := shared.SecurityFinding{
+		TraceID:     target.TraceID,
+		ScanID:      target.ScanID,
+		OrgID:       target.OrgID,
+		Source:      "webtechprofiler",
+		DiscoveryID: target.DiscoveryID,
+		FindingType: "tech-detection",
+		Severity:    severity,
+		Title:       fmt.Sprintf("Detected: %s", tech.Technology),
+		Description: fmt.Sprintf("Web technology '%s' detected on %s", tech.Technology, tech.URL),
+		Metadata:    metadata,
+		Status:      shared.FindingStatusOpen,
+		Timestamp:   time.Now(),
+	}
+
+	return finding
+}
+
+// determineSeverity determines the severity level for a detected technology
+func (s *Service) determineSeverity(technology string) string {
+	// Most technology detections are informational
+	// This can be enhanced with version checking and vulnerability databases
+	return shared.SeverityInfo
+}
+
+// publishFinding publishes a security finding to the Redis stream
+func (s *Service) publishFinding(ctx context.Context, finding shared.SecurityFinding) error {
+	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding)
+}
