@@ -12,12 +12,11 @@ type NiktoOutput struct {
 
 // NiktoVuln represents a single vulnerability found by Nikto
 type NiktoVuln struct {
-	ID          string `json:"id"`          // OSVDB ID or custom ID
+	ID          string `json:"id"`          // Test ID from Nikto database
 	Method      string `json:"method"`      // HTTP method used
 	URL         string `json:"url"`         // Vulnerable URL/path
 	Description string `json:"msg"`         // Vulnerability description
-	References  string `json:"references,omitempty"` // External references
-	Tuning      string `json:"tuning,omitempty"`     // Tuning type/category
+	References  string `json:"references,omitempty"` // External references (CVE, URLs, etc.)
 }
 
 // NiktoStats represents scan statistics

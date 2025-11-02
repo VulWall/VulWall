@@ -134,26 +134,13 @@ func (s *Service) parseNiktoOutput(output []byte) ([]NiktoVuln, error) {
 	return allVulns, nil
 }
 
-// tuningToCategory converts Nikto tuning codes to readable category names
-func tuningToCategory(tuning string) string {
-	if category, ok := TuningCategories[tuning]; ok {
-		return category
-	}
-	// If tuning code is not recognized, return "unknown"
-	return "unknown"
-}
-
 // convertToSecurityFinding converts Nikto vulnerability to SecurityFinding model
 func (s *Service) convertToSecurityFinding(vuln NiktoVuln, target ScanTarget) shared.SecurityFinding {
 	// Determine severity based on OSVDB ID or description
 	severity := s.determineSeverity(vuln)
 
-	// Determine finding type from category (tuning code)
-	findingType := tuningToCategory(vuln.Tuning)
-
 	// Build metadata with all Nikto-specific data
 	metadata := map[string]interface{}{
-		"osvdb_id":   vuln.ID,
 		"method":     vuln.Method,
 		"url":        vuln.URL,
 		"references": vuln.References,
@@ -170,7 +157,7 @@ func (s *Service) convertToSecurityFinding(vuln NiktoVuln, target ScanTarget) sh
 		OrgID:       target.OrgID,
 		Source:      "nikto",
 		DiscoveryID: target.DiscoveryID,
-		FindingType: findingType, // Category from tuning code
+		FindingType: vuln.ID, // Use Nikto test ID (e.g., "999986")
 		Severity:    severity,
 		Title:       title,
 		Description: vuln.Description,
