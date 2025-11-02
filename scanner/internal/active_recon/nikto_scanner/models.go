@@ -17,6 +17,7 @@ type NiktoVuln struct {
 	URL         string `json:"url"`         // Vulnerable URL/path
 	Description string `json:"msg"`         // Vulnerability description
 	References  string `json:"references,omitempty"` // External references
+	Tuning      string `json:"tuning,omitempty"`     // Tuning type/category
 }
 
 // NiktoStats represents scan statistics
