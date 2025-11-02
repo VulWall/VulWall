@@ -190,7 +190,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner"; \
+		echo "Available services: domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)
