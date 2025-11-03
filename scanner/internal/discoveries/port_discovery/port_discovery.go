@@ -55,8 +55,9 @@ func (s *Service) enrichIP(ip string) map[string]interface{} {
 
 	return map[string]interface{}{
 		"geo": map[string]interface{}{
-			"country": ipInfo.Country,
-			"isp":     ipInfo.ISP,
+			"continent": ipInfo.Continent,
+			"country":   ipInfo.Country,
+			"isp":       ipInfo.ISP,
 		},
 	}
 }

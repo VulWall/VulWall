@@ -10,8 +10,9 @@ import (
 
 // IPInfo contains geolocation information for an IP address
 type IPInfo struct {
-	Country string
-	ISP     string
+	Continent string
+	Country   string
+	ISP       string
 }
 
 // IPEnricher provides IP geolocation enrichment using MaxMind DB format
@@ -46,14 +47,18 @@ func (e *IPEnricher) Enrich(ipStr string) (*IPInfo, error) {
 		return nil, fmt.Errorf("invalid IP address: %s", ipStr)
 	}
 
-	// DB-IP.com ISP MMDB format structure
-	// Based on: https://db-ip.com/db/format/ip-to-isp-lite/mmdb.html
+	// DB-IP.com MMDB format structure
+	// Actual structure from db.mmdb file
 	var record struct {
 		Country struct {
-			ISOCode string `maxminddb:"iso_code"`
+			Continent string `maxminddb:"continent"`
+			ISOCode   string `maxminddb:"iso_code"`
 		} `maxminddb:"country"`
-		ISP string `maxminddb:"isp"`
-		ASN uint   `maxminddb:"asn"`
+		ASN struct {
+			ASN   uint   `maxminddb:"asn"`
+			Name  string `maxminddb:"name"`   // This is the ISP name
+			Route string `maxminddb:"route"`
+		} `maxminddb:"asn"`
 	}
 
 	// Lookup IP in database
@@ -62,21 +67,28 @@ func (e *IPEnricher) Enrich(ipStr string) (*IPInfo, error) {
 		return nil, fmt.Errorf("database lookup failed: %w", err)
 	}
 
+	// Extract continent code
+	continent := record.Country.Continent
+	if continent == "" {
+		continent = "Unknown"
+	}
+
 	// Extract country code
 	country := record.Country.ISOCode
 	if country == "" {
 		country = "Unknown"
 	}
 
-	// Extract ISP
-	isp := record.ISP
+	// Extract ISP from ASN name
+	isp := record.ASN.Name
 	if isp == "" {
 		isp = "Unknown"
 	}
 
 	return &IPInfo{
-		Country: country,
-		ISP:     isp,
+		Continent: continent,
+		Country:   country,
+		ISP:       isp,
 	}, nil
 }
 
