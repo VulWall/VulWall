@@ -47,18 +47,18 @@ func (e *IPEnricher) Enrich(ipStr string) (*IPInfo, error) {
 		return nil, fmt.Errorf("invalid IP address: %s", ipStr)
 	}
 
-	// DB-IP.com MMDB format structure
-	// Actual structure from db.mmdb file
+	// MMDB format structure (GeoIP2/GeoLite2 format)
+	// Actual structure from the database file
 	var record struct {
+		Continent struct {
+			Code string `maxminddb:"code"`
+		} `maxminddb:"continent"`
 		Country struct {
-			Continent string `maxminddb:"continent"`
-			ISOCode   string `maxminddb:"iso_code"`
+			ISOCode string `maxminddb:"iso_code"`
 		} `maxminddb:"country"`
-		ASN struct {
-			ASN   uint   `maxminddb:"asn"`
-			Name  string `maxminddb:"name"`   // This is the ISP name
-			Route string `maxminddb:"route"`
-		} `maxminddb:"asn"`
+		Traits struct {
+			ISP string `maxminddb:"isp"`
+		} `maxminddb:"traits"`
 	}
 
 	// Lookup IP in database
@@ -68,7 +68,7 @@ func (e *IPEnricher) Enrich(ipStr string) (*IPInfo, error) {
 	}
 
 	// Extract continent code
-	continent := record.Country.Continent
+	continent := record.Continent.Code
 	if continent == "" {
 		continent = "Unknown"
 	}
@@ -79,8 +79,8 @@ func (e *IPEnricher) Enrich(ipStr string) (*IPInfo, error) {
 		country = "Unknown"
 	}
 
-	// Extract ISP from ASN name
-	isp := record.ASN.Name
+	// Extract ISP
+	isp := record.Traits.ISP
 	if isp == "" {
 		isp = "Unknown"
 	}
