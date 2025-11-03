@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/ingestion/services"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -14,16 +15,30 @@ import (
 )
 
 type Service struct {
-	db     *mongo.Database
-	redis  *redis.Client
-	logger *zap.Logger
+	db       *mongo.Database
+	redis    *redis.Client
+	logger   *zap.Logger
+	enricher *services.IPEnricher
 }
 
-func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger) *Service {
+func NewService(db *mongo.Database, redis *redis.Client, ipEnrichmentDBPath string, logger *zap.Logger) *Service {
+	// Initialize enricher (graceful failure if DB missing)
+	enricher, err := services.NewIPEnricher(ipEnrichmentDBPath)
+	if err != nil {
+		logger.Warn("Failed to initialize IP enricher, continuing without enrichment",
+			zap.String("db_path", ipEnrichmentDBPath),
+			zap.Error(err))
+		enricher = nil
+	} else {
+		logger.Info("IP enrichment enabled",
+			zap.String("db_path", ipEnrichmentDBPath))
+	}
+
 	return &Service{
-		db:     db,
-		redis:  redis,
-		logger: logger,
+		db:       db,
+		redis:    redis,
+		logger:   logger,
+		enricher: enricher,
 	}
 }
 
@@ -324,6 +339,27 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 			scanIDs = []string{*finding.ScanID}
 		}
 
+		// Enrich IP with geolocation data
+		var metadata map[string]interface{}
+		if s.enricher != nil {
+			if ipInfo, err := s.enricher.Enrich(*finding.IP); err == nil {
+				metadata = map[string]interface{}{
+					"geo": map[string]interface{}{
+						"continent": ipInfo.Continent,
+						"country":   ipInfo.Country,
+						"isp":       ipInfo.ISP,
+					},
+				}
+				s.logger.Debug("IP enriched with geolocation",
+					zap.String("ip", *finding.IP),
+					zap.String("continent", ipInfo.Continent),
+					zap.String("country", ipInfo.Country),
+					zap.String("isp", ipInfo.ISP))
+			} else {
+				s.logger.Debug("Failed to enrich IP", zap.String("ip", *finding.IP), zap.Error(err))
+			}
+		}
+
 		newIPDiscovery := shared.Discovery{
 			ID:             ipDiscoveryID,
 			OrgID:          finding.OrgID,                   // Organization GUID
@@ -337,7 +373,7 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 			IP:             finding.IP,
 			FirstSeen:      timestamp,
 			LastSeen:       timestamp,
-			Metadata:       finding.Metadata,
+			Metadata:       metadata,                        // Use enriched metadata
 		}
 
 		doc := s.buildDiscoveryDocument(newIPDiscovery)

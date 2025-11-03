@@ -19,10 +19,10 @@ type Consumer struct {
 	logger  *zap.Logger
 }
 
-func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Consumer {
+func NewConsumer(redisClient *redis.Client, db *mongo.Database, ipEnrichmentDBPath string, logger *zap.Logger) *Consumer {
 	return &Consumer{
 		redis:   redisClient,
-		service: NewService(db, redisClient, logger),
+		service: NewService(db, redisClient, ipEnrichmentDBPath, logger),
 		logger:  logger,
 	}
 }

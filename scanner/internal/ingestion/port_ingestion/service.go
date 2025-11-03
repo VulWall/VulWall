@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/vulwall/scanners/internal/ingestion/port_ingestion/services"
+	"github.com/vulwall/scanners/internal/ingestion/services"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

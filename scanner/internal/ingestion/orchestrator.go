@@ -45,7 +45,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting domain ingestion consumer")
 
-		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.logger)
+		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.ipEnrichmentDBPath, o.logger)
 		if err := domainConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Domain ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("domain ingestion: %w", err)
