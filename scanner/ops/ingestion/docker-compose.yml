@@ -10,6 +10,7 @@ services:
     environment:
       - REDIS_URI=${REDIS_URI}
       - MONGO_URI=${MONGO_URI}
+      - IP_ENRICHMENT_DB_PATH=/app/data/dbip-isp-country.mmdb
     networks:
       - core-network
     healthcheck:

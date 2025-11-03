@@ -22,8 +22,5 @@ WORKDIR /root/
 # Copy the binary from builder
 COPY --from=builder /app/port-discovery .
 
-# Copy MMDB database for IP enrichment
-COPY data/dbip-isp-country.mmdb /app/data/dbip-isp-country.mmdb
-
 # Run the binary
 CMD ["./port-discovery"]

@@ -67,7 +67,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Start orchestrator in a goroutine
-	orchestrator := ingestion.NewOrchestrator(redisClient, db, logger.Log)
+	orchestrator := ingestion.NewOrchestrator(redisClient, db, cfg.IPEnrichmentDBPath, logger.Log)
 
 	errChan := make(chan error, 1)
 	go func() {

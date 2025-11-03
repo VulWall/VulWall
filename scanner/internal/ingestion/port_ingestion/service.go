@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/vulwall/scanners/internal/ingestion/port_ingestion/services"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -11,14 +12,28 @@ import (
 )
 
 type Service struct {
-	db     *mongo.Database
-	logger *zap.Logger
+	db       *mongo.Database
+	logger   *zap.Logger
+	enricher *services.IPEnricher
 }
 
-func NewService(db *mongo.Database, logger *zap.Logger) *Service {
+func NewService(db *mongo.Database, ipEnrichmentDBPath string, logger *zap.Logger) *Service {
+	// Initialize enricher (graceful failure if DB missing)
+	enricher, err := services.NewIPEnricher(ipEnrichmentDBPath)
+	if err != nil {
+		logger.Warn("Failed to initialize IP enricher, continuing without enrichment",
+			zap.String("db_path", ipEnrichmentDBPath),
+			zap.Error(err))
+		enricher = nil
+	} else {
+		logger.Info("IP enrichment enabled",
+			zap.String("db_path", ipEnrichmentDBPath))
+	}
+
 	return &Service{
-		db:     db,
-		logger: logger,
+		db:       db,
+		logger:   logger,
+		enricher: enricher,
 	}
 }
 
@@ -82,6 +97,27 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 			scanIDs = []string{*finding.ScanID}
 		}
 
+		// Enrich IP with geolocation data
+		var metadata map[string]interface{}
+		if s.enricher != nil {
+			if ipInfo, err := s.enricher.Enrich(finding.IP); err == nil {
+				metadata = map[string]interface{}{
+					"geo": map[string]interface{}{
+						"continent": ipInfo.Continent,
+						"country":   ipInfo.Country,
+						"isp":       ipInfo.ISP,
+					},
+				}
+				s.logger.Debug("IP enriched with geolocation",
+					zap.String("ip", finding.IP),
+					zap.String("continent", ipInfo.Continent),
+					zap.String("country", ipInfo.Country),
+					zap.String("isp", ipInfo.ISP))
+			} else {
+				s.logger.Debug("Failed to enrich IP", zap.String("ip", finding.IP), zap.Error(err))
+			}
+		}
+
 		newIPDiscovery := shared.Discovery{
 			ID:             ipDiscoveryID,
 			OrgID:          finding.OrgID,                   // Organization GUID
@@ -95,7 +131,7 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 			IP:             &finding.IP,
 			FirstSeen:      timestamp,
 			LastSeen:       timestamp,
-			Metadata:       finding.Metadata,
+			Metadata:       metadata,  // Use enriched metadata
 		}
 
 		doc := s.buildDiscoveryDocument(newIPDiscovery)
