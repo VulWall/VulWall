@@ -110,7 +110,8 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 	}
 
 	now := time.Now()
-	parentHost := domain // Use the domain as parent identifier
+	// Generate parent domain ID (org-scoped)
+	parentDomainID := shared.GenerateDomainID(orgID, domain)
 
 	// Publish each discovered subdomain
 	for _, subdomainName := range subdomains {
@@ -145,7 +146,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 			ScanID:      scanID,  // Pass through scan_id
 			OrgID:       orgID,
 			Source:      "shodan",
-			ParentID:    &parentHost,
+			ParentID:    &parentDomainID,
 			Host:        fullSubdomain,
 			IP:          resolvedIP,
 			Port:        nil,
