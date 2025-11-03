@@ -49,9 +49,11 @@ func (e *IPEnricher) Enrich(ipStr string) (*IPInfo, error) {
 	// DB-IP.com ISP MMDB format structure
 	// Based on: https://db-ip.com/db/format/ip-to-isp-lite/mmdb.html
 	var record struct {
-		Country string `maxminddb:"country"`
-		ISP     string `maxminddb:"isp"`
-		ASN     uint   `maxminddb:"asn"`
+		Country struct {
+			ISOCode string `maxminddb:"iso_code"`
+		} `maxminddb:"country"`
+		ISP string `maxminddb:"isp"`
+		ASN uint   `maxminddb:"asn"`
 	}
 
 	// Lookup IP in database
@@ -61,7 +63,7 @@ func (e *IPEnricher) Enrich(ipStr string) (*IPInfo, error) {
 	}
 
 	// Extract country code
-	country := record.Country
+	country := record.Country.ISOCode
 	if country == "" {
 		country = "Unknown"
 	}
