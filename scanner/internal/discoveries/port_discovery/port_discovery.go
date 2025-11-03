@@ -12,53 +12,16 @@ import (
 )
 
 type Service struct {
-	redis    *redis.Client
-	logger   *zap.Logger
-	scanner  *services.Scanner
-	enricher *services.IPEnricher
+	redis   *redis.Client
+	logger  *zap.Logger
+	scanner *services.Scanner
 }
 
-func NewService(redisClient *redis.Client, ipEnrichmentDBPath string, logger *zap.Logger) *Service {
-	// Initialize enricher (gracefully handle failures)
-	enricher, err := services.NewIPEnricher(ipEnrichmentDBPath)
-	if err != nil {
-		logger.Warn("Failed to initialize IP enricher, continuing without enrichment",
-			zap.String("db_path", ipEnrichmentDBPath),
-			zap.Error(err))
-		enricher = nil
-	} else {
-		logger.Info("IP enrichment enabled",
-			zap.String("db_path", ipEnrichmentDBPath))
-	}
-
+func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
-		redis:    redisClient,
-		logger:   logger,
-		scanner:  services.NewScanner(),
-		enricher: enricher,
-	}
-}
-
-// enrichIP performs IP geolocation enrichment
-func (s *Service) enrichIP(ip string) map[string]interface{} {
-	if s.enricher == nil {
-		return nil
-	}
-
-	ipInfo, err := s.enricher.Enrich(ip)
-	if err != nil {
-		s.logger.Debug("IP enrichment lookup failed",
-			zap.String("ip", ip),
-			zap.Error(err))
-		return nil
-	}
-
-	return map[string]interface{}{
-		"geo": map[string]interface{}{
-			"continent": ipInfo.Continent,
-			"country":   ipInfo.Country,
-			"isp":       ipInfo.ISP,
-		},
+		redis:   redisClient,
+		logger:  logger,
+		scanner: services.NewScanner(),
 	}
 }
 
@@ -69,9 +32,6 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 		zap.String("org_id", job.OrgID),
 		zap.String("ip", job.IP),
 	)
-
-	// Enrich IP with geolocation data
-	ipMetadata := s.enrichIP(job.IP)
 
 	// Determine which ports to scan
 	portsToScan := CommonPorts
@@ -110,7 +70,6 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 			Protocol:    shared.ProtocolTCP,
 			Status:      shared.AssetStatusActive,
 			Banner:      banner,
-			Metadata:    ipMetadata, // Include IP geolocation data
 			Timestamp:   now,
 		}
 

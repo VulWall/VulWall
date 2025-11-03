@@ -16,7 +16,7 @@ func main() {
 		StreamName:    shared.StreamIPDiscoveryQueue,
 		ConsumerGroup: port_discovery.GroupPortDiscovery,
 		Factory: func(cfg *config.Config, redisClient *redis.Client, _ *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
-			return port_discovery.NewConsumer(redisClient, cfg.IPEnrichmentDBPath, logger)
+			return port_discovery.NewConsumer(redisClient, logger)
 		},
 	})
 }
