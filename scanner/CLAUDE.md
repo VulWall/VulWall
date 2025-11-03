@@ -19,7 +19,7 @@ VulWall Engine is a **vertically-sliced Go monorepo** for security scanning serv
 ## Project Structure
 
 ```
-VulWall.Engine/
+VulWall.NightWatch/
 ├── cmd/                    # Entry points for each service
 │   ├── discoveries/        # Discovery services entry points
 │   │   ├── domain-discovery/
@@ -66,14 +66,29 @@ VulWall.Engine/
 │   │       ├── constants.go    # Consumer group + common ports array
 │   │       ├── service.go      # Port scanning logic
 │   │       ├── consumer.go     # Redis consumer
-│   │       └── scanner/        # Simple TCP scanner
-│   │           └── scanner.go  # TCP connect with 2s timeout
+│   │       └── services/       # Simple TCP scanner
+│   │           └── port_scanner.go  # TCP connect with 2s timeout
 │   └── active_recon/      # Active reconnaissance services
 │       ├── nuclei_scanner/     # Nuclei vulnerability scanner
 │       │   ├── constants.go    # Consumer group
 │       │   ├── models.go       # Nuclei output models
 │       │   ├── service.go      # Nuclei scanning logic
-       │   └── consumer.go     # Dual-stream consumer (domain + IP results)
+│       │   └── consumer.go     # Dual-stream consumer (domain + IP results)
+│       ├── nikto_scanner/      # Nikto web scanner
+│       │   ├── constants.go    # Consumer group
+│       │   ├── models.go       # Nikto output models
+│       │   ├── service.go      # Nikto scanning logic
+│       │   └── consumer.go     # Consumes domain_discovery_results
+│       ├── testssl_scanner/    # TestSSL TLS/SSL scanner
+│       │   ├── constants.go    # Consumer group
+│       │   ├── models.go       # TestSSL output models
+│       │   ├── service.go      # TestSSL scanning logic
+│       │   └── consumer.go     # Consumes domain_discovery_results
+│       └── webtechprofiler/    # Web technology profiler
+│           ├── constants.go    # Consumer group
+│           ├── models.go       # Profiler output models
+│           ├── service.go      # Profiling logic
+│           └── consumer.go     # Consumes domain_discovery_results
 ├── ops/                   # Docker and deployment files
 │   ├── active_recon/
 │   │   └── nuclei-scanner/
@@ -747,7 +762,7 @@ type SecurityFinding struct {
 - `MONGO_URI` - MongoDB Atlas/Cloud connection string (e.g., `mongodb+srv://user:pass@cluster.mongodb.net/`)
 - `MONGO_DB` - Database name (default: vulwall)
 - `ENVIRONMENT` - development/production (affects logging)
-- `SHODAN_API_KEY` - Shodan API key for subdomain discovery (shodan-discovery service)
+- `SHODAN_API_KEY` - Shodan API key for subdomain discovery (domain-discovery service)
 
 See `.env.example` for full list and examples.
 
@@ -959,10 +974,10 @@ db.discoveries.aggregate([
 
 ## Development Workflow
 
-1. Make changes to a service (e.g., `internal/discoveries/shodan_discovery/`)
-2. Test locally: `make run-shodan-discovery` + `make run-ingestion`
+1. Make changes to a service (e.g., `internal/discoveries/domain_discovery/`)
+2. Test locally: `make run-domain-discovery` + `make run-ingestion`
 3. Verify: Publish test job to `domain_discovery_queue`, check MongoDB for results
-4. Build: `make build-shodan-discovery && make build-ingestion`
+4. Build: `make build-domain-discovery && make build-ingestion`
 5. Deploy: `make docker-build && make docker-up`
 
 ## Important Notes
@@ -1004,12 +1019,12 @@ db.discoveries.aggregate([
 - **Type discrimination** - Single `discoveries` collection uses `asset_type` field to distinguish 4 asset types
 - **Org-scoped deduplication** - Unique indexes on (org_id + asset_type + identifying fields) prevent duplicates within an org
 
-### Example: Shodan Discovery Service
+### Example: Domain Discovery Service (Shodan)
 ```
-internal/discoveries/shodan_discovery/
-├── constants.go      # GroupShodanSubdomainService only
+internal/discoveries/domain_discovery/
+├── constants.go      # GroupDomainDiscovery only
 ├── service.go        # Uses shared.DiscoveryJob, publishes shared.DiscoveryFinding
-├── consumer.go       # Listens to shared.StreamDomainDiscoveryQueue with GroupShodanSubdomainService
+├── consumer.go       # Listens to shared.StreamDomainDiscoveryQueue with GroupDomainDiscovery
 └── shodan/
     └── client.go     # Shodan API client implementation
 ```
@@ -1035,8 +1050,8 @@ internal/discoveries/port_discovery/
 ├── constants.go      # GroupPortDiscovery + CommonPorts array (23 ports)
 ├── service.go        # Uses shared.IPDiscoveryJob, publishes shared.IPDiscoveryFinding
 ├── consumer.go       # Listens to shared.StreamIPDiscoveryQueue with GroupPortDiscovery
-└── scanner/
-    └── scanner.go    # Simple TCP connect scanner with 2s timeout
+└── services/
+    └── port_scanner.go    # Simple TCP connect scanner with 2s timeout
 ```
 
 **Port Discovery Flow:**
