@@ -6,22 +6,58 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/redisx"
-	"github.com/vulwall/scanners/internal/discoveries/port_discovery/scanner"
+	"github.com/vulwall/scanners/internal/discoveries/port_discovery/services"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
 
 type Service struct {
-	redis   *redis.Client
-	logger  *zap.Logger
-	scanner *scanner.Scanner
+	redis    *redis.Client
+	logger   *zap.Logger
+	scanner  *services.Scanner
+	enricher *services.IPEnricher
 }
 
-func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
+func NewService(redisClient *redis.Client, ipEnrichmentDBPath string, logger *zap.Logger) *Service {
+	// Initialize enricher (gracefully handle failures)
+	enricher, err := services.NewIPEnricher(ipEnrichmentDBPath)
+	if err != nil {
+		logger.Warn("Failed to initialize IP enricher, continuing without enrichment",
+			zap.String("db_path", ipEnrichmentDBPath),
+			zap.Error(err))
+		enricher = nil
+	} else {
+		logger.Info("IP enrichment enabled",
+			zap.String("db_path", ipEnrichmentDBPath))
+	}
+
 	return &Service{
-		redis:   redisClient,
-		logger:  logger,
-		scanner: scanner.NewScanner(),
+		redis:    redisClient,
+		logger:   logger,
+		scanner:  services.NewScanner(),
+		enricher: enricher,
+	}
+}
+
+// enrichIP performs IP geolocation enrichment
+func (s *Service) enrichIP(ip string) map[string]interface{} {
+	if s.enricher == nil {
+		return nil
+	}
+
+	ipInfo, err := s.enricher.Enrich(ip)
+	if err != nil {
+		s.logger.Debug("IP enrichment lookup failed",
+			zap.String("ip", ip),
+			zap.Error(err))
+		return nil
+	}
+
+	return map[string]interface{}{
+		"geo": map[string]interface{}{
+			"country": ipInfo.Country,
+			"isp":     ipInfo.ISP,
+		},
 	}
 }
 
@@ -32,6 +68,9 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 		zap.String("org_id", job.OrgID),
 		zap.String("ip", job.IP),
 	)
+
+	// Enrich IP with geolocation data
+	ipMetadata := s.enrichIP(job.IP)
 
 	// Determine which ports to scan
 	portsToScan := CommonPorts
@@ -62,7 +101,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 		finding := shared.IPDiscoveryFinding{
 			DiscoveryID: portID,
 			TraceID:     job.TraceID,
-			ScanID:      job.ScanID,  // Pass through scan_id
+			ScanID:      job.ScanID, // Pass through scan_id
 			OrgID:       job.OrgID,
 			Source:      "port_discovery",
 			IP:          job.IP,
@@ -70,7 +109,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 			Protocol:    shared.ProtocolTCP,
 			Status:      shared.AssetStatusActive,
 			Banner:      banner,
-			Metadata:    nil, // Keep field for future extensibility
+			Metadata:    ipMetadata, // Include IP geolocation data
 			Timestamp:   now,
 		}
 

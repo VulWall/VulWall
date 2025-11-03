@@ -18,10 +18,10 @@ type Consumer struct {
 	logger  *zap.Logger
 }
 
-func NewConsumer(redisClient *redis.Client, logger *zap.Logger) *Consumer {
+func NewConsumer(redisClient *redis.Client, ipEnrichmentDBPath string, logger *zap.Logger) *Consumer {
 	return &Consumer{
 		redis:   redisClient,
-		service: NewService(redisClient, logger),
+		service: NewService(redisClient, ipEnrichmentDBPath, logger),
 		logger:  logger,
 	}
 }
