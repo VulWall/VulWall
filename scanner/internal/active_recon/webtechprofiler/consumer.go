@@ -209,7 +209,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	// Create scan target
 	scanTarget := ScanTarget{
 		Target:      target,
-		DiscoveryID: finding.Host, // Use host as discovery ID for now
+		DiscoveryID: finding.DiscoveryID, // Use actual discovery UUID from discoveries collection
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,
 		OrgID:       finding.OrgID,
@@ -256,7 +256,7 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 	// Create scan target
 	scanTarget := ScanTarget{
 		Target:      target,
-		DiscoveryID: fmt.Sprintf("%s:%d", finding.IP, finding.Port), // Use IP:port as discovery ID
+		DiscoveryID: finding.DiscoveryID, // Use actual discovery UUID from discoveries collection
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,
 		OrgID:       finding.OrgID,

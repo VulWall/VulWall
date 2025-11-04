@@ -214,7 +214,6 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	// testssl.sh is specifically for TLS/SSL scanning
 	// Only scan HTTPS targets or known SSL/TLS ports
 	var target string
-	var discoveryID string
 
 	if finding.IP != nil && *finding.IP != "" {
 		// If we have an IP with a port
@@ -230,47 +229,20 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 
 			// Format: IP:port
 			target = fmt.Sprintf("%s:%d", *finding.IP, *finding.Port)
-
-			// Generate discovery ID for port
-			if finding.DiscoveryID != "" {
-				discoveryID = finding.DiscoveryID
-			} else if finding.Protocol != nil {
-				discoveryID = shared.GeneratePortID(finding.OrgID, *finding.IP, *finding.Port, *finding.Protocol)
-			} else {
-				discoveryID = shared.GeneratePortID(finding.OrgID, *finding.IP, *finding.Port, "tcp")
-			}
 		} else {
 			// IP without port - default to 443
 			target = fmt.Sprintf("%s:443", *finding.IP)
-
-			// Generate discovery ID for IP
-			if finding.DiscoveryID != "" {
-				discoveryID = finding.DiscoveryID
-			} else {
-				discoveryID = shared.GenerateIPID(finding.OrgID, *finding.IP)
-			}
 		}
 	} else {
 		// Domain/subdomain - scan on port 443 (HTTPS)
 		target = fmt.Sprintf("%s:443", finding.Host)
-
-		// Generate discovery ID for domain/subdomain
-		if finding.DiscoveryID != "" {
-			discoveryID = finding.DiscoveryID
-		} else {
-			assetType := shared.DetermineDomainAssetType(finding.Host, finding.ParentID)
-			if assetType == shared.AssetTypeSubdomain {
-				discoveryID = shared.GenerateSubdomainID(finding.OrgID, finding.Host)
-			} else {
-				discoveryID = shared.GenerateDomainID(finding.OrgID, finding.Host)
-			}
-		}
 	}
 
-	// Create scan target
+	// Create scan target - use discovery ID directly from finding
+	// Discovery services always include this ID
 	scanTarget := ScanTarget{
 		Target:      target,
-		DiscoveryID: discoveryID,
+		DiscoveryID: finding.DiscoveryID, // Always present from discovery services
 		TraceID:     finding.TraceID,
 		OrgID:       finding.OrgID,
 	}
@@ -313,17 +285,11 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 	// Build target (format: IP:port)
 	target := fmt.Sprintf("%s:%d", finding.IP, finding.Port)
 
-	// Generate discovery ID for the port
-	var discoveryID string
-	if finding.DiscoveryID != "" {
-		discoveryID = finding.DiscoveryID
-	} else {
-		discoveryID = shared.GeneratePortID(finding.OrgID, finding.IP, finding.Port, finding.Protocol)
-	}
-
+	// Create scan target - use discovery ID directly from finding
+	// Port discovery service always includes this ID
 	scanTarget := ScanTarget{
 		Target:      target,
-		DiscoveryID: discoveryID,
+		DiscoveryID: finding.DiscoveryID, // Always present from port discovery service
 		TraceID:     finding.TraceID,
 		OrgID:       finding.OrgID,
 	}
