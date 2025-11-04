@@ -34,10 +34,10 @@ const (
 	AssetStatusInactive = "inactive"
 	AssetStatusUnknown  = "unknown"
 
-	// Org Asset Link Status (organizational state)
-	OrgAssetStatusConfirmed = "confirmed" // Asset confirmed to belong to org
-	OrgAssetStatusPending   = "pending"   // Asset pending verification
-	OrgAssetStatusDismissed = "dismissed" // Asset dismissed/not relevant to org
+	or                                   // Ownership Status (organizational state)
+	OwnershipStatusVerified = "verified" // Asset verified to belong to org
+	OwnershipStatusNotMine  = "NotMine"  // Asset does not belong to org
+	OwnershipStatusNotSure  = "NotSure"  // Asset ownership unclear/pending verification
 
 	// Protocol constants
 	ProtocolTCP  = "tcp"

@@ -75,14 +75,14 @@ type IPDiscoveryFinding struct {
 // Uses type discrimination to store different asset types (domain, subdomain, ip, port)
 // Each organization has separate discovery records (no deduplication across orgs)
 type Discovery struct {
-	ID             string    `json:"_id" bson:"_id"`
-	OrgID          string    `json:"org_id" bson:"org_id"`                                   // Organization GUID
-	ScanIDs        []string  `json:"scan_ids,omitempty" bson:"scan_ids,omitempty"`           // Array of scan identifiers that detected this asset
-	AssetType      string    `json:"asset_type" bson:"asset_type"`                           // "domain", "subdomain", "ip", "port"
-	Source         string    `json:"source" bson:"source"`                                   // Discovery source
-	Status         string    `json:"status" bson:"status"`                                   // active, inactive, unknown (technical state)
-	OrgAssetStatus string    `json:"org_asset_status" bson:"org_asset_status"`               // "confirmed", "pending", "dismissed" (organizational state)
-	AssignedAt     time.Time `json:"assigned_at" bson:"assigned_at"`                         // When assigned to org
+	ID              string    `json:"_id" bson:"_id"`
+	OrgID           string    `json:"org_id" bson:"org_id"`                                     // Organization GUID
+	ScanIDs         []string  `json:"scan_ids,omitempty" bson:"scan_ids,omitempty"`             // Array of scan identifiers that detected this asset
+	AssetType       string    `json:"asset_type" bson:"asset_type"`                             // "domain", "subdomain", "ip", "port"
+	Source          string    `json:"source" bson:"source"`                                     // Discovery source
+	Status          string    `json:"status" bson:"status"`                                     // active, inactive, unknown (technical state)
+	OwnershipStatus string    `json:"ownership_status" bson:"ownership_status"`                 // "verified", "NotMine", "NotSure" (organizational state)
+	AssignedAt      time.Time `json:"assigned_at" bson:"assigned_at"`                           // When assigned to org
 	ParentID       *string   `json:"parent_id,omitempty" bson:"parent_id,omitempty"`         // Parent asset ID (org-scoped)
 	FirstSeen      time.Time `json:"first_seen" bson:"first_seen"`
 	LastSeen       time.Time `json:"last_seen" bson:"last_seen"`

@@ -93,14 +93,14 @@ func ensureDiscoveriesIndexes(ctx context.Context, db *mongo.Database, logger *z
 					{Key: "protocol", Value: bson.D{{Key: "$exists", Value: true}}},
 				}),
 		},
-		// Query index: org_id + org_asset_status + asset_type (for filtering confirmed/pending/dismissed assets)
+		// Query index: org_id + ownership_status + asset_type (for filtering verified/not_mine/not_sure assets)
 		{
 			Keys: bson.D{
 				{Key: "org_id", Value: 1},
-				{Key: "org_asset_status", Value: 1},
+				{Key: "ownership_status", Value: 1},
 				{Key: "asset_type", Value: 1},
 			},
-			Options: options.Index().SetName("idx_org_status_type"),
+			Options: options.Index().SetName("idx_org_ownership_type"),
 		},
 		// Query index: org_id + assigned_at (for sorting by assignment time)
 		{

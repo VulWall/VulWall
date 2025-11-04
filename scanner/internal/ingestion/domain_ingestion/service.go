@@ -147,7 +147,7 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 			AssetType:      assetType,
 			Source:         finding.Source,
 			Status:         finding.Status,
-			OrgAssetStatus: shared.OrgAssetStatusConfirmed,     // Default to confirmed
+			OwnershipStatus: shared.OwnershipStatusVerified,     // Default to verified
 			AssignedAt:     timestamp,                          // When assigned to org
 			ParentID:       finding.ParentID,
 			FirstSeen:      timestamp,
@@ -367,7 +367,7 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 			AssetType:      shared.AssetTypeIP,
 			Source:         finding.Source,
 			Status:         finding.Status,
-			OrgAssetStatus: shared.OrgAssetStatusConfirmed,  // Default to confirmed
+			OwnershipStatus: shared.OwnershipStatusVerified,  // Default to verified
 			AssignedAt:     timestamp,                       // When assigned to org
 			ParentID:       &parentDiscoveryID,
 			IP:             finding.IP,
@@ -462,7 +462,7 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 		"asset_type":       discovery.AssetType,
 		"source":           discovery.Source,
 		"status":           discovery.Status,
-		"org_asset_status": discovery.OrgAssetStatus,
+		"ownership_status": discovery.OwnershipStatus,
 		"assigned_at":      discovery.AssignedAt,
 		"first_seen":       discovery.FirstSeen,
 		"last_seen":        discovery.LastSeen,

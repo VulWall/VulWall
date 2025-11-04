@@ -14,7 +14,7 @@ VulWall Engine is a **vertically-sliced Go monorepo** for security scanning serv
 - **Type discrimination:** Uses `asset_type` field (domain, subdomain, ip, port) to distinguish asset types
 - **Denormalized design:** Each organization has separate discovery records (no cross-org deduplication)
 - **Hierarchical relationships:** Domain → Subdomain → IP → Port via parent_id fields (org-scoped)
-- **Two status fields:** `discovery.status` (technical state: active/inactive) and `discovery.org_asset_status` (organizational state: confirmed/pending/dismissed)
+- **Two status fields:** `discovery.status` (technical state: active/inactive) and `discovery.ownership_status` (organizational state: verified/not_mine/not_sure)
 
 ## Project Structure
 
@@ -287,7 +287,7 @@ Input Stream: domain_discovery_queue
 8. Ingestion service processes all domain/subdomain discoveries:
    - Domains/subdomains → `discoveries` (asset_type: "domain" or "subdomain", with org_id) with IP resolution history
    - IPs → `discoveries` (asset_type: "ip", with org_id) as separate records with parent_id
-   - All assets include org_id, org_asset_status (confirmed/pending/dismissed), and assigned_at timestamp
+   - All assets include org_id, ownership_status (verified/not_mine/not_sure), and assigned_at timestamp
 
 ## Common Commands
 
@@ -580,7 +580,7 @@ type Discovery struct {
     AssetType      string    // "domain", "subdomain", "ip", or "port" (type discrimination)
     Source         string    // Discovery source ("shodan", "port_discovery", etc.)
     Status         string    // active, inactive, unknown (technical state)
-    OrgAssetStatus string    // "confirmed", "pending", "dismissed" (organizational state)
+    OwnershipStatus string    // "verified", "not_mine", "not_sure" (organizational state)
     AssignedAt     time.Time // When assigned to this organization
     ParentID       *string   // Parent asset ID (hierarchical relationships, org-scoped)
     FirstSeen      time.Time
@@ -635,7 +635,7 @@ type ServiceHistoryEntry struct {
   - Simplifies queries (no joins needed), but increases storage
 - ✅ **Two status fields with different meanings:**
   - `discovery.status` - Technical state (active/inactive/unknown) - is the asset reachable?
-  - `discovery.org_asset_status` - Organizational state (confirmed/pending/dismissed) - does org claim this asset?
+  - `discovery.ownership_status` - Organizational state (verified/not_mine/not_sure) - does org claim this asset?
 - ✅ **Hierarchical traceability (org-scoped):**
   - Domains track parent_id=null (root assets)
   - Subdomains track parent_id=domain_id (within same org)
@@ -688,10 +688,10 @@ type ServiceHistoryEntry struct {
 - `shared.AssetStatusInactive` - Asset is not reachable
 - `shared.AssetStatusUnknown` - Asset state is unknown
 
-**Org Asset Link Status (organizational state):**
-- `shared.OrgAssetStatusConfirmed` - Asset confirmed to belong to org
-- `shared.OrgAssetStatusPending` - Asset pending verification
-- `shared.OrgAssetStatusDismissed` - Asset dismissed/not relevant to org
+**Ownership Status (organizational state):**
+- `shared.OwnershipStatusVerified = "verified"` - Asset verified to belong to org
+- `shared.OwnershipStatusNotMine = "not_mine"` - Asset does not belong to org
+- `shared.OwnershipStatusNotSure = "not_sure"` - Asset ownership unclear/pending verification
 
 **Finding Severity Levels:**
 - `shared.SeverityInfo` - Informational finding
@@ -801,8 +801,8 @@ redis-cli XADD domain_discovery_queue * data '{
 # 1. Domain discovery service finds subdomains and resolves IPs
 # 2. Findings published to domain_discovery_results with org_id, scan_id (if provided), and source="shodan"
 # 3. Domain ingestion consumer stores in discoveries collection (with org_id and scan_id):
-#    - Domains/subdomains with asset_type="domain"/"subdomain", org_asset_status="confirmed", IP resolution history
-#    - IPs with asset_type="ip", org_asset_status="confirmed", as separate records with parent_id
+#    - Domains/subdomains with asset_type="domain"/"subdomain", ownership_status="verified", IP resolution history
+#    - IPs with asset_type="ip", ownership_status="verified", as separate records with parent_id
 ```
 
 ### Port Discovery (TCP Scanner)
@@ -823,8 +823,8 @@ redis-cli XADD ip_discovery_queue * data '{
 # 1. Port discovery service scans 23 common ports (TCP connect, 2s timeout)
 # 2. For each open port, finding published to ip_discovery_results with scan_id and source="port_discovery"
 # 3. Port ingestion consumer stores in discoveries collection (with org_id and scan_id):
-#    - Ensures IP record exists with asset_type="ip", org_asset_status="confirmed"
-#    - Creates/updates port with asset_type="port", org_asset_status="confirmed", banner, service_name, product, version
+#    - Ensures IP record exists with asset_type="ip", ownership_status="verified"
+#    - Creates/updates port with asset_type="port", ownership_status="verified", banner, service_name, product, version
 ```
 
 **❌ INVALID: Job without org_id (will be skipped):**
@@ -863,7 +863,7 @@ db.discoveries.find({
 // Filter by org_id and organizational status
 db.discoveries.find({
   org_id: "550e8400-e29b-41d4-a716-446655440000",
-  org_asset_status: "confirmed"
+  ownership_status: "verified"
 })
 ```
 
@@ -1039,7 +1039,7 @@ internal/discoveries/domain_discovery/
 5. Domain ingestion consumer validates `source` is present (skips if missing)
 6. For domain/subdomain findings:
    - Determines asset_type (domain vs subdomain) by dot count
-   - Stores in `discoveries` collection with org_id, org_asset_status="confirmed", and IP resolution history
+   - Stores in `discoveries` collection with org_id, ownership_status="verified", and IP resolution history
    - Creates separate IP record in `discoveries` with org_id and parent_id
    - If domain IP changed: closes old resolution, adds new one to history
    - Triggers port scanning for new IPs
@@ -1064,6 +1064,6 @@ internal/discoveries/port_discovery/
 5. Port ingestion consumer validates `source` is present (skips if missing)
 6. For port findings:
    - Ensures IP record exists in `discoveries` (creates with org_id if not found)
-   - Stores port in `discoveries` collection (asset_type: "port", with org_id, org_asset_status="confirmed", parent_id: ip_id)
+   - Stores port in `discoveries` collection (asset_type: "port", with org_id, ownership_status="verified", parent_id: ip_id)
    - Tracks service changes: if ANY characteristic changes (service_name, product, version, or banner), archives complete old service state to previous_services array
    - If port exists: updates `last_seen`, merges metadata, and updates service fields
