@@ -4,15 +4,27 @@ import (
 	"testing"
 )
 
+const testRulesPath = "./waf_rules.json"
+
 func TestSignatureCompilation(t *testing.T) {
-	err := CompileSignatures(AllSignatures)
+	signatures, err := loadSignaturesFromJSON(testRulesPath)
+	if err != nil {
+		t.Fatalf("Failed to load signatures: %v", err)
+	}
+
+	err = CompileSignatures(signatures)
 	if err != nil {
 		t.Fatalf("Failed to compile signatures: %v", err)
 	}
 }
 
 func TestSignatureCount(t *testing.T) {
-	count := len(AllSignatures)
+	signatures, err := loadSignaturesFromJSON(testRulesPath)
+	if err != nil {
+		t.Fatalf("Failed to load signatures: %v", err)
+	}
+
+	count := len(signatures)
 	if count < 60 {
 		t.Errorf("Expected at least 60 signatures, got %d", count)
 	}
@@ -20,6 +32,11 @@ func TestSignatureCount(t *testing.T) {
 }
 
 func TestEUWAFSignatures(t *testing.T) {
+	signatures, err := loadSignaturesFromJSON(testRulesPath)
+	if err != nil {
+		t.Fatalf("Failed to load signatures: %v", err)
+	}
+
 	euWAFs := []string{
 		"Airlock",
 		"TransIP Web Firewall",
@@ -45,7 +62,7 @@ func TestEUWAFSignatures(t *testing.T) {
 	}
 
 	found := make(map[string]bool)
-	for _, sig := range AllSignatures {
+	for _, sig := range signatures {
 		found[sig.Name] = true
 	}
 
@@ -64,7 +81,12 @@ func TestEUWAFSignatures(t *testing.T) {
 }
 
 func TestSignaturePriorities(t *testing.T) {
-	for _, sig := range AllSignatures {
+	signatures, err := loadSignaturesFromJSON(testRulesPath)
+	if err != nil {
+		t.Fatalf("Failed to load signatures: %v", err)
+	}
+
+	for _, sig := range signatures {
 		if sig.Priority < 0 || sig.Priority > 100 {
 			t.Errorf("Signature %s has invalid priority: %d", sig.Name, sig.Priority)
 		}
@@ -81,7 +103,12 @@ func TestSignaturePriorities(t *testing.T) {
 }
 
 func TestCheckPatterns(t *testing.T) {
-	for _, sig := range AllSignatures {
+	signatures, err := loadSignaturesFromJSON(testRulesPath)
+	if err != nil {
+		t.Fatalf("Failed to load signatures: %v", err)
+	}
+
+	for _, sig := range signatures {
 		for _, check := range sig.Checks {
 			if check.Type == "" {
 				t.Errorf("Signature %s has check with empty type", sig.Name)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
+	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
@@ -21,8 +22,8 @@ type Consumer struct {
 }
 
 // NewConsumer creates a new WAF detector consumer
-func NewConsumer(redisClient *redis.Client, logger *zap.Logger) (*Consumer, error) {
-	service, err := NewService(redisClient, logger)
+func NewConsumer(redisClient *redis.Client, cfg *config.Config, logger *zap.Logger) (*Consumer, error) {
+	service, err := NewService(redisClient, cfg, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service: %w", err)
 	}

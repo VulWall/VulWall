@@ -51,7 +51,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Create and start consumer
-	consumer, err := waf_detector.NewConsumer(redisClient, logger.Log)
+	consumer, err := waf_detector.NewConsumer(redisClient, cfg, logger.Log)
 	if err != nil {
 		logger.Log.Fatal("Failed to create consumer", zap.Error(err))
 	}
