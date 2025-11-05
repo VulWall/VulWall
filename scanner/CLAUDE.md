@@ -199,8 +199,8 @@ ASSET ENRICHMENT FLOW (WAF DETECTOR):
 
 2. WAF Detector Service
    ├─→ Sends HTTP probes (normal + attack payloads) to each discovered domain
-   ├─→ Analyzes responses against 44 WAF signature patterns
-   ├─→ Detects WAF vendor (Cloudflare, Akamai, AWS WAF, etc.)
+   ├─→ Analyzes responses against 68 WAF signature patterns
+   ├─→ Detects WAF vendor (Cloudflare, Akamai, AWS WAF, ZScaler, Google Cloud Armor, etc.)
    └─→ Publishes to asset_enrichment_results stream (source="waf_detector")
 
 3. Enrichment Ingestion Consumer
@@ -479,17 +479,21 @@ The project supports **asset enrichment** - adding metadata to discovered assets
 2. For each domain, sends HTTP probes:
    - Normal request (GET /)
    - Attack requests with 10 different payloads (XSS, SQLi, LFI, etc.)
-3. Analyzes responses against 44 WAF signature patterns (ported from wafw00f)
+3. Analyzes responses against 68 WAF signature patterns (ported from wafw00f)
 4. If WAF detected, publishes to `asset_enrichment_results` stream
 
 **WAF Signatures:** Located in `internal/active_recon/waf_detector/patterns/signatures.go`
 
-Detects 44 WAF vendors including:
-- **Cloud WAFs:** Cloudflare, Akamai, AWS WAF, Azure Front Door, Fastly
-- **Enterprise WAFs:** F5 BIG-IP, Imperva Incapsula, Fortinet FortiWeb, Citrix NetScaler
-- **Open Source:** ModSecurity, NAXSI
+Detects 68 WAF vendors including:
+- **Cloud WAFs:** Cloudflare, Akamai, AWS WAF, Azure Front Door, Google Cloud Armor, ZScaler, Fastly
+- **Enterprise WAFs:** F5 BIG-IP, Imperva Incapsula, Fortinet FortiWeb, Citrix NetScaler, IBM WebSEAL, IBM DataPower
+- **European WAFs:** Airlock (Swiss), NevisProxy (Swiss), TransIP (Netherlands), Link11 (German), WatchGuard
+- **Open Source:** ModSecurity, NAXSI, LiteSpeed
 - **Security SaaS:** Sucuri, Wordfence, PerimeterX, Wallarm, Reblaze
-- **Regional:** Jiasule, Yundun, SafeDog, West263CDN, ChinaCache
+- **Regional Asia:** Jiasule, Yundun, SafeDog, West263CDN, ChinaCache, Huawei Cloud, Tencent Cloud
+- **Regional EU/Russia:** Qrator, PT Application Firewall, HyperGuard, GreyWizard
+- **WordPress Plugins:** NinjaFirewall (French), WebARX, Shield Security
+- **Microsoft IIS:** URLScan, RequestValidationMode
 
 **Detection Logic:** Each signature defines checks for:
 - **Headers:** Specific header names/values (e.g., `CF-Ray`, `X-Akamai-Request-ID`)
