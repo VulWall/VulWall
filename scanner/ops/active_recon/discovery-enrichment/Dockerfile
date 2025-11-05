@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o waf-detector ./cmd/active_recon/waf-detector
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o discovery-enrichment ./cmd/active_recon/discovery-enrichment
 
 # Runtime stage
 FROM alpine:latest
@@ -25,10 +25,10 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 # Copy binary from builder
-COPY --from=builder /app/waf-detector .
+COPY --from=builder /app/discovery-enrichment .
 
 # Copy WAF rules JSON file
-COPY --from=builder /app/internal/active_recon/waf_detector/patterns/waf_rules.json ./internal/active_recon/waf_detector/patterns/
+COPY --from=builder /app/internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json ./internal/active_recon/discovery_enrichment/waf/patterns/
 
 # Run the binary
-CMD ["./waf-detector"]
+CMD ["./discovery-enrichment"]

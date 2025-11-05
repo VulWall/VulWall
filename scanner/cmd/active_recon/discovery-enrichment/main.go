@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/vulwall/scanners/internal/active_recon/waf_detector"
+	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/core/logger"
 	"github.com/vulwall/scanners/internal/core/redisx"
@@ -26,8 +26,8 @@ func main() {
 	}
 	defer logger.Sync()
 
-	logger.Log.Info("Starting WAF detector service",
-		zap.String("service", "waf-detector"),
+	logger.Log.Info("Starting discovery enrichment service",
+		zap.String("service", "discovery-enrichment"),
 		zap.String("environment", cfg.Environment),
 	)
 
@@ -51,7 +51,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Create and start consumer
-	consumer, err := waf_detector.NewConsumer(redisClient, cfg, logger.Log)
+	consumer, err := discovery_enrichment.NewConsumer(redisClient, cfg, logger.Log)
 	if err != nil {
 		logger.Log.Fatal("Failed to create consumer", zap.Error(err))
 	}
@@ -73,5 +73,5 @@ func main() {
 		cancel()
 	}
 
-	logger.Log.Info("WAF detector service shutdown complete")
+	logger.Log.Info("Discovery enrichment service shutdown complete")
 }

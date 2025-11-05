@@ -11,26 +11,6 @@ import (
 // This ensures our UUIDs don't collide with other systems
 var DiscoveryNamespace = uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
-// DetermineDomainAssetType determines if a hostname is a domain or subdomain
-// This function is ONLY for domain/subdomain classification, not for IPs or ports
-// Note: parentID in this context refers to the parent domain, indicating a subdomain relationship
-func DetermineDomainAssetType(host string, parentID *string) string {
-	// If parentID is specified, it's a subdomain under a parent domain
-	if parentID != nil && *parentID != "" {
-		return AssetTypeSubdomain
-	}
-
-	// Count dots to determine if subdomain
-	// example.com = 1 dot = domain
-	// api.example.com = 2 dots = subdomain
-	dotCount := strings.Count(host, ".")
-	if dotCount > 1 {
-		return AssetTypeSubdomain
-	}
-
-	return AssetTypeDomain
-}
-
 // GenerateDomainID creates a deterministic UUID for a domain scoped to an organization
 // Same domain + org_id always produces the same ID
 // Different orgs can have separate records for the same domain

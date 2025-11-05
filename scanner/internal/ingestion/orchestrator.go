@@ -16,19 +16,17 @@ import (
 
 // Orchestrator manages multiple ingestion consumers running concurrently
 type Orchestrator struct {
-	redis              *redis.Client
-	db                 *mongo.Database
-	ipEnrichmentDBPath string
-	logger             *zap.Logger
+	redis  *redis.Client
+	db     *mongo.Database
+	logger *zap.Logger
 }
 
 // NewOrchestrator creates a new ingestion orchestrator
-func NewOrchestrator(redisClient *redis.Client, db *mongo.Database, ipEnrichmentDBPath string, logger *zap.Logger) *Orchestrator {
+func NewOrchestrator(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Orchestrator {
 	return &Orchestrator{
-		redis:              redisClient,
-		db:                 db,
-		ipEnrichmentDBPath: ipEnrichmentDBPath,
-		logger:             logger,
+		redis:  redisClient,
+		db:     db,
+		logger: logger,
 	}
 }
 
@@ -46,7 +44,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting domain ingestion consumer")
 
-		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.ipEnrichmentDBPath, o.logger)
+		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.logger)
 		if err := domainConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Domain ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("domain ingestion: %w", err)
@@ -59,7 +57,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting port ingestion consumer")
 
-		portConsumer := port_ingestion.NewConsumer(o.redis, o.db, o.ipEnrichmentDBPath, o.logger)
+		portConsumer := port_ingestion.NewConsumer(o.redis, o.db, o.logger)
 		if err := portConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Port ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("port ingestion: %w", err)

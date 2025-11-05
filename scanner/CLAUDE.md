@@ -84,11 +84,23 @@ VulWall.NightWatch/
 │       │   ├── models.go       # TestSSL output models
 │       │   ├── service.go      # TestSSL scanning logic
 │       │   └── consumer.go     # Consumes domain_discovery_results
-│       └── webtechprofiler/    # Web technology profiler
-│           ├── constants.go    # Consumer group
-│           ├── models.go       # Profiler output models
-│           ├── service.go      # Profiling logic
-│           └── consumer.go     # Consumes domain_discovery_results
+│       ├── webtechprofiler/    # Web technology profiler
+│       │   ├── constants.go    # Consumer group
+│       │   ├── models.go       # Profiler output models
+│       │   ├── service.go      # Profiling logic
+│       │   └── consumer.go     # Consumes domain_discovery_results
+│       └── discovery_enrichment/  # Discovery enrichment (WAF + IP geolocation)
+│           ├── constants.go       # Consumer groups (domain + IP streams)
+│           ├── models.go          # EnrichmentTarget model
+│           ├── service.go         # Enrichment orchestrator (WAF + geolocation)
+│           ├── consumer.go        # Dual-stream consumer (domain + IP results)
+│           ├── waf/
+│           │   └── patterns/      # WAF detection patterns
+│           │       ├── detector.go      # WAF detection logic
+│           │       ├── signatures.go    # 68 WAF signature patterns
+│           │       └── waf_rules.json   # WAF rules (JSON format)
+│           └── geolocation/
+│               └── enricher.go    # IP geolocation (MaxMind MMDB)
 ├── ops/                   # Docker and deployment files
 │   ├── active_recon/
 │   │   └── nuclei-scanner/
@@ -193,26 +205,37 @@ SECURITY FINDINGS FLOW (NUCLEI SCANNER):
        ├─→ Reopens resolved findings if detected again
        └─→ Stores full Nuclei metadata
 
-ASSET ENRICHMENT FLOW (WAF DETECTOR):
-1. WAF Detector Consumes from:
-   └─→ domain_discovery_results (domains/subdomains only)
+DISCOVERY ENRICHMENT FLOW (WAF + IP GEOLOCATION):
+1. Discovery Enrichment Service Consumes from TWO streams:
+   ├─→ domain_discovery_results (domains/subdomains/IPs)
+   └─→ ip_discovery_results (ports on IPs)
 
-2. WAF Detector Service
-   ├─→ Sends HTTP probes (normal + attack payloads) to each discovered domain
-   ├─→ Analyzes responses against 68 WAF signature patterns
-   ├─→ Detects WAF vendor (Cloudflare, Akamai, AWS WAF, ZScaler, Google Cloud Armor, etc.)
-   └─→ Publishes to asset_enrichment_results stream (source="waf_detector")
+2. Discovery Enrichment Service (filters by asset_type)
+   ├─→ Domain/Subdomain assets:
+   │   ├─→ IP Geolocation: Enriches with continent, country, ISP (MaxMind MMDB)
+   │   └─→ WAF Detection: Sends HTTP probes (normal + attack payloads)
+   │       ├─→ Analyzes responses against 68 WAF signature patterns
+   │       └─→ Detects WAF vendor (Cloudflare, Akamai, AWS WAF, etc.)
+   ├─→ IP assets:
+   │   └─→ IP Geolocation: Enriches with continent, country, ISP
+   └─→ Port assets:
+       └─→ Skipped (no enrichment needed)
 
-3. Enrichment Ingestion Consumer
+3. Discovery Enrichment Service publishes to discovery_enrichment_results stream:
+   ├─→ Geolocation enrichment (enrichment_type="geolocation", source="discovery_enrichment")
+   └─→ WAF enrichment (enrichment_type="waf", source="discovery_enrichment")
+
+4. Enrichment Ingestion Consumer
    └─→ Updates discoveries collection:
-       └─→ Sets metadata.waf = "WAF_Name" (simple string, overwrites on change)
+       ├─→ Sets metadata.waf = "WAF_Name" (simple string, overwrites on change)
+       └─→ Sets metadata.continent, metadata.country, metadata.isp (geolocation data)
 
 INGESTION SERVICE ARCHITECTURE:
 ├─→ Orchestrator starts FOUR consumers concurrently
 ├─→ domain_ingestion: consumes domain_discovery_results
 ├─→ port_ingestion: consumes ip_discovery_results
 ├─→ findings_ingestion: consumes security_findings
-└─→ enrichment_ingestion: consumes asset_enrichment_results
+└─→ enrichment_ingestion: consumes discovery_enrichment_results
 ```
 
 ### Model Ownership Rules
@@ -240,7 +263,7 @@ INGESTION SERVICE ARCHITECTURE:
   - `StreamDomainDiscoveryQueue`, `StreamDomainDiscoveryResults`
   - `StreamIPDiscoveryQueue`, `StreamIPDiscoveryResults`
   - `StreamSecurityFindings` - Security findings from scanners
-  - `StreamAssetEnrichmentResults` - Asset enrichment data from active recon services
+  - `StreamDiscoveryEnrichmentResults` - Discovery enrichment data (WAF + IP geolocation)
 - Shared collection names:
   - `CollectionDiscoveries` - Org-scoped asset registry (includes org_id)
   - `CollectionFindings` - Security findings/vulnerabilities
@@ -466,23 +489,37 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
 - ✅ **NO MongoDB dependency** in discovery services
 - ✅ Publish findings with `source` field ("nmap", "shodan", etc.)
 
-## WAF Detection and Asset Enrichment
+## Discovery Enrichment (WAF Detection + IP Geolocation)
 
-The project supports **asset enrichment** - adding metadata to discovered assets without creating separate findings. The first enrichment service is **WAF detection**, which identifies Web Application Firewalls protecting discovered web assets.
+The project supports **discovery enrichment** - adding metadata to discovered assets without creating separate findings. The discovery enrichment service combines two enrichment types: **WAF detection** (identifies Web Application Firewalls) and **IP geolocation** (enriches IPs with geographic data).
 
-### WAF Detector Architecture
+### Discovery Enrichment Architecture
 
-**Location:** `internal/active_recon/waf_detector/`
+**Location:** `internal/active_recon/discovery_enrichment/`
 
 **How it works:**
-1. Listens to `domain_discovery_results` stream (domains/subdomains only, skips raw IPs)
-2. For each domain, sends HTTP probes:
-   - Normal request (GET /)
-   - Attack requests with 10 different payloads (XSS, SQLi, LFI, etc.)
-3. Analyzes responses against 68 WAF signature patterns (ported from wafw00f)
-4. If WAF detected, publishes to `asset_enrichment_results` stream
+1. Consumes from TWO Redis streams in parallel:
+   - `domain_discovery_results` (domains/subdomains/IPs)
+   - `ip_discovery_results` (ports on IPs)
+2. Filters by `asset_type` field to determine enrichment strategy:
+   - **Domain/Subdomain:** IP geolocation + WAF detection
+   - **IP:** IP geolocation only
+   - **Port:** Skip (no enrichment needed)
+3. Publishes enrichment findings to `discovery_enrichment_results` stream
 
-**WAF Signatures:** Located in `internal/active_recon/waf_detector/patterns/signatures.go`
+**Components:**
+
+**WAF Detection** (`waf/patterns/`):
+- Sends HTTP probes (normal request + 10 attack payloads: XSS, SQLi, LFI, etc.)
+- Analyzes responses against 68 WAF signature patterns (ported from wafw00f)
+- Publishes WAF enrichment if detected
+
+**IP Geolocation** (`geolocation/`):
+- Uses MaxMind MMDB database for IP lookups
+- Extracts continent, country, ISP information
+- Publishes geolocation enrichment for all IPs
+
+**WAF Signatures:** Located in `internal/active_recon/discovery_enrichment/waf/patterns/signatures.go`
 
 Detects 68 WAF vendors including:
 - **Cloud WAFs:** Cloudflare, Akamai, AWS WAF, Azure Front Door, Google Cloud Armor, ZScaler, Fastly
@@ -508,15 +545,16 @@ A match requires **at least 2 checks** to pass for confidence.
 **Location:** `internal/ingestion/enrichment_ingestion/`
 
 **How it works:**
-1. Consumes from `asset_enrichment_results` stream
+1. Consumes from `discovery_enrichment_results` stream
 2. Validates `source` is present (skips if missing)
 3. Updates discovery in MongoDB based on `enrichment_type`:
    - **Type: "waf"** → Sets `metadata.waf = "Cloudflare"` (simple string)
-4. Overwrites previous value (no history tracking per user requirements)
+   - **Type: "geolocation"** → Sets `metadata.continent`, `metadata.country`, `metadata.isp`
+4. Overwrites previous values (no history tracking per user requirements)
 
 **Data Model:**
 ```javascript
-// Before WAF detection
+// Before enrichment
 {
   _id: "uuid-123",
   org_id: "org-456",
@@ -525,14 +563,17 @@ A match requires **at least 2 checks** to pass for confidence.
   metadata: {}
 }
 
-// After WAF detection
+// After discovery enrichment (WAF + geolocation)
 {
   _id: "uuid-123",
   org_id: "org-456",
   asset_type: "domain",
   domain: "example.com",
   metadata: {
-    waf: "Cloudflare"  // ← Simple string, overwrites on change
+    waf: "Cloudflare",           // ← WAF detection result
+    continent: "North America",   // ← IP geolocation
+    country: "United States",     // ← IP geolocation
+    isp: "Cloudflare, Inc."      // ← IP geolocation
   }
 }
 ```
@@ -581,13 +622,30 @@ db.findings.aggregate([
 ])
 ```
 
+**Find assets by country (geolocation):**
+```javascript
+db.discoveries.find({
+  org_id: "org-456",
+  "metadata.country": "United States"
+})
+```
+
+**Find assets by ISP:**
+```javascript
+db.discoveries.find({
+  org_id: "org-456",
+  "metadata.isp": /cloudflare/i  // Case-insensitive regex match
+})
+```
+
 ### Adding New Enrichment Types
 
 To add a new enrichment type (e.g., CDN detection, tech stack profiling):
 
-1. **Create active recon service:**
-   - Follow WAF detector pattern in `internal/active_recon/`
-   - Consume from appropriate discovery stream
+**Option 1: Add to existing discovery_enrichment service**
+1. **Add enrichment logic to service.go:**
+   - Add new enrichment method (e.g., `enrichCDN()`)
+   - Call it from `ProcessEnrichment()` based on asset_type
    - Publish `EnrichmentFinding` with your `enrichment_type`
 
 2. **Update enrichment ingestion:**
@@ -597,10 +655,24 @@ To add a new enrichment type (e.g., CDN detection, tech stack profiling):
          return s.processCDNEnrichment(ctx, enrichment)
      ```
 
-3. **Store in metadata:**
-   - Use simple types: string, number, boolean, or simple objects
-   - Avoid arrays or complex history tracking
-   - Example: `metadata.cdn = "Cloudflare"`, `metadata.cms = "WordPress"`
+**Option 2: Create separate enrichment service**
+1. **Create active recon service:**
+   - Follow discovery_enrichment pattern in `internal/active_recon/`
+   - Consume from appropriate discovery stream(s)
+   - Filter by asset_type if needed
+   - Publish `EnrichmentFinding` with your `enrichment_type`
+
+2. **Update enrichment ingestion:**
+   - Add case in `enrichment_ingestion/service.go`:
+     ```go
+     case "tech_stack":
+         return s.processTechStackEnrichment(ctx, enrichment)
+     ```
+
+**Storage Guidelines:**
+- Use simple types: string, number, boolean, or simple objects
+- Avoid arrays or complex history tracking
+- Example: `metadata.cdn = "Cloudflare"`, `metadata.cms = "WordPress"`
 
 ## Key Files
 
