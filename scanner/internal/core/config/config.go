@@ -28,7 +28,7 @@ func Load() (*Config, error) {
 		ServiceName:        getEnv("SERVICE_NAME", "vulwall-scanner"),
 		Environment:        getEnv("DOPPLER_ENVIRONMENT", "development"),
 		ShodanAPIKey:       getEnv("SHODAN_API_KEY", ""),
-		IPEnrichmentDBPath: getEnv("IP_ENRICHMENT_DB_PATH", ""),
+		IPEnrichmentDBPath: getEnv("IP_ENRICHMENT_DB_PATH", "./data/dbip-isp-country.mmdb"),
 		WAFRulesPath:       getEnv("WAF_RULES_PATH", "./internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json"),
 	}, nil
 }
