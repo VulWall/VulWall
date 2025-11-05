@@ -59,6 +59,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	// Publish root asset finding
 	if err := s.publishFinding(ctx, shared.DiscoveryFinding{
 		DiscoveryID: discoveryID,
+		AssetType:   assetType,
 		TraceID:     job.TraceID,
 		ScanID:      job.ScanID,  // Pass through scan_id
 		OrgID:       job.OrgID,
@@ -142,6 +143,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 		// Publish subdomain finding
 		if err := s.publishFinding(ctx, shared.DiscoveryFinding{
 			DiscoveryID: subdomainID,
+			AssetType:   shared.AssetTypeSubdomain,
 			TraceID:     traceID,
 			ScanID:      scanID,  // Pass through scan_id
 			OrgID:       orgID,

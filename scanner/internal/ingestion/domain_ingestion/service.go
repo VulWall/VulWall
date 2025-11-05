@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/redisx"
-	"github.com/vulwall/scanners/internal/ingestion/services"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,30 +14,16 @@ import (
 )
 
 type Service struct {
-	db       *mongo.Database
-	redis    *redis.Client
-	logger   *zap.Logger
-	enricher *services.IPEnricher
+	db     *mongo.Database
+	redis  *redis.Client
+	logger *zap.Logger
 }
 
-func NewService(db *mongo.Database, redis *redis.Client, ipEnrichmentDBPath string, logger *zap.Logger) *Service {
-	// Initialize enricher (graceful failure if DB missing)
-	enricher, err := services.NewIPEnricher(ipEnrichmentDBPath)
-	if err != nil {
-		logger.Warn("Failed to initialize IP enricher, continuing without enrichment",
-			zap.String("db_path", ipEnrichmentDBPath),
-			zap.Error(err))
-		enricher = nil
-	} else {
-		logger.Info("IP enrichment enabled",
-			zap.String("db_path", ipEnrichmentDBPath))
-	}
-
+func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
-		db:       db,
-		redis:    redis,
-		logger:   logger,
-		enricher: enricher,
+		db:     db,
+		redis:  redis,
+		logger: logger,
 	}
 }
 
@@ -70,11 +55,8 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 		return nil
 	}
 
-	// Determine if this is a domain or subdomain using shared logic
-	assetType := shared.DetermineDomainAssetType(finding.Host, finding.ParentID)
-
-	// Process the discovery
-	return s.processDiscovery(ctx, finding, assetType)
+	// Process the discovery (asset_type is now in the finding)
+	return s.processDiscovery(ctx, finding, finding.AssetType)
 }
 
 // processDiscovery processes a domain/subdomain discovery and stores in discoveries collection
@@ -339,26 +321,8 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 			scanIDs = []string{*finding.ScanID}
 		}
 
-		// Enrich IP with geolocation data
+		// IP geolocation enrichment now handled by discovery_enrichment service
 		var metadata map[string]interface{}
-		if s.enricher != nil {
-			if ipInfo, err := s.enricher.Enrich(*finding.IP); err == nil {
-				metadata = map[string]interface{}{
-					"geo": map[string]interface{}{
-						"continent": ipInfo.Continent,
-						"country":   ipInfo.Country,
-						"isp":       ipInfo.ISP,
-					},
-				}
-				s.logger.Debug("IP enriched with geolocation",
-					zap.String("ip", *finding.IP),
-					zap.String("continent", ipInfo.Continent),
-					zap.String("country", ipInfo.Country),
-					zap.String("isp", ipInfo.ISP))
-			} else {
-				s.logger.Debug("Failed to enrich IP", zap.String("ip", *finding.IP), zap.Error(err))
-			}
-		}
 
 		newIPDiscovery := shared.Discovery{
 			ID:             ipDiscoveryID,
