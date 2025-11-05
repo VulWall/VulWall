@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/active_recon/waf_detector/patterns"
+	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
@@ -20,11 +21,15 @@ type Service struct {
 }
 
 // NewService creates a new WAF detector service
-func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error) {
-	detector, err := patterns.NewDetector(logger)
+func NewService(redisClient *redis.Client, cfg *config.Config, logger *zap.Logger) (*Service, error) {
+	detector, err := patterns.NewDetector(logger, cfg.WAFRulesPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create detector: %w", err)
 	}
+
+	logger.Info("WAF detector initialized",
+		zap.String("rules_path", cfg.WAFRulesPath),
+	)
 
 	return &Service{
 		redis:    redisClient,

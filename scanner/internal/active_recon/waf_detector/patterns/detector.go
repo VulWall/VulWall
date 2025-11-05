@@ -3,9 +3,11 @@ package patterns
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -28,10 +30,34 @@ type Detector struct {
 	signatures []WAFSignature
 }
 
+// loadSignaturesFromJSON loads WAF signatures from a JSON file
+func loadSignaturesFromJSON(path string) ([]WAFSignature, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read rules file: %w", err)
+	}
+
+	var config struct {
+		Signatures []WAFSignature `json:"signatures"`
+	}
+
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return config.Signatures, nil
+}
+
 // NewDetector creates a new WAF detector
-func NewDetector(logger *zap.Logger) (*Detector, error) {
+func NewDetector(logger *zap.Logger, rulesPath string) (*Detector, error) {
+	// Load signatures from JSON file
+	signatures, err := loadSignaturesFromJSON(rulesPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load signatures: %w", err)
+	}
+
 	// Compile all signature patterns
-	if err := CompileSignatures(AllSignatures); err != nil {
+	if err := CompileSignatures(signatures); err != nil {
 		return nil, fmt.Errorf("failed to compile signatures: %w", err)
 	}
 
@@ -55,7 +81,7 @@ func NewDetector(logger *zap.Logger) (*Detector, error) {
 	return &Detector{
 		client:     client,
 		logger:     logger,
-		signatures: AllSignatures,
+		signatures: signatures,
 	}, nil
 }
 

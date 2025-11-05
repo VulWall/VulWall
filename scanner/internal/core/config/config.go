@@ -14,6 +14,7 @@ type Config struct {
 	Environment        string
 	ShodanAPIKey       string
 	IPEnrichmentDBPath string
+	WAFRulesPath       string
 }
 
 func Load() (*Config, error) {
@@ -28,6 +29,7 @@ func Load() (*Config, error) {
 		Environment:        getEnv("DOPPLER_ENVIRONMENT", "development"),
 		ShodanAPIKey:       getEnv("SHODAN_API_KEY", ""),
 		IPEnrichmentDBPath: getEnv("IP_ENRICHMENT_DB_PATH", ""),
+		WAFRulesPath:       getEnv("WAF_RULES_PATH", "./internal/active_recon/waf_detector/patterns/waf_rules.json"),
 	}, nil
 }
 

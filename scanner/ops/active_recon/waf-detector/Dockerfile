@@ -27,5 +27,8 @@ WORKDIR /root/
 # Copy binary from builder
 COPY --from=builder /app/waf-detector .
 
+# Copy WAF rules JSON file
+COPY --from=builder /app/internal/active_recon/waf_detector/patterns/waf_rules.json ./internal/active_recon/waf_detector/patterns/
+
 # Run the binary
 CMD ["./waf-detector"]
