@@ -61,6 +61,8 @@ func (s *Service) ProcessEnrichment(ctx context.Context, enrichment shared.Enric
 	switch enrichment.EnrichmentType {
 	case "waf":
 		return s.processWAFEnrichment(ctx, enrichment)
+	case "geolocation":
+		return s.processGeolocationEnrichment(ctx, enrichment)
 	default:
 		s.logger.Warn("Unknown enrichment type",
 			zap.String("enrichment_type", enrichment.EnrichmentType),
@@ -126,6 +128,81 @@ func (s *Service) processWAFEnrichment(ctx context.Context, enrichment shared.En
 	s.logger.Info("Successfully updated discovery with WAF enrichment",
 		zap.String("discovery_id", enrichment.DiscoveryID),
 		zap.String("waf_name", wafName),
+		zap.Int64("modified_count", result.ModifiedCount),
+	)
+
+	return nil
+}
+
+// processGeolocationEnrichment processes IP geolocation enrichment data
+func (s *Service) processGeolocationEnrichment(ctx context.Context, enrichment shared.EnrichmentFinding) error {
+	// Extract geolocation data from enrichment
+	continent, _ := enrichment.Data["continent"].(string)
+	country, _ := enrichment.Data["country"].(string)
+	isp, _ := enrichment.Data["isp"].(string)
+
+	s.logger.Info("Updating discovery with geolocation information",
+		zap.String("discovery_id", enrichment.DiscoveryID),
+		zap.String("continent", continent),
+		zap.String("country", country),
+		zap.String("isp", isp),
+	)
+
+	// Update discovery in MongoDB
+	collection := s.db.Collection(shared.CollectionDiscoveries)
+
+	// Build update document
+	// Set geolocation metadata fields (overwrites previous values)
+	setFields := bson.M{
+		"last_seen": time.Now(),
+	}
+
+	// Only set fields that have values
+	if continent != "" {
+		setFields["metadata.continent"] = continent
+	}
+	if country != "" {
+		setFields["metadata.country"] = country
+	}
+	if isp != "" {
+		setFields["metadata.isp"] = isp
+	}
+
+	update := bson.M{
+		"$set": setFields,
+	}
+
+	// Add scan_id to scan_ids array if present (using $addToSet to avoid duplicates)
+	if enrichment.ScanID != nil && *enrichment.ScanID != "" {
+		update["$addToSet"] = bson.M{
+			"scan_ids": *enrichment.ScanID,
+		}
+	}
+
+	// Update by discovery_id and org_id (for security)
+	filter := bson.M{
+		"_id":    enrichment.DiscoveryID,
+		"org_id": enrichment.OrgID,
+	}
+
+	result, err := collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return fmt.Errorf("failed to update discovery: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		s.logger.Warn("Discovery not found for enrichment",
+			zap.String("discovery_id", enrichment.DiscoveryID),
+			zap.String("org_id", enrichment.OrgID),
+		)
+		return nil
+	}
+
+	s.logger.Info("Successfully updated discovery with geolocation enrichment",
+		zap.String("discovery_id", enrichment.DiscoveryID),
+		zap.String("continent", continent),
+		zap.String("country", country),
+		zap.String("isp", isp),
 		zap.Int64("modified_count", result.ModifiedCount),
 	)
 
