@@ -23,6 +23,7 @@ type DiscoveryJob struct {
 // This is published to domain_discovery_results by all domain discovery services
 type DiscoveryFinding struct {
 	DiscoveryID string                 `json:"discovery_id" bson:"discovery_id"` // Deterministic UUID for this discovery
+	AssetType   string                 `json:"asset_type" bson:"asset_type"`     // "domain", "subdomain", "ip"
 	TraceID     string                 `json:"trace_id" bson:"trace_id"`
 	ScanID      *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
 	OrgID       string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
@@ -54,6 +55,7 @@ type IPDiscoveryJob struct {
 // This is published to ip_discovery_results by port discovery services
 type IPDiscoveryFinding struct {
 	DiscoveryID string                 `json:"discovery_id" bson:"discovery_id"` // Deterministic UUID for this port discovery
+	AssetType   string                 `json:"asset_type" bson:"asset_type"`     // "ip", "port"
 	TraceID     string                 `json:"trace_id" bson:"trace_id"`
 	ScanID      *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
 	OrgID       string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
