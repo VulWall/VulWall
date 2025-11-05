@@ -23,8 +23,8 @@ const (
 	// Redis Streams - Security Findings
 	StreamSecurityFindings = "security_findings" // Output stream for security findings from scanning tools (consumed by findings ingestion)
 
-	// Redis Streams - Asset Enrichment
-	StreamAssetEnrichmentResults = "asset_enrichment_results" // Output stream for asset enrichment data (consumed by enrichment ingestion)
+	// Redis Streams - Discovery Enrichment
+	StreamDiscoveryEnrichmentResults = "discovery_enrichment_results" // Output stream for discovery enrichment data (consumed by enrichment ingestion)
 
 	// Asset Types (for Discovery.AssetType)
 	AssetTypeDomain    = "domain"
@@ -37,7 +37,7 @@ const (
 	AssetStatusInactive = "inactive"
 	AssetStatusUnknown  = "unknown"
 
-	or                                   // Ownership Status (organizational state)
+	// Ownership Status (organizational state)
 	OwnershipStatusVerified = "verified" // Asset verified to belong to org
 	OwnershipStatusNotMine  = "NotMine"  // Asset does not belong to org
 	OwnershipStatusNotSure  = "NotSure"  // Asset ownership unclear/pending verification

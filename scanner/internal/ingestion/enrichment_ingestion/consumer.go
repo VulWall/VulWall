@@ -36,7 +36,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting enrichment ingestion consumer")
 
 	// Create consumer group
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamAssetEnrichmentResults, GroupEnrichmentIngestion); err != nil {
+	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDiscoveryEnrichmentResults, GroupEnrichmentIngestion); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
@@ -45,7 +45,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 	c.logger.Info("Consumer group created",
 		zap.String("consumer", consumerName),
-		zap.String("stream", shared.StreamAssetEnrichmentResults),
+		zap.String("stream", shared.StreamDiscoveryEnrichmentResults),
 	)
 
 	// Start processing messages
@@ -64,7 +64,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupEnrichmentIngestion,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamAssetEnrichmentResults, ">"},
+				Streams:  []string{shared.StreamDiscoveryEnrichmentResults, ">"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
@@ -93,7 +93,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 					}
 
 					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamAssetEnrichmentResults, GroupEnrichmentIngestion, message.ID)
+					c.redis.XAck(ctx, shared.StreamDiscoveryEnrichmentResults, GroupEnrichmentIngestion, message.ID)
 				}
 			}
 		}
