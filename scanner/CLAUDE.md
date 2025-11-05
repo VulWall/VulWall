@@ -14,7 +14,7 @@ VulWall Engine is a **vertically-sliced Go monorepo** for security scanning serv
 - **Type discrimination:** Uses `asset_type` field (domain, subdomain, ip, port) to distinguish asset types
 - **Denormalized design:** Each organization has separate discovery records (no cross-org deduplication)
 - **Hierarchical relationships:** Domain → Subdomain → IP → Port via parent_id fields (org-scoped)
-- **Two status fields:** `discovery.status` (technical state: active/inactive) and `discovery.ownership_status` (organizational state: verified/not_mine/not_sure)
+- **Two status fields:** `discovery.status` (technical state: active/inactive) and `discovery.ownership_status` (organizational state: verified/notMine/notSure)
 
 ## Project Structure
 
@@ -287,7 +287,7 @@ Input Stream: domain_discovery_queue
 8. Ingestion service processes all domain/subdomain discoveries:
    - Domains/subdomains → `discoveries` (asset_type: "domain" or "subdomain", with org_id) with IP resolution history
    - IPs → `discoveries` (asset_type: "ip", with org_id) as separate records with parent_id
-   - All assets include org_id, ownership_status (verified/not_mine/not_sure), and assigned_at timestamp
+   - All assets include org_id, ownership_status (verified/notMine/notSure), and assigned_at timestamp
 
 ## Common Commands
 
@@ -580,7 +580,7 @@ type Discovery struct {
     AssetType      string    // "domain", "subdomain", "ip", or "port" (type discrimination)
     Source         string    // Discovery source ("shodan", "port_discovery", etc.)
     Status         string    // active, inactive, unknown (technical state)
-    OwnershipStatus string    // "verified", "not_mine", "not_sure" (organizational state)
+    OwnershipStatus string    // "verified", "notMine", "notSure" (organizational state)
     AssignedAt     time.Time // When assigned to this organization
     ParentID       *string   // Parent asset ID (hierarchical relationships, org-scoped)
     FirstSeen      time.Time
@@ -635,7 +635,7 @@ type ServiceHistoryEntry struct {
   - Simplifies queries (no joins needed), but increases storage
 - ✅ **Two status fields with different meanings:**
   - `discovery.status` - Technical state (active/inactive/unknown) - is the asset reachable?
-  - `discovery.ownership_status` - Organizational state (verified/not_mine/not_sure) - does org claim this asset?
+  - `discovery.ownership_status` - Organizational state (verified/notMine/notSure) - does org claim this asset?
 - ✅ **Hierarchical traceability (org-scoped):**
   - Domains track parent_id=null (root assets)
   - Subdomains track parent_id=domain_id (within same org)
@@ -690,8 +690,8 @@ type ServiceHistoryEntry struct {
 
 **Ownership Status (organizational state):**
 - `shared.OwnershipStatusVerified = "verified"` - Asset verified to belong to org
-- `shared.OwnershipStatusNotMine = "not_mine"` - Asset does not belong to org
-- `shared.OwnershipStatusNotSure = "not_sure"` - Asset ownership unclear/pending verification
+- `shared.OwnershipStatusNotMine = "notMine"` - Asset does not belong to org
+- `shared.OwnershipStatusNotSure = "notSure"` - Asset ownership unclear/pending verification
 
 **Finding Severity Levels:**
 - `shared.SeverityInfo` - Informational finding
