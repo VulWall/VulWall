@@ -174,12 +174,12 @@ All signatures have been:
 
 ## Files Modified
 
-1. **internal/active_recon/waf_detector/patterns/signatures.go**
+1. **internal/active_recon/discovery_enrichment/waf/patterns/signatures.go**
    - Added 24 new EU WAF signatures
    - Total signatures: 68 (was 44)
    - Added "// European WAFs" section marker
 
-2. **internal/active_recon/waf_detector/patterns/signatures_test.go** (NEW)
+2. **internal/active_recon/discovery_enrichment/waf/patterns/signatures_test.go** (NEW)
    - TestSignatureCompilation
    - TestSignatureCount
    - TestEUWAFSignatures

@@ -29,7 +29,7 @@ func Load() (*Config, error) {
 		Environment:        getEnv("DOPPLER_ENVIRONMENT", "development"),
 		ShodanAPIKey:       getEnv("SHODAN_API_KEY", ""),
 		IPEnrichmentDBPath: getEnv("IP_ENRICHMENT_DB_PATH", ""),
-		WAFRulesPath:       getEnv("WAF_RULES_PATH", "./internal/active_recon/waf_detector/patterns/waf_rules.json"),
+		WAFRulesPath:       getEnv("WAF_RULES_PATH", "./internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json"),
 	}, nil
 }
 
