@@ -143,3 +143,16 @@ type SecurityFinding struct {
 	Status       string                 `json:"status" bson:"status"`                       // open, resolved
 	Timestamp    time.Time              `json:"timestamp" bson:"timestamp"`                 // When finding was discovered
 }
+
+// EnrichmentFinding represents enrichment data for discovered assets
+// Published to asset_enrichment_results stream and merged into discoveries collection metadata
+type EnrichmentFinding struct {
+	TraceID         string                 `json:"trace_id" bson:"trace_id"`
+	ScanID          *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier
+	OrgID           string                 `json:"org_id" bson:"org_id"`                       // Organization GUID
+	Source          string                 `json:"source" bson:"source"`                       // Enrichment source (e.g., "waf_detector")
+	DiscoveryID     string                 `json:"discovery_id" bson:"discovery_id"`           // Links to Discovery._id
+	EnrichmentType  string                 `json:"enrichment_type" bson:"enrichment_type"`     // Type of enrichment (e.g., "waf", "cdn", "tech_stack")
+	Data            map[string]interface{} `json:"data" bson:"data"`                           // Enrichment data (e.g., {"waf_name": "Cloudflare"})
+	Timestamp       time.Time              `json:"timestamp" bson:"timestamp"`                 // When enrichment was performed
+}

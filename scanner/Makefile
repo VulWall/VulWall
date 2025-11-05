@@ -19,6 +19,8 @@ build: ## Build all services
 	@go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
 	@echo "Building webtechprofiler..."
 	@go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
+	@echo "Building waf-detector..."
+	@go build -o bin/waf-detector ./cmd/active_recon/waf-detector
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Build complete!"
@@ -41,6 +43,9 @@ build-testssl-scanner: ## Build testssl-scanner service
 build-webtechprofiler: ## Build webtechprofiler service
 	@go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
 
+build-waf-detector: ## Build waf-detector service
+	@go build -o bin/waf-detector ./cmd/active_recon/waf-detector
+
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
 
@@ -61,6 +66,9 @@ run-testssl-scanner: ## Run testssl-scanner service locally
 
 run-webtechprofiler: ## Run webtechprofiler service locally
 	@go run ./cmd/active_recon/webtechprofiler/main.go
+
+run-waf-detector: ## Run waf-detector service locally
+	@go run ./cmd/active_recon/waf-detector/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
@@ -108,6 +116,9 @@ docker-scale-testssl-scanner: ## Scale testssl-scanner workers (usage: make dock
 
 docker-scale-webtechprofiler: ## Scale webtechprofiler workers (usage: make docker-scale-webtechprofiler N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale webtechprofiler=$(N)
+
+docker-scale-waf-detector: ## Scale waf-detector workers (usage: make docker-scale-waf-detector N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale waf-detector=$(N)
 
 docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ingestion N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
@@ -183,6 +194,13 @@ prod-deploy-webtechprofiler: ## Deploy webtechprofiler service (usage: make prod
 		ops/scripts/deploy-service.sh webtechprofiler; \
 	fi
 
+prod-deploy-waf-detector: ## Deploy waf-detector service (usage: make prod-deploy-waf-detector [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh waf-detector $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh waf-detector; \
+	fi
+
 prod-stop-all: ## Stop all production services
 	@ops/scripts/stop-all.sh
 
@@ -190,7 +208,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler"; \
+		echo "Available services: domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, waf-detector"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)
