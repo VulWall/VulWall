@@ -30,5 +30,8 @@ COPY --from=builder /app/discovery-enrichment .
 # Copy WAF rules JSON file
 COPY --from=builder /app/internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json ./internal/active_recon/discovery_enrichment/waf/patterns/
 
+# Copy MaxMind GeoLite2 database (if exists)
+COPY --from=builder /app/data/*.mmdb ./data/ 2>/dev/null || true
+
 # Run the binary
 CMD ["./discovery-enrichment"]
