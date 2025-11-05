@@ -193,11 +193,26 @@ SECURITY FINDINGS FLOW (NUCLEI SCANNER):
        ├─→ Reopens resolved findings if detected again
        └─→ Stores full Nuclei metadata
 
+ASSET ENRICHMENT FLOW (WAF DETECTOR):
+1. WAF Detector Consumes from:
+   └─→ domain_discovery_results (domains/subdomains only)
+
+2. WAF Detector Service
+   ├─→ Sends HTTP probes (normal + attack payloads) to each discovered domain
+   ├─→ Analyzes responses against 68 WAF signature patterns
+   ├─→ Detects WAF vendor (Cloudflare, Akamai, AWS WAF, ZScaler, Google Cloud Armor, etc.)
+   └─→ Publishes to asset_enrichment_results stream (source="waf_detector")
+
+3. Enrichment Ingestion Consumer
+   └─→ Updates discoveries collection:
+       └─→ Sets metadata.waf = "WAF_Name" (simple string, overwrites on change)
+
 INGESTION SERVICE ARCHITECTURE:
-├─→ Orchestrator starts THREE consumers concurrently
+├─→ Orchestrator starts FOUR consumers concurrently
 ├─→ domain_ingestion: consumes domain_discovery_results
 ├─→ port_ingestion: consumes ip_discovery_results
-└─→ findings_ingestion: consumes security_findings
+├─→ findings_ingestion: consumes security_findings
+└─→ enrichment_ingestion: consumes asset_enrichment_results
 ```
 
 ### Model Ownership Rules
@@ -213,6 +228,7 @@ INGESTION SERVICE ARCHITECTURE:
   - `DiscoveryFinding` (domain discovery findings)
   - `IPDiscoveryFinding` (port discovery findings)
   - `SecurityFinding` (security vulnerabilities from scanners)
+  - `EnrichmentFinding` (asset enrichment data from active recon)
 - Shared asset models:
   - `Discovery` (unified asset model for all 4 types with org_id: domain, subdomain, ip, port)
   - `ResolutionHistoryEntry` (IP resolution history for domains/subdomains)
@@ -224,6 +240,7 @@ INGESTION SERVICE ARCHITECTURE:
   - `StreamDomainDiscoveryQueue`, `StreamDomainDiscoveryResults`
   - `StreamIPDiscoveryQueue`, `StreamIPDiscoveryResults`
   - `StreamSecurityFindings` - Security findings from scanners
+  - `StreamAssetEnrichmentResults` - Asset enrichment data from active recon services
 - Shared collection names:
   - `CollectionDiscoveries` - Org-scoped asset registry (includes org_id)
   - `CollectionFindings` - Security findings/vulnerabilities
@@ -448,6 +465,142 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
 - ✅ Use `shared.DiscoveryFinding` for output
 - ✅ **NO MongoDB dependency** in discovery services
 - ✅ Publish findings with `source` field ("nmap", "shodan", etc.)
+
+## WAF Detection and Asset Enrichment
+
+The project supports **asset enrichment** - adding metadata to discovered assets without creating separate findings. The first enrichment service is **WAF detection**, which identifies Web Application Firewalls protecting discovered web assets.
+
+### WAF Detector Architecture
+
+**Location:** `internal/active_recon/waf_detector/`
+
+**How it works:**
+1. Listens to `domain_discovery_results` stream (domains/subdomains only, skips raw IPs)
+2. For each domain, sends HTTP probes:
+   - Normal request (GET /)
+   - Attack requests with 10 different payloads (XSS, SQLi, LFI, etc.)
+3. Analyzes responses against 68 WAF signature patterns (ported from wafw00f)
+4. If WAF detected, publishes to `asset_enrichment_results` stream
+
+**WAF Signatures:** Located in `internal/active_recon/waf_detector/patterns/signatures.go`
+
+Detects 68 WAF vendors including:
+- **Cloud WAFs:** Cloudflare, Akamai, AWS WAF, Azure Front Door, Google Cloud Armor, ZScaler, Fastly
+- **Enterprise WAFs:** F5 BIG-IP, Imperva Incapsula, Fortinet FortiWeb, Citrix NetScaler, IBM WebSEAL, IBM DataPower
+- **European WAFs:** Airlock (Swiss), NevisProxy (Swiss), TransIP (Netherlands), Link11 (German), WatchGuard
+- **Open Source:** ModSecurity, NAXSI, LiteSpeed
+- **Security SaaS:** Sucuri, Wordfence, PerimeterX, Wallarm, Reblaze
+- **Regional Asia:** Jiasule, Yundun, SafeDog, West263CDN, ChinaCache, Huawei Cloud, Tencent Cloud
+- **Regional EU/Russia:** Qrator, PT Application Firewall, HyperGuard, GreyWizard
+- **WordPress Plugins:** NinjaFirewall (French), WebARX, Shield Security
+- **Microsoft IIS:** URLScan, RequestValidationMode
+
+**Detection Logic:** Each signature defines checks for:
+- **Headers:** Specific header names/values (e.g., `CF-Ray`, `X-Akamai-Request-ID`)
+- **Cookies:** Cookie name patterns (e.g., `__cfduid`, `incap_ses_`)
+- **Content:** Body text patterns (e.g., "Access Denied by Cloudflare")
+- **Status codes:** Block responses (403, 406, 418, 503, etc.)
+
+A match requires **at least 2 checks** to pass for confidence.
+
+### Enrichment Ingestion
+
+**Location:** `internal/ingestion/enrichment_ingestion/`
+
+**How it works:**
+1. Consumes from `asset_enrichment_results` stream
+2. Validates `source` is present (skips if missing)
+3. Updates discovery in MongoDB based on `enrichment_type`:
+   - **Type: "waf"** → Sets `metadata.waf = "Cloudflare"` (simple string)
+4. Overwrites previous value (no history tracking per user requirements)
+
+**Data Model:**
+```javascript
+// Before WAF detection
+{
+  _id: "uuid-123",
+  org_id: "org-456",
+  asset_type: "domain",
+  domain: "example.com",
+  metadata: {}
+}
+
+// After WAF detection
+{
+  _id: "uuid-123",
+  org_id: "org-456",
+  asset_type: "domain",
+  domain: "example.com",
+  metadata: {
+    waf: "Cloudflare"  // ← Simple string, overwrites on change
+  }
+}
+```
+
+### Query Examples
+
+**Find assets with specific WAF:**
+```javascript
+db.discoveries.find({
+  org_id: "org-456",
+  "metadata.waf": "Cloudflare"
+})
+```
+
+**Find assets with ANY WAF:**
+```javascript
+db.discoveries.find({
+  org_id: "org-456",
+  "metadata.waf": {$exists: true, $ne: null}
+})
+```
+
+**Find unprotected assets (security risk!):**
+```javascript
+db.discoveries.find({
+  org_id: "org-456",
+  asset_type: {$in: ["domain", "subdomain"]},
+  $or: [
+    {"metadata.waf": {$exists: false}},
+    {"metadata.waf": null}
+  ]
+})
+```
+
+**Find high-severity findings on non-WAF-protected assets:**
+```javascript
+db.findings.aggregate([
+  {$match: {org_id: "org-456", severity: "high"}},
+  {$lookup: {
+    from: "discoveries",
+    localField: "discovery_id",
+    foreignField: "_id",
+    as: "asset"
+  }},
+  {$match: {"asset.metadata.waf": {$in: [null, ""]}}}
+])
+```
+
+### Adding New Enrichment Types
+
+To add a new enrichment type (e.g., CDN detection, tech stack profiling):
+
+1. **Create active recon service:**
+   - Follow WAF detector pattern in `internal/active_recon/`
+   - Consume from appropriate discovery stream
+   - Publish `EnrichmentFinding` with your `enrichment_type`
+
+2. **Update enrichment ingestion:**
+   - Add case in `enrichment_ingestion/service.go`:
+     ```go
+     case "cdn":
+         return s.processCDNEnrichment(ctx, enrichment)
+     ```
+
+3. **Store in metadata:**
+   - Use simple types: string, number, boolean, or simple objects
+   - Avoid arrays or complex history tracking
+   - Example: `metadata.cdn = "Cloudflare"`, `metadata.cms = "WordPress"`
 
 ## Key Files
 

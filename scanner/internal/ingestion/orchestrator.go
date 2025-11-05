@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/ingestion/domain_ingestion"
+	"github.com/vulwall/scanners/internal/ingestion/enrichment_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/findings_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/port_ingestion"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -37,7 +38,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 
 	// Create wait group to manage goroutines
 	var wg sync.WaitGroup
-	errChan := make(chan error, 3) // Buffer for 3 consumers
+	errChan := make(chan error, 4) // Buffer for 4 consumers
 
 	// Start domain ingestion consumer
 	wg.Add(1)
@@ -75,6 +76,19 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		if err := findingsConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Findings ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("findings ingestion: %w", err)
+		}
+	}()
+
+	// Start enrichment ingestion consumer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		o.logger.Info("Starting enrichment ingestion consumer")
+
+		enrichmentConsumer := enrichment_ingestion.NewConsumer(o.redis, o.db, o.logger)
+		if err := enrichmentConsumer.Start(ctx); err != nil && err != context.Canceled {
+			o.logger.Error("Enrichment ingestion consumer failed", zap.Error(err))
+			errChan <- fmt.Errorf("enrichment ingestion: %w", err)
 		}
 	}()
 

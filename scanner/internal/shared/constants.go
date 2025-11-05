@@ -23,6 +23,9 @@ const (
 	// Redis Streams - Security Findings
 	StreamSecurityFindings = "security_findings" // Output stream for security findings from scanning tools (consumed by findings ingestion)
 
+	// Redis Streams - Asset Enrichment
+	StreamAssetEnrichmentResults = "asset_enrichment_results" // Output stream for asset enrichment data (consumed by enrichment ingestion)
+
 	// Asset Types (for Discovery.AssetType)
 	AssetTypeDomain    = "domain"
 	AssetTypeSubdomain = "subdomain"
