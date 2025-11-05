@@ -3,44 +3,26 @@ services:
     build:
       context: ../../..
       dockerfile: ops/active_recon/waf-detector/Dockerfile
-    container_name: waf-detector
+    container_name: nightwatch-waf-detector
     restart: unless-stopped
     env_file:
-      - ../../../.env
+      - .env
     environment:
-      - ENVIRONMENT=production
+      - REDIS_URI=${REDIS_URI}
     networks:
-      - vulwall-network
-    depends_on:
-      - redis
-      - mongo
-
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    networks:
-      - vulwall-network
-
-  mongo:
-    image: mongo:7
-    container_name: mongo
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=password
-    volumes:
-      - mongo-data:/data/db
-    networks:
-      - vulwall-network
+      - core-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "waf-detector"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
-  vulwall-network:
-    driver: bridge
-
-volumes:
-  mongo-data:
+  core-network:
+    external: true
