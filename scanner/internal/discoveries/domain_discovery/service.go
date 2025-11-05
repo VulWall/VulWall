@@ -48,7 +48,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	}
 
 	// Determine asset type and generate deterministic ID (org-scoped)
-	assetType := shared.DetermineDomainAssetType(job.Host, job.ParentID)
+	assetType := determineDomainAssetType(job.Host, job.ParentID)
 	var discoveryID string
 	if assetType == shared.AssetTypeDomain {
 		discoveryID = shared.GenerateDomainID(job.OrgID, job.Host)
