@@ -216,18 +216,6 @@
       ]
     },
     {
-      "name": "PT Application Firewall",
-      "vendor": "Positive Technologies",
-      "description": "Positive Technologies Application Firewall (Russian)",
-      "priority": 50,
-      "checks": [
-        {"type": "content", "pattern": "(?i)<h1.{0,10}?Forbidden"},
-        {"type": "content", "pattern": "(?i)<pre>Request.ID:.{0,10}?\\d{4}-(\\d{2})+.{0,35}?pre>"},
-        {"type": "content", "pattern": "(?i)positive technologies"},
-        {"type": "code", "pattern": "^403$"}
-      ]
-    },
-    {
       "name": "Link11 WAAP",
       "vendor": "Link11",
       "description": "Link11 Web Application and API Protection (German)",
