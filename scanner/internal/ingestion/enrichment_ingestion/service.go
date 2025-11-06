@@ -63,6 +63,8 @@ func (s *Service) ProcessEnrichment(ctx context.Context, enrichment shared.Enric
 		return s.processWAFEnrichment(ctx, enrichment)
 	case "geolocation":
 		return s.processGeolocationEnrichment(ctx, enrichment)
+	case "cloud":
+		return s.processCloudEnrichment(ctx, enrichment)
 	default:
 		s.logger.Warn("Unknown enrichment type",
 			zap.String("enrichment_type", enrichment.EnrichmentType),
@@ -203,6 +205,81 @@ func (s *Service) processGeolocationEnrichment(ctx context.Context, enrichment s
 		zap.String("continent", continent),
 		zap.String("country", country),
 		zap.String("isp", isp),
+		zap.Int64("modified_count", result.ModifiedCount),
+	)
+
+	return nil
+}
+
+// processCloudEnrichment processes cloud provider enrichment data
+func (s *Service) processCloudEnrichment(ctx context.Context, enrichment shared.EnrichmentFinding) error {
+	// Extract cloud provider data from enrichment
+	provider, _ := enrichment.Data["provider"].(string)
+	region, _ := enrichment.Data["region"].(string)
+	service, _ := enrichment.Data["service"].(string)
+
+	s.logger.Info("Updating discovery with cloud provider information",
+		zap.String("discovery_id", enrichment.DiscoveryID),
+		zap.String("provider", provider),
+		zap.String("region", region),
+		zap.String("service", service),
+	)
+
+	// Update discovery in MongoDB
+	collection := s.db.Collection(shared.CollectionDiscoveries)
+
+	// Build update document
+	// Set cloud metadata fields (nested under metadata.cloud)
+	setFields := bson.M{
+		"last_seen": time.Now(),
+	}
+
+	// Only set fields that have values (nested under metadata.cloud)
+	if provider != "" {
+		setFields["metadata.cloud.provider"] = provider
+	}
+	if region != "" {
+		setFields["metadata.cloud.region"] = region
+	}
+	if service != "" {
+		setFields["metadata.cloud.service"] = service
+	}
+
+	update := bson.M{
+		"$set": setFields,
+	}
+
+	// Add scan_id to scan_ids array if present (using $addToSet to avoid duplicates)
+	if enrichment.ScanID != nil && *enrichment.ScanID != "" {
+		update["$addToSet"] = bson.M{
+			"scan_ids": *enrichment.ScanID,
+		}
+	}
+
+	// Update by discovery_id and org_id (for security)
+	filter := bson.M{
+		"_id":    enrichment.DiscoveryID,
+		"org_id": enrichment.OrgID,
+	}
+
+	result, err := collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return fmt.Errorf("failed to update discovery: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		s.logger.Warn("Discovery not found for enrichment",
+			zap.String("discovery_id", enrichment.DiscoveryID),
+			zap.String("org_id", enrichment.OrgID),
+		)
+		return nil
+	}
+
+	s.logger.Info("Successfully updated discovery with cloud enrichment",
+		zap.String("discovery_id", enrichment.DiscoveryID),
+		zap.String("provider", provider),
+		zap.String("region", region),
+		zap.String("service", service),
 		zap.Int64("modified_count", result.ModifiedCount),
 	)
 

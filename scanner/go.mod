@@ -10,6 +10,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/projectdiscovery/wappalyzergo v0.2.53
+	github.com/yl2chen/cidranger v1.0.2
 	go.mongodb.org/mongo-driver v1.17.4
 	go.uber.org/zap v1.27.0
 )
