@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-// AzureParser parses Azure IP ranges from Microsoft download center
-// URL: https://download.microsoft.com/download/7/1/D/71D86715-5596-4529-9B13-DA13A5DE5B63/ServiceTags_Public_YYYYMMDD.json
+// AzureParser parses Azure IP ranges from multiple sources
+// Supports both Microsoft format and azureipranges.azurewebsites.net format
 type AzureParser struct{}
 
-// azureIPRangesResponse represents the Azure Service Tags JSON structure
+// azureIPRangesResponse represents the Microsoft Azure Service Tags JSON structure
 type azureIPRangesResponse struct {
 	ChangeNumber int    `json:"changeNumber"`
 	Cloud        string `json:"cloud"`
@@ -28,17 +28,50 @@ type azureIPRangesResponse struct {
 	} `json:"values"`
 }
 
-// Parse parses Azure IP ranges JSON
-func (p *AzureParser) Parse(data []byte) ([]IPRange, error) {
-	var azureData azureIPRangesResponse
-	if err := json.Unmarshal(data, &azureData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal Azure JSON: %w", err)
-	}
+// azureWebsiteResponse represents the azureipranges.azurewebsites.net JSON structure (array format)
+type azureWebsiteResponse []struct {
+	ChangeNumber    int      `json:"changeNumber"`
+	Region          string   `json:"region"`
+	Platform        string   `json:"platform"`
+	SystemService   string   `json:"systemService"`
+	AddressPrefixes []string `json:"addressPrefixes"`
+}
 
+// Parse parses Azure IP ranges JSON (supports both formats)
+func (p *AzureParser) Parse(data []byte) ([]IPRange, error) {
 	var ranges []IPRange
 
+	// Try parsing as array format first (azureipranges.azurewebsites.net)
+	var websiteData azureWebsiteResponse
+	if err := json.Unmarshal(data, &websiteData); err == nil && len(websiteData) > 0 {
+		// Successfully parsed as array format
+		for _, item := range websiteData {
+			region := normalizeAzureRegion(item.Region)
+			service := normalizeAzureService(item.SystemService)
+
+			for _, cidr := range item.AddressPrefixes {
+				if cidr == "" {
+					continue
+				}
+				ranges = append(ranges, IPRange{
+					CIDR:     cidr,
+					Provider: "Azure",
+					Region:   region,
+					Service:  service,
+				})
+			}
+		}
+		return ranges, nil
+	}
+
+	// Try parsing as Microsoft format (with "values" wrapper)
+	var msData azureIPRangesResponse
+	if err := json.Unmarshal(data, &msData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Azure JSON (tried both formats): %w", err)
+	}
+
 	// Parse each service tag
-	for _, value := range azureData.Values {
+	for _, value := range msData.Values {
 		region := normalizeAzureRegion(value.Properties.Region)
 		service := normalizeAzureService(value.Properties.SystemService)
 
