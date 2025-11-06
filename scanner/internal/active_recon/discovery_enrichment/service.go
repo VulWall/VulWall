@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/cloud"
 	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/geolocation"
 	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/waf/patterns"
 	"github.com/vulwall/scanners/internal/core/config"
@@ -14,12 +15,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// Service orchestrates discovery enrichment (WAF detection + IP geolocation)
+// Service orchestrates discovery enrichment (WAF detection + IP geolocation + cloud detection)
 type Service struct {
-	redis        *redis.Client
-	wafDetector  *patterns.Detector
-	geoEnricher  *geolocation.IPEnricher
-	logger       *zap.Logger
+	redis         *redis.Client
+	wafDetector   *patterns.Detector
+	geoEnricher   *geolocation.IPEnricher
+	cloudDetector *cloud.Detector
+	logger        *zap.Logger
 }
 
 // NewService creates a new discovery enrichment service
@@ -48,11 +50,28 @@ func NewService(redisClient *redis.Client, cfg *config.Config, logger *zap.Logge
 		}
 	}
 
+	// Initialize cloud detector (graceful failure if disabled or errors)
+	var cloudDetector *cloud.Detector
+	if cfg.CloudDetectorEnabled {
+		cloudDetector, err = cloud.NewDetector(cfg.CloudDataDir, logger)
+		if err != nil {
+			logger.Warn("Failed to initialize cloud detector, continuing without cloud detection",
+				zap.String("data_dir", cfg.CloudDataDir),
+				zap.Error(err))
+		} else {
+			logger.Info("Cloud detector initialized",
+				zap.String("data_dir", cfg.CloudDataDir))
+		}
+	} else {
+		logger.Info("Cloud detector disabled")
+	}
+
 	return &Service{
-		redis:       redisClient,
-		wafDetector: wafDetector,
-		geoEnricher: geoEnricher,
-		logger:      logger,
+		redis:         redisClient,
+		wafDetector:   wafDetector,
+		geoEnricher:   geoEnricher,
+		cloudDetector: cloudDetector,
+		logger:        logger,
 	}, nil
 }
 
@@ -68,18 +87,20 @@ func (s *Service) ProcessEnrichment(ctx context.Context, job shared.EnrichmentJo
 	// Enrich based on asset type
 	switch job.AssetType {
 	case shared.AssetTypeDomain, shared.AssetTypeSubdomain:
-		// For domains/subdomains: IP geolocation + WAF detection
+		// For domains/subdomains: IP geolocation + cloud detection + WAF detection
 		if job.IP != "" {
 			s.enrichGeolocation(ctx, job)
+			s.enrichCloud(ctx, job)
 		}
 		if job.Host != "" {
 			s.enrichWAF(ctx, job)
 		}
 
 	case shared.AssetTypeIP:
-		// For IPs: IP geolocation only
+		// For IPs: IP geolocation + cloud detection
 		if job.IP != "" {
 			s.enrichGeolocation(ctx, job)
+			s.enrichCloud(ctx, job)
 		}
 
 	default:
@@ -195,6 +216,62 @@ func (s *Service) enrichWAF(ctx context.Context, job shared.EnrichmentJob) {
 	} else {
 		s.logger.Debug("No WAF detected",
 			zap.String("host", job.Host),
+		)
+	}
+}
+
+// enrichCloud performs cloud provider detection enrichment
+func (s *Service) enrichCloud(ctx context.Context, job shared.EnrichmentJob) {
+	if s.cloudDetector == nil {
+		s.logger.Debug("Cloud detector not initialized, skipping cloud detection",
+			zap.String("discovery_id", job.DiscoveryID),
+		)
+		return
+	}
+
+	cloudInfo, err := s.cloudDetector.Detect(job.IP)
+	if err != nil {
+		s.logger.Debug("Failed to detect cloud provider",
+			zap.String("ip", job.IP),
+			zap.Error(err),
+		)
+		return
+	}
+
+	// Only publish enrichment if cloud provider was detected
+	if cloudInfo != nil {
+		s.logger.Info("Cloud provider detected, publishing enrichment",
+			zap.String("trace_id", job.TraceID),
+			zap.String("ip", job.IP),
+			zap.String("provider", cloudInfo.Provider),
+			zap.String("region", cloudInfo.Region),
+			zap.String("service", cloudInfo.Service),
+		)
+
+		enrichment := shared.EnrichmentFinding{
+			TraceID:        job.TraceID,
+			ScanID:         job.ScanID,
+			OrgID:          job.OrgID,
+			Source:         "discovery_enrichment",
+			DiscoveryID:    job.DiscoveryID,
+			EnrichmentType: "cloud",
+			Data: map[string]interface{}{
+				"provider": cloudInfo.Provider,
+				"region":   cloudInfo.Region,
+				"service":  cloudInfo.Service,
+			},
+			Timestamp: time.Now(),
+		}
+
+		if err := s.publishEnrichment(ctx, enrichment); err != nil {
+			s.logger.Error("Failed to publish cloud enrichment",
+				zap.String("discovery_id", job.DiscoveryID),
+				zap.Error(err),
+			)
+		}
+	} else {
+		s.logger.Debug("No cloud provider detected",
+			zap.String("ip", job.IP),
 		)
 	}
 }
