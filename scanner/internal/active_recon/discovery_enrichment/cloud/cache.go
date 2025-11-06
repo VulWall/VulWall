@@ -13,9 +13,9 @@ import (
 
 // CloudInfo contains cloud provider information for an IP
 type CloudInfo struct {
-	Provider string // "AWS", "Azure", "GCP"
-	Region   string // "us-east-1", "westus", "asia-northeast1"
-	Service  string // "EC2", "S3", "COMPUTE", "STORAGE" (may be empty)
+	Provider string // "AWS", "Azure", "GCP", "Fastly"
+	Region   string // "us-east-1", "westus", "asia-northeast1", "global"
+	Service  string // "EC2", "S3", "COMPUTE", "STORAGE", "CDN" (may be empty)
 }
 
 // cidrEntry wraps an IP range with its metadata for CIDR ranger
@@ -47,6 +47,7 @@ type CacheStats struct {
 	AWSRanges      int
 	AzureRanges    int
 	GCPRanges      int
+	FastlyRanges   int
 	IPv4Ranges     int
 	IPv6Ranges     int
 	LastUpdateTime time.Time
@@ -112,6 +113,8 @@ func (c *Cache) Build(ranges []parsers.IPRange) error {
 			c.stats.AzureRanges++
 		case "GCP":
 			c.stats.GCPRanges++
+		case "Fastly":
+			c.stats.FastlyRanges++
 		}
 
 		// Count IPv4 vs IPv6
@@ -129,6 +132,7 @@ func (c *Cache) Build(ranges []parsers.IPRange) error {
 		zap.Int("aws_ranges", c.stats.AWSRanges),
 		zap.Int("azure_ranges", c.stats.AzureRanges),
 		zap.Int("gcp_ranges", c.stats.GCPRanges),
+		zap.Int("fastly_ranges", c.stats.FastlyRanges),
 		zap.Int("ipv4_ranges", c.stats.IPv4Ranges),
 		zap.Int("ipv6_ranges", c.stats.IPv6Ranges),
 	)

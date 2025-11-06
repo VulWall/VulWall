@@ -35,6 +35,13 @@ func GetDefaultCloudSources() []CloudSource {
 			Enabled:  true,
 			FileName: "gcp.json",
 		},
+		{
+			Name:     "Fastly",
+			URL:      "https://api.fastly.com/public-ip-list",
+			Parser:   &parsers.FastlyParser{},
+			Enabled:  true,
+			FileName: "fastly.json",
+		},
 		// Future providers can be added here:
 		// {
 		//     Name:     "Oracle",

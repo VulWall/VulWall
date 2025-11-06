@@ -106,6 +106,7 @@ func (d *Detector) Initialize(ctx context.Context) error {
 		zap.Int("aws_ranges", stats.AWSRanges),
 		zap.Int("azure_ranges", stats.AzureRanges),
 		zap.Int("gcp_ranges", stats.GCPRanges),
+		zap.Int("fastly_ranges", stats.FastlyRanges),
 		zap.Int("ipv4_ranges", stats.IPv4Ranges),
 		zap.Int("ipv6_ranges", stats.IPv6Ranges),
 	)
