@@ -146,6 +146,19 @@ type SecurityFinding struct {
 	Timestamp    time.Time              `json:"timestamp" bson:"timestamp"`                 // When finding was discovered
 }
 
+// EnrichmentJob represents a request to enrich a discovered asset
+// Published by ingestion services to discovery_enrichment_queue
+type EnrichmentJob struct {
+	TraceID     string    `json:"trace_id" bson:"trace_id"`
+	ScanID      *string   `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier
+	OrgID       string    `json:"org_id" bson:"org_id"`                       // Organization GUID
+	DiscoveryID string    `json:"discovery_id" bson:"discovery_id"`           // Discovery ID to enrich
+	AssetType   string    `json:"asset_type" bson:"asset_type"`               // "domain", "subdomain", "ip" (NOT "port")
+	Host        string    `json:"host,omitempty" bson:"host,omitempty"`       // Domain/subdomain name (for WAF detection)
+	IP          string    `json:"ip,omitempty" bson:"ip,omitempty"`           // IP address (for geolocation)
+	Created     time.Time `json:"created" bson:"created"`
+}
+
 // EnrichmentFinding represents enrichment data for discovered assets
 // Published to asset_enrichment_results stream and merged into discoveries collection metadata
 type EnrichmentFinding struct {

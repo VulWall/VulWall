@@ -2,8 +2,11 @@ package port_ingestion
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/go-redis/redis/v8"
+	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,12 +15,14 @@ import (
 
 type Service struct {
 	db     *mongo.Database
+	redis  *redis.Client
 	logger *zap.Logger
 }
 
-func NewService(db *mongo.Database, logger *zap.Logger) *Service {
+func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
 		db:     db,
+		redis:  redis,
 		logger: logger,
 	}
 }
@@ -45,22 +50,37 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 	now := time.Now()
 
 	// 1. Ensure IP discovery exists (create if not found with org_id)
-	ipDiscoveryID, err := s.ensureIPDiscovery(ctx, finding, now)
+	ipDiscoveryID, isNewIP, err := s.ensureIPDiscovery(ctx, finding, now)
 	if err != nil {
 		return err
 	}
 
-	// 2. Upsert port discovery (with org_id)
-	_, err = s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
-	if err != nil {
-		return err
+	// 2. Publish enrichment job for IP (if it's asset_type="ip" finding or new IP)
+	if finding.AssetType == shared.AssetTypeIP || isNewIP {
+		if err := s.publishEnrichmentJob(ctx, finding, ipDiscoveryID); err != nil {
+			s.logger.Error("Failed to publish enrichment job for IP",
+				zap.String("trace_id", finding.TraceID),
+				zap.String("ip", finding.IP),
+				zap.Error(err),
+			)
+			// Don't fail if enrichment trigger fails
+		}
+	}
+
+	// 3. Upsert port discovery (with org_id) - skip if this is an IP finding
+	if finding.AssetType == shared.AssetTypePort {
+		_, err = s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 // ensureIPDiscovery ensures an IP discovery exists, creating it if not found
-func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscoveryFinding, timestamp time.Time) (string, error) {
+// Returns (discoveryID, isNewIP, error)
+func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscoveryFinding, timestamp time.Time) (string, bool, error) {
 	collection := s.db.Collection(shared.CollectionDiscoveries)
 
 	// Check if IP discovery exists (org-scoped)
@@ -109,14 +129,14 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 				zap.String("ip", finding.IP),
 				zap.Error(err),
 			)
-			return "", err
+			return "", false, err
 		}
 
 		s.logger.Info("Created new IP discovery",
 			zap.String("discovery_id", ipDiscoveryID),
 			zap.String("ip", finding.IP),
 		)
-		return ipDiscoveryID, nil
+		return ipDiscoveryID, true, nil  // Return true for new IP
 	}
 
 	if err != nil {
@@ -124,7 +144,7 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 			zap.String("trace_id", finding.TraceID),
 			zap.Error(err),
 		)
-		return "", err
+		return "", false, err
 	}
 
 	// IP exists - update last_seen and add scan_id to array
@@ -146,14 +166,14 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 			zap.String("ip", finding.IP),
 			zap.Error(err),
 		)
-		return "", err
+		return "", false, err
 	}
 
 	s.logger.Debug("Updated existing IP discovery",
 		zap.String("discovery_id", existingIPDiscovery.ID),
 		zap.String("ip", finding.IP),
 	)
-	return existingIPDiscovery.ID, nil
+	return existingIPDiscovery.ID, false, nil  // Return false for existing IP
 }
 
 // upsertPortDiscovery creates or updates a port discovery
@@ -444,4 +464,31 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 	}
 
 	return doc
+}
+
+// publishEnrichmentJob publishes an enrichment job for an IP to the enrichment queue
+func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.IPDiscoveryFinding, ipDiscoveryID string) error {
+	// Build enrichment job (IP only - no ports)
+	enrichmentJob := shared.EnrichmentJob{
+		TraceID:     finding.TraceID,
+		ScanID:      finding.ScanID,
+		OrgID:       finding.OrgID,
+		DiscoveryID: ipDiscoveryID,
+		AssetType:   shared.AssetTypeIP,
+		IP:          finding.IP,
+		Created:     time.Now(),
+	}
+
+	// Publish to enrichment queue
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDiscoveryEnrichmentQueue, enrichmentJob); err != nil {
+		return fmt.Errorf("failed to publish enrichment job: %w", err)
+	}
+
+	s.logger.Debug("Published enrichment job for IP",
+		zap.String("trace_id", finding.TraceID),
+		zap.String("discovery_id", ipDiscoveryID),
+		zap.String("ip", finding.IP),
+	)
+
+	return nil
 }

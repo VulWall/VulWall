@@ -24,6 +24,7 @@ const (
 	StreamSecurityFindings = "security_findings" // Output stream for security findings from scanning tools (consumed by findings ingestion)
 
 	// Redis Streams - Discovery Enrichment
+	StreamDiscoveryEnrichmentQueue   = "discovery_enrichment_queue"   // Input stream for enrichment jobs (published by ingestion services)
 	StreamDiscoveryEnrichmentResults = "discovery_enrichment_results" // Output stream for discovery enrichment data (consumed by enrichment ingestion)
 
 	// Asset Types (for Discovery.AssetType)

@@ -56,41 +56,36 @@ func NewService(redisClient *redis.Client, cfg *config.Config, logger *zap.Logge
 	}, nil
 }
 
-// ProcessEnrichment processes a discovered asset and performs appropriate enrichments
-func (s *Service) ProcessEnrichment(ctx context.Context, target EnrichmentTarget) error {
-	s.logger.Info("Processing discovery for enrichment",
-		zap.String("trace_id", target.TraceID),
-		zap.String("org_id", target.OrgID),
-		zap.String("asset_type", target.AssetType),
-		zap.String("discovery_id", target.DiscoveryID),
+// ProcessEnrichment processes an enrichment job
+func (s *Service) ProcessEnrichment(ctx context.Context, job shared.EnrichmentJob) error {
+	s.logger.Info("Processing enrichment job",
+		zap.String("trace_id", job.TraceID),
+		zap.String("org_id", job.OrgID),
+		zap.String("asset_type", job.AssetType),
+		zap.String("discovery_id", job.DiscoveryID),
 	)
 
 	// Enrich based on asset type
-	switch target.AssetType {
+	switch job.AssetType {
 	case shared.AssetTypeDomain, shared.AssetTypeSubdomain:
 		// For domains/subdomains: IP geolocation + WAF detection
-		if target.IP != "" {
-			s.enrichGeolocation(ctx, target)
+		if job.IP != "" {
+			s.enrichGeolocation(ctx, job)
 		}
-		s.enrichWAF(ctx, target)
+		if job.Host != "" {
+			s.enrichWAF(ctx, job)
+		}
 
 	case shared.AssetTypeIP:
 		// For IPs: IP geolocation only
-		if target.IP != "" {
-			s.enrichGeolocation(ctx, target)
+		if job.IP != "" {
+			s.enrichGeolocation(ctx, job)
 		}
-
-	case shared.AssetTypePort:
-		// Skip ports (no enrichment needed)
-		s.logger.Debug("Skipping port asset (no enrichment needed)",
-			zap.String("discovery_id", target.DiscoveryID),
-		)
-		return nil
 
 	default:
 		s.logger.Warn("Unknown asset type, skipping enrichment",
-			zap.String("asset_type", target.AssetType),
-			zap.String("discovery_id", target.DiscoveryID),
+			zap.String("asset_type", job.AssetType),
+			zap.String("discovery_id", job.DiscoveryID),
 		)
 	}
 
@@ -98,25 +93,25 @@ func (s *Service) ProcessEnrichment(ctx context.Context, target EnrichmentTarget
 }
 
 // enrichGeolocation performs IP geolocation enrichment
-func (s *Service) enrichGeolocation(ctx context.Context, target EnrichmentTarget) {
+func (s *Service) enrichGeolocation(ctx context.Context, job shared.EnrichmentJob) {
 	if s.geoEnricher == nil {
 		s.logger.Debug("IP enricher not initialized, skipping geolocation",
-			zap.String("discovery_id", target.DiscoveryID),
+			zap.String("discovery_id", job.DiscoveryID),
 		)
 		return
 	}
 
-	ipInfo, err := s.geoEnricher.Enrich(target.IP)
+	ipInfo, err := s.geoEnricher.Enrich(job.IP)
 	if err != nil {
 		s.logger.Debug("Failed to enrich IP with geolocation",
-			zap.String("ip", target.IP),
+			zap.String("ip", job.IP),
 			zap.Error(err),
 		)
 		return
 	}
 
 	s.logger.Debug("IP enriched with geolocation",
-		zap.String("ip", target.IP),
+		zap.String("ip", job.IP),
 		zap.String("continent", ipInfo.Continent),
 		zap.String("country", ipInfo.Country),
 		zap.String("isp", ipInfo.ISP),
@@ -124,11 +119,11 @@ func (s *Service) enrichGeolocation(ctx context.Context, target EnrichmentTarget
 
 	// Publish geolocation enrichment
 	enrichment := shared.EnrichmentFinding{
-		TraceID:        target.TraceID,
-		ScanID:         target.ScanID,
-		OrgID:          target.OrgID,
+		TraceID:        job.TraceID,
+		ScanID:         job.ScanID,
+		OrgID:          job.OrgID,
 		Source:         "discovery_enrichment",
-		DiscoveryID:    target.DiscoveryID,
+		DiscoveryID:    job.DiscoveryID,
 		EnrichmentType: "geolocation",
 		Data: map[string]interface{}{
 			"continent": ipInfo.Continent,
@@ -140,30 +135,30 @@ func (s *Service) enrichGeolocation(ctx context.Context, target EnrichmentTarget
 
 	if err := s.publishEnrichment(ctx, enrichment); err != nil {
 		s.logger.Error("Failed to publish geolocation enrichment",
-			zap.String("discovery_id", target.DiscoveryID),
+			zap.String("discovery_id", job.DiscoveryID),
 			zap.Error(err),
 		)
 	}
 }
 
 // enrichWAF performs WAF detection enrichment
-func (s *Service) enrichWAF(ctx context.Context, target EnrichmentTarget) {
-	// Skip if no host (shouldn't happen for domain/subdomain)
-	if target.Host == "" {
+func (s *Service) enrichWAF(ctx context.Context, job shared.EnrichmentJob) {
+	// Skip if no host
+	if job.Host == "" {
 		s.logger.Debug("No host for WAF detection",
-			zap.String("discovery_id", target.DiscoveryID),
+			zap.String("discovery_id", job.DiscoveryID),
 		)
 		return
 	}
 
 	// Build target URL (try HTTPS first)
-	targetURL := fmt.Sprintf("https://%s", target.Host)
+	targetURL := fmt.Sprintf("https://%s", job.Host)
 
 	// Perform WAF detection
 	wafName, err := s.wafDetector.Detect(ctx, targetURL)
 	if err != nil {
 		s.logger.Debug("WAF detection failed",
-			zap.String("host", target.Host),
+			zap.String("host", job.Host),
 			zap.Error(err),
 		)
 		// Don't return error - just log and continue
@@ -173,17 +168,17 @@ func (s *Service) enrichWAF(ctx context.Context, target EnrichmentTarget) {
 	// Only publish enrichment if WAF was detected
 	if wafName != "" {
 		s.logger.Info("WAF detected, publishing enrichment",
-			zap.String("trace_id", target.TraceID),
-			zap.String("host", target.Host),
+			zap.String("trace_id", job.TraceID),
+			zap.String("host", job.Host),
 			zap.String("waf", wafName),
 		)
 
 		enrichment := shared.EnrichmentFinding{
-			TraceID:        target.TraceID,
-			ScanID:         target.ScanID,
-			OrgID:          target.OrgID,
+			TraceID:        job.TraceID,
+			ScanID:         job.ScanID,
+			OrgID:          job.OrgID,
 			Source:         "discovery_enrichment",
-			DiscoveryID:    target.DiscoveryID,
+			DiscoveryID:    job.DiscoveryID,
 			EnrichmentType: "waf",
 			Data: map[string]interface{}{
 				"waf_name": wafName,
@@ -193,13 +188,13 @@ func (s *Service) enrichWAF(ctx context.Context, target EnrichmentTarget) {
 
 		if err := s.publishEnrichment(ctx, enrichment); err != nil {
 			s.logger.Error("Failed to publish WAF enrichment",
-				zap.String("discovery_id", target.DiscoveryID),
+				zap.String("discovery_id", job.DiscoveryID),
 				zap.Error(err),
 			)
 		}
 	} else {
 		s.logger.Debug("No WAF detected",
-			zap.String("host", target.Host),
+			zap.String("host", job.Host),
 		)
 	}
 }

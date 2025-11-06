@@ -93,6 +93,27 @@ func (s *Service) processDiscovery(ctx context.Context, finding shared.Discovery
 		}
 	}
 
+	// 4. Publish enrichment job for domain/subdomain
+	if err := s.publishEnrichmentJob(ctx, finding, discoveryID, assetType); err != nil {
+		s.logger.Error("Failed to publish enrichment job for domain/subdomain",
+			zap.String("trace_id", finding.TraceID),
+			zap.String("asset_type", assetType),
+			zap.String("host", finding.Host),
+			zap.Error(err),
+		)
+		// Don't fail if enrichment trigger fails
+	}
+
+	// 5. Publish enrichment job for IP
+	if err := s.publishEnrichmentJob(ctx, finding, ipDiscoveryID, shared.AssetTypeIP); err != nil {
+		s.logger.Error("Failed to publish enrichment job for IP",
+			zap.String("trace_id", finding.TraceID),
+			zap.String("ip", *finding.IP),
+			zap.Error(err),
+		)
+		// Don't fail if enrichment trigger fails
+	}
+
 	return nil
 }
 
@@ -414,6 +435,50 @@ func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.Disc
 	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryQueue, ipJob); err != nil {
 		return fmt.Errorf("failed to publish IP discovery job: %w", err)
 	}
+
+	return nil
+}
+
+// publishEnrichmentJob publishes an enrichment job to the enrichment queue
+func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.DiscoveryFinding, discoveryID string, assetType string) error {
+	// Build enrichment job
+	enrichmentJob := shared.EnrichmentJob{
+		TraceID:     finding.TraceID,
+		ScanID:      finding.ScanID,
+		OrgID:       finding.OrgID,
+		DiscoveryID: discoveryID,
+		AssetType:   assetType,
+		Created:     time.Now(),
+	}
+
+	// Add asset-specific fields
+	switch assetType {
+	case shared.AssetTypeDomain, shared.AssetTypeSubdomain:
+		// Domain/subdomain: include host for WAF detection + IP for geolocation
+		enrichmentJob.Host = finding.Host
+		if finding.IP != nil {
+			enrichmentJob.IP = *finding.IP
+		}
+	case shared.AssetTypeIP:
+		// IP: include IP for geolocation only
+		if finding.IP != nil {
+			enrichmentJob.IP = *finding.IP
+		}
+	default:
+		// Skip ports or unknown asset types
+		return nil
+	}
+
+	// Publish to enrichment queue
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDiscoveryEnrichmentQueue, enrichmentJob); err != nil {
+		return fmt.Errorf("failed to publish enrichment job: %w", err)
+	}
+
+	s.logger.Debug("Published enrichment job",
+		zap.String("trace_id", finding.TraceID),
+		zap.String("discovery_id", discoveryID),
+		zap.String("asset_type", assetType),
+	)
 
 	return nil
 }
