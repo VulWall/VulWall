@@ -152,20 +152,20 @@ func (s *Service) processGeolocationEnrichment(ctx context.Context, enrichment s
 	collection := s.db.Collection(shared.CollectionDiscoveries)
 
 	// Build update document
-	// Set geolocation metadata fields (overwrites previous values)
+	// Set geolocation metadata fields (nested under metadata.geo)
 	setFields := bson.M{
 		"last_seen": time.Now(),
 	}
 
-	// Only set fields that have values
+	// Only set fields that have values (nested under metadata.geo)
 	if continent != "" {
-		setFields["metadata.continent"] = continent
+		setFields["metadata.geo.continent"] = continent
 	}
 	if country != "" {
-		setFields["metadata.country"] = country
+		setFields["metadata.geo.country"] = country
 	}
 	if isp != "" {
-		setFields["metadata.isp"] = isp
+		setFields["metadata.geo.isp"] = isp
 	}
 
 	update := bson.M{

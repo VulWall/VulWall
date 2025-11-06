@@ -228,7 +228,7 @@ DISCOVERY ENRICHMENT FLOW (WAF + IP GEOLOCATION):
 4. Enrichment Ingestion Consumer
    └─→ Updates discoveries collection:
        ├─→ Sets metadata.waf = "WAF_Name" (simple string, overwrites on change)
-       └─→ Sets metadata.continent, metadata.country, metadata.isp (geolocation data)
+       └─→ Sets metadata.geo.continent, metadata.geo.country, metadata.geo.isp (geolocation data)
 
 INGESTION SERVICE ARCHITECTURE:
 ├─→ Orchestrator starts FOUR consumers concurrently
@@ -549,7 +549,7 @@ A match requires **at least 2 checks** to pass for confidence.
 2. Validates `source` is present (skips if missing)
 3. Updates discovery in MongoDB based on `enrichment_type`:
    - **Type: "waf"** → Sets `metadata.waf = "Cloudflare"` (simple string)
-   - **Type: "geolocation"** → Sets `metadata.continent`, `metadata.country`, `metadata.isp`
+   - **Type: "geolocation"** → Sets `metadata.geo.continent`, `metadata.geo.country`, `metadata.geo.isp`
 4. Overwrites previous values (no history tracking per user requirements)
 
 **Data Model:**
@@ -571,9 +571,11 @@ A match requires **at least 2 checks** to pass for confidence.
   domain: "example.com",
   metadata: {
     waf: "Cloudflare",           // ← WAF detection result
-    continent: "North America",   // ← IP geolocation
-    country: "United States",     // ← IP geolocation
-    isp: "Cloudflare, Inc."      // ← IP geolocation
+    geo: {                        // ← IP geolocation (nested)
+      continent: "North America",
+      country: "United States",
+      isp: "Cloudflare, Inc."
+    }
   }
 }
 ```
@@ -626,7 +628,7 @@ db.findings.aggregate([
 ```javascript
 db.discoveries.find({
   org_id: "org-456",
-  "metadata.country": "United States"
+  "metadata.geo.country": "United States"
 })
 ```
 
@@ -634,7 +636,15 @@ db.discoveries.find({
 ```javascript
 db.discoveries.find({
   org_id: "org-456",
-  "metadata.isp": /cloudflare/i  // Case-insensitive regex match
+  "metadata.geo.isp": /cloudflare/i  // Case-insensitive regex match
+})
+```
+
+**Find assets by continent:**
+```javascript
+db.discoveries.find({
+  org_id: "org-456",
+  "metadata.geo.continent": "North America"
 })
 ```
 
