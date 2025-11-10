@@ -2,10 +2,10 @@ package shared
 
 const (
 	// Scan Status
-	StatusPending   = "pending"
-	StatusRunning   = "running"
-	StatusCompleted = "completed"
-	StatusFailed    = "failed"
+	StatusPending = "pending"
+	StatusRunning = "running"
+	StatusDone    = "done"
+	StatusFailed  = "failed"
 
 	// Scan Type
 	ScanTypeManual    = "manual"
