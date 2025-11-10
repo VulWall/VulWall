@@ -78,7 +78,7 @@ func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organizati
 	scan := shared.Scan{
 		ID:          scanID,
 		OrgID:       org.ID,
-		Status:      shared.StatusPending,
+		Status:      shared.StatusRunning,
 		Type:        shared.ScanTypeScheduled,
 		TriggeredBy: "system",
 		CreatedAt:   time.Now(),
