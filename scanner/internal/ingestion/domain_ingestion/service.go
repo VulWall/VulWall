@@ -248,11 +248,23 @@ func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared
 
 		// If IP changed, close previous resolution and add new one
 		if lastResolution.IP != newIP && lastResolution.LastSeen == nil {
-			update := bson.M{
+			// Step 1: Close the old resolution (set last_seen on the last entry)
+			closeUpdate := bson.M{
 				"$set": bson.M{
 					"resolution_history." + fmt.Sprint(len(discovery.ResolutionHistory)-1) + ".last_seen": timestamp,
-					"last_seen": timestamp,
 				},
+			}
+			_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, closeUpdate)
+			if err != nil {
+				s.logger.Error("Failed to close old resolution",
+					zap.String("discovery_id", discovery.ID),
+					zap.Error(err),
+				)
+				return err
+			}
+
+			// Step 2: Add new resolution and update last_seen
+			addUpdate := bson.M{
 				"$push": bson.M{
 					"resolution_history": shared.ResolutionHistoryEntry{
 						IP:        newIP,
@@ -260,17 +272,20 @@ func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared
 						LastSeen:  nil, // Currently active
 					},
 				},
+				"$set": bson.M{
+					"last_seen": timestamp,
+				},
 			}
 			// Add scan_id to array if present
 			if finding.ScanID != nil {
-				update["$addToSet"] = bson.M{
+				addUpdate["$addToSet"] = bson.M{
 					"scan_ids": *finding.ScanID,
 				}
 			}
 
-			_, err := collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, update)
+			_, err = collection.UpdateOne(ctx, bson.M{"_id": discovery.ID}, addUpdate)
 			if err != nil {
-				s.logger.Error("Failed to update resolution history",
+				s.logger.Error("Failed to add new resolution",
 					zap.String("discovery_id", discovery.ID),
 					zap.Error(err),
 				)
