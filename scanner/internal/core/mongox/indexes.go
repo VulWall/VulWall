@@ -102,13 +102,13 @@ func ensureDiscoveriesIndexes(ctx context.Context, db *mongo.Database, logger *z
 			},
 			Options: options.Index().SetName("idx_org_ownership_type"),
 		},
-		// Query index: org_id + assigned_at (for sorting by assignment time)
+		// Query index: org_id + discovered_at (for sorting by discovery time)
 		{
 			Keys: bson.D{
 				{Key: "org_id", Value: 1},
-				{Key: "assigned_at", Value: -1},
+				{Key: "discovered_at", Value: -1},
 			},
-			Options: options.Index().SetName("idx_org_assigned"),
+			Options: options.Index().SetName("idx_org_discovered"),
 		},
 		// Query index: org_id + asset_type (for finding all assets of a type for an org)
 		{
@@ -157,14 +157,14 @@ func ensureDiscoveriesIndexes(ctx context.Context, db *mongo.Database, logger *z
 			},
 			Options: options.Index().SetName("idx_org_source_type"),
 		},
-		// Index for scan-based queries: org_id + scan_ids + assigned_at
+		// Index for scan-based queries: org_id + scan_ids + discovered_at
 		// MongoDB automatically creates multikey index for scan_ids array field
 		// Supports queries like: {org_id: X, scan_ids: "scan-123"}
 		{
 			Keys: bson.D{
 				{Key: "org_id", Value: 1},
 				{Key: "scan_ids", Value: 1},
-				{Key: "assigned_at", Value: -1},
+				{Key: "discovered_at", Value: -1},
 			},
 			Options: options.Index().
 				SetName("idx_org_scan_time").

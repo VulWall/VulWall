@@ -327,7 +327,7 @@ Input Stream: domain_discovery_queue
 8. Ingestion service processes all domain/subdomain discoveries:
    - Domains/subdomains → `discoveries` (asset_type: "domain" or "subdomain", with org_id) with IP resolution history
    - IPs → `discoveries` (asset_type: "ip", with org_id) as separate records with parent_id
-   - All assets include org_id, ownership_status (verified/notMine/notSure), and assigned_at timestamp
+   - All assets include org_id, ownership_status (verified/notMine/notSure), and discovered_at timestamp
 
 ## Common Commands
 
@@ -816,7 +816,7 @@ type Discovery struct {
     Source         string    // Discovery source ("shodan", "port_discovery", etc.)
     Status         string    // active, inactive, unknown (technical state)
     OwnershipStatus string    // "verified", "notMine", "notSure" (organizational state)
-    AssignedAt     time.Time // When assigned to this organization
+    DiscoveredAt   time.Time // When asset was discovered
     ParentID       *string   // Parent asset ID (hierarchical relationships, org-scoped)
     FirstSeen      time.Time
     LastSeen       time.Time
@@ -1155,7 +1155,7 @@ db.discoveries.aggregate([
 db.discoveries.find({
   org_id: "550e8400-e29b-41d4-a716-446655440000",
   scan_ids: "scan-abc-456"
-}).sort({ assigned_at: -1 })
+}).sort({ discovered_at: -1 })
 
 // Find all security findings from a scan
 db.findings.find({

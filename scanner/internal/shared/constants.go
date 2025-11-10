@@ -7,10 +7,17 @@ const (
 	StatusCompleted = "completed"
 	StatusFailed    = "failed"
 
+	// Scan Type
+	ScanTypeManual    = "manual"
+	ScanTypeScheduled = "scheduled"
+	ScanTypeOnDemand  = "on_demand"
+
 	// MongoDB Collections
-	CollectionScanResults = "scan_results"
-	CollectionDiscoveries = "discoveries" // Org-scoped asset registry (domains, subdomains, IPs, ports)
-	CollectionFindings    = "findings"    // Security findings from scanning tools
+	CollectionOrganizations = "organizations" // Organizations with subscription settings
+	CollectionScans         = "scans"         // Scan execution records
+	CollectionScanResults   = "scan_results"
+	CollectionDiscoveries   = "discoveries" // Org-scoped asset registry (domains, subdomains, IPs, ports)
+	CollectionFindings      = "findings"    // Security findings from scanning tools
 
 	// Redis Streams - Domain Discovery
 	StreamDomainDiscoveryQueue   = "domain_discovery_queue"   // Input stream for domain discovery jobs

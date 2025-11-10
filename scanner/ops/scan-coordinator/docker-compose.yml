@@ -1,0 +1,29 @@
+services:
+  scan-coordinator:
+    build:
+      context: ../..
+      dockerfile: ops/scan-coordinator/Dockerfile
+    container_name: nightwatch-scan-coordinator
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - REDIS_URI=${REDIS_URI}
+      - MONGO_URI=${MONGO_URI}
+    networks:
+      - core-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "scan-coordinator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  core-network:
+    external: true

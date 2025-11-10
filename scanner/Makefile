@@ -23,6 +23,8 @@ build: ## Build all services
 	@go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
+	@echo "Building scan-coordinator..."
+	@go build -o bin/scan-coordinator ./cmd/scan-coordinator
 	@echo "Build complete!"
 
 build-domain-discovery: ## Build domain-discovery service
@@ -49,6 +51,9 @@ build-discovery-enrichment: ## Build discovery-enrichment service
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
 
+build-scan-coordinator: ## Build scan-coordinator service
+	@go build -o bin/scan-coordinator ./cmd/scan-coordinator
+
 run-domain-discovery: ## Run domain-discovery service locally
 	@go run ./cmd/discoveries/domain-discovery/main.go
 
@@ -72,6 +77,9 @@ run-discovery-enrichment: ## Run discovery-enrichment service locally
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
+
+run-scan-coordinator: ## Run scan-coordinator service locally
+	@go run ./cmd/scan-coordinator/main.go
 
 test: ## Run tests
 	@go test -v ./...
@@ -201,6 +209,13 @@ prod-deploy-discovery-enrichment: ## Deploy discovery-enrichment service (usage:
 		ops/scripts/deploy-service.sh discovery-enrichment; \
 	fi
 
+prod-deploy-scan-coordinator: ## Deploy scan-coordinator service (usage: make prod-deploy-scan-coordinator [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh scan-coordinator $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh scan-coordinator; \
+	fi
+
 prod-stop-all: ## Stop all production services
 	@ops/scripts/stop-all.sh
 
@@ -208,7 +223,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, discovery-enrichment"; \
+		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, discovery-enrichment"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)
