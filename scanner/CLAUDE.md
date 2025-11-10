@@ -10,17 +10,24 @@ VulWall Engine is a **vertically-sliced Go monorepo** for security scanning serv
 - Discovery services focus on finding assets and publish findings to Redis streams
 - The **ingestion service** uses **vertical slice architecture** with concurrent consumers
 - All jobs MUST include `org_id` (organization GUID) or they will be skipped
-- **Org-scoped asset storage:** ALL assets (domains, subdomains, IPs, ports) stored in single `discoveries` collection WITH `org_id`
-- **Type discrimination:** Uses `asset_type` field (domain, subdomain, ip, port) to distinguish asset types
-- **Denormalized design:** Each organization has separate discovery records (no cross-org deduplication)
+- **Two separate asset collections:**
+  - `assets` - User-added assets to be scanned (managed via UI, status: Active/Inactive)
+  - `discoveries` - Scan results/findings (auto-discovered, ownership_status: verified/notMine/notSure)
+- **Org-scoped storage:** ALL assets stored with `org_id` (denormalized design)
+- **Type discrimination:** Uses `asset_type` field (domain, subdomain, ip, port) for discoveries
 - **Hierarchical relationships:** Domain → Subdomain → IP → Port via parent_id fields (org-scoped)
-- **Two status fields:** `discovery.status` (technical state: active/inactive) and `discovery.ownership_status` (organizational state: verified/notMine/notSure)
+- **Two status fields:**
+  - `asset.status` (Active/Inactive) - user-controlled via UI
+  - `discovery.status` (active/inactive/unknown) - technical state
+  - `discovery.ownership_status` (verified/notMine/notSure) - organizational state
 
 ## Project Structure
 
 ```
 VulWall.NightWatch/
 ├── cmd/                    # Entry points for each service
+│   ├── scan-coordinator/   # Scan coordinator entry point
+│   │   └── main.go
 │   ├── discoveries/        # Discovery services entry points
 │   │   ├── domain-discovery/
 │   │   │   └── main.go
@@ -39,8 +46,12 @@ VulWall.NightWatch/
 │   │   ├── mongox/        # MongoDB connection
 │   │   └── redisx/        # Redis client & consumer groups
 │   ├── shared/            # Cross-cutting concerns used by 2+ services
-│   │   ├── models.go      # Shared models (DiscoveryJob, IPDiscoveryJob, etc.)
+│   │   ├── models.go      # Shared models (DiscoveryJob, IPDiscoveryJob, Organization, Scan, etc.)
 │   │   └── constants.go   # Shared constants (streams, protocols, statuses)
+│   ├── scan_coordinator/  # Scan coordinator service (automatic scan scheduling)
+│   │   ├── constants.go   # Scheduler interval configuration
+│   │   ├── service.go     # Scan coordination logic
+│   │   └── scheduler.go   # Periodic scheduler loop
 │   ├── ingestion/         # Ingestion service (vertical slice architecture)
 │   │   ├── orchestrator.go      # Runs all consumers concurrently
 │   │   ├── domain_ingestion/    # Domain ingestion slice
@@ -236,6 +247,23 @@ INGESTION SERVICE ARCHITECTURE:
 ├─→ port_ingestion: consumes ip_discovery_results
 ├─→ findings_ingestion: consumes security_findings
 └─→ enrichment_ingestion: consumes discovery_enrichment_results
+
+SCAN COORDINATOR FLOW (AUTOMATED SCANNING):
+1. Scan Coordinator runs on schedule (default: every hour)
+   └─→ Queries organizations collection for orgs with scan_interval_days > 0
+
+2. For each organization:
+   ├─→ Check last scan from scans collection
+   ├─→ Calculate days_since_last_scan = now - last_scan.created_at
+   └─→ If days_since_last_scan >= org.subscription_settings.scan_interval_days:
+       ├─→ Create new Scan record (status=pending, type=scheduled, triggered_by=system)
+       ├─→ Query all active user-added assets for org from assets collection (status="Active")
+       └─→ Publish discovery jobs to Redis:
+           ├─→ Domain assets → domain_discovery_queue (with scan_id + org_id)
+           └─→ IP assets → ip_discovery_queue (with scan_id + org_id)
+
+3. Discovery services process jobs normally
+   └─→ All findings include scan_id for tracking which scan found them
 ```
 
 ### Model Ownership Rules
@@ -253,9 +281,13 @@ INGESTION SERVICE ARCHITECTURE:
   - `SecurityFinding` (security vulnerabilities from scanners)
   - `EnrichmentFinding` (asset enrichment data from active recon)
 - Shared asset models:
+  - `Asset` (user-added assets to be scanned: domain, ip)
   - `Discovery` (unified asset model for all 4 types with org_id: domain, subdomain, ip, port)
   - `ResolutionHistoryEntry` (IP resolution history for domains/subdomains)
   - `ServiceHistoryEntry` (service change history for ports)
+- Scan coordination models:
+  - `Organization`, `SubscriptionSettings` (org settings with scan_interval_days)
+  - `Scan`, `ScanStats` (scan execution tracking)
 - Common data structures for inter-service communication
 
 ✅ **Put in `internal/shared/constants.go`:**
@@ -265,8 +297,11 @@ INGESTION SERVICE ARCHITECTURE:
   - `StreamSecurityFindings` - Security findings from scanners
   - `StreamDiscoveryEnrichmentResults` - Discovery enrichment data (WAF + IP geolocation)
 - Shared collection names:
+  - `CollectionAssets` - User-added assets to be scanned
   - `CollectionDiscoveries` - Org-scoped asset registry (includes org_id)
   - `CollectionFindings` - Security findings/vulnerabilities
+  - `CollectionOrganizations` - Organizations with subscription settings
+  - `CollectionScans` - Scan execution records
 - Asset type constants (domain, subdomain, ip, port)
 - Finding severity constants (info, low, medium, high, critical)
 - Finding status constants (open, resolved)
@@ -334,6 +369,7 @@ Input Stream: domain_discovery_queue
 ### Building Services
 ```bash
 make build                      # Build all services
+make build-scan-coordinator     # Build scan-coordinator only
 make build-domain-discovery     # Build domain-discovery only
 make build-port-discovery       # Build port-discovery only
 make build-nuclei-scanner       # Build nuclei-scanner only
@@ -342,6 +378,7 @@ make build-ingestion            # Build ingestion only
 
 ### Running Locally
 ```bash
+make run-scan-coordinator       # Run scan-coordinator service
 make run-domain-discovery       # Run domain-discovery service
 make run-port-discovery         # Run port-discovery service
 make run-nuclei-scanner         # Run nuclei-scanner service
@@ -684,6 +721,283 @@ To add a new enrichment type (e.g., CDN detection, tech stack profiling):
 - Avoid arrays or complex history tracking
 - Example: `metadata.cdn = "Cloudflare"`, `metadata.cms = "WordPress"`
 
+## Scan Coordinator (Automated Scanning)
+
+The Scan Coordinator is a background service that **automatically schedules and triggers scans** based on organization subscription settings.
+
+### Overview
+
+**Location:** `internal/scan_coordinator/`
+
+**Purpose:** Automates recurring scans for organizations based on their subscription plans, eliminating the need for manual scan initiation.
+
+**Key Features:**
+- ✅ Runs on a schedule (default: every hour)
+- ✅ Queries organizations with `scan_interval_days > 0`
+- ✅ Checks time since last scan
+- ✅ Creates scan records and publishes discovery jobs automatically
+- ✅ Only scans **active user-added assets** from `assets` collection (`status = "Active"`)
+- ✅ Tracks all scans in `scans` collection for auditing
+
+### Architecture
+
+**Components:**
+- `constants.go` - Scheduler interval configuration (default: 3600 seconds)
+- `scheduler.go` - Periodic scheduler loop that runs coordination cycles
+- `service.go` - Core coordination logic (check org settings, trigger scans)
+
+**How It Works:**
+
+1. **Scheduler Loop:** Runs every N seconds (configurable)
+2. **Query Organizations:** Finds orgs with `subscription_settings.scan_interval_days > 0`
+3. **For Each Organization:**
+   - Retrieve last scan from `scans` collection
+   - Calculate `days_since_last_scan = (now - last_scan.created_at) / 24h`
+   - If `days_since_last_scan >= scan_interval_days`:
+     - Create new `Scan` record (status=pending, type=scheduled, triggered_by=system)
+     - Query all active user-added assets for org from `assets` collection (`status = "Active"`)
+     - Publish discovery jobs to Redis streams (with `scan_id` + `org_id`)
+
+### Data Models
+
+**Asset Model** (in `shared/models.go`):**
+```go
+// Asset represents a user-added asset to be scanned
+// Stored in assets collection (user-managed assets, not scan discoveries)
+// Matches VulWall.Dashboard.Data.Entities.Asset.Asset entity
+type Asset struct {
+    ID            string     // MongoDB ObjectId
+    OrgID         string     // Organization GUID
+    Type          string     // "domain" or "ip"
+    Status        string     // "Active" or "Inactive"
+    DNSVerifiedAt *time.Time // DNS verification timestamp
+    Domain        *string    // For domain assets
+    IP            *string    // For IP assets
+    AddedOn       time.Time  // When asset was added
+}
+```
+
+**Organization Model** (in `shared/models.go`):
+```go
+type Organization struct {
+    ID                   string               // Organization UUID
+    UserIDs              []string             // Associated users
+    CompanyName          string
+    Industry             string
+    Website              string
+    CertVisible          bool
+    CreatedAt            time.Time
+    UpdatedAt            time.Time
+    SubscriptionSettings SubscriptionSettings // Scan configuration
+}
+
+type SubscriptionSettings struct {
+    ScanIntervalDays int // How often to scan (0 = disabled)
+    MaxAssets        int // Maximum allowed assets
+}
+```
+
+**Scan Model** (in `shared/models.go`):
+```go
+type Scan struct {
+    ID          string     // Scan UUID
+    OrgID       string     // Organization GUID
+    Status      string     // "pending", "running", "completed", "failed"
+    Type        string     // "manual", "scheduled", "on_demand"
+    TriggeredBy string     // User ID or "system"
+    StartedAt   *time.Time
+    CompletedAt *time.Time
+    CreatedAt   time.Time
+    UpdatedAt   time.Time
+    Stats       ScanStats  // Scan statistics
+}
+
+type ScanStats struct {
+    TotalAssets      int // Total assets to scan
+    AssetsScanned    int // Assets scanned so far
+    NewAssets        int // New assets discovered
+    FindingsDetected int // Security findings found
+}
+```
+
+### Database Collections
+
+**Assets Collection:**
+```javascript
+{
+  _id: ObjectId("..."),
+  org_id: "507f1f77bcf86cd799439011",
+  type: "domain",              // "domain" or "ip"
+  status: "Active",            // "Active" or "Inactive"
+  dns_verified_at: ISODate("2025-11-09T08:53:38.744Z"),
+  domain: "moj.dev",          // For domain assets
+  // ip: "8.8.8.8",           // For IP assets
+  added_on: ISODate("2025-11-09T08:53:27.775Z")
+}
+```
+
+**Organizations Collection:**
+```javascript
+{
+  _id: "org-uuid-123",
+  user_ids: ["user-1", "user-2"],
+  company_name: "Example Corp",
+  industry: "Technology",
+  website: "https://example.com",
+  cert_visible: true,
+  created_at: ISODate("2025-01-01"),
+  updated_at: ISODate("2025-01-10"),
+  subscription_settings: {
+    scan_interval_days: 7,  // Scan every 7 days
+    max_assets: 1000
+  }
+}
+```
+
+**Scans Collection:**
+```javascript
+{
+  _id: "scan-uuid-456",
+  org_id: "org-uuid-123",
+  status: "pending",           // pending → running → completed/failed
+  type: "scheduled",           // scheduled (auto), manual (UI), on_demand
+  triggered_by: "system",      // "system" for automated scans
+  started_at: null,
+  completed_at: null,
+  created_at: ISODate("2025-01-10T12:00:00Z"),
+  updated_at: ISODate("2025-01-10T12:00:00Z"),
+  stats: {
+    total_assets: 0,
+    assets_scanned: 0,
+    new_assets: 0,
+    findings_detected: 0
+  }
+}
+```
+
+### Integration with Discovery Services
+
+The Scan Coordinator seamlessly integrates with existing discovery services:
+
+1. **Publishes Standard Jobs:** Uses `shared.DiscoveryJob` and `shared.IPDiscoveryJob`
+2. **Includes scan_id:** All jobs include the scan UUID for tracking
+3. **No Changes to Discovery Services:** Discovery services work unchanged
+4. **Scan Tracking:** All discoveries and findings include `scan_ids` array
+
+**Example Flow:**
+```
+Scan Coordinator (every hour)
+    ↓
+Check: Last scan was 8 days ago, scan_interval_days = 7
+    ↓
+1. Create Scan (scan_id = "scan-abc-456")
+2. Query active user-added assets from assets collection (status = "Active")
+3. Publish jobs:
+   ├─→ domain_discovery_queue: {org_id, scan_id, host: "moj.dev"}        (from asset.domain)
+   ├─→ domain_discovery_queue: {org_id, scan_id, host: "api.moj.dev"}   (from asset.domain)
+   └─→ ip_discovery_queue: {org_id, scan_id, ip: "192.168.1.100"}       (from asset.ip)
+    ↓
+Discovery Services Process Jobs
+    ↓
+Findings stored in discoveries collection (scan results) with scan_id = "scan-abc-456"
+    ↓
+Query discoveries by scan: db.discoveries.find({scan_ids: "scan-abc-456"})
+```
+
+### Configuration
+
+**Scheduler Interval:** Configured in `internal/scan_coordinator/constants.go`
+```go
+const SchedulerInterval = 3600 // 1 hour in seconds
+```
+
+To change the interval, modify this constant and rebuild.
+
+### Deployment
+
+**Build:**
+```bash
+make build-scan-coordinator
+```
+
+**Run Locally:**
+```bash
+make run-scan-coordinator
+```
+
+**Deploy to Production:**
+```bash
+make prod-deploy-scan-coordinator           # Deploy
+make prod-stop-service SERVICE=scan-coordinator  # Stop
+make prod-logs SERVICE=scan-coordinator OPTS=-f  # View logs
+```
+
+**Deploy All Services (includes scan-coordinator):**
+```bash
+make prod-deploy-all
+```
+
+### Disabling Automated Scans
+
+To disable automated scans for an organization:
+```javascript
+db.organizations.updateOne(
+  { _id: "org-uuid" },
+  { $set: { "subscription_settings.scan_interval_days": 0 } }
+)
+```
+
+To re-enable:
+```javascript
+db.organizations.updateOne(
+  { _id: "org-uuid" },
+  { $set: { "subscription_settings.scan_interval_days": 7 } }
+)
+```
+
+### Monitoring Scans
+
+**View all scans for an organization:**
+```javascript
+db.scans.find({ org_id: "org-uuid" }).sort({ created_at: -1 })
+```
+
+**Check last scan:**
+```javascript
+db.scans.findOne(
+  { org_id: "org-uuid" },
+  { sort: { created_at: -1 } }
+)
+```
+
+**Query discoveries from a specific scan:**
+```javascript
+db.discoveries.find({
+  org_id: "org-uuid",
+  scan_ids: "scan-abc-456"
+})
+```
+
+**Count assets discovered per scan:**
+```javascript
+db.discoveries.aggregate([
+  { $match: { org_id: "org-uuid", scan_ids: "scan-abc-456" } },
+  { $group: { _id: "$asset_type", count: { $sum: 1 } } }
+])
+```
+
+### Important Notes
+
+- ✅ **Only ONE instance** should run (do not scale horizontally)
+- ✅ **Minimal resource usage** - only queries MongoDB and publishes to Redis
+- ✅ **Two collections:**
+  - `assets` - User-added assets to be scanned (status: "Active" / "Inactive")
+  - `discoveries` - Scan results/findings (ownership_status: "verified" / "notMine" / "notSure")
+- ✅ **Only scans active user-added assets** - queries from `assets` collection with `status = "Active"`
+- ✅ **Audit trail** - All scans logged with `triggered_by = "system"`
+- ✅ **Graceful shutdown** - Handles SIGTERM/SIGINT properly
+- ✅ **See [SCAN_COORDINATOR.md](SCAN_COORDINATOR.md)** for complete documentation
+
 ## Key Files
 
 ### Infrastructure (`internal/core/`)
@@ -696,11 +1010,14 @@ To add a new enrichment type (e.g., CDN detection, tech stack profiling):
 ### Shared Package (`internal/shared/`)
 - `models.go` - Models used by 2+ services:
   - Job formats: `DiscoveryJob`, `IPDiscoveryJob`
-  - Finding formats: `DiscoveryFinding`, `IPDiscoveryFinding`
-  - Asset models: `Discovery` (unified model for all 4 asset types)
-  - Relationship model: `OrgAssetLink`
+  - Finding formats: `DiscoveryFinding`, `IPDiscoveryFinding`, `SecurityFinding`, `EnrichmentFinding`
+  - Asset models:
+    - `Asset` (user-added assets to be scanned: domain, ip)
+    - `Discovery` (unified model for all 4 scan result types: domain, subdomain, ip, port)
+  - Organization models: `Organization`, `SubscriptionSettings`
+  - Scan models: `Scan`, `ScanStats`
   - History models: `ResolutionHistoryEntry`, `ServiceHistoryEntry`
-- `constants.go` - Constants used by 2+ services (streams, collections, asset types, protocols, statuses)
+- `constants.go` - Constants used by 2+ services (streams, collections, asset types, protocols, statuses, scan types)
 
 ### Ingestion Service (`internal/ingestion/`)
 **Domain Ingestion Slice** (`internal/ingestion/domain_ingestion/`):
@@ -903,8 +1220,11 @@ type ServiceHistoryEntry struct {
 - `shared.StreamSecurityFindings = "security_findings"` - Output stream for security findings from scanners (requires `source`)
 
 **Collection Names:**
-- `shared.CollectionDiscoveries = "discoveries"` - Org-scoped asset registry (all 4 asset types, includes org_id)
+- `shared.CollectionAssets = "assets"` - User-added assets to be scanned (includes org_id)
+- `shared.CollectionDiscoveries = "discoveries"` - Org-scoped scan results registry (all 4 asset types, includes org_id)
 - `shared.CollectionFindings = "findings"` - Security findings/vulnerabilities
+- `shared.CollectionOrganizations = "organizations"` - Organizations with subscription settings
+- `shared.CollectionScans = "scans"` - Scan execution records
 
 **Asset Types (for Discovery.AssetType):**
 - `shared.AssetTypeDomain = "domain"` - Domain asset type

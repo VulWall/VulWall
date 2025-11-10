@@ -143,17 +143,14 @@ func (s *Service) createScan(ctx context.Context, scan shared.Scan) error {
 	return err
 }
 
-// getOrgAssets retrieves all verified assets for an organization
-func (s *Service) getOrgAssets(ctx context.Context, orgID string) ([]shared.Discovery, error) {
-	coll := s.db.Collection(shared.CollectionDiscoveries)
+// getOrgAssets retrieves all active user-added assets for an organization
+func (s *Service) getOrgAssets(ctx context.Context, orgID string) ([]shared.Asset, error) {
+	coll := s.db.Collection(shared.CollectionAssets)
 
-	// Query for all verified assets (domains and IPs are the entry points for scanning)
+	// Query for all active assets (user-added assets to be scanned)
 	filter := bson.M{
-		"org_id":           orgID,
-		"ownership_status": shared.OwnershipStatusVerified,
-		"asset_type": bson.M{
-			"$in": []string{shared.AssetTypeDomain, shared.AssetTypeSubdomain, shared.AssetTypeIP},
-		},
+		"org_id": orgID,
+		"status": "Active",
 	}
 
 	cursor, err := coll.Find(ctx, filter)
@@ -162,7 +159,7 @@ func (s *Service) getOrgAssets(ctx context.Context, orgID string) ([]shared.Disc
 	}
 	defer cursor.Close(ctx)
 
-	var assets []shared.Discovery
+	var assets []shared.Asset
 	if err := cursor.All(ctx, &assets); err != nil {
 		return nil, err
 	}
@@ -171,20 +168,27 @@ func (s *Service) getOrgAssets(ctx context.Context, orgID string) ([]shared.Disc
 }
 
 // publishDiscoveryJobs publishes discovery jobs to Redis for each asset
-func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string, assets []shared.Discovery) error {
+func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string, assets []shared.Asset) error {
 	traceID := uuid.New().String()
 
 	for _, asset := range assets {
-		switch asset.AssetType {
-		case shared.AssetTypeDomain, shared.AssetTypeSubdomain:
+		switch asset.Type {
+		case "domain":
 			// Publish domain discovery job
+			if asset.Domain == nil {
+				s.logger.Warn("Domain asset missing domain field",
+					zap.String("org_id", orgID),
+					zap.String("asset_id", asset.ID),
+				)
+				continue
+			}
+
 			job := shared.DiscoveryJob{
-				TraceID:  traceID,
-				ScanID:   &scanID,
-				OrgID:    orgID,
-				ParentID: asset.ParentID,
-				Host:     s.getAssetHost(asset),
-				Created:  time.Now(),
+				TraceID: traceID,
+				ScanID:  &scanID,
+				OrgID:   orgID,
+				Host:    *asset.Domain,
+				Created: time.Now(),
 			}
 
 			if err := s.publishToStream(ctx, shared.StreamDomainDiscoveryQueue, job); err != nil {
@@ -199,18 +203,25 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 			s.logger.Debug("Published domain discovery job",
 				zap.String("scan_id", scanID),
 				zap.String("asset_id", asset.ID),
-				zap.String("host", job.Host),
+				zap.String("host", *asset.Domain),
 			)
 
-		case shared.AssetTypeIP:
+		case "ip":
 			// Publish IP discovery job (port scanning)
+			if asset.IP == nil {
+				s.logger.Warn("IP asset missing IP field",
+					zap.String("org_id", orgID),
+					zap.String("asset_id", asset.ID),
+				)
+				continue
+			}
+
 			job := shared.IPDiscoveryJob{
-				TraceID:  traceID,
-				ScanID:   &scanID,
-				OrgID:    orgID,
-				ParentID: &asset.ID,
-				IP:       *asset.IP,
-				Created:  time.Now(),
+				TraceID: traceID,
+				ScanID:  &scanID,
+				OrgID:   orgID,
+				IP:      *asset.IP,
+				Created: time.Now(),
 			}
 
 			if err := s.publishToStream(ctx, shared.StreamIPDiscoveryQueue, job); err != nil {
@@ -227,24 +238,17 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 				zap.String("asset_id", asset.ID),
 				zap.String("ip", *asset.IP),
 			)
+
+		default:
+			s.logger.Warn("Unknown asset type",
+				zap.String("scan_id", scanID),
+				zap.String("asset_id", asset.ID),
+				zap.String("type", asset.Type),
+			)
 		}
 	}
 
 	return nil
-}
-
-// getAssetHost returns the appropriate host value for an asset
-func (s *Service) getAssetHost(asset shared.Discovery) string {
-	if asset.Domain != nil {
-		return *asset.Domain
-	}
-	if asset.Subdomain != nil {
-		return *asset.Subdomain
-	}
-	if asset.IP != nil {
-		return *asset.IP
-	}
-	return ""
 }
 
 // publishToStream publishes a job to a Redis stream

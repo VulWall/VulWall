@@ -13,6 +13,7 @@ const (
 	ScanTypeOnDemand  = "on_demand"
 
 	// MongoDB Collections
+	CollectionAssets        = "assets"        // User-added assets to be scanned
 	CollectionOrganizations = "organizations" // Organizations with subscription settings
 	CollectionScans         = "scans"         // Scan execution records
 	CollectionScanResults   = "scan_results"

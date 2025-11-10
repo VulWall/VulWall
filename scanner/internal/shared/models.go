@@ -171,6 +171,20 @@ type EnrichmentFinding struct {
 	Timestamp      time.Time              `json:"timestamp" bson:"timestamp"`                 // When enrichment was performed
 }
 
+// Asset represents a user-added asset to be scanned
+// Stored in assets collection (user-managed assets, not scan discoveries)
+// Matches VulWall.Dashboard.Data.Entities.Asset.Asset entity
+type Asset struct {
+	ID            string     `json:"_id,omitempty" bson:"_id,omitempty"`
+	OrgID         string     `json:"org_id" bson:"org_id"`
+	Type          string     `json:"type" bson:"type"`                                           // "domain", "ip"
+	Status        string     `json:"status" bson:"status"`                                       // "Active", "Inactive"
+	DNSVerifiedAt *time.Time `json:"dns_verified_at,omitempty" bson:"dns_verified_at,omitempty"` // DNS verification timestamp
+	Domain        *string    `json:"domain,omitempty" bson:"domain,omitempty"`                   // For domain assets
+	IP            *string    `json:"ip,omitempty" bson:"ip,omitempty"`                           // For IP assets
+	AddedOn       time.Time  `json:"added_on" bson:"added_on"`                                   // When asset was added
+}
+
 // Organization represents an organization with subscription settings
 // Stored in organizations collection
 type Organization struct {
