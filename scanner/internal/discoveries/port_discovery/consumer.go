@@ -49,7 +49,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 	streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    GroupPortDiscovery,
 		Consumer: consumerName,
-		Streams:  []string{shared.StreamIPDiscoveryQueue, ">"},
+		Streams:  []string{shared.StreamIPDiscoveryQueue, "0"},
 		Count:    1,
 		Block:    5 * time.Second,
 	}).Result()

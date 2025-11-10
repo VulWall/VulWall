@@ -50,11 +50,11 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			c.logger.Info("Domain ingestion consumer context cancelled, shutting down")
 			return ctx.Err()
 		default:
-			// Read messages from stream
+			// Read messages from stream (using "0" to get pending + new messages)
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupDomainIngestion,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamDomainDiscoveryResults, "0"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()

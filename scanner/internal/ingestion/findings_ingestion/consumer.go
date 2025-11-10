@@ -61,11 +61,11 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			c.logger.Info("Context cancelled, shutting down consumer")
 			return ctx.Err()
 		default:
-			// Read messages from stream
+			// Read messages from stream (using "0" to get pending + new messages)
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupFindingsIngestion,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamSecurityFindings, ">"},
+				Streams:  []string{shared.StreamSecurityFindings, "0"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()

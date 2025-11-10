@@ -65,7 +65,7 @@ func (c *Consumer) consumeEnrichmentJobs(ctx context.Context) error {
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupDiscoveryEnrichment,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDiscoveryEnrichmentQueue, ">"},
+				Streams:  []string{shared.StreamDiscoveryEnrichmentQueue, "0"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()

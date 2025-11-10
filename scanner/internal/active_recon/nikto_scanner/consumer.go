@@ -105,7 +105,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupNiktoScanner,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamDomainDiscoveryResults, "0"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
@@ -153,7 +153,7 @@ func (c *Consumer) processIPMessages(ctx context.Context, consumerName string) e
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupNiktoScanner,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamIPDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamIPDiscoveryResults, "0"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
