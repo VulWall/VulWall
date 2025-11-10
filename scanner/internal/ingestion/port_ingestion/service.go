@@ -113,7 +113,7 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 			Source:         finding.Source,
 			Status:         finding.Status,
 			OwnershipStatus: shared.OwnershipStatusVerified,  // Default to verified
-			AssignedAt:     timestamp,                       // When assigned to org
+			DiscoveredAt:   timestamp,                       // When asset was discovered
 			ParentID:       finding.ParentID,                // From IPDiscoveryJob.ParentID
 			IP:             &finding.IP,
 			FirstSeen:      timestamp,
@@ -208,7 +208,7 @@ func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDisc
 			Source:         finding.Source,
 			Status:         finding.Status,
 			OwnershipStatus: shared.OwnershipStatusVerified,     // Default to verified
-			AssignedAt:     timestamp,                          // When assigned to org
+			DiscoveredAt:   timestamp,                          // When asset was discovered
 			ParentID:       &ipDiscoveryID,
 			IP:             &finding.IP,
 			Port:           &finding.Port,
@@ -420,7 +420,7 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 		"source":           discovery.Source,
 		"status":           discovery.Status,
 		"ownership_status": discovery.OwnershipStatus,
-		"assigned_at":      discovery.AssignedAt,
+		"discovered_at":    discovery.DiscoveredAt,
 		"first_seen":       discovery.FirstSeen,
 		"last_seen":        discovery.LastSeen,
 	}

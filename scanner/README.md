@@ -449,7 +449,7 @@ Org-to-asset relationship links (many-to-many):
 - `org_id` - Organization GUID
 - `asset_id` - References `discoveries._id`
 - `status` - Organizational state (confirmed, pending, dismissed)
-- `assigned_at` - When asset was assigned to org
+- `discovered_at` - When asset was discovered
 
 **Indexes:**
 - `idx_org_id_asset_id` - UNIQUE, prevents duplicate links
