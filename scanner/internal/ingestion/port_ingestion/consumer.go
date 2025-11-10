@@ -29,7 +29,7 @@ func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logg
 
 func (c *Consumer) Start(ctx context.Context) error {
 	// Create consumer group if it doesn't exist
-	err := c.redis.XGroupCreateMkStream(ctx, shared.StreamIPDiscoveryResults, GroupPortIngestion, ">").Err()
+	err := c.redis.XGroupCreateMkStream(ctx, shared.StreamIPDiscoveryResults, GroupPortIngestion, "0").Err()
 	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
