@@ -64,7 +64,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupEnrichmentIngestion,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDiscoveryEnrichmentResults, "0"},
+				Streams:  []string{shared.StreamDiscoveryEnrichmentResults, ">"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
