@@ -170,3 +170,48 @@ type EnrichmentFinding struct {
 	Data           map[string]interface{} `json:"data" bson:"data"`                           // Enrichment data (e.g., {"waf_name": "Cloudflare"})
 	Timestamp      time.Time              `json:"timestamp" bson:"timestamp"`                 // When enrichment was performed
 }
+
+// Organization represents an organization with subscription settings
+// Stored in organizations collection
+type Organization struct {
+	ID                   string               `json:"_id" bson:"_id"`
+	UserIDs              []string             `json:"user_ids" bson:"user_ids"`
+	CompanyName          string               `json:"company_name" bson:"company_name"`
+	Industry             string               `json:"industry" bson:"industry"`
+	Website              string               `json:"website" bson:"website"`
+	CertVisible          bool                 `json:"cert_visible" bson:"cert_visible"`
+	CreatedAt            time.Time            `json:"created_at" bson:"created_at"`
+	UpdatedAt            time.Time            `json:"updated_at" bson:"updated_at"`
+	SubscriptionSettings SubscriptionSettings `json:"subscription_settings" bson:"subscription_settings"`
+}
+
+// SubscriptionSettings contains subscription-specific settings for scanning
+type SubscriptionSettings struct {
+	ScanIntervalDays int `json:"scan_interval_days" bson:"scan_interval_days"` // How often to scan assets
+	MaxAssets        int `json:"max_assets" bson:"max_assets"`                 // Maximum number of assets allowed
+}
+
+// Scan represents a scan execution in the system
+// Stored in scans collection
+type Scan struct {
+	ID          string     `json:"_id" bson:"_id"`                                       // Scan UUID
+	OrgID       string     `json:"org_id" bson:"org_id"`                                 // Organization GUID
+	Status      string     `json:"status" bson:"status"`                                 // "pending", "running", "completed", "failed"
+	Type        string     `json:"type" bson:"type"`                                     // "manual", "scheduled", "on_demand"
+	TriggeredBy string     `json:"triggered_by,omitempty" bson:"triggered_by,omitempty"` // User ID or "system"
+	StartedAt   *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty" bson:"completed_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at" bson:"updated_at"`
+
+	// Scan statistics (populated as scan progresses)
+	Stats ScanStats `json:"stats,omitempty" bson:"stats,omitempty"`
+}
+
+// ScanStats tracks statistics for a scan execution
+type ScanStats struct {
+	TotalAssets      int `json:"total_assets" bson:"total_assets"`
+	AssetsScanned    int `json:"assets_scanned" bson:"assets_scanned"`
+	NewAssets        int `json:"new_assets" bson:"new_assets"`
+	FindingsDetected int `json:"findings_detected" bson:"findings_detected"`
+}
