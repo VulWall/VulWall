@@ -53,27 +53,23 @@ func main() {
 	// Create scheduler
 	scheduler := scan_coordinator.NewScheduler(redisClient, db, logger.Log)
 
+	// Create scan monitor
+	scanMonitor := scan_coordinator.NewScanMonitor(redisClient, db, logger.Log)
+
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Start scheduler in goroutine
-	errChan := make(chan error, 1)
-	go func() {
-		if err := scheduler.Start(ctx); err != nil {
-			errChan <- err
-		}
-	}()
+	// Start scheduler in goroutine (runs every 1 hour)
+	go scheduler.Start(ctx)
 
-	// Wait for shutdown signal or error
-	select {
-	case <-sigChan:
-		logger.Log.Info("Received shutdown signal")
-		cancel()
-	case err := <-errChan:
-		logger.Log.Error("Scheduler error", zap.Error(err))
-		cancel()
-	}
+	// Start scan monitor in goroutine (runs every 15 minutes)
+	go scanMonitor.Start(ctx)
+
+	// Wait for shutdown signal
+	<-sigChan
+	logger.Log.Info("Received shutdown signal")
+	cancel()
 
 	logger.Log.Info("Scan Coordinator stopped")
 }

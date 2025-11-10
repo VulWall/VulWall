@@ -13,26 +13,24 @@ import (
 
 // Scheduler runs the scan coordinator on a schedule
 type Scheduler struct {
-	service  *Service
-	db       *mongo.Database
-	logger   *zap.Logger
-	interval time.Duration
+	service *Service
+	db      *mongo.Database
+	logger  *zap.Logger
 }
 
 // NewScheduler creates a new scheduler instance
 func NewScheduler(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Scheduler {
 	return &Scheduler{
-		service:  NewService(redisClient, db, logger),
-		db:       db,
-		logger:   logger,
-		interval: time.Duration(SchedulerInterval) * time.Second,
+		service: NewService(redisClient, db, logger),
+		db:      db,
+		logger:  logger,
 	}
 }
 
 // Start begins the scheduler loop
 func (sc *Scheduler) Start(ctx context.Context) error {
 	sc.logger.Info("Scan coordinator scheduler started",
-		zap.Duration("interval", sc.interval),
+		zap.Duration("interval", SchedulerInterval),
 	)
 
 	// Run immediately on startup
@@ -41,7 +39,7 @@ func (sc *Scheduler) Start(ctx context.Context) error {
 	}
 
 	// Then run on schedule
-	ticker := time.NewTicker(sc.interval)
+	ticker := time.NewTicker(SchedulerInterval)
 	defer ticker.Stop()
 
 	for {
