@@ -187,7 +187,6 @@ func (s *Service) convertToSecurityFinding(tech TechDetectionWithInfo, target Sc
 		OrgID:       target.OrgID,
 		Source:      "webtechprofiler",
 		DiscoveryID: target.DiscoveryID,
-		FindingType: "tech-detection",
 		Severity:    severity,
 		Title:       tech.Technology,
 		Metadata:    metadata,
