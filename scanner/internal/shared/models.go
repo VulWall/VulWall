@@ -145,6 +145,17 @@ type SecurityFinding struct {
 	Timestamp   time.Time              `json:"timestamp" bson:"timestamp"`                   // When finding was discovered
 }
 
+// ScanTarget represents a target to be scanned by active recon scanners
+// Used by nuclei_scanner, nikto_scanner, testssl_scanner, webtechprofiler
+type ScanTarget struct {
+	Target      string  `json:"target"`        // URL, IP, or Host:port to scan
+	AssetType   string  `json:"asset_type"`    // Asset type: domain, subdomain, ip, port
+	DiscoveryID string  `json:"discovery_id"`  // Links back to Discovery._id
+	TraceID     string  `json:"trace_id"`      // Request tracing ID
+	ScanID      *string `json:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
+	OrgID       string  `json:"org_id"`        // Organization GUID
+}
+
 // EnrichmentJob represents a request to enrich a discovered asset
 // Published by ingestion services to discovery_enrichment_queue
 type EnrichmentJob struct {

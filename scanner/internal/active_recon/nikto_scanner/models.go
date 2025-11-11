@@ -1,5 +1,11 @@
 package nikto_scanner
 
+import "github.com/vulwall/scanners/internal/shared"
+
+// ScanTarget is an alias for the shared ScanTarget model
+// All active recon scanners use the same ScanTarget structure
+type ScanTarget = shared.ScanTarget
+
 // NiktoOutput represents the JSON output from Nikto scanner
 // Nikto's JSON output format varies, this represents common fields
 type NiktoOutput struct {
@@ -24,12 +30,4 @@ type NiktoStats struct {
 	ElapsedTime  string `json:"elapsed"`
 	ItemsTested  int    `json:"itemstested"`
 	ItemsFound   int    `json:"itemsfound"`
-}
-
-// ScanTarget represents a target to be scanned by Nikto
-type ScanTarget struct {
-	Target      string // URL or IP to scan
-	DiscoveryID string // Links back to Discovery._id
-	TraceID     string
-	OrgID       string
 }

@@ -242,6 +242,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	// Discovery services always include this ID
 	scanTarget := ScanTarget{
 		Target:      target,
+		AssetType:   finding.AssetType,   // Asset type (domain, subdomain, ip, port)
 		DiscoveryID: finding.DiscoveryID, // Always present from discovery services
 		TraceID:     finding.TraceID,
 		OrgID:       finding.OrgID,
@@ -289,6 +290,7 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 	// Port discovery service always includes this ID
 	scanTarget := ScanTarget{
 		Target:      target,
+		AssetType:   finding.AssetType,   // Asset type (port)
 		DiscoveryID: finding.DiscoveryID, // Always present from port discovery service
 		TraceID:     finding.TraceID,
 		OrgID:       finding.OrgID,

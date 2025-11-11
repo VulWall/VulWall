@@ -235,6 +235,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	// The discovery service already generated a deterministic ID for this asset
 	scanTarget := ScanTarget{
 		Target:      target,
+		AssetType:   finding.AssetType,   // Asset type (domain, subdomain, ip, port)
 		DiscoveryID: finding.DiscoveryID, // Use the ID from the finding
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,      // Pass through scan_id
@@ -278,6 +279,7 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 	// The port scanner already generated a deterministic ID for this port
 	scanTarget := ScanTarget{
 		Target:      target,
+		AssetType:   finding.AssetType,   // Asset type (port)
 		DiscoveryID: finding.DiscoveryID, // Use the ID from the finding
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,      // Pass through scan_id

@@ -2,16 +2,13 @@ package webtechprofiler
 
 import (
 	wappalyzer "github.com/projectdiscovery/wappalyzergo"
+
+	"github.com/vulwall/scanners/internal/shared"
 )
 
-// ScanTarget represents a target to be scanned by WebTechProfiler
-type ScanTarget struct {
-	Target      string  // URL or IP to scan
-	DiscoveryID string  // Links back to Discovery._id
-	TraceID     string  // Request tracing ID
-	ScanID      *string // Optional: scan identifier for linking to UI scans
-	OrgID       string  // Organization GUID
-}
+// ScanTarget is an alias for the shared ScanTarget model
+// All active recon scanners use the same ScanTarget structure
+type ScanTarget = shared.ScanTarget
 
 // TechDetectionWithInfo represents a detected technology with detailed information
 type TechDetectionWithInfo struct {

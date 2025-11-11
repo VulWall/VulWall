@@ -1,5 +1,11 @@
 package testssl_scanner
 
+import "github.com/vulwall/scanners/internal/shared"
+
+// ScanTarget is an alias for the shared ScanTarget model
+// All active recon scanners use the same ScanTarget structure
+type ScanTarget = shared.ScanTarget
+
 // TestSSLOutput represents the JSON output from testssl.sh scanner
 // testssl.sh outputs JSON with metadata and a single scanResult object containing nested test arrays
 type TestSSLOutput struct {
@@ -34,12 +40,4 @@ type TestSSLFinding struct {
 	Finding  string `json:"finding"`           // Description of the finding
 	CVE      string `json:"cve,omitempty"`     // CVE identifiers (space-separated)
 	CWE      string `json:"cwe,omitempty"`     // CWE identifier
-}
-
-// ScanTarget represents a target to be scanned by testssl.sh
-type ScanTarget struct {
-	Target      string // Host:port to scan (e.g., "example.com:443")
-	DiscoveryID string // Links back to Discovery._id
-	TraceID     string
-	OrgID       string
 }

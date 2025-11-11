@@ -209,6 +209,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	// Create scan target
 	scanTarget := ScanTarget{
 		Target:      target,
+		AssetType:   finding.AssetType,   // Asset type (domain, subdomain, ip, port)
 		DiscoveryID: finding.DiscoveryID, // Use actual discovery UUID from discoveries collection
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,
@@ -256,6 +257,7 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 	// Create scan target
 	scanTarget := ScanTarget{
 		Target:      target,
+		AssetType:   finding.AssetType,   // Asset type (port)
 		DiscoveryID: finding.DiscoveryID, // Use actual discovery UUID from discoveries collection
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,

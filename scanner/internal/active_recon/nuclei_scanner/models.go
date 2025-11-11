@@ -1,5 +1,11 @@
 package nuclei_scanner
 
+import "github.com/vulwall/scanners/internal/shared"
+
+// ScanTarget is an alias for the shared ScanTarget model
+// All active recon scanners use the same ScanTarget structure
+type ScanTarget = shared.ScanTarget
+
 // NucleiOutput represents the JSON output from Nuclei scanner
 type NucleiOutput struct {
 	TemplateID   string                 `json:"template-id"`
@@ -24,13 +30,4 @@ type NucleiInfo struct {
 	Reference   []string            `json:"reference,omitempty"`
 	Severity    string              `json:"severity"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// ScanTarget represents a target to be scanned by Nuclei
-type ScanTarget struct {
-	Target      string  // URL or IP to scan
-	DiscoveryID string  // Links back to Discovery._id
-	TraceID     string
-	ScanID      *string // Optional: scan identifier for linking to UI scans
-	OrgID       string
 }
