@@ -190,7 +190,6 @@ func (s *Service) convertToSecurityFinding(tech TechDetectionWithInfo, target Sc
 		FindingType: "tech-detection",
 		Severity:    severity,
 		Title:       tech.Technology,
-		Description: fmt.Sprintf("Web technology '%s' detected on %s", tech.Technology, tech.URL),
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,
 		Timestamp:   time.Now(),

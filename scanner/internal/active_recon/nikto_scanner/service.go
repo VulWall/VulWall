@@ -146,12 +146,6 @@ func (s *Service) convertToSecurityFinding(vuln NiktoVuln, target ScanTarget) sh
 		"references": vuln.References,
 	}
 
-	// Build title from description (first 100 chars)
-	title := vuln.Description
-	if len(title) > 100 {
-		title = title[:97] + "..."
-	}
-
 	return shared.SecurityFinding{
 		TraceID:     target.TraceID,
 		OrgID:       target.OrgID,
@@ -159,8 +153,7 @@ func (s *Service) convertToSecurityFinding(vuln NiktoVuln, target ScanTarget) sh
 		DiscoveryID: target.DiscoveryID,
 		FindingType: vuln.ID, // Use Nikto test ID (e.g., "999986")
 		Severity:    severity,
-		Title:       title,
-		Description: vuln.Description,
+		Title:       vuln.Description,
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,
 		Timestamp:   time.Now(),
