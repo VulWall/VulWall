@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -62,7 +64,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 
 	// Scan both HTTP and HTTPS
 	protocols := []string{"http", "https"}
-	detectedTechs := make(map[string]TechDetection)
+	detectedTechs := make(map[string]TechDetectionWithInfo)
 
 	for _, protocol := range protocols {
 		url := fmt.Sprintf("%s://%s", protocol, target.Target)
@@ -78,11 +80,12 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		}
 
 		// Store unique technologies (deduplicate by name)
-		for tech := range techs {
+		for tech, info := range techs {
 			if _, exists := detectedTechs[tech]; !exists {
-				detectedTechs[tech] = TechDetection{
+				detectedTechs[tech] = TechDetectionWithInfo{
 					Technology: tech,
 					URL:        url,
+					AppInfo:    info,
 				}
 			}
 		}
@@ -110,7 +113,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 }
 
 // detectTechnologies fetches the webpage and detects technologies using Wappalyzer
-func (s *Service) detectTechnologies(ctx context.Context, url string) (map[string]struct{}, error) {
+func (s *Service) detectTechnologies(ctx context.Context, url string) (map[string]wappalyzer.AppInfo, error) {
 	// Create request with context
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -133,21 +136,48 @@ func (s *Service) detectTechnologies(ctx context.Context, url string) (map[strin
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Use Wappalyzer to fingerprint technologies
-	fingerprints := s.wappalyzer.Fingerprint(resp.Header, body)
+	// Use Wappalyzer to fingerprint technologies with detailed info
+	fingerprints := s.wappalyzer.FingerprintWithInfo(resp.Header, body)
 
 	return fingerprints, nil
 }
 
 // convertToSecurityFinding converts a technology detection to a SecurityFinding
-func (s *Service) convertToSecurityFinding(tech TechDetection, target ScanTarget) shared.SecurityFinding {
+func (s *Service) convertToSecurityFinding(tech TechDetectionWithInfo, target ScanTarget) shared.SecurityFinding {
 	// Determine severity based on technology name
 	severity := s.determineSeverity(tech.Technology)
 
-	// Create metadata
+	// Create metadata with categories and icon
 	metadata := map[string]interface{}{
-		"technology": tech.Technology,
-		"url":        tech.URL,
+		"url": tech.URL,
+	}
+
+	// Add categories if available
+	if len(tech.AppInfo.Categories) > 0 {
+		metadata["categories"] = tech.AppInfo.Categories
+	}
+
+	// Add icon if available (normalize to .png extension)
+	if tech.AppInfo.Icon != "" {
+		// Remove existing extension and add .png
+		ext := filepath.Ext(tech.AppInfo.Icon)
+		iconName := strings.TrimSuffix(tech.AppInfo.Icon, ext)
+		metadata["icon"] = iconName + ".png"
+	}
+
+	// Add description if available
+	if tech.AppInfo.Description != "" {
+		metadata["description"] = tech.AppInfo.Description
+	}
+
+	// Add website if available
+	if tech.AppInfo.Website != "" {
+		metadata["website"] = tech.AppInfo.Website
+	}
+
+	// Add CPE if available
+	if tech.AppInfo.CPE != "" {
+		metadata["cpe"] = tech.AppInfo.CPE
 	}
 
 	// Create finding
@@ -159,7 +189,7 @@ func (s *Service) convertToSecurityFinding(tech TechDetection, target ScanTarget
 		DiscoveryID: target.DiscoveryID,
 		FindingType: "tech-detection",
 		Severity:    severity,
-		Title:       fmt.Sprintf("Detected: %s", tech.Technology),
+		Title:       tech.Technology,
 		Description: fmt.Sprintf("Web technology '%s' detected on %s", tech.Technology, tech.URL),
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,

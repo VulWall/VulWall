@@ -1,5 +1,9 @@
 package webtechprofiler
 
+import (
+	wappalyzer "github.com/projectdiscovery/wappalyzergo"
+)
+
 // ScanTarget represents a target to be scanned by WebTechProfiler
 type ScanTarget struct {
 	Target      string  // URL or IP to scan
@@ -9,8 +13,9 @@ type ScanTarget struct {
 	OrgID       string  // Organization GUID
 }
 
-// TechDetection represents a detected technology
-type TechDetection struct {
-	Technology string // Name of the detected technology
-	URL        string // URL where technology was detected
+// TechDetectionWithInfo represents a detected technology with detailed information
+type TechDetectionWithInfo struct {
+	Technology string              // Name of the detected technology
+	URL        string              // URL where technology was detected
+	AppInfo    wappalyzer.AppInfo  // Detailed information from Wappalyzer
 }
