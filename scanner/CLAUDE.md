@@ -287,7 +287,7 @@ SCAN COORDINATOR FLOW (AUTOMATED SCANNING):
   - `ServiceHistoryEntry` (service change history for ports)
 - Scan coordination models:
   - `Organization`, `SubscriptionSettings` (org settings with scan_interval_days)
-  - `Scan`, `ScanStats` (scan execution tracking)
+  - `Scan`, `ScanStats`, `AssetTarget` (scan execution tracking with targeted assets)
 - Common data structures for inter-service communication
 
 ✅ **Put in `internal/shared/constants.go`:**
@@ -800,16 +800,23 @@ type SubscriptionSettings struct {
 **Scan Model** (in `shared/models.go`):
 ```go
 type Scan struct {
-    ID          string     // Scan UUID
-    OrgID       string     // Organization GUID
-    Status      string     // "pending", "running", "completed", "failed"
-    Type        string     // "manual", "scheduled", "on_demand"
-    TriggeredBy string     // User ID or "system"
-    StartedAt   *time.Time
-    CompletedAt *time.Time
-    CreatedAt   time.Time
-    UpdatedAt   time.Time
-    Stats       ScanStats  // Scan statistics
+    ID             string        // Scan UUID
+    OrgID          string        // Organization GUID
+    Status         string        // "pending", "running", "completed", "failed"
+    Type           string        // "manual", "scheduled", "on_demand"
+    TriggeredBy    string        // User ID or "system"
+    StartedAt      *time.Time
+    CompletedAt    *time.Time
+    CreatedAt      time.Time
+    UpdatedAt      time.Time
+    TargetedAssets []AssetTarget // Assets that were targeted for scanning (audit trail)
+    Stats          ScanStats     // Scan statistics
+}
+
+type AssetTarget struct {
+    AssetID string // References assets._id
+    Type    string // "domain" or "ip"
+    Value   string // Domain name or IP address
 }
 
 type ScanStats struct {
@@ -859,15 +866,27 @@ type ScanStats struct {
 {
   _id: "scan-uuid-456",
   org_id: "org-uuid-123",
-  status: "pending",           // pending → running → completed/failed
+  status: "running",           // pending → running → completed/failed
   type: "scheduled",           // scheduled (auto), manual (UI), on_demand
   triggered_by: "system",      // "system" for automated scans
   started_at: null,
   completed_at: null,
   created_at: ISODate("2025-01-10T12:00:00Z"),
   updated_at: ISODate("2025-01-10T12:00:00Z"),
+  targeted_assets: [           // Assets that were targeted for scanning (audit trail)
+    {
+      asset_id: "asset-uuid-1",
+      type: "domain",
+      value: "example.com"
+    },
+    {
+      asset_id: "asset-uuid-2",
+      type: "ip",
+      value: "192.168.1.100"
+    }
+  ],
   stats: {
-    total_assets: 0,
+    total_assets: 2,           // Count of targeted_assets
     assets_scanned: 0,
     new_assets: 0,
     findings_detected: 0
@@ -984,6 +1003,42 @@ db.discoveries.aggregate([
   { $match: { org_id: "org-uuid", scan_ids: "scan-abc-456" } },
   { $group: { _id: "$asset_type", count: { $sum: 1 } } }
 ])
+```
+
+**Get assets that were targeted/scanned (for UI display):**
+```javascript
+// Get scan with targeted assets
+const scan = db.scans.findOne({ _id: "scan-abc-456" })
+
+// Count of assets scanned
+const count = scan.targeted_assets.length
+
+// Names/values of assets scanned
+const assetNames = scan.targeted_assets.map(a => a.value)
+// Returns: ["example.com", "192.168.1.100"]
+
+// Get full asset details with types
+scan.targeted_assets.forEach(target => {
+  console.log(`${target.type}: ${target.value}`)
+})
+// Output:
+// domain: example.com
+// ip: 192.168.1.100
+```
+
+**Compare targeted vs discovered assets:**
+```javascript
+// Get what we planned to scan
+const scan = db.scans.findOne({ _id: "scan-abc-456" })
+const targetedCount = scan.targeted_assets.length
+
+// Get what we actually discovered
+const discoveredCount = db.discoveries.countDocuments({
+  org_id: scan.org_id,
+  scan_ids: "scan-abc-456"
+})
+
+console.log(`Targeted: ${targetedCount}, Discovered: ${discoveredCount}`)
 ```
 
 ### Important Notes

@@ -218,6 +218,9 @@ type Scan struct {
 	CreatedAt   time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at" bson:"updated_at"`
 
+	// Assets that were targeted for scanning (input)
+	TargetedAssets []AssetTarget `json:"targeted_assets,omitempty" bson:"targeted_assets,omitempty"`
+
 	// Scan statistics (populated as scan progresses)
 	Stats ScanStats `json:"stats,omitempty" bson:"stats,omitempty"`
 }
@@ -228,4 +231,12 @@ type ScanStats struct {
 	AssetsScanned    int `json:"assets_scanned" bson:"assets_scanned"`
 	NewAssets        int `json:"new_assets" bson:"new_assets"`
 	FindingsDetected int `json:"findings_detected" bson:"findings_detected"`
+}
+
+// AssetTarget represents an asset that was targeted for scanning
+// Stored in Scan.TargetedAssets array for audit trail
+type AssetTarget struct {
+	AssetID string `json:"asset_id" bson:"asset_id"` // References assets._id
+	Type    string `json:"type" bson:"type"`         // "domain" or "ip"
+	Value   string `json:"value" bson:"value"`       // Domain name or IP address
 }

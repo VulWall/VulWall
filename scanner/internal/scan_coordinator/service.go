@@ -73,16 +73,57 @@ func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organizati
 		return nil
 	}
 
-	// Create new scan record
+	// Get all assets for this organization first (needed for targeted_assets)
+	assets, err := s.getOrgAssets(ctx, org.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get org assets: %w", err)
+	}
+
+	s.logger.Info("Found assets to scan",
+		zap.String("org_id", org.ID),
+		zap.Int("asset_count", len(assets)),
+	)
+
+	// Build targeted assets array for audit trail
+	targetedAssets := make([]shared.AssetTarget, 0, len(assets))
+	for _, asset := range assets {
+		target := shared.AssetTarget{
+			AssetID: asset.ID,
+			Type:    asset.Type,
+		}
+
+		// Set the value based on asset type
+		if asset.Type == "domain" && asset.Domain != nil {
+			target.Value = *asset.Domain
+		} else if asset.Type == "ip" && asset.IP != nil {
+			target.Value = *asset.IP
+		} else {
+			// Skip assets with missing values
+			s.logger.Warn("Asset missing required field, skipping from targeted assets",
+				zap.String("org_id", org.ID),
+				zap.String("asset_id", asset.ID),
+				zap.String("type", asset.Type),
+			)
+			continue
+		}
+
+		targetedAssets = append(targetedAssets, target)
+	}
+
+	// Create new scan record with targeted assets
 	scanID := uuid.New().String()
 	scan := shared.Scan{
-		ID:          scanID,
-		OrgID:       org.ID,
-		Status:      shared.StatusRunning,
-		Type:        shared.ScanTypeScheduled,
-		TriggeredBy: "system",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		ID:             scanID,
+		OrgID:          org.ID,
+		Status:         shared.StatusRunning,
+		Type:           shared.ScanTypeScheduled,
+		TriggeredBy:    "system",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		TargetedAssets: targetedAssets,
+		Stats: shared.ScanStats{
+			TotalAssets: len(targetedAssets),
+		},
 	}
 
 	// Insert scan into database
@@ -93,17 +134,7 @@ func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organizati
 	s.logger.Info("Created new scan record",
 		zap.String("scan_id", scanID),
 		zap.String("org_id", org.ID),
-	)
-
-	// Get all assets for this organization
-	assets, err := s.getOrgAssets(ctx, org.ID)
-	if err != nil {
-		return fmt.Errorf("failed to get org assets: %w", err)
-	}
-
-	s.logger.Info("Found assets to scan",
-		zap.String("org_id", org.ID),
-		zap.Int("asset_count", len(assets)),
+		zap.Int("targeted_assets_count", len(targetedAssets)),
 	)
 
 	// Publish discovery jobs for each asset
