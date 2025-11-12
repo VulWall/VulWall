@@ -21,6 +21,8 @@ build: ## Build all services
 	@go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
 	@echo "Building discovery-enrichment..."
 	@go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
+	@echo "Building js-dependency-scanner..."
+	@go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Building scan-coordinator..."
@@ -48,6 +50,9 @@ build-webtechprofiler: ## Build webtechprofiler service
 build-discovery-enrichment: ## Build discovery-enrichment service
 	@go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
 
+build-js-dependency-scanner: ## Build js-dependency-scanner service
+	@go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
+
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
 
@@ -74,6 +79,9 @@ run-webtechprofiler: ## Run webtechprofiler service locally
 
 run-discovery-enrichment: ## Run discovery-enrichment service locally
 	@go run ./cmd/active_recon/discovery-enrichment/main.go
+
+run-js-dependency-scanner: ## Run js-dependency-scanner service locally
+	@go run ./cmd/active_recon/js-dependency-scanner/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
@@ -127,6 +135,9 @@ docker-scale-webtechprofiler: ## Scale webtechprofiler workers (usage: make dock
 
 docker-scale-discovery-enrichment: ## Scale discovery-enrichment workers (usage: make docker-scale-discovery-enrichment N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale discovery-enrichment=$(N)
+
+docker-scale-js-dependency-scanner: ## Scale js-dependency-scanner workers (usage: make docker-scale-js-dependency-scanner N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale js-dependency-scanner=$(N)
 
 docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ingestion N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
@@ -209,6 +220,13 @@ prod-deploy-discovery-enrichment: ## Deploy discovery-enrichment service (usage:
 		ops/scripts/deploy-service.sh discovery-enrichment; \
 	fi
 
+prod-deploy-js-dependency-scanner: ## Deploy js-dependency-scanner service (usage: make prod-deploy-js-dependency-scanner [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh js-dependency-scanner $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh js-dependency-scanner; \
+	fi
+
 prod-deploy-scan-coordinator: ## Deploy scan-coordinator service (usage: make prod-deploy-scan-coordinator [PROJECT=name] [CONFIG=prd])
 	@if [ -n "$(PROJECT)" ]; then \
 		ops/scripts/deploy-service.sh scan-coordinator $(PROJECT) $(CONFIG); \
@@ -223,7 +241,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, discovery-enrichment"; \
+		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, discovery-enrichment, js-dependency-scanner"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)
