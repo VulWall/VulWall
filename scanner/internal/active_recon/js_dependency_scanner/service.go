@@ -171,10 +171,8 @@ func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL strin
 		OrgID:       target.OrgID,
 		Scanner:     "js_dependency_scanner",
 		DiscoveryID: target.DiscoveryID,
-		FindingType: "", // Empty per requirements
 		Severity:    vuln.Severity,
 		Title:       title, // Full summary - no truncation
-		Description: "",    // Empty per requirements
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,
 		Timestamp:   time.Now(),
