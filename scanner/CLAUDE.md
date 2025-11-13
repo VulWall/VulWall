@@ -364,6 +364,459 @@ Input Stream: domain_discovery_queue
    - IPs → `discoveries` (asset_type: "ip", with org_id) as separate records with parent_id
    - All assets include org_id, ownership_status (verified/notMine/notSure), and discovered_at timestamp
 
+## Active Reconnaissance Scanner Architecture (Reference Pattern)
+
+Active reconnaissance scanners perform security testing and vulnerability detection on discovered assets. The **js_dependency_scanner** serves as the **reference architecture** for all active recon scanners, demonstrating best practices for performance, maintainability, and clean code structure.
+
+### Reference Implementation: js_dependency_scanner
+
+**Location:** `internal/active_recon/js_dependency_scanner/`
+
+**Purpose:** Detects JavaScript library vulnerabilities by:
+1. Fetching HTML from target URLs (HTTP and HTTPS in parallel)
+2. Extracting JavaScript file references
+3. Downloading JS files in parallel (20 concurrent workers)
+4. Running retire.js vulnerability scanner
+5. Publishing security findings to Redis
+
+**Performance Characteristics:**
+- ✅ **4-5x faster** than sequential approach (15-20s vs 60-90s per domain)
+- ✅ Parallel protocol scanning (HTTP + HTTPS concurrently)
+- ✅ Parallel file downloads (20 worker pool)
+- ✅ Retry logic with exponential backoff (3 retries: 1s, 2s, 4s)
+- ✅ Optimized HTTP client with comprehensive timeouts
+- ✅ Context-aware operations for graceful cancellation
+
+### Architecture Pattern
+
+**Directory Structure:**
+```
+internal/active_recon/js_dependency_scanner/
+├── constants.go          # Consumer group name
+├── models.go             # Scanner-specific models (ScanTarget)
+├── service.go            # Orchestration layer (~200 lines)
+│   ├── ProcessDiscovery()           # Main entry point
+│   ├── scanBothProtocols()          # Parallel HTTP/HTTPS scanning
+│   ├── publishUniqueVulnerabilities() # Deduplication & publishing
+│   └── convertToSecurityFinding()   # Model conversion
+├── consumer.go           # Redis consumer (dual-stream)
+└── scanner/              # Scanner implementation package
+    ├── scanner.go        # Scanner interface & implementation
+    ├── html.go           # HTML fetching & JS extraction
+    ├── downloader.go     # Parallel file downloader with retry
+    └── retire.go         # retire.js executor & parser
+```
+
+**Key Principle:** **Separation of concerns**
+- `service.go` - Orchestration only (coordinates scanning, handles findings)
+- `scanner/` package - Pure scanning logic (no Redis, no MongoDB, fully testable)
+
+### Core Patterns
+
+#### 1. Scanner Interface Pattern
+
+**Why:** Enables testing, mocking, and future scanner swapping
+
+```go
+// scanner/scanner.go
+type Scanner interface {
+    Scan(ctx context.Context, targetURL string) ([]ProcessedVulnerability, error)
+}
+
+type JSDependencyScanner struct {
+    httpClient *http.Client
+    logger     *zap.Logger
+}
+
+func NewScanner(logger *zap.Logger) *JSDependencyScanner {
+    return &JSDependencyScanner{
+        httpClient: CreateHTTPClient(),
+        logger:     logger,
+    }
+}
+
+func (s *JSDependencyScanner) Scan(ctx context.Context, targetURL string) ([]ProcessedVulnerability, error) {
+    // 1. Fetch HTML
+    htmlContent, err := FetchHTML(ctx, targetURL, s.httpClient, s.logger)
+
+    // 2. Extract JS files
+    jsFiles := ExtractJSFiles(htmlContent, targetURL, s.logger)
+
+    // 3. Download files in parallel
+    tmpDir, fileMetadata, err := DownloadFiles(ctx, jsFiles, s.httpClient, s.logger)
+    defer os.RemoveAll(tmpDir)
+
+    // 4. Run vulnerability scanner
+    retireOutput, err := RunRetireJS(ctx, tmpDir, s.logger)
+
+    // 5. Process results
+    return ProcessVulnerabilities(retireOutput, fileMetadata, targetURL), nil
+}
+```
+
+#### 2. Worker Pool Pattern (Parallel Operations)
+
+**Why:** Dramatically improves performance for I/O-bound operations
+
+**Use Case:** Downloading 20 JS files concurrently instead of sequentially (10-15s vs 200s)
+
+```go
+// scanner/downloader.go
+func DownloadFiles(ctx context.Context, jsFiles []string, httpClient *http.Client, logger *zap.Logger) (string, []JSFileMetadata, error) {
+    const numWorkers = 20
+
+    // Create channels for job distribution
+    jobs := make(chan downloadJob, len(jsFiles))
+    results := make(chan downloadResult, len(jsFiles))
+
+    // Start worker pool
+    var wg sync.WaitGroup
+    for w := 0; w < numWorkers; w++ {
+        wg.Add(1)
+        go downloadWorker(ctx, jobs, results, httpClient, logger, &wg)
+    }
+
+    // Distribute jobs
+    for _, url := range jsFiles {
+        jobs <- downloadJob{url: url, filePath: filepath.Join(tmpDir, filename)}
+    }
+    close(jobs)
+
+    // Collect results
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+
+    // Process results
+    var fileMetadata []JSFileMetadata
+    for result := range results {
+        if result.err == nil {
+            fileMetadata = append(fileMetadata, result.metadata)
+        }
+    }
+
+    return tmpDir, fileMetadata, nil
+}
+
+func downloadWorker(ctx context.Context, jobs <-chan downloadJob, results chan<- downloadResult, httpClient *http.Client, logger *zap.Logger, wg *sync.WaitGroup) {
+    defer wg.Done()
+
+    for job := range jobs {
+        select {
+        case <-ctx.Done():
+            return
+        default:
+            // Download with retry logic
+            err := downloadFileWithRetry(ctx, job.url, job.filePath, httpClient, logger)
+            results <- downloadResult{
+                url:      job.url,
+                filePath: job.filePath,
+                err:      err,
+                metadata: JSFileMetadata{URL: job.url, Filename: filepath.Base(job.filePath)},
+            }
+        }
+    }
+}
+```
+
+**Pattern Benefits:**
+- ✅ Configurable concurrency (adjust `numWorkers` based on resource constraints)
+- ✅ Graceful cancellation via context
+- ✅ Channel-based communication (clean, idiomatic Go)
+- ✅ WaitGroup for synchronization
+
+#### 3. Retry Logic with Exponential Backoff
+
+**Why:** Handles transient network failures gracefully
+
+**Use Case:** Network timeouts, temporary server errors
+
+```go
+// scanner/downloader.go
+func downloadFileWithRetry(ctx context.Context, url, filePath string, httpClient *http.Client, logger *zap.Logger) error {
+    const maxRetries = 3
+    var lastErr error
+
+    for attempt := 0; attempt <= maxRetries; attempt++ {
+        // Backoff delay: 0s, 1s, 2s, 4s
+        if attempt > 0 {
+            backoff := time.Duration(1<<(attempt-1)) * time.Second
+            logger.Debug("Retrying download",
+                zap.String("url", url),
+                zap.Int("attempt", attempt),
+                zap.Duration("backoff", backoff),
+            )
+
+            select {
+            case <-time.After(backoff):
+            case <-ctx.Done():
+                return ctx.Err()
+            }
+        }
+
+        err := downloadFile(ctx, url, filePath, httpClient)
+        if err == nil {
+            return nil // Success
+        }
+
+        lastErr = err
+
+        // Don't retry non-retryable errors (404, 401, etc.)
+        if !isRetryableError(err) {
+            return err
+        }
+    }
+
+    return fmt.Errorf("max retries exceeded: %w", lastErr)
+}
+
+func isRetryableError(err error) bool {
+    // Retry on network errors, timeouts, 5xx status codes
+    // Don't retry on 4xx client errors
+    if err == nil {
+        return false
+    }
+
+    errStr := err.Error()
+    return strings.Contains(errStr, "timeout") ||
+           strings.Contains(errStr, "connection refused") ||
+           strings.Contains(errStr, "HTTP 5")
+}
+```
+
+**Pattern Benefits:**
+- ✅ Exponential backoff prevents overwhelming servers
+- ✅ Context-aware (respects cancellation)
+- ✅ Smart retry logic (skip permanent failures like 404)
+- ✅ Detailed logging for debugging
+
+#### 4. Parallel Protocol Scanning
+
+**Why:** Scan both HTTP and HTTPS concurrently instead of sequentially (30s vs 60s)
+
+```go
+// service.go
+func (s *Service) scanBothProtocols(ctx context.Context, target ScanTarget) []protocolScanResult {
+    protocols := []string{"http", "https"}
+    results := make(chan protocolScanResult, len(protocols))
+
+    var wg sync.WaitGroup
+
+    // Launch parallel scans
+    for _, protocol := range protocols {
+        wg.Add(1)
+        go func(proto string) {
+            defer wg.Done()
+
+            url := fmt.Sprintf("%s://%s", proto, target.Target)
+            vulnerabilities, err := s.scanner.Scan(ctx, url)
+
+            if err != nil {
+                s.logger.Debug("Failed to scan URL",
+                    zap.String("url", url),
+                    zap.Error(err),
+                )
+            }
+
+            results <- protocolScanResult{
+                protocol:        proto,
+                url:             url,
+                vulnerabilities: vulnerabilities,
+            }
+        }(protocol)
+    }
+
+    // Wait for completion
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+
+    // Collect results
+    var allResults []protocolScanResult
+    for result := range results {
+        if len(result.vulnerabilities) > 0 {
+            allResults = append(allResults, result)
+        }
+    }
+
+    return allResults
+}
+```
+
+**Pattern Benefits:**
+- ✅ Both protocols tested simultaneously
+- ✅ Failures in one protocol don't block the other
+- ✅ Clean result aggregation
+
+#### 5. Optimized HTTP Client
+
+**Why:** Prevent hangs on dead hosts, improve failure detection
+
+```go
+// scanner/html.go
+func CreateHTTPClient() *http.Client {
+    transport := &http.Transport{
+        TLSClientConfig: &tls.Config{
+            InsecureSkipVerify: true, // Allow self-signed certificates
+        },
+        ResponseHeaderTimeout: 10 * time.Second, // Detect hung servers quickly
+        TLSHandshakeTimeout:   10 * time.Second, // TLS negotiation timeout
+        MaxIdleConns:          100,
+        MaxIdleConnsPerHost:   20,               // Increased for parallel downloads
+        IdleConnTimeout:       30 * time.Second,
+    }
+
+    // Set dial timeout using custom dialer
+    transport.DialContext = (&net.Dialer{
+        Timeout: 5 * time.Second, // Fast DNS/TCP connection timeout
+    }).DialContext
+
+    return &http.Client{
+        Timeout:   15 * time.Second, // Reduced from 30s for faster failure detection
+        Transport: transport,
+    }
+}
+```
+
+**Timeout Strategy:**
+- **DialTimeout (5s):** DNS resolution + TCP connection
+- **TLSHandshakeTimeout (10s):** TLS negotiation
+- **ResponseHeaderTimeout (10s):** Server must send headers within 10s
+- **Overall Timeout (15s):** Total request timeout
+
+**Pattern Benefits:**
+- ✅ No 30+ second hangs on dead hosts
+- ✅ Connection reuse for better performance
+- ✅ TLS flexibility for self-signed certificates
+
+#### 6. Deduplication Strategy
+
+**Why:** Same vulnerability may be found in HTTP and HTTPS versions
+
+```go
+// service.go
+func (s *Service) publishUniqueVulnerabilities(ctx context.Context, results []protocolScanResult, target ScanTarget) {
+    // Dedup by component+version+CVE across all protocols
+    seen := make(map[string]bool)
+
+    for _, result := range results {
+        for _, vuln := range result.vulnerabilities {
+            // Create dedup key
+            cveStr := strings.Join(vuln.CVEs, ",")
+            if cveStr == "" {
+                cveStr = "no-cve"
+            }
+            key := fmt.Sprintf("%s|%s|%s", vuln.Component, vuln.Version, cveStr)
+
+            if !seen[key] {
+                seen[key] = true
+
+                // Convert to SecurityFinding and publish
+                finding := convertToSecurityFinding(vuln, result.url, target)
+                if err := s.publishFinding(ctx, finding); err != nil {
+                    s.logger.Error("Failed to publish finding", zap.Error(err))
+                    continue
+                }
+
+                s.logger.Info("Published vulnerability finding",
+                    zap.String("component", vuln.Component),
+                    zap.String("version", vuln.Version),
+                    zap.String("severity", vuln.Severity),
+                )
+            }
+        }
+    }
+}
+```
+
+### When to Use This Pattern
+
+**✅ Use this pattern when:**
+- Scanner performs I/O-bound operations (HTTP requests, file downloads)
+- Multiple items can be processed in parallel (files, URLs, targets)
+- Operation may encounter transient failures (network requests)
+- Scanner needs to test multiple protocols/variants (HTTP/HTTPS)
+- Code complexity justifies separation into package
+
+**❌ Use simpler pattern when:**
+- Scanner is CPU-bound (cryptographic operations)
+- Sequential processing is acceptable (< 5 items)
+- Operation is very simple (< 100 lines)
+- No parallelization opportunities
+
+### Implementation Checklist
+
+When implementing a new active recon scanner using this pattern:
+
+1. **Directory Structure:**
+   - [ ] Create `internal/active_recon/[scanner_name]/` directory
+   - [ ] Add `constants.go` (consumer group name)
+   - [ ] Add `models.go` (scanner-specific models if needed)
+   - [ ] Add `service.go` (orchestration layer)
+   - [ ] Add `consumer.go` (Redis consumer)
+   - [ ] Create `scanner/` subdirectory for implementation
+
+2. **Scanner Package:**
+   - [ ] Define `Scanner` interface in `scanner/scanner.go`
+   - [ ] Implement scanner with clean, testable methods
+   - [ ] Split complex operations into separate files (html.go, downloader.go, etc.)
+   - [ ] Add retry logic for network operations
+   - [ ] Use `shared.DefaultUserAgent` for HTTP requests
+   - [ ] Implement optimized HTTP client with timeouts
+
+3. **Orchestration Layer (service.go):**
+   - [ ] Keep orchestration code under 200 lines
+   - [ ] Implement deduplication logic if needed
+   - [ ] Convert scanner results to `shared.SecurityFinding`
+   - [ ] Publish findings to `shared.StreamSecurityFindings`
+   - [ ] Set `Scanner` field to lowercase scanner name (e.g., "jsscanner")
+   - [ ] Include proper error handling and logging
+
+4. **Performance Optimization:**
+   - [ ] Identify I/O-bound operations for parallelization
+   - [ ] Implement worker pool pattern if processing multiple items (files, URLs)
+   - [ ] Add parallel protocol scanning if applicable (HTTP/HTTPS)
+   - [ ] Use context for cancellation support
+   - [ ] Add retry logic with exponential backoff
+
+5. **Consumer:**
+   - [ ] Consume from appropriate stream(s) (domain_discovery_results, ip_discovery_results)
+   - [ ] Validate required fields (org_id, scanner)
+   - [ ] Handle both single and dual-stream consumption if needed
+   - [ ] Implement proper error handling
+
+6. **Testing:**
+   - [ ] Unit tests for scanner package (no external dependencies)
+   - [ ] Integration tests for service layer
+   - [ ] Performance benchmarks if applicable
+
+### Example: Applying Pattern to New Scanner
+
+**Scenario:** Implementing a new "ssl_scanner" to detect TLS/SSL vulnerabilities
+
+**Structure:**
+```
+internal/active_recon/ssl_scanner/
+├── constants.go          # GroupSSLScanner = "ssl_scanner_service"
+├── models.go             # SSLScanTarget
+├── service.go            # Orchestration (~150 lines)
+├── consumer.go           # Consumes domain_discovery_results
+└── scanner/
+    ├── scanner.go        # Scanner interface + SSLScanner implementation
+    ├── protocols.go      # Parallel TLS version testing (TLS 1.0, 1.1, 1.2, 1.3)
+    ├── ciphers.go        # Cipher suite enumeration with worker pool
+    └── certificates.go   # Certificate chain validation
+```
+
+**Key Decisions:**
+- ✅ Use worker pool for cipher suite enumeration (100+ ciphers to test)
+- ✅ Parallel protocol testing (TLS 1.0-1.3 concurrently)
+- ✅ Retry logic for network handshake failures
+- ✅ Optimized TLS dialer with timeouts
+- ✅ Dedup findings by (protocol + cipher + weakness type)
+
 ## Common Commands
 
 ### Building Services
