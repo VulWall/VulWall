@@ -30,7 +30,7 @@ func NewService(db *mongo.Database, logger *zap.Logger) *Service {
 // ProcessFinding processes a security finding and persists it to MongoDB
 func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFinding) error {
 	// Validate required fields
-	if finding.Source == "" {
+	if finding.Scanner == "" {
 		s.logger.Warn("Skipping finding without source field")
 		return nil
 	}
@@ -42,7 +42,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 
 	s.logger.Info("Processing security finding",
 		zap.String("org_id", finding.OrgID),
-		zap.String("source", finding.Source),
+		zap.String("source", finding.Scanner),
 		zap.String("finding_type", finding.FindingType),
 		zap.String("severity", finding.Severity),
 		zap.String("title", finding.Title),
@@ -87,7 +87,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 			"discovery_id":    finding.DiscoveryID,
 			"finding_type":    finding.FindingType,
 			"severity":        finding.Severity,
-			"source":          finding.Source,
+			"source":          finding.Scanner,
 			"title":           finding.Title,
 			"description":     finding.Description,
 			"metadata":        finding.Metadata,
@@ -169,7 +169,7 @@ func (s *Service) buildFindingDocument(finding shared.SecurityFinding) (bson.M, 
 		"discovery_id":   finding.DiscoveryID,
 		"finding_type":   finding.FindingType,
 		"severity":       finding.Severity,
-		"source":         finding.Source,
+		"source":         finding.Scanner,
 		"title":          finding.Title,
 		"description":    finding.Description,
 		"status":         finding.Status,

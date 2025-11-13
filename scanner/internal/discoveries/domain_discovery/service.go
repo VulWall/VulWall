@@ -63,7 +63,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		TraceID:     job.TraceID,
 		ScanID:      job.ScanID,  // Pass through scan_id
 		OrgID:       job.OrgID,
-		Source:      "shodan",
+		Scanner:     "shodan",
 		ParentID:    job.ParentID,
 		Host:        job.Host,
 		IP:          resolvedIP,
@@ -147,7 +147,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 			TraceID:     traceID,
 			ScanID:      scanID,  // Pass through scan_id
 			OrgID:       orgID,
-			Source:      "shodan",
+			Scanner:     "shodan",
 			ParentID:    &parentDomainID,
 			Host:        fullSubdomain,
 			IP:          resolvedIP,
@@ -186,7 +186,7 @@ func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFi
 	s.logger.Debug("Published finding to stream",
 		zap.String("stream", shared.StreamDomainDiscoveryResults),
 		zap.String("host", finding.Host),
-		zap.String("source", finding.Source),
+		zap.String("source", finding.Scanner),
 	)
 
 	return nil

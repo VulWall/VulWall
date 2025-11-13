@@ -65,7 +65,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 			TraceID:     job.TraceID,
 			ScanID:      job.ScanID, // Pass through scan_id
 			OrgID:       job.OrgID,
-			Source:      "port_discovery",
+			Scanner:     "port_discovery",
 			IP:          job.IP,
 			Port:        portResult.Port,
 			Protocol:    shared.ProtocolTCP,

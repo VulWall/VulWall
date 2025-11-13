@@ -108,7 +108,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	c.logger.Info("Processing domain discovery finding",
 		zap.String("message_id", message.ID),
 		zap.String("trace_id", finding.TraceID),
-		zap.String("source", finding.Source),
+		zap.String("source", finding.Scanner),
 		zap.String("host", finding.Host),
 	)
 

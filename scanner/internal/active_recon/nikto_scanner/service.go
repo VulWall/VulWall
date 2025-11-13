@@ -149,7 +149,7 @@ func (s *Service) convertToSecurityFinding(vuln NiktoVuln, target ScanTarget) sh
 	return shared.SecurityFinding{
 		TraceID:     target.TraceID,
 		OrgID:       target.OrgID,
-		Source:      "nikto",
+		Scanner:     "nikto",
 		DiscoveryID: target.DiscoveryID,
 		FindingType: vuln.ID, // Use Nikto test ID (e.g., "999986")
 		Severity:    severity,

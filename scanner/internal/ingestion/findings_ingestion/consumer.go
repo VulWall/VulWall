@@ -116,7 +116,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	}
 
 	// Validate source field
-	if finding.Source == "" {
+	if finding.Scanner == "" {
 		c.logger.Warn("Skipping finding without source field",
 			zap.String("message_id", message.ID),
 		)

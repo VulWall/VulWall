@@ -143,7 +143,7 @@ func (s *Service) enrichGeolocation(ctx context.Context, job shared.EnrichmentJo
 		TraceID:        job.TraceID,
 		ScanID:         job.ScanID,
 		OrgID:          job.OrgID,
-		Source:         "discovery_enrichment",
+		Scanner:        "discovery_enrichment",
 		DiscoveryID:    job.DiscoveryID,
 		EnrichmentType: "geolocation",
 		Data: map[string]interface{}{
@@ -198,7 +198,7 @@ func (s *Service) enrichWAF(ctx context.Context, job shared.EnrichmentJob) {
 			TraceID:        job.TraceID,
 			ScanID:         job.ScanID,
 			OrgID:          job.OrgID,
-			Source:         "discovery_enrichment",
+			Scanner:        "discovery_enrichment",
 			DiscoveryID:    job.DiscoveryID,
 			EnrichmentType: "waf",
 			Data: map[string]interface{}{
@@ -252,7 +252,7 @@ func (s *Service) enrichCloud(ctx context.Context, job shared.EnrichmentJob) {
 			TraceID:        job.TraceID,
 			ScanID:         job.ScanID,
 			OrgID:          job.OrgID,
-			Source:         "discovery_enrichment",
+			Scanner:        "discovery_enrichment",
 			DiscoveryID:    job.DiscoveryID,
 			EnrichmentType: "cloud",
 			Data: map[string]interface{}{

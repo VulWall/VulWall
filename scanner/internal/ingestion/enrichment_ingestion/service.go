@@ -33,13 +33,13 @@ func (s *Service) ProcessEnrichment(ctx context.Context, enrichment shared.Enric
 	s.logger.Info("Processing enrichment finding",
 		zap.String("trace_id", enrichment.TraceID),
 		zap.String("org_id", enrichment.OrgID),
-		zap.String("source", enrichment.Source),
+		zap.String("source", enrichment.Scanner),
 		zap.String("discovery_id", enrichment.DiscoveryID),
 		zap.String("enrichment_type", enrichment.EnrichmentType),
 	)
 
 	// Validate source is present (required)
-	if enrichment.Source == "" {
+	if enrichment.Scanner == "" {
 		s.logger.Warn("Skipping enrichment: missing source",
 			zap.String("trace_id", enrichment.TraceID),
 			zap.String("org_id", enrichment.OrgID),
