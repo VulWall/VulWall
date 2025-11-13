@@ -121,7 +121,7 @@ func (s *Service) detectTechnologies(ctx context.Context, url string) (map[strin
 	}
 
 	// Set user agent
-	req.Header.Set("User-Agent", "VulWall-Scanner/1.0")
+	req.Header.Set("User-Agent", shared.DefaultUserAgent)
 
 	// Fetch the webpage
 	resp, err := s.httpClient.Do(req)

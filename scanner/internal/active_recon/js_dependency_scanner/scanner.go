@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vulwall/scanners/internal/shared"
 	"golang.org/x/net/html"
 	"go.uber.org/zap"
 )
@@ -23,7 +24,7 @@ func fetchHTML(ctx context.Context, targetURL string, httpClient *http.Client, l
 		return "", err
 	}
 
-	req.Header.Set("User-Agent", "VulWall-WebVulnScanner/1.0")
+	req.Header.Set("User-Agent", shared.DefaultUserAgent)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -175,7 +176,7 @@ func downloadFile(ctx context.Context, url, filepath string, httpClient *http.Cl
 		return err
 	}
 
-	req.Header.Set("User-Agent", "VulWall-WebVulnScanner/1.0")
+	req.Header.Set("User-Agent", shared.DefaultUserAgent)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {

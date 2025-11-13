@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
 
@@ -184,7 +185,7 @@ func (d *Detector) probe(ctx context.Context, targetURL string, payload string) 
 	}
 
 	// Add common headers
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("User-Agent", shared.DefaultUserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 	req.Header.Set("Accept-Encoding", "gzip, deflate")

@@ -72,4 +72,7 @@ const (
 	// Finding Status
 	FindingStatusOpen     = "open"
 	FindingStatusResolved = "resolved"
+
+	// HTTP User Agent (shared across all scanners)
+	DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0"
 )

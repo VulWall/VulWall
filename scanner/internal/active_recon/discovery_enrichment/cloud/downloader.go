@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
 
@@ -91,7 +92,7 @@ func (d *Downloader) downloadSource(ctx context.Context, source CloudSource) err
 	}
 
 	// Set user agent
-	req.Header.Set("User-Agent", "VulWall-NightWatch-CloudDetector/1.0")
+	req.Header.Set("User-Agent", shared.DefaultUserAgent)
 
 	// Execute request
 	resp, err := d.httpClient.Do(req)
