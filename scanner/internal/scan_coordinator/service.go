@@ -11,6 +11,7 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
 )
 
@@ -155,10 +156,13 @@ func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organizati
 func (s *Service) getLastScan(ctx context.Context, orgID string) (*shared.Scan, error) {
 	coll := s.db.Collection(shared.CollectionScans)
 
+	// Sort by created_at descending to get the most recent scan
+	opts := options.FindOne().SetSort(bson.M{"created_at": -1})
+
 	var scan shared.Scan
 	err := coll.FindOne(ctx, bson.M{
 		"org_id": orgID,
-	}, nil).Decode(&scan)
+	}, opts).Decode(&scan)
 
 	if err != nil {
 		return nil, err
