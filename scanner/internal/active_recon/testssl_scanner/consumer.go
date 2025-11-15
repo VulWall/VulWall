@@ -245,6 +245,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 		AssetType:   finding.AssetType,   // Asset type (domain, subdomain, ip, port)
 		DiscoveryID: finding.DiscoveryID, // Always present from discovery services
 		TraceID:     finding.TraceID,
+		ScanID:      finding.ScanID,      // Optional: scan identifier for linking to UI scans
 		OrgID:       finding.OrgID,
 	}
 
@@ -293,6 +294,7 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 		AssetType:   finding.AssetType,   // Asset type (port)
 		DiscoveryID: finding.DiscoveryID, // Always present from port discovery service
 		TraceID:     finding.TraceID,
+		ScanID:      finding.ScanID,      // Optional: scan identifier for linking to UI scans
 		OrgID:       finding.OrgID,
 	}
 
