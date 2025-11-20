@@ -10,6 +10,9 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +20,7 @@ type Service struct {
 	db     *mongo.Database
 	redis  *redis.Client
 	logger *zap.Logger
+	tracer trace.Tracer
 }
 
 func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger) *Service {
@@ -24,11 +28,23 @@ func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger) *Se
 		db:     db,
 		redis:  redis,
 		logger: logger,
+		tracer: otel.Tracer("port-ingestion"),
 	}
 }
 
 // ProcessFinding processes a port discovery finding and persists it to MongoDB discoveries collection
 func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscoveryFinding) error {
+	ctx, span := s.tracer.Start(ctx, "ingest_port_finding",
+		trace.WithAttributes(
+			attribute.String("org.id", finding.OrgID),
+			attribute.String("trace.id", finding.TraceID),
+			attribute.String("asset.type", finding.AssetType),
+			attribute.String("ip", finding.IP),
+			attribute.Int("port", finding.Port),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Processing port discovery finding",
 		zap.String("trace_id", finding.TraceID),
 		zap.String("org_id", finding.OrgID),
@@ -52,8 +68,11 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 	// 1. Ensure IP discovery exists (create if not found with org_id)
 	ipDiscoveryID, isNewIP, err := s.ensureIPDiscovery(ctx, finding, now)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
+
+	span.SetAttributes(attribute.Bool("ip.is_new", isNewIP))
 
 	// 2. Publish enrichment job for IP (if it's asset_type="ip" finding or new IP)
 	if finding.AssetType == shared.AssetTypeIP || isNewIP {
@@ -71,6 +90,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 	if finding.AssetType == shared.AssetTypePort {
 		_, err = s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
 		if err != nil {
+			span.RecordError(err)
 			return err
 		}
 	}

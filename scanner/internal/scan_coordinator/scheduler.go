@@ -8,6 +8,9 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -16,6 +19,7 @@ type Scheduler struct {
 	service *Service
 	db      *mongo.Database
 	logger  *zap.Logger
+	tracer  trace.Tracer
 }
 
 // NewScheduler creates a new scheduler instance
@@ -24,6 +28,7 @@ func NewScheduler(redisClient *redis.Client, db *mongo.Database, logger *zap.Log
 		service: NewService(redisClient, db, logger),
 		db:      db,
 		logger:  logger,
+		tracer:  otel.Tracer("scan-coordinator"),
 	}
 }
 
@@ -57,13 +62,19 @@ func (sc *Scheduler) Start(ctx context.Context) error {
 
 // runCoordinationCycle runs a single coordination cycle
 func (sc *Scheduler) runCoordinationCycle(ctx context.Context) error {
+	ctx, span := sc.tracer.Start(ctx, "coordination_cycle")
+	defer span.End()
+
 	sc.logger.Info("Starting scan coordination cycle")
 
 	// Get all organizations with active subscriptions
 	orgs, err := sc.getActiveOrganizations(ctx)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
+
+	span.SetAttributes(attribute.Int("organization.count", len(orgs)))
 
 	sc.logger.Info("Processing organizations",
 		zap.Int("organization_count", len(orgs)),
@@ -74,17 +85,32 @@ func (sc *Scheduler) runCoordinationCycle(ctx context.Context) error {
 	errorCount := 0
 
 	for _, org := range orgs {
-		if err := sc.service.ProcessOrganization(ctx, org); err != nil {
+		orgCtx, orgSpan := sc.tracer.Start(ctx, "process_organization",
+			trace.WithAttributes(
+				attribute.String("org.id", org.ID),
+				attribute.String("org.name", org.CompanyName),
+			),
+		)
+
+		if err := sc.service.ProcessOrganization(orgCtx, org); err != nil {
 			sc.logger.Error("Failed to process organization",
 				zap.String("org_id", org.ID),
 				zap.String("company_name", org.CompanyName),
 				zap.Error(err),
 			)
+			orgSpan.RecordError(err)
 			errorCount++
 		} else {
 			successCount++
 		}
+
+		orgSpan.End()
 	}
+
+	span.SetAttributes(
+		attribute.Int("organizations.successful", successCount),
+		attribute.Int("organizations.errors", errorCount),
+	)
 
 	sc.logger.Info("Scan coordination cycle completed",
 		zap.Int("total_organizations", len(orgs)),

@@ -5,12 +5,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/core/logger"
 	"github.com/vulwall/scanners/internal/core/mongox"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )
@@ -53,6 +55,22 @@ func Run(cfg ServiceConfig) {
 
 	// Create context for service lifecycle
 	ctx := context.Background()
+
+	// Initialize OpenTelemetry tracing
+	tracerProvider, err := telemetry.InitTracing(ctx, appCfg.ServiceName, appCfg.Environment, logger.Log)
+	if err != nil {
+		logger.Log.Warn("Failed to initialize tracing", zap.Error(err))
+		// Continue without tracing rather than failing
+	}
+	if tracerProvider != nil {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+				logger.Log.Error("Failed to shutdown tracer", zap.Error(err))
+			}
+		}()
+	}
 
 	// Connect to Redis
 	redisClient, err := redisx.NewClient(appCfg)

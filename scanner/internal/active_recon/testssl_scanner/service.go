@@ -12,6 +12,9 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/shared"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -19,6 +22,7 @@ import (
 type Service struct {
 	redis  *redis.Client
 	logger *zap.Logger
+	tracer trace.Tracer
 }
 
 // NewService creates a new testssl scanner service
@@ -26,11 +30,22 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
 		redis:  redisClient,
 		logger: logger,
+		tracer: otel.Tracer("testssl-scanner"),
 	}
 }
 
 // ProcessDiscovery scans a discovered asset with testssl.sh
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
+	ctx, span := s.tracer.Start(ctx, "scan_testssl",
+		trace.WithAttributes(
+			attribute.String("org.id", target.OrgID),
+			attribute.String("trace.id", target.TraceID),
+			attribute.String("discovery.id", target.DiscoveryID),
+			attribute.String("target", target.Target),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Processing scan target",
 		zap.String("target", target.Target),
 		zap.String("discovery_id", target.DiscoveryID),
@@ -44,8 +59,11 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 			zap.String("target", target.Target),
 			zap.Error(err),
 		)
+		span.RecordError(err)
 		return err
 	}
+
+	span.SetAttributes(attribute.Int("findings.count", len(findings)))
 
 	s.logger.Info("testssl.sh scan completed",
 		zap.String("target", target.Target),

@@ -10,6 +10,9 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +20,7 @@ type Service struct {
 	db     *mongo.Database
 	redis  *redis.Client
 	logger *zap.Logger
+	tracer trace.Tracer
 }
 
 func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger) *Service {
@@ -24,11 +28,22 @@ func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger) *Se
 		db:     db,
 		redis:  redis,
 		logger: logger,
+		tracer: otel.Tracer("domain-ingestion"),
 	}
 }
 
 // ProcessFinding processes a domain discovery finding and persists it to MongoDB
 func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFinding) error {
+	ctx, span := s.tracer.Start(ctx, "ingest_domain_finding",
+		trace.WithAttributes(
+			attribute.String("org.id", finding.OrgID),
+			attribute.String("trace.id", finding.TraceID),
+			attribute.String("asset.type", finding.AssetType),
+			attribute.String("host", finding.Host),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Processing domain discovery finding",
 		zap.String("trace_id", finding.TraceID),
 		zap.String("org_id", finding.OrgID),
@@ -56,7 +71,12 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 	}
 
 	// Process the discovery (asset_type is now in the finding)
-	return s.processDiscovery(ctx, finding, finding.AssetType)
+	if err := s.processDiscovery(ctx, finding, finding.AssetType); err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }
 
 // processDiscovery processes a domain/subdomain discovery and stores in discoveries collection

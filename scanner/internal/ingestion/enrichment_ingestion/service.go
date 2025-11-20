@@ -9,6 +9,9 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +20,7 @@ type Service struct {
 	db     *mongo.Database
 	redis  *redis.Client
 	logger *zap.Logger
+	tracer trace.Tracer
 }
 
 // NewService creates a new enrichment ingestion service
@@ -25,11 +29,22 @@ func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger) *Se
 		db:     db,
 		redis:  redis,
 		logger: logger,
+		tracer: otel.Tracer("enrichment-ingestion"),
 	}
 }
 
 // ProcessEnrichment processes an enrichment finding and updates the discovery in MongoDB
 func (s *Service) ProcessEnrichment(ctx context.Context, enrichment shared.EnrichmentFinding) error {
+	ctx, span := s.tracer.Start(ctx, "ingest_enrichment",
+		trace.WithAttributes(
+			attribute.String("org.id", enrichment.OrgID),
+			attribute.String("trace.id", enrichment.TraceID),
+			attribute.String("discovery.id", enrichment.DiscoveryID),
+			attribute.String("enrichment.type", enrichment.EnrichmentType),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Processing enrichment finding",
 		zap.String("trace_id", enrichment.TraceID),
 		zap.String("org_id", enrichment.OrgID),
@@ -58,19 +73,27 @@ func (s *Service) ProcessEnrichment(ctx context.Context, enrichment shared.Enric
 	}
 
 	// Update discovery based on enrichment type
+	var err error
 	switch enrichment.EnrichmentType {
 	case "waf":
-		return s.processWAFEnrichment(ctx, enrichment)
+		err = s.processWAFEnrichment(ctx, enrichment)
 	case "geolocation":
-		return s.processGeolocationEnrichment(ctx, enrichment)
+		err = s.processGeolocationEnrichment(ctx, enrichment)
 	case "cloud":
-		return s.processCloudEnrichment(ctx, enrichment)
+		err = s.processCloudEnrichment(ctx, enrichment)
 	default:
 		s.logger.Warn("Unknown enrichment type",
 			zap.String("enrichment_type", enrichment.EnrichmentType),
 		)
 		return nil
 	}
+
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }
 
 // processWAFEnrichment processes WAF enrichment data
