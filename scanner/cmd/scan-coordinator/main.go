@@ -10,6 +10,7 @@ import (
 	"github.com/vulwall/scanners/internal/core/logger"
 	"github.com/vulwall/scanners/internal/core/mongox"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/scan_coordinator"
 	"go.uber.org/zap"
 )
@@ -35,6 +36,17 @@ func main() {
 	// Create context for service lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Initialize OpenTelemetry tracing
+	tracerProvider, err := telemetry.InitTracing(ctx, "scan-coordinator", appCfg.Environment, logger.Log)
+	if err != nil {
+		logger.Log.Fatal("Failed to initialize tracing", zap.Error(err))
+	}
+	defer func() {
+		if err := tracerProvider.Shutdown(context.Background()); err != nil {
+			logger.Log.Error("Failed to shutdown tracer provider", zap.Error(err))
+		}
+	}()
 
 	// Connect to Redis
 	redisClient, err := redisx.NewClient(appCfg)

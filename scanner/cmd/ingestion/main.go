@@ -10,6 +10,7 @@ import (
 	"github.com/vulwall/scanners/internal/core/logger"
 	"github.com/vulwall/scanners/internal/core/mongox"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/ingestion"
 	"go.uber.org/zap"
 )
@@ -32,6 +33,21 @@ func main() {
 		zap.String("environment", cfg.Environment),
 	)
 
+	// Create context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Initialize OpenTelemetry tracing
+	tracerProvider, err := telemetry.InitTracing(ctx, "ingestion", cfg.Environment, logger.Log)
+	if err != nil {
+		logger.Log.Fatal("Failed to initialize tracing", zap.Error(err))
+	}
+	defer func() {
+		if err := tracerProvider.Shutdown(context.Background()); err != nil {
+			logger.Log.Error("Failed to shutdown tracer provider", zap.Error(err))
+		}
+	}()
+
 	// Initialize Redis client
 	redisClient, err := redisx.NewClient(cfg)
 	if err != nil {
@@ -52,10 +68,6 @@ func main() {
 	logger.Log.Info("Connected to MongoDB",
 		zap.String("database", cfg.MongoDB),
 	)
-
-	// Create context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// Ensure indexes exist
 	if err := mongox.EnsureIndexes(ctx, db, logger.Log); err != nil {
