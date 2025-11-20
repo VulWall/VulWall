@@ -139,7 +139,7 @@ func (s *Service) publishUniqueVulnerabilities(ctx context.Context, results []pr
 
 // publishFinding publishes a security finding to the Redis stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.SecurityFinding) error {
-	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding)
+	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 20000)
 }
 
 // convertToSecurityFinding converts a vulnerability to SecurityFinding format

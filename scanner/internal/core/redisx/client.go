@@ -39,20 +39,29 @@ func CreateConsumerGroup(ctx context.Context, client *redis.Client, stream, grou
 // PublishToStream publishes a message to a Redis stream
 // The message will be marshaled to JSON and published with a "data" field
 // This is a generic helper to reduce code duplication across services
-func PublishToStream(ctx context.Context, client *redis.Client, stream string, message interface{}) error {
+// If maxLen > 0, the stream will be trimmed to approximately that size (using ~ for better performance)
+func PublishToStream(ctx context.Context, client *redis.Client, stream string, message interface{}, maxLen int64) error {
 	// Marshal message to JSON
 	data, err := json.Marshal(message)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
 
-	// Publish to stream
-	_, err = client.XAdd(ctx, &redis.XAddArgs{
+	// Publish to stream with optional MAXLEN trimming
+	args := &redis.XAddArgs{
 		Stream: stream,
 		Values: map[string]interface{}{
 			"data": string(data),
 		},
-	}).Result()
+	}
+
+	// Apply MAXLEN if specified (using approximate ~ for better performance)
+	if maxLen > 0 {
+		args.MaxLen = maxLen
+		args.Approx = true
+	}
+
+	_, err = client.XAdd(ctx, args).Result()
 
 	if err != nil {
 		return fmt.Errorf("failed to publish to stream %s: %w", stream, err)

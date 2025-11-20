@@ -258,5 +258,5 @@ func (s *Service) mapSeverity(testsslSeverity string) string {
 
 // publishFinding publishes a security finding to Redis stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.SecurityFinding) error {
-	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding)
+	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 20000)
 }

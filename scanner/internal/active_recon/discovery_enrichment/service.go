@@ -284,9 +284,11 @@ func (s *Service) publishEnrichment(ctx context.Context, enrichment shared.Enric
 		return fmt.Errorf("failed to marshal enrichment: %w", err)
 	}
 
-	// Publish to discovery_enrichment_results stream
+	// Publish to discovery_enrichment_results stream with MAXLEN=5000
 	_, err = s.redis.XAdd(ctx, &redis.XAddArgs{
 		Stream: shared.StreamDiscoveryEnrichmentResults,
+		MaxLen: 5000,
+		Approx: true,
 		Values: map[string]interface{}{
 			"data": string(data),
 		},

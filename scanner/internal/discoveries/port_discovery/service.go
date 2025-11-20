@@ -105,8 +105,8 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 
 // publishFinding publishes a port discovery finding to the IP discovery results stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.IPDiscoveryFinding) error {
-	// Use shared publisher utility
-	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryResults, finding); err != nil {
+	// Use shared publisher utility with MAXLEN=10000 to prevent unbounded growth
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryResults, finding, 10000); err != nil {
 		s.logger.Error("Failed to publish finding to stream",
 			zap.String("stream", shared.StreamIPDiscoveryResults),
 			zap.Error(err),

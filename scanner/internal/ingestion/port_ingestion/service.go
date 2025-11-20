@@ -479,8 +479,8 @@ func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.IPDis
 		Created:     time.Now(),
 	}
 
-	// Publish to enrichment queue
-	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDiscoveryEnrichmentQueue, enrichmentJob); err != nil {
+	// Publish to enrichment queue with MAXLEN=5000
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDiscoveryEnrichmentQueue, enrichmentJob, 5000); err != nil {
 		return fmt.Errorf("failed to publish enrichment job: %w", err)
 	}
 
