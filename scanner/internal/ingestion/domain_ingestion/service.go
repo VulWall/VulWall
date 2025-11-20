@@ -467,7 +467,8 @@ func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.Disc
 		Created: time.Now(),
 	}
 
-	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryQueue, ipJob, 5000); err != nil {
+	// Publish to job queue WITHOUT MAXLEN (queues should not be trimmed)
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryQueue, ipJob, 0); err != nil {
 		return fmt.Errorf("failed to publish IP discovery job: %w", err)
 	}
 
@@ -504,8 +505,8 @@ func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.Disco
 		return nil
 	}
 
-	// Publish to enrichment queue with MAXLEN=5000
-	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDiscoveryEnrichmentQueue, enrichmentJob, 5000); err != nil {
+	// Publish to enrichment job queue WITHOUT MAXLEN (queues should not be trimmed)
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDiscoveryEnrichmentQueue, enrichmentJob, 0); err != nil {
 		return fmt.Errorf("failed to publish enrichment job: %w", err)
 	}
 

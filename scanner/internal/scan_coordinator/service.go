@@ -2,12 +2,12 @@ package scan_coordinator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
+	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -226,7 +226,8 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 				Created: time.Now(),
 			}
 
-			if err := s.publishToStream(ctx, shared.StreamDomainDiscoveryQueue, job); err != nil {
+			// Publish to job queue WITHOUT MAXLEN (queues should not be trimmed)
+			if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDomainDiscoveryQueue, job, 0); err != nil {
 				s.logger.Error("Failed to publish domain discovery job",
 					zap.String("org_id", orgID),
 					zap.String("asset_id", asset.ID),
@@ -259,7 +260,8 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 				Created: time.Now(),
 			}
 
-			if err := s.publishToStream(ctx, shared.StreamIPDiscoveryQueue, job); err != nil {
+			// Publish to job queue WITHOUT MAXLEN (queues should not be trimmed)
+			if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryQueue, job, 0); err != nil {
 				s.logger.Error("Failed to publish IP discovery job",
 					zap.String("org_id", orgID),
 					zap.String("asset_id", asset.ID),
@@ -286,19 +288,3 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 	return nil
 }
 
-// publishToStream publishes a job to a Redis stream
-func (s *Service) publishToStream(ctx context.Context, stream string, job interface{}) error {
-	data, err := json.Marshal(job)
-	if err != nil {
-		return fmt.Errorf("failed to marshal job: %w", err)
-	}
-
-	_, err = s.redis.XAdd(ctx, &redis.XAddArgs{
-		Stream: stream,
-		Values: map[string]interface{}{
-			"data": string(data),
-		},
-	}).Result()
-
-	return err
-}

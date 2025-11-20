@@ -2,7 +2,6 @@ package discovery_enrichment
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/geolocation"
 	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/waf/patterns"
 	"github.com/vulwall/scanners/internal/core/config"
+	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -293,23 +293,8 @@ func (s *Service) enrichCloud(ctx context.Context, job shared.EnrichmentJob) {
 
 // publishEnrichment publishes enrichment data to Redis stream
 func (s *Service) publishEnrichment(ctx context.Context, enrichment shared.EnrichmentFinding) error {
-	// Marshal to JSON
-	data, err := json.Marshal(enrichment)
-	if err != nil {
-		return fmt.Errorf("failed to marshal enrichment: %w", err)
-	}
-
-	// Publish to discovery_enrichment_results stream with MAXLEN=5000
-	_, err = s.redis.XAdd(ctx, &redis.XAddArgs{
-		Stream: shared.StreamDiscoveryEnrichmentResults,
-		MaxLen: 5000,
-		Approx: true,
-		Values: map[string]interface{}{
-			"data": string(data),
-		},
-	}).Result()
-
-	if err != nil {
+	// Use PublishToStream helper with MAXLEN=5000 for result streams
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDiscoveryEnrichmentResults, enrichment, 5000); err != nil {
 		return fmt.Errorf("failed to publish to stream: %w", err)
 	}
 
