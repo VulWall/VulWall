@@ -10,6 +10,9 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +20,7 @@ import (
 type Service struct {
 	db     *mongo.Database
 	logger *zap.Logger
+	tracer trace.Tracer
 }
 
 // NewService creates a new findings ingestion service
@@ -24,11 +28,22 @@ func NewService(db *mongo.Database, logger *zap.Logger) *Service {
 	return &Service{
 		db:     db,
 		logger: logger,
+		tracer: otel.Tracer("findings-ingestion"),
 	}
 }
 
 // ProcessFinding processes a security finding and persists it to MongoDB
 func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFinding) error {
+	ctx, span := s.tracer.Start(ctx, "ingest_security_finding",
+		trace.WithAttributes(
+			attribute.String("org.id", finding.OrgID),
+			attribute.String("trace.id", finding.TraceID),
+			attribute.String("finding.type", finding.FindingType),
+			attribute.String("severity", finding.Severity),
+		),
+	)
+	defer span.End()
+
 	// Validate required fields
 	if finding.Scanner == "" {
 		s.logger.Warn("Skipping finding without source field")
@@ -50,6 +65,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 
 	// Upsert the finding (deduplicate by org_id + discovery_id + finding_type + title)
 	if err := s.upsertFinding(ctx, finding); err != nil {
+		span.RecordError(err)
 		return fmt.Errorf("failed to upsert finding: %w", err)
 	}
 

@@ -12,6 +12,9 @@ import (
 	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/waf/patterns"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/shared"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -22,6 +25,7 @@ type Service struct {
 	geoEnricher   *geolocation.IPEnricher
 	cloudDetector *cloud.Detector
 	logger        *zap.Logger
+	tracer        trace.Tracer
 }
 
 // NewService creates a new discovery enrichment service
@@ -72,11 +76,22 @@ func NewService(redisClient *redis.Client, cfg *config.Config, logger *zap.Logge
 		geoEnricher:   geoEnricher,
 		cloudDetector: cloudDetector,
 		logger:        logger,
+		tracer:        otel.Tracer("discovery-enrichment"),
 	}, nil
 }
 
 // ProcessEnrichment processes an enrichment job
 func (s *Service) ProcessEnrichment(ctx context.Context, job shared.EnrichmentJob) error {
+	ctx, span := s.tracer.Start(ctx, "enrich_discovery",
+		trace.WithAttributes(
+			attribute.String("org.id", job.OrgID),
+			attribute.String("trace.id", job.TraceID),
+			attribute.String("discovery.id", job.DiscoveryID),
+			attribute.String("asset.type", job.AssetType),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Processing enrichment job",
 		zap.String("trace_id", job.TraceID),
 		zap.String("org_id", job.OrgID),

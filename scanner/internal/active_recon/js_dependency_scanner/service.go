@@ -11,6 +11,9 @@ import (
 	"github.com/vulwall/scanners/internal/active_recon/js_dependency_scanner/scanner"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/shared"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -19,6 +22,7 @@ type Service struct {
 	redis   *redis.Client
 	logger  *zap.Logger
 	scanner scanner.Scanner
+	tracer  trace.Tracer
 }
 
 // NewService creates a new JSDependencyScanner service
@@ -27,12 +31,23 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 		redis:   redisClient,
 		logger:  logger,
 		scanner: scanner.NewScanner(logger),
+		tracer:  otel.Tracer("js-dependency-scanner"),
 	}
 }
 
 // ProcessDiscovery processes a discovery target and scans for JS vulnerabilities
 // Scans both HTTP and HTTPS protocols in parallel for maximum performance
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
+	ctx, span := s.tracer.Start(ctx, "scan_js_dependencies",
+		trace.WithAttributes(
+			attribute.String("org.id", target.OrgID),
+			attribute.String("trace.id", target.TraceID),
+			attribute.String("discovery.id", target.DiscoveryID),
+			attribute.String("target", target.Target),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Processing discovery for JSDependencyScanner",
 		zap.String("target", target.Target),
 		zap.String("discovery_id", target.DiscoveryID),
@@ -41,6 +56,13 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 
 	// Scan both HTTP and HTTPS in parallel
 	allVulnerabilities := s.scanBothProtocols(ctx, target)
+
+	// Count total vulnerabilities
+	totalVulns := 0
+	for _, result := range allVulnerabilities {
+		totalVulns += len(result.vulnerabilities)
+	}
+	span.SetAttributes(attribute.Int("vulnerabilities.count", totalVulns))
 
 	// Publish unique vulnerabilities to Redis
 	s.publishUniqueVulnerabilities(ctx, allVulnerabilities, target)

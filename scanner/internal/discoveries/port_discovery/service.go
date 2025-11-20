@@ -8,6 +8,9 @@ import (
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/discoveries/port_discovery/services"
 	"github.com/vulwall/scanners/internal/shared"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -15,6 +18,7 @@ type Service struct {
 	redis   *redis.Client
 	logger  *zap.Logger
 	scanner *services.Scanner
+	tracer  trace.Tracer
 }
 
 func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
@@ -22,11 +26,21 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 		redis:   redisClient,
 		logger:  logger,
 		scanner: services.NewScanner(),
+		tracer:  otel.Tracer("port-discovery"),
 	}
 }
 
 // ProcessJob processes an IP discovery job by scanning common ports
 func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) error {
+	ctx, span := s.tracer.Start(ctx, "scan_ports",
+		trace.WithAttributes(
+			attribute.String("org.id", job.OrgID),
+			attribute.String("trace.id", job.TraceID),
+			attribute.String("ip", job.IP),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Processing IP discovery job",
 		zap.String("trace_id", job.TraceID),
 		zap.String("org_id", job.OrgID),
@@ -37,8 +51,12 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 	portsToScan := CommonPorts
 	// TODO: In the future, support custom port ranges from job.PortRange
 
+	span.SetAttributes(attribute.Int("ports.to_scan", len(portsToScan)))
+
 	// Scan all ports and filter to open ones
 	openPorts := s.scanner.ScanPortsFiltered(ctx, job.IP, portsToScan)
+
+	span.SetAttributes(attribute.Int("ports.open", len(openPorts)))
 
 	s.logger.Info("Port scan completed",
 		zap.String("trace_id", job.TraceID),

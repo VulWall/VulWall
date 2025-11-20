@@ -8,6 +8,9 @@ import (
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/discoveries/domain_discovery/shodan"
 	"github.com/vulwall/scanners/internal/shared"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -15,6 +18,7 @@ type Service struct {
 	redis        *redis.Client
 	logger       *zap.Logger
 	shodanClient *shodan.Client
+	tracer       trace.Tracer
 }
 
 func NewService(redisClient *redis.Client, shodanAPIKey string, logger *zap.Logger) *Service {
@@ -22,11 +26,21 @@ func NewService(redisClient *redis.Client, shodanAPIKey string, logger *zap.Logg
 		redis:        redisClient,
 		logger:       logger,
 		shodanClient: shodan.NewClient(shodanAPIKey, logger),
+		tracer:       otel.Tracer("domain-discovery"),
 	}
 }
 
 // ProcessJob processes a discovery job using Shodan
 func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error {
+	ctx, span := s.tracer.Start(ctx, "discover_domain",
+		trace.WithAttributes(
+			attribute.String("org.id", job.OrgID),
+			attribute.String("trace.id", job.TraceID),
+			attribute.String("host", job.Host),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Processing discovery job with Shodan",
 		zap.String("trace_id", job.TraceID),
 		zap.String("org_id", job.OrgID),
@@ -93,6 +107,15 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 
 // discoverSubdomains uses Shodan to discover and publish subdomain findings
 func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID *string, orgID, domain string) error {
+	ctx, span := s.tracer.Start(ctx, "shodan_subdomain_discovery",
+		trace.WithAttributes(
+			attribute.String("org.id", orgID),
+			attribute.String("trace.id", traceID),
+			attribute.String("domain", domain),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Starting Shodan subdomain discovery",
 		zap.String("trace_id", traceID),
 		zap.String("org_id", orgID),
@@ -102,8 +125,11 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 	// Discover subdomains using Shodan
 	subdomains, err := s.shodanClient.DiscoverSubdomains(ctx, domain)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
+
+	span.SetAttributes(attribute.Int("subdomain.count", len(subdomains)))
 
 	if len(subdomains) == 0 {
 		s.logger.Info("No subdomains discovered", zap.String("domain", domain))

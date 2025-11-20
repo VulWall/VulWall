@@ -14,6 +14,9 @@ import (
 	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/shared"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -23,6 +26,7 @@ type Service struct {
 	logger     *zap.Logger
 	wappalyzer *wappalyzer.Wappalyze
 	httpClient *http.Client
+	tracer     trace.Tracer
 }
 
 // NewService creates a new WebTechProfiler service
@@ -51,11 +55,22 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error)
 		logger:     logger,
 		wappalyzer: wappalyzerInstance,
 		httpClient: httpClient,
+		tracer:     otel.Tracer("webtechprofiler"),
 	}, nil
 }
 
 // ProcessDiscovery processes a discovery target and detects web technologies
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
+	ctx, span := s.tracer.Start(ctx, "profile_web_tech",
+		trace.WithAttributes(
+			attribute.String("org.id", target.OrgID),
+			attribute.String("trace.id", target.TraceID),
+			attribute.String("discovery.id", target.DiscoveryID),
+			attribute.String("target", target.Target),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Processing discovery for WebTechProfiler scan",
 		zap.String("target", target.Target),
 		zap.String("discovery_id", target.DiscoveryID),
@@ -90,6 +105,8 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 			}
 		}
 	}
+
+	span.SetAttributes(attribute.Int("technologies.count", len(detectedTechs)))
 
 	// Convert and publish findings
 	for _, tech := range detectedTechs {
