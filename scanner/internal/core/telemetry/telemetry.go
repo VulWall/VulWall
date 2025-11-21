@@ -36,6 +36,7 @@ func InitTracing(ctx context.Context, serviceName, environment string, logger *z
 	// Create OTLP HTTP exporter for Honeycomb
 	exporter, err := otlptracehttp.New(ctx,
 		otlptracehttp.WithEndpoint(getOTLPEndpoint()),
+		otlptracehttp.WithURLPath("/v1/traces"), // Honeycomb requires this path
 		otlptracehttp.WithHeaders(map[string]string{
 			"x-honeycomb-team": getHoneycombAPIKey(),
 		}),
