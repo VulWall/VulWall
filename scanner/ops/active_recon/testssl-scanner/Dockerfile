@@ -15,6 +15,9 @@ FROM drwetter/testssl.sh:latest
 # Switch to root to install our binary
 USER root
 
+# Install ca-certificates for HTTPS requests
+RUN apk add --no-cache ca-certificates
+
 WORKDIR /root/
 
 # Copy the Go binary from builder

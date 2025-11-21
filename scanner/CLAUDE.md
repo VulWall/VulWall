@@ -817,6 +817,165 @@ internal/active_recon/ssl_scanner/
 - ✅ Optimized TLS dialer with timeouts
 - ✅ Dedup findings by (protocol + cipher + weakness type)
 
+## Distributed Tracing (OpenTelemetry)
+
+This project uses **OpenTelemetry** for distributed tracing with **W3C TraceContext propagation** across all services. This enables end-to-end visibility from scan initiation through discovery, scanning, and findings persistence.
+
+### Tracing Infrastructure
+
+**Location:** `internal/core/telemetry/`
+
+- `telemetry.go` - OpenTelemetry initialization (Honeycomb OTLP exporter)
+- `propagation.go` - W3C TraceContext injection/extraction utilities
+
+**Configuration:**
+- `OTEL_ENABLED` - Enable/disable tracing (default: enabled)
+- `HONEYCOMB_API_KEY` - Honeycomb API key
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP endpoint (default: api.honeycomb.io)
+- `OTEL_TRACES_SAMPLER` - Sampler strategy (default: parentbased_always_on)
+
+### Trace Context Propagation Pattern
+
+All services MUST follow this pattern to enable distributed tracing:
+
+#### **1. Publishers: Inject Trace Context**
+
+**When publishing to Redis streams, inject trace context BEFORE calling `PublishToStream`:**
+
+```go
+import "github.com/vulwall/scanners/internal/core/telemetry"
+
+func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFinding) error {
+    // Inject trace context for span linking across service boundaries
+    finding.TraceContext = telemetry.InjectTraceContext(ctx)
+
+    return redisx.PublishToStream(ctx, s.redis, shared.StreamDomainDiscoveryResults, finding, 10000)
+}
+```
+
+**Apply to:**
+- Discovery services publishing findings (`DiscoveryFinding`, `IPDiscoveryFinding`)
+- Ingestion services publishing jobs (`IPDiscoveryJob`, `EnrichmentJob`)
+- Active recon scanners publishing findings (`SecurityFinding`, `EnrichmentFinding`)
+- Scan coordinator publishing initial jobs (`DiscoveryJob`, `IPDiscoveryJob`)
+
+#### **2. Consumers: Extract Trace Context**
+
+**When consuming from Redis streams, extract trace context AFTER unmarshaling message:**
+
+```go
+import "github.com/vulwall/scanners/internal/core/telemetry"
+
+func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) error {
+    var finding shared.DiscoveryFinding
+    if err := json.Unmarshal([]byte(dataStr), &finding); err != nil {
+        return fmt.Errorf("failed to unmarshal finding: %w", err)
+    }
+
+    // Extract trace context from message to link spans across service boundaries
+    ctx = telemetry.ExtractTraceContext(ctx, finding.TraceContext)
+
+    // Process with linked context
+    if err := c.service.ProcessFinding(ctx, finding); err != nil {
+        return fmt.Errorf("failed to process finding: %w", err)
+    }
+
+    return nil
+}
+```
+
+**Apply to:**
+- All consumer.go files in discovery services
+- All consumer.go files in ingestion services
+- All consumer.go files in active recon scanners
+
+#### **3. Context Propagation in Goroutines**
+
+**When spawning goroutines, pass the parent context to maintain trace links:**
+
+```go
+// ❌ WRONG: Breaks span hierarchy
+go func() {
+    s.discoverSubdomains(context.Background(), ...) // Lost context!
+}()
+
+// ✅ CORRECT: Maintains span hierarchy
+go func() {
+    s.discoverSubdomains(ctx, ...) // Preserves trace context
+}()
+```
+
+### Trace Context in Shared Models
+
+All stream-based models include a `TraceContext` field for W3C propagation:
+
+```go
+type DiscoveryJob struct {
+    TraceID      string            `json:"trace_id" bson:"trace_id"`
+    TraceContext map[string]string `json:"trace_context,omitempty" bson:"-"` // W3C headers
+    // ... other fields
+}
+```
+
+**Note:** The `bson:"-"` tag ensures trace context is **not stored in MongoDB** (only used for Redis streaming).
+
+### End-to-End Trace Flow
+
+```
+Scan Coordinator (creates trace_id + root span)
+    └─ Inject TraceContext → Publish DiscoveryJob
+        └─ Domain Discovery Consumer (extract TraceContext)
+            └─ Domain Discovery Service (create child span)
+                └─ Inject TraceContext → Publish DiscoveryFinding
+                    └─ Domain Ingestion Consumer (extract TraceContext)
+                        └─ Domain Ingestion Service (create child span)
+                            ├─ Inject TraceContext → Publish IPDiscoveryJob
+                            │   └─ Port Discovery Consumer (extract TraceContext)
+                            │       └─ Port Discovery Service (create child span)
+                            │           └─ Inject TraceContext → Publish IPDiscoveryFinding
+                            │               └─ Port Ingestion Consumer (extract TraceContext)
+                            │                   └─ Port Ingestion Service (create child span)
+                            └─ Inject TraceContext → Publish EnrichmentJob
+                                └─ Enrichment Consumer (extract TraceContext)
+                                    └─ Enrichment Service (create child span)
+```
+
+**Result:** Hierarchical waterfall in Honeycomb showing full causality chain with timing data.
+
+### Adding Tracing to New Services
+
+When creating a new service that publishes to or consumes from Redis streams:
+
+1. **Publisher:**
+   - Add import: `"github.com/vulwall/scanners/internal/core/telemetry"`
+   - Before `PublishToStream`: `message.TraceContext = telemetry.InjectTraceContext(ctx)`
+
+2. **Consumer:**
+   - Add import: `"github.com/vulwall/scanners/internal/core/telemetry"`
+   - After `json.Unmarshal`: `ctx = telemetry.ExtractTraceContext(ctx, message.TraceContext)`
+
+3. **Service spans:**
+   - Use `otel.Tracer("service-name")` to get tracer
+   - Create spans: `ctx, span := tracer.Start(ctx, "operation_name")`
+   - Add attributes: `span.SetAttributes(attribute.String("key", "value"))`
+   - Always defer: `defer span.End()`
+
+### Querying Traces in Honeycomb
+
+```
+# Find all spans for a scan
+trace.trace_id = "abc-123-def-456"
+
+# Find slow operations
+duration_ms > 5000
+
+# Find errors
+error = true
+
+# Group by service
+VISUALIZE COUNT GROUP BY service.name
+```
+
 ## Common Commands
 
 ### Building Services
@@ -1514,6 +1673,252 @@ console.log(`Targeted: ${targetedCount}, Discovered: ${discoveredCount}`)
 - `logger/logger.go` - Zap logger initialization
 - `redisx/client.go` - Redis client with consumer group helpers
 - `mongox/client.go` - MongoDB connection manager
+- `telemetry/telemetry.go` - OpenTelemetry initialization and tracing setup
+- `telemetry/propagation.go` - W3C TraceContext injection/extraction utilities
+
+### Bootstrap Pattern Architecture
+
+The project uses a **bootstrap pattern** to eliminate boilerplate code and ensure consistent service initialization. All services use one of two bootstrap variants depending on their requirements.
+
+#### Bootstrap Variants
+
+**1. `bootstrap.Run()` - Full Bootstrap (Single-Stream with MongoDB)**
+
+For services that:
+
+- Consume from a single Redis stream
+- Require MongoDB access
+- Need automatic consumer group management
+
+**Example:** js-dependency-scanner
+
+```go
+package main
+
+import (
+    "github.com/vulwall/scanners/internal/active_recon/js_dependency_scanner"
+    "github.com/vulwall/scanners/internal/core/bootstrap"
+    "github.com/vulwall/scanners/internal/shared"
+)
+
+func main() {
+    bootstrap.Run(bootstrap.ServiceConfig{
+        ServiceName:   "js-dependency-scanner",
+        StreamName:    shared.StreamDomainDiscoveryResults,
+        ConsumerGroup: js_dependency_scanner.GroupJSDependencyScanner,
+        Factory: func(cfg *config.Config, redisClient *redis.Client, mongoDB *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
+            return js_dependency_scanner.NewConsumer(redisClient, mongoDB, logger)
+        },
+    })
+}
+```
+
+**What it provides:**
+
+- ✅ Configuration loading from environment
+- ✅ Structured logging initialization (Zap)
+- ✅ OpenTelemetry tracing initialization (automatic)
+- ✅ Redis client connection
+- ✅ MongoDB connection
+- ✅ Consumer group creation (automatic)
+- ✅ Graceful shutdown handling (SIGTERM/SIGINT)
+- ✅ Error handling and panic recovery
+
+**2. `bootstrap.RunSimple()` - Simple Bootstrap (Multi-Stream without MongoDB)**
+
+For services that:
+
+- Consume from multiple Redis streams (dual-stream pattern)
+- Do NOT need MongoDB access
+- Handle their own consumer group creation
+
+**Example:** nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, discovery-enrichment
+
+```go
+package main
+
+import (
+    "github.com/go-redis/redis/v8"
+    "github.com/vulwall/scanners/internal/active_recon/nuclei_scanner"
+    "github.com/vulwall/scanners/internal/core/bootstrap"
+    "github.com/vulwall/scanners/internal/core/config"
+    "go.uber.org/zap"
+)
+
+func main() {
+    bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
+        ServiceName: "nuclei-scanner",
+        Factory: func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (bootstrap.ConsumerStarter, error) {
+            return nuclei_scanner.NewConsumer(redisClient, logger), nil
+        },
+    })
+}
+```
+
+**What it provides:**
+
+- ✅ Configuration loading from environment
+- ✅ Structured logging initialization (Zap)
+- ✅ **OpenTelemetry tracing initialization (automatic)**
+- ✅ Redis client connection
+- ❌ No MongoDB connection (not needed)
+- ❌ No automatic consumer group creation (service handles it)
+- ✅ Graceful shutdown handling (SIGTERM/SIGINT)
+- ✅ Error handling and panic recovery
+
+#### Bootstrap Refactoring (2025)
+
+**Problem:** Five active reconnaissance scanners (Nikto, Nuclei, TestSSL, WebTechProfiler, Discovery Enrichment) were using manual initialization code instead of the bootstrap pattern. This resulted in:
+
+- ❌ 293 lines of duplicate initialization code across 5 services
+- ❌ Each main.go file was ~75-80 lines (mostly boilerplate)
+- ❌ **Missing OpenTelemetry initialization** - spans were created but silently dropped (no TracerProvider)
+- ❌ Inconsistent architecture (js-dependency-scanner used bootstrap, others didn't)
+
+**Solution:** Extended bootstrap pattern with `RunSimple()` variant and migrated all 5 scanners.
+
+**Results:**
+
+- ✅ Eliminated 293 lines of duplicate code (76% reduction)
+- ✅ Reduced each main.go from ~75 lines to 18 lines
+- ✅ Automatic OpenTelemetry initialization now guaranteed
+- ✅ All active recon scanners now use consistent architecture
+- ✅ Honeycomb traces now show spans for all scanners
+
+**Before (75 lines - manual initialization):**
+```go
+package main
+
+import (
+    "context"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
+
+    "github.com/go-redis/redis/v8"
+    "github.com/vulwall/scanners/internal/active_recon/nuclei_scanner"
+    "github.com/vulwall/scanners/internal/core/config"
+    "github.com/vulwall/scanners/internal/core/logger"
+    "github.com/vulwall/scanners/internal/core/redisx"
+    "github.com/vulwall/scanners/internal/core/telemetry"
+    "go.uber.org/zap"
+)
+
+func main() {
+    // Load configuration
+    cfg, err := config.Load()
+    if err != nil {
+        panic(err)
+    }
+
+    // Initialize logger
+    log, err := logger.New(cfg.ServiceName, cfg.Environment)
+    if err != nil {
+        panic(err)
+    }
+    defer log.Sync()
+
+    // Initialize OpenTelemetry
+    ctx := context.Background()
+    tracerProvider, err := telemetry.InitTracing(ctx, cfg.ServiceName, cfg.Environment, log)
+    if err != nil {
+        log.Fatal("Failed to initialize tracing", zap.Error(err))
+    }
+    defer func() {
+        shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+        if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+            log.Error("Failed to shutdown tracer provider", zap.Error(err))
+        }
+    }()
+
+    // Connect to Redis
+    redisClient := redisx.NewClient(&redis.Options{
+        Addr:     cfg.Redis.Addr,
+        Password: cfg.Redis.Password,
+        DB:       cfg.Redis.DB,
+    })
+    defer redisClient.Close()
+
+    // Create consumer
+    consumer := nuclei_scanner.NewConsumer(redisClient, log)
+
+    // Start consumer
+    consumerCtx, cancel := context.WithCancel(ctx)
+    defer cancel()
+
+    go func() {
+        if err := consumer.Start(consumerCtx); err != nil {
+            log.Fatal("Consumer failed", zap.Error(err))
+        }
+    }()
+
+    // Wait for shutdown signal
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+    <-sigChan
+
+    log.Info("Shutting down gracefully...")
+    cancel()
+    time.Sleep(2 * time.Second)
+}
+```
+
+**After (18 lines - bootstrap pattern):**
+```go
+package main
+
+import (
+    "github.com/go-redis/redis/v8"
+    "github.com/vulwall/scanners/internal/active_recon/nuclei_scanner"
+    "github.com/vulwall/scanners/internal/core/bootstrap"
+    "github.com/vulwall/scanners/internal/core/config"
+    "go.uber.org/zap"
+)
+
+func main() {
+    bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
+        ServiceName: "nuclei-scanner",
+        Factory: func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (bootstrap.ConsumerStarter, error) {
+            return nuclei_scanner.NewConsumer(redisClient, logger), nil
+        },
+    })
+}
+```
+
+**Impact:** This refactoring resolved a critical production issue where active recon scanner spans were missing from Honeycomb traces. Data was being stored in MongoDB, but without proper OpenTelemetry initialization, all spans were silently discarded. The bootstrap pattern now guarantees that OpenTelemetry is initialized before any service logic runs.
+
+#### When to Use Each Bootstrap Variant
+
+**Use `bootstrap.Run()` when:**
+
+- Service consumes from a **single Redis stream**
+- Service needs **MongoDB access**
+- Service uses standard single-stream consumer pattern
+- Example: js-dependency-scanner
+
+**Use `bootstrap.RunSimple()` when:**
+
+- Service consumes from **multiple Redis streams** (dual-stream pattern)
+- Service does **NOT need MongoDB**
+- Service handles its own consumer group creation
+- Examples: nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, discovery-enrichment
+
+**Use neither (manual initialization) when:**
+
+- Service has highly custom initialization requirements
+- Service doesn't follow standard consumer patterns
+- Examples: scan-coordinator (scheduler, not consumer), ingestion orchestrator (multi-consumer orchestration)
+
+#### Adding Bootstrap to New Services
+
+When creating a new service, **always prefer using a bootstrap variant** instead of manual initialization:
+
+1. **Determine which variant to use** (see "When to Use" above)
+2. **Create minimal main.go** with appropriate bootstrap call
+3. **Implement consumer interface** that bootstrap expects
+4. **Deploy** - OpenTelemetry and all infrastructure automatically initialized
 
 ### Shared Package (`internal/shared/`)
 - `models.go` - Models used by 2+ services:
@@ -2050,7 +2455,7 @@ db.discoveries.aggregate([
 - **Shared models for communication** - Use `internal/shared/` for models used by 2+ services
 - **Discovery services should not access MongoDB** - only publish findings to Redis
 - **Ingestion service is the single source of truth** - only it writes to MongoDB
-- **Use bootstrap pattern** - All services use `bootstrap.Run()` to eliminate boilerplate
+- **Use bootstrap pattern** - All services use `bootstrap.Run()` or `bootstrap.RunSimple()` to eliminate boilerplate and ensure OpenTelemetry initialization
 
 ### Infrastructure
 - **Cloud infrastructure** - This project uses cloud-hosted Redis and MongoDB, not self-hosted instances

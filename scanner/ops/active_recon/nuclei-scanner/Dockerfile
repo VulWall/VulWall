@@ -12,6 +12,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o nuclei-scanner ./
 # Stage 2: Use ProjectDiscovery's official Nuclei image
 FROM projectdiscovery/nuclei:latest
 
+# Install ca-certificates for HTTPS requests
+RUN apk add --no-cache ca-certificates
+
 WORKDIR /root/
 
 # Copy the Go binary from builder

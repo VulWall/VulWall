@@ -18,12 +18,13 @@ LABEL version="1.0.0" \
 
 WORKDIR /root/
 
-# Install Nikto dependencies
+# Install Nikto dependencies and CA certificates
 RUN echo 'Installing packages for Nikto.' && \
     apk add --update --no-cache --virtual .build-deps \
         perl \
         perl-net-ssleay \
         git && \
+    apk add --no-cache ca-certificates && \
     echo 'Installing Nikto from GitHub.' && \
     git clone https://github.com/sullo/nikto.git /opt/nikto && \
     chmod +x /opt/nikto/program/nikto.pl && \

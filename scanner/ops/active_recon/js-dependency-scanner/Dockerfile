@@ -18,6 +18,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Install ca-certificates for HTTPS requests
+RUN apk add --no-cache ca-certificates
+
 # Install retire.js globally
 RUN npm install -g retire@5.2.4
 
