@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/discoveries/domain_discovery/shodan"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
@@ -93,7 +94,8 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	// Trigger Shodan subdomain discovery for root domains (no parent, no port)
 	if job.ParentID == nil && job.Port == nil && s.isDomain(job.Host) {
 		go func() {
-			if err := s.discoverSubdomains(context.Background(), job.TraceID, job.ScanID, job.OrgID, job.Host); err != nil {
+			// Pass ctx to maintain trace context in goroutine
+			if err := s.discoverSubdomains(ctx, job.TraceID, job.ScanID, job.OrgID, job.Host); err != nil {
 				s.logger.Error("Shodan subdomain discovery failed",
 					zap.String("host", job.Host),
 					zap.Error(err),
@@ -200,6 +202,9 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 
 // publishFinding publishes a discovery finding to the domain discovery results stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFinding) error {
+	// Inject trace context for span linking across service boundaries
+	finding.TraceContext = telemetry.InjectTraceContext(ctx)
+
 	// Use shared publisher utility with MAXLEN=10000 to prevent unbounded growth
 	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDomainDiscoveryResults, finding, 10000); err != nil {
 		s.logger.Error("Failed to publish finding to stream",

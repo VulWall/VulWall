@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/discoveries/port_discovery/services"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
@@ -123,6 +124,9 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 
 // publishFinding publishes a port discovery finding to the IP discovery results stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.IPDiscoveryFinding) error {
+	// Inject trace context for span linking across service boundaries
+	finding.TraceContext = telemetry.InjectTraceContext(ctx)
+
 	// Use shared publisher utility with MAXLEN=10000 to prevent unbounded growth
 	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryResults, finding, 10000); err != nil {
 		s.logger.Error("Failed to publish finding to stream",

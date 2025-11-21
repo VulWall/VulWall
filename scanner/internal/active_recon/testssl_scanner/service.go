@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -73,6 +74,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	// Publish each finding to Redis
 	for _, testSSLFinding := range findings {
 		finding := s.convertToSecurityFinding(testSSLFinding, target)
+		finding.TraceContext = telemetry.InjectTraceContext(ctx)
 		if err := s.publishFinding(ctx, finding); err != nil {
 			s.logger.Error("Failed to publish finding",
 				zap.String("target", target.Target),

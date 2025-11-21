@@ -8,6 +8,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
@@ -112,6 +113,9 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	if err := json.Unmarshal([]byte(dataStr), &finding); err != nil {
 		return fmt.Errorf("failed to unmarshal discovery finding: %w", err)
 	}
+
+	// Extract trace context from message to link spans across service boundaries
+	ctx = telemetry.ExtractTraceContext(ctx, finding.TraceContext)
 
 	// Validate org_id
 	if finding.OrgID == "" {

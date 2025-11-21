@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
@@ -113,6 +114,9 @@ func (c *Consumer) handleEnrichmentJob(ctx context.Context, message redis.XMessa
 	if err := json.Unmarshal([]byte(data), &job); err != nil {
 		return fmt.Errorf("failed to unmarshal enrichment job: %w", err)
 	}
+
+	// Extract trace context from message to link spans across service boundaries
+	ctx = telemetry.ExtractTraceContext(ctx, job.TraceContext)
 
 	// Validate org_id
 	if job.OrgID == "" {

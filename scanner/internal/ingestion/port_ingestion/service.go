@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -490,13 +491,14 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.IPDiscoveryFinding, ipDiscoveryID string) error {
 	// Build enrichment job (IP only - no ports)
 	enrichmentJob := shared.EnrichmentJob{
-		TraceID:     finding.TraceID,
-		ScanID:      finding.ScanID,
-		OrgID:       finding.OrgID,
-		DiscoveryID: ipDiscoveryID,
-		AssetType:   shared.AssetTypeIP,
-		IP:          finding.IP,
-		Created:     time.Now(),
+		TraceID:      finding.TraceID,
+		TraceContext: telemetry.InjectTraceContext(ctx), // Inject trace context for span linking
+		ScanID:       finding.ScanID,
+		OrgID:        finding.OrgID,
+		DiscoveryID:  ipDiscoveryID,
+		AssetType:    shared.AssetTypeIP,
+		IP:           finding.IP,
+		Created:      time.Now(),
 	}
 
 	// Publish to enrichment job queue WITHOUT MAXLEN (queues should not be trimmed)

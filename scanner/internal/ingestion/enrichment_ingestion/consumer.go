@@ -9,6 +9,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
@@ -113,6 +114,9 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	if err := json.Unmarshal([]byte(data), &enrichment); err != nil {
 		return fmt.Errorf("failed to unmarshal enrichment: %w", err)
 	}
+
+	// Extract trace context from message to link spans across service boundaries
+	ctx = telemetry.ExtractTraceContext(ctx, enrichment.TraceContext)
 
 	// Validate org_id
 	if enrichment.OrgID == "" {

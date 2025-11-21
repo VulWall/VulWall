@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -455,11 +456,12 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 // publishIPDiscoveryJob publishes an IP discovery job to trigger port scanning
 func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.DiscoveryFinding, ipDiscoveryID string) error {
 	ipJob := shared.IPDiscoveryJob{
-		TraceID:  finding.TraceID,
-		ScanID:   finding.ScanID,                        // Pass through scan_id
-		OrgID:    finding.OrgID,
-		ParentID: &ipDiscoveryID,
-		IP:       *finding.IP,
+		TraceID:      finding.TraceID,
+		TraceContext: telemetry.InjectTraceContext(ctx), // Inject trace context for span linking
+		ScanID:       finding.ScanID,                    // Pass through scan_id
+		OrgID:        finding.OrgID,
+		ParentID:     &ipDiscoveryID,
+		IP:           *finding.IP,
 		Metadata: map[string]interface{}{
 			"source":          "domain_discovery",
 			"ip_discovery_id": ipDiscoveryID,
@@ -479,12 +481,13 @@ func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.Disc
 func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.DiscoveryFinding, discoveryID string, assetType string) error {
 	// Build enrichment job
 	enrichmentJob := shared.EnrichmentJob{
-		TraceID:     finding.TraceID,
-		ScanID:      finding.ScanID,
-		OrgID:       finding.OrgID,
-		DiscoveryID: discoveryID,
-		AssetType:   assetType,
-		Created:     time.Now(),
+		TraceID:      finding.TraceID,
+		TraceContext: telemetry.InjectTraceContext(ctx), // Inject trace context for span linking
+		ScanID:       finding.ScanID,
+		OrgID:        finding.OrgID,
+		DiscoveryID:  discoveryID,
+		AssetType:    assetType,
+		Created:      time.Now(),
 	}
 
 	// Add asset-specific fields
