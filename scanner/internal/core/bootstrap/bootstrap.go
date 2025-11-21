@@ -110,3 +110,100 @@ func Run(cfg ServiceConfig) {
 		logger.Log.Fatal("Consumer error", zap.Error(err))
 	}
 }
+
+// SimpleConsumerFactory is a function that creates a consumer with minimal dependencies
+type SimpleConsumerFactory func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (ConsumerStarter, error)
+
+// SimpleServiceConfig holds the configuration for bootstrapping a simple service
+// Simple services handle their own consumer group creation and don't need MongoDB
+type SimpleServiceConfig struct {
+	ServiceName string
+	Factory     SimpleConsumerFactory
+}
+
+// RunSimple bootstraps and runs a simple scanner service (no MongoDB, no consumer group management)
+// This is suitable for dual-stream consumers and services with custom initialization needs
+func RunSimple(cfg SimpleServiceConfig) {
+	// Load configuration
+	appCfg, err := config.Load()
+	if err != nil {
+		panic("Failed to load config: " + err.Error())
+	}
+
+	// Initialize logger
+	if err := logger.Init(appCfg.Environment); err != nil {
+		panic("Failed to initialize logger: " + err.Error())
+	}
+	defer logger.Sync()
+
+	logger.Log.Info("Starting service",
+		zap.String("service", cfg.ServiceName),
+		zap.String("environment", appCfg.Environment),
+	)
+
+	// Create context for service lifecycle
+	ctx := context.Background()
+
+	// Initialize OpenTelemetry tracing
+	tracerProvider, err := telemetry.InitTracing(ctx, appCfg.ServiceName, appCfg.Environment, logger.Log)
+	if err != nil {
+		logger.Log.Warn("Failed to initialize tracing", zap.Error(err))
+		// Continue without tracing rather than failing
+	}
+	if tracerProvider != nil {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+				logger.Log.Error("Failed to shutdown tracer", zap.Error(err))
+			}
+		}()
+	}
+
+	// Connect to Redis
+	redisClient, err := redisx.NewClient(appCfg)
+	if err != nil {
+		logger.Log.Fatal("Failed to connect to Redis", zap.Error(err))
+	}
+	defer redisClient.Close()
+
+	logger.Log.Info("Connected to Redis",
+		zap.String("uri", appCfg.RedisURI),
+	)
+
+	// Create consumer using the factory function
+	consumer, err := cfg.Factory(appCfg, redisClient, logger.Log)
+	if err != nil {
+		logger.Log.Fatal("Failed to create consumer", zap.Error(err))
+	}
+
+	// Create context for graceful shutdown
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Handle graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Start consumer in goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		if err := consumer.Start(ctx); err != nil && err != context.Canceled {
+			errChan <- err
+		}
+	}()
+
+	// Wait for shutdown signal or error
+	select {
+	case sig := <-sigChan:
+		logger.Log.Info("Received shutdown signal", zap.String("signal", sig.String()))
+		cancel()
+	case err := <-errChan:
+		logger.Log.Error("Consumer error", zap.Error(err))
+		cancel()
+	}
+
+	logger.Log.Info("Service shutdown complete",
+		zap.String("service", cfg.ServiceName),
+	)
+}
