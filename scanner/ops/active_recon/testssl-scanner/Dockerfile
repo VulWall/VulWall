@@ -1,6 +1,8 @@
 # Stage 1: Build Go binary
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
+# Install CA certificates in builder
+RUN apk add --no-cache ca-certificates
 # Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
@@ -15,10 +17,10 @@ FROM drwetter/testssl.sh:latest
 # Switch to root to install our binary
 USER root
 
-# Install ca-certificates for HTTPS requests
-RUN apk add --no-cache ca-certificates
-
 WORKDIR /root/
+
+# Copy CA certificates from builder (testssl.sh image lacks package manager)
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Copy the Go binary from builder
 COPY --from=builder /app/testssl-scanner .
