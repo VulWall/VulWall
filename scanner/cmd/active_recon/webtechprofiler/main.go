@@ -5,11 +5,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/vulwall/scanners/internal/active_recon/webtechprofiler"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/core/logger"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +30,25 @@ func main() {
 		zap.String("environment", cfg.Environment),
 	)
 
+	// Create context for service lifecycle
+	ctx := context.Background()
+
+	// Initialize OpenTelemetry tracing
+	tracerProvider, err := telemetry.InitTracing(ctx, cfg.ServiceName, cfg.Environment, logger.Log)
+	if err != nil {
+		logger.Log.Warn("Failed to initialize tracing", zap.Error(err))
+		// Continue without tracing rather than failing
+	}
+	if tracerProvider != nil {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+				logger.Log.Error("Failed to shutdown tracer", zap.Error(err))
+			}
+		}()
+	}
+
 	// Initialize Redis client
 	redisClient, err := redisx.NewClient(cfg)
 	if err != nil {
@@ -38,7 +59,7 @@ func main() {
 	logger.Log.Info("Redis client initialized successfully")
 
 	// Create context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// Setup signal handling for graceful shutdown
