@@ -10,6 +10,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/vulwall/scanners/internal/active_recon/js_dependency_scanner/scanner"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -161,6 +162,8 @@ func (s *Service) publishUniqueVulnerabilities(ctx context.Context, results []pr
 
 // publishFinding publishes a security finding to the Redis stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.SecurityFinding) error {
+	// Inject trace context for span linking across service boundaries
+	finding.TraceContext = telemetry.InjectTraceContext(ctx)
 	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 20000)
 }
 

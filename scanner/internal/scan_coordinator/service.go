@@ -8,6 +8,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -219,11 +220,12 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 			}
 
 			job := shared.DiscoveryJob{
-				TraceID: traceID,
-				ScanID:  &scanID,
-				OrgID:   orgID,
-				Host:    *asset.Domain,
-				Created: time.Now(),
+				TraceID:      traceID,
+				TraceContext: telemetry.InjectTraceContext(ctx), // Inject trace context for distributed tracing
+				ScanID:       &scanID,
+				OrgID:        orgID,
+				Host:         *asset.Domain,
+				Created:      time.Now(),
 			}
 
 			// Publish to job queue WITHOUT MAXLEN (queues should not be trimmed)
@@ -253,11 +255,12 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 			}
 
 			job := shared.IPDiscoveryJob{
-				TraceID: traceID,
-				ScanID:  &scanID,
-				OrgID:   orgID,
-				IP:      *asset.IP,
-				Created: time.Now(),
+				TraceID:      traceID,
+				TraceContext: telemetry.InjectTraceContext(ctx), // Inject trace context for distributed tracing
+				ScanID:       &scanID,
+				OrgID:        orgID,
+				IP:           *asset.IP,
+				Created:      time.Now(),
 			}
 
 			// Publish to job queue WITHOUT MAXLEN (queues should not be trimmed)

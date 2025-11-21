@@ -11,6 +11,7 @@ import (
 	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/waf/patterns"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -168,6 +169,7 @@ func (s *Service) enrichGeolocation(ctx context.Context, job shared.EnrichmentJo
 		},
 		Timestamp: time.Now(),
 	}
+	enrichment.TraceContext = telemetry.InjectTraceContext(ctx)
 
 	if err := s.publishEnrichment(ctx, enrichment); err != nil {
 		s.logger.Error("Failed to publish geolocation enrichment",
@@ -221,6 +223,7 @@ func (s *Service) enrichWAF(ctx context.Context, job shared.EnrichmentJob) {
 			},
 			Timestamp: time.Now(),
 		}
+		enrichment.TraceContext = telemetry.InjectTraceContext(ctx)
 
 		if err := s.publishEnrichment(ctx, enrichment); err != nil {
 			s.logger.Error("Failed to publish WAF enrichment",
@@ -277,6 +280,7 @@ func (s *Service) enrichCloud(ctx context.Context, job shared.EnrichmentJob) {
 			},
 			Timestamp: time.Now(),
 		}
+		enrichment.TraceContext = telemetry.InjectTraceContext(ctx)
 
 		if err := s.publishEnrichment(ctx, enrichment); err != nil {
 			s.logger.Error("Failed to publish cloud enrichment",

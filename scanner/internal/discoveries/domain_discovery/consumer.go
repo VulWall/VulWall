@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
@@ -98,6 +99,9 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 		c.logger.Error("Failed to unmarshal job", zap.Error(err))
 		return err
 	}
+
+	// Extract trace context from message to link spans across service boundaries
+	ctx = telemetry.ExtractTraceContext(ctx, job.TraceContext)
 
 	// Validate org_id is present (required)
 	if job.OrgID == "" {
