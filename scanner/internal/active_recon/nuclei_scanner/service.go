@@ -36,7 +36,7 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 
 // ProcessDiscovery scans a discovered asset with Nuclei
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
-	ctx, span := s.tracer.Start(ctx, "scan_nuclei",
+	ctx, span := s.tracer.Start(ctx, "nuclei",
 		trace.WithAttributes(
 			attribute.String("org.id", target.OrgID),
 			attribute.String("trace.id", target.TraceID),

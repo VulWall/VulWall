@@ -39,7 +39,7 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 // ProcessDiscovery processes a discovery target and scans for JS vulnerabilities
 // Scans both HTTP and HTTPS protocols in parallel for maximum performance
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
-	ctx, span := s.tracer.Start(ctx, "scan_js_dependencies",
+	ctx, span := s.tracer.Start(ctx, "jsscanner",
 		trace.WithAttributes(
 			attribute.String("org.id", target.OrgID),
 			attribute.String("trace.id", target.TraceID),
@@ -194,7 +194,7 @@ func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL strin
 		TraceID:     target.TraceID,
 		ScanID:      target.ScanID,
 		OrgID:       target.OrgID,
-		Scanner:     "js_dependency_scanner",
+		Scanner:     "jsscanner",
 		DiscoveryID: target.DiscoveryID,
 		Severity:    vuln.Severity,
 		Title:       title, // Full summary - no truncation

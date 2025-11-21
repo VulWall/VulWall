@@ -36,7 +36,7 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 
 // ProcessDiscovery scans a discovered asset with Nikto
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
-	ctx, span := s.tracer.Start(ctx, "scan_nikto",
+	ctx, span := s.tracer.Start(ctx, "nikto",
 		trace.WithAttributes(
 			attribute.String("org.id", target.OrgID),
 			attribute.String("trace.id", target.TraceID),

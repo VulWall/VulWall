@@ -62,7 +62,7 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error)
 
 // ProcessDiscovery processes a discovery target and detects web technologies
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
-	ctx, span := s.tracer.Start(ctx, "profile_web_tech",
+	ctx, span := s.tracer.Start(ctx, "webtechprofiler",
 		trace.WithAttributes(
 			attribute.String("org.id", target.OrgID),
 			attribute.String("trace.id", target.TraceID),

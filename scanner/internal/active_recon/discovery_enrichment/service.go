@@ -83,7 +83,7 @@ func NewService(redisClient *redis.Client, cfg *config.Config, logger *zap.Logge
 
 // ProcessEnrichment processes an enrichment job
 func (s *Service) ProcessEnrichment(ctx context.Context, job shared.EnrichmentJob) error {
-	ctx, span := s.tracer.Start(ctx, "enrich_discovery",
+	ctx, span := s.tracer.Start(ctx, "enrichment",
 		trace.WithAttributes(
 			attribute.String("org.id", job.OrgID),
 			attribute.String("trace.id", job.TraceID),
@@ -159,7 +159,7 @@ func (s *Service) enrichGeolocation(ctx context.Context, job shared.EnrichmentJo
 		TraceID:        job.TraceID,
 		ScanID:         job.ScanID,
 		OrgID:          job.OrgID,
-		Scanner:        "discovery_enrichment",
+		Scanner:        "enrichment",
 		DiscoveryID:    job.DiscoveryID,
 		EnrichmentType: "geolocation",
 		Data: map[string]interface{}{
@@ -215,7 +215,7 @@ func (s *Service) enrichWAF(ctx context.Context, job shared.EnrichmentJob) {
 			TraceID:        job.TraceID,
 			ScanID:         job.ScanID,
 			OrgID:          job.OrgID,
-			Scanner:        "discovery_enrichment",
+			Scanner:        "enrichment",
 			DiscoveryID:    job.DiscoveryID,
 			EnrichmentType: "waf",
 			Data: map[string]interface{}{
@@ -270,7 +270,7 @@ func (s *Service) enrichCloud(ctx context.Context, job shared.EnrichmentJob) {
 			TraceID:        job.TraceID,
 			ScanID:         job.ScanID,
 			OrgID:          job.OrgID,
-			Scanner:        "discovery_enrichment",
+			Scanner:        "enrichment",
 			DiscoveryID:    job.DiscoveryID,
 			EnrichmentType: "cloud",
 			Data: map[string]interface{}{
