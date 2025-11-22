@@ -37,11 +37,11 @@ func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting testssl scanner consumer")
 
 	// Create consumer groups for both streams
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainDiscoveryResults, GroupTestSSLScanner); err != nil {
+	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupTestSSLScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
 
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupTestSSLScanner); err != nil {
+	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamPortScanTriggers, GroupTestSSLScanner); err != nil {
 		return fmt.Errorf("failed to create IP consumer group: %w", err)
 	}
 
@@ -106,7 +106,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupTestSSLScanner,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
@@ -135,7 +135,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 					}
 
 					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDomainDiscoveryResults, GroupTestSSLScanner, message.ID)
+					c.redis.XAck(ctx, shared.StreamDomainScanTriggers, GroupTestSSLScanner, message.ID)
 				}
 			}
 		}
@@ -154,7 +154,7 @@ func (c *Consumer) processIPMessages(ctx context.Context, consumerName string) e
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupTestSSLScanner,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamIPDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamPortScanTriggers, ">"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
@@ -183,7 +183,7 @@ func (c *Consumer) processIPMessages(ctx context.Context, consumerName string) e
 					}
 
 					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamIPDiscoveryResults, GroupTestSSLScanner, message.ID)
+					c.redis.XAck(ctx, shared.StreamPortScanTriggers, GroupTestSSLScanner, message.ID)
 				}
 			}
 		}

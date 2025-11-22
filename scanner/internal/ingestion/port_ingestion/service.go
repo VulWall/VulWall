@@ -88,11 +88,23 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 	}
 
 	// 3. Upsert port discovery (with org_id) - skip if this is an IP finding
+	var portDiscoveryID string
 	if finding.AssetType == shared.AssetTypePort {
-		_, err = s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
+		portDiscoveryID, err = s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
 		if err != nil {
 			span.RecordError(err)
 			return err
+		}
+
+		// 4. Publish scan trigger for active recon scanners (port only)
+		if err := s.publishPortScanTrigger(ctx, finding, portDiscoveryID); err != nil {
+			s.logger.Error("Failed to publish port scan trigger",
+				zap.String("trace_id", finding.TraceID),
+				zap.String("ip", finding.IP),
+				zap.Int("port", finding.Port),
+				zap.Error(err),
+			)
+			// Don't fail if trigger fails
 		}
 	}
 
@@ -510,6 +522,30 @@ func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.IPDis
 		zap.String("trace_id", finding.TraceID),
 		zap.String("discovery_id", ipDiscoveryID),
 		zap.String("ip", finding.IP),
+	)
+
+	return nil
+}
+
+// publishPortScanTrigger publishes a scan trigger for active recon scanners
+// This is published AFTER persisting the port to ensure proper trace hierarchy
+func (s *Service) publishPortScanTrigger(ctx context.Context, finding shared.IPDiscoveryFinding, portDiscoveryID string) error {
+	// Re-publish the finding with the current span context (ingest_port_finding)
+	// This ensures active recon scanners become children of this span
+	trigger := finding
+	trigger.DiscoveryID = portDiscoveryID
+	trigger.TraceContext = telemetry.InjectTraceContext(ctx) // Inject current context for proper hierarchy
+
+	// Publish to port scan triggers stream with MAXLEN to prevent unbounded growth
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamPortScanTriggers, trigger, 10000); err != nil {
+		return fmt.Errorf("failed to publish port scan trigger: %w", err)
+	}
+
+	s.logger.Debug("Published port scan trigger",
+		zap.String("trace_id", finding.TraceID),
+		zap.String("discovery_id", portDiscoveryID),
+		zap.String("ip", finding.IP),
+		zap.Int("port", finding.Port),
 	)
 
 	return nil

@@ -35,6 +35,10 @@ const (
 	StreamDiscoveryEnrichmentQueue   = "discovery_enrichment_queue"   // Input stream for enrichment jobs (published by ingestion services)
 	StreamDiscoveryEnrichmentResults = "discovery_enrichment_results" // Output stream for discovery enrichment data (consumed by enrichment ingestion)
 
+	// Redis Streams - Active Scan Triggers (published by ingestion services AFTER persisting discoveries)
+	StreamDomainScanTriggers = "domain_scan_triggers" // Triggers for active recon scanners on domains/subdomains (published by domain_ingestion)
+	StreamPortScanTriggers   = "port_scan_triggers"   // Triggers for active recon scanners on ports (published by port_ingestion)
+
 	// Asset Types (for Discovery.AssetType)
 	AssetTypeDomain    = "domain"
 	AssetTypeSubdomain = "subdomain"

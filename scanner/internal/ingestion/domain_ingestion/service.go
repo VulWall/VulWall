@@ -135,6 +135,19 @@ func (s *Service) processDiscovery(ctx context.Context, finding shared.Discovery
 		// Don't fail if enrichment trigger fails
 	}
 
+	// 6. Publish scan trigger for active recon scanners (domain/subdomain only)
+	if assetType == shared.AssetTypeDomain || assetType == shared.AssetTypeSubdomain {
+		if err := s.publishDomainScanTrigger(ctx, finding, discoveryID); err != nil {
+			s.logger.Error("Failed to publish domain scan trigger",
+				zap.String("trace_id", finding.TraceID),
+				zap.String("asset_type", assetType),
+				zap.String("host", finding.Host),
+				zap.Error(err),
+			)
+			// Don't fail if trigger fails
+		}
+	}
+
 	return nil
 }
 
@@ -517,6 +530,29 @@ func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.Disco
 		zap.String("trace_id", finding.TraceID),
 		zap.String("discovery_id", discoveryID),
 		zap.String("asset_type", assetType),
+	)
+
+	return nil
+}
+
+// publishDomainScanTrigger publishes a scan trigger for active recon scanners
+// This is published AFTER persisting the discovery to ensure proper trace hierarchy
+func (s *Service) publishDomainScanTrigger(ctx context.Context, finding shared.DiscoveryFinding, discoveryID string) error {
+	// Re-publish the finding with the current span context (ingest_domain_finding)
+	// This ensures active recon scanners become children of this span
+	trigger := finding
+	trigger.DiscoveryID = discoveryID
+	trigger.TraceContext = telemetry.InjectTraceContext(ctx) // Inject current context for proper hierarchy
+
+	// Publish to domain scan triggers stream with MAXLEN to prevent unbounded growth
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDomainScanTriggers, trigger, 10000); err != nil {
+		return fmt.Errorf("failed to publish domain scan trigger: %w", err)
+	}
+
+	s.logger.Debug("Published domain scan trigger",
+		zap.String("trace_id", finding.TraceID),
+		zap.String("discovery_id", discoveryID),
+		zap.String("host", finding.Host),
 	)
 
 	return nil

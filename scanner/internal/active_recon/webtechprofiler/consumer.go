@@ -40,7 +40,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting WebTechProfiler consumer")
 
 	// Create consumer groups for both streams
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainDiscoveryResults, GroupWebTechProfiler); err != nil {
+	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupWebTechProfiler); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
 
@@ -87,7 +87,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 // processDomainMessages processes messages from domain_discovery_results stream
 func (c *Consumer) processDomainMessages(ctx context.Context, consumerName string) error {
 	c.logger.Info("Starting domain discovery consumer",
-		zap.String("stream", shared.StreamDomainDiscoveryResults),
+		zap.String("stream", shared.StreamDomainScanTriggers),
 		zap.String("group", GroupWebTechProfiler),
 		zap.String("consumer", consumerName),
 	)
@@ -102,7 +102,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupWebTechProfiler,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
 				Count:    10,
 				Block:    0, // Block indefinitely
 			}).Result()
@@ -126,7 +126,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 					}
 
 					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDomainDiscoveryResults, GroupWebTechProfiler, message.ID)
+					c.redis.XAck(ctx, shared.StreamDomainScanTriggers, GroupWebTechProfiler, message.ID)
 				}
 			}
 		}

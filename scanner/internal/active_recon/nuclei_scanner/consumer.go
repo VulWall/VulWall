@@ -37,11 +37,11 @@ func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting Nuclei scanner consumer")
 
 	// Create consumer groups for both streams
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainDiscoveryResults, GroupNucleiScanner); err != nil {
+	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupNucleiScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
 
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupNucleiScanner); err != nil {
+	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamPortScanTriggers, GroupNucleiScanner); err != nil {
 		return fmt.Errorf("failed to create IP consumer group: %w", err)
 	}
 
@@ -106,7 +106,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupNucleiScanner,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
@@ -135,7 +135,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 					}
 
 					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDomainDiscoveryResults, GroupNucleiScanner, message.ID)
+					c.redis.XAck(ctx, shared.StreamDomainScanTriggers, GroupNucleiScanner, message.ID)
 				}
 			}
 		}
@@ -154,7 +154,7 @@ func (c *Consumer) processIPMessages(ctx context.Context, consumerName string) e
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupNucleiScanner,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamIPDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamPortScanTriggers, ">"},
 				Count:    1,
 				Block:    5 * time.Second,
 			}).Result()
@@ -183,7 +183,7 @@ func (c *Consumer) processIPMessages(ctx context.Context, consumerName string) e
 					}
 
 					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamIPDiscoveryResults, GroupNucleiScanner, message.ID)
+					c.redis.XAck(ctx, shared.StreamPortScanTriggers, GroupNucleiScanner, message.ID)
 				}
 			}
 		}

@@ -31,12 +31,12 @@ func NewConsumer(redisClient *redis.Client, logger *zap.Logger) (*Consumer, erro
 	}, nil
 }
 
-// Start starts the consumer (domain discovery results only - domains and subdomains)
+// Start starts the consumer (domain scan triggers only - domains and subdomains)
 func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting JSDependencyScanner consumer")
 
-	// Create consumer group for domain discovery results
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainDiscoveryResults, GroupJSDependencyScanner); err != nil {
+	// Create consumer group for domain scan triggers
+	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupJSDependencyScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
 
@@ -51,10 +51,10 @@ func (c *Consumer) Start(ctx context.Context) error {
 	return c.processDomainMessages(ctx, consumerName)
 }
 
-// processDomainMessages processes messages from domain_discovery_results stream
+// processDomainMessages processes messages from domain_scan_triggers stream
 func (c *Consumer) processDomainMessages(ctx context.Context, consumerName string) error {
-	c.logger.Info("Starting domain discovery consumer",
-		zap.String("stream", shared.StreamDomainDiscoveryResults),
+	c.logger.Info("Starting domain scan triggers consumer",
+		zap.String("stream", shared.StreamDomainScanTriggers),
 		zap.String("group", GroupJSDependencyScanner),
 		zap.String("consumer", consumerName),
 	)
@@ -69,7 +69,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupJSDependencyScanner,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainDiscoveryResults, ">"},
+				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
 				Count:    10,
 				Block:    0, // Block indefinitely
 			}).Result()
@@ -78,7 +78,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 				if err == redis.Nil {
 					continue
 				}
-				c.logger.Error("Failed to read from domain stream", zap.Error(err))
+				c.logger.Error("Failed to read from domain scan triggers stream", zap.Error(err))
 				continue
 			}
 
@@ -93,14 +93,14 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 					}
 
 					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDomainDiscoveryResults, GroupJSDependencyScanner, message.ID)
+					c.redis.XAck(ctx, shared.StreamDomainScanTriggers, GroupJSDependencyScanner, message.ID)
 				}
 			}
 		}
 	}
 }
 
-// handleDomainMessage handles a single message from domain_discovery_results
+// handleDomainMessage handles a single message from domain_scan_triggers
 func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessage) error {
 	// Extract data from message
 	dataStr, ok := message.Values["data"].(string)
