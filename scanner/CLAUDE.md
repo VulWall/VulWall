@@ -11,13 +11,13 @@ VulWall Engine is a **vertically-sliced Go monorepo** for security scanning serv
 - The **ingestion service** uses **vertical slice architecture** with concurrent consumers
 - All jobs MUST include `org_id` (organization GUID) or they will be skipped
 - **Two separate asset collections:**
-  - `assets` - User-added assets to be scanned (managed via UI, status: Active/Inactive)
+  - `assets` - User-added assets to be scanned (managed via UI, enabled: true/false)
   - `discoveries` - Scan results/findings (auto-discovered, ownership_status: verified/notMine/notSure)
 - **Org-scoped storage:** ALL assets stored with `org_id` (denormalized design)
 - **Type discrimination:** Uses `asset_type` field (domain, subdomain, ip, port) for discoveries
 - **Hierarchical relationships:** Domain → Subdomain → IP → Port via parent_id fields (org-scoped)
 - **Two status fields:**
-  - `asset.status` (Active/Inactive) - user-controlled via UI
+  - `asset.enabled` (true/false) - user-controlled via UI
   - `discovery.status` (active/inactive/unknown) - technical state
   - `discovery.ownership_status` (verified/notMine/notSure) - organizational state
 
@@ -257,7 +257,7 @@ SCAN COORDINATOR FLOW (AUTOMATED SCANNING):
    ├─→ Calculate days_since_last_scan = now - last_scan.created_at
    └─→ If days_since_last_scan >= org.subscription_settings.scan_interval_days:
        ├─→ Create new Scan record (status=pending, type=scheduled, triggered_by=system)
-       ├─→ Query all active user-added assets for org from assets collection (status="Active")
+       ├─→ Query all enabled user-added assets for org from assets collection (enabled=true)
        └─→ Publish discovery jobs to Redis:
            ├─→ Domain assets → domain_discovery_queue (with scan_id + org_id)
            └─→ IP assets → ip_discovery_queue (with scan_id + org_id)
@@ -1348,7 +1348,7 @@ The Scan Coordinator is a background service that **automatically schedules and 
 - ✅ Queries organizations with `scan_interval_days > 0`
 - ✅ Checks time since last scan
 - ✅ Creates scan records and publishes discovery jobs automatically
-- ✅ Only scans **active user-added assets** from `assets` collection (`status = "Active"`)
+- ✅ Only scans **enabled user-added assets** from `assets` collection (`enabled = true`)
 - ✅ Tracks all scans in `scans` collection for auditing
 
 ### Architecture
@@ -1367,7 +1367,7 @@ The Scan Coordinator is a background service that **automatically schedules and 
    - Calculate `days_since_last_scan = (now - last_scan.created_at) / 24h`
    - If `days_since_last_scan >= scan_interval_days`:
      - Create new `Scan` record (status=pending, type=scheduled, triggered_by=system)
-     - Query all active user-added assets for org from `assets` collection (`status = "Active"`)
+     - Query all enabled user-added assets for org from `assets` collection (`enabled = true`)
      - Publish discovery jobs to Redis streams (with `scan_id` + `org_id`)
 
 ### Data Models
@@ -1381,7 +1381,7 @@ type Asset struct {
     ID            string     // MongoDB ObjectId
     OrgID         string     // Organization GUID
     Type          string     // "domain" or "ip"
-    Status        string     // "Active" or "Inactive"
+    Enabled       bool       // true = enabled, false = disabled
     DNSVerifiedAt *time.Time // DNS verification timestamp
     Domain        *string    // For domain assets
     IP            *string    // For IP assets
@@ -1447,7 +1447,7 @@ type ScanStats struct {
   _id: ObjectId("..."),
   org_id: "507f1f77bcf86cd799439011",
   type: "domain",              // "domain" or "ip"
-  status: "Active",            // "Active" or "Inactive"
+  enabled: true,               // true = enabled, false = disabled
   dns_verified_at: ISODate("2025-11-09T08:53:38.744Z"),
   domain: "moj.dev",          // For domain assets
   // ip: "8.8.8.8",           // For IP assets
@@ -1522,7 +1522,7 @@ Scan Coordinator (every hour)
 Check: Last scan was 8 days ago, scan_interval_days = 7
     ↓
 1. Create Scan (scan_id = "scan-abc-456")
-2. Query active user-added assets from assets collection (status = "Active")
+2. Query enabled user-added assets from assets collection (enabled = true)
 3. Publish jobs:
    ├─→ domain_discovery_queue: {org_id, scan_id, host: "moj.dev"}        (from asset.domain)
    ├─→ domain_discovery_queue: {org_id, scan_id, host: "api.moj.dev"}   (from asset.domain)
@@ -1658,9 +1658,9 @@ console.log(`Targeted: ${targetedCount}, Discovered: ${discoveredCount}`)
 - ✅ **Only ONE instance** should run (do not scale horizontally)
 - ✅ **Minimal resource usage** - only queries MongoDB and publishes to Redis
 - ✅ **Two collections:**
-  - `assets` - User-added assets to be scanned (status: "Active" / "Inactive")
+  - `assets` - User-added assets to be scanned (enabled: true / false)
   - `discoveries` - Scan results/findings (ownership_status: "verified" / "notMine" / "notSure")
-- ✅ **Only scans active user-added assets** - queries from `assets` collection with `status = "Active"`
+- ✅ **Only scans enabled user-added assets** - queries from `assets` collection with `enabled = true`
 - ✅ **Audit trail** - All scans logged with `triggered_by = "system"`
 - ✅ **Graceful shutdown** - Handles SIGTERM/SIGINT properly
 - ✅ **See [SCAN_COORDINATOR.md](SCAN_COORDINATOR.md)** for complete documentation

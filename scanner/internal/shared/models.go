@@ -196,7 +196,7 @@ type Asset struct {
 	ID            string     `json:"_id,omitempty" bson:"_id,omitempty"`
 	OrgID         string     `json:"org_id" bson:"org_id"`
 	Type          string     `json:"type" bson:"type"`                                           // "domain", "ip"
-	Status        string     `json:"status" bson:"status"`                                       // "Active", "Inactive"
+	Enabled       bool       `json:"enabled" bson:"enabled"`                                     // true = enabled, false = disabled
 	DNSVerifiedAt *time.Time `json:"dns_verified_at,omitempty" bson:"dns_verified_at,omitempty"` // DNS verification timestamp
 	Domain        *string    `json:"domain,omitempty" bson:"domain,omitempty"`                   // For domain assets
 	IP            *string    `json:"ip,omitempty" bson:"ip,omitempty"`                           // For IP assets

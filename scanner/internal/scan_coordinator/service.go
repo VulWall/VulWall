@@ -179,14 +179,14 @@ func (s *Service) createScan(ctx context.Context, scan shared.Scan) error {
 	return err
 }
 
-// getOrgAssets retrieves all active user-added assets for an organization
+// getOrgAssets retrieves all enabled user-added assets for an organization
 func (s *Service) getOrgAssets(ctx context.Context, orgID string) ([]shared.Asset, error) {
 	coll := s.db.Collection(shared.CollectionAssets)
 
-	// Query for all active assets (user-added assets to be scanned)
+	// Query for all enabled assets (user-added assets to be scanned)
 	filter := bson.M{
-		"org_id": orgID,
-		"status": "Active",
+		"org_id":  orgID,
+		"enabled": true,
 	}
 
 	cursor, err := coll.Find(ctx, filter)
