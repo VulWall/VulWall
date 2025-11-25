@@ -1,12 +1,10 @@
 services:
   webtechprofiler:
-    build:
-      context: ../../..
-      dockerfile: ops/active_recon/webtechprofiler/Dockerfile
+    image: ghcr.io/vulwall/nightwatch-webtechprofiler:${IMAGE_TAG:-dev}
     container_name: nightwatch-webtechprofiler
     restart: unless-stopped
     env_file:
-      - .env
+      - /opt/vulwall/.env
     environment:
       - REDIS_URI=${REDIS_URI}
     networks:

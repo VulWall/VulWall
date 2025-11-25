@@ -1,12 +1,10 @@
 services:
   domain-discovery:
-    build:
-      context: ../..
-      dockerfile: ops/domain-discovery/Dockerfile
+    image: ghcr.io/vulwall/nightwatch-domain-discovery:${IMAGE_TAG:-dev}
     container_name: nightwatch-domain-discovery
     restart: unless-stopped
     env_file:
-      - .env
+      - /opt/vulwall/.env
     environment:
       - REDIS_URI=${REDIS_URI}
       - MONGO_URI=${MONGO_URI}

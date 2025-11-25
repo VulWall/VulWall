@@ -1,12 +1,10 @@
 services:
   testssl-scanner:
-    build:
-      context: ../../..
-      dockerfile: ops/active_recon/testssl-scanner/Dockerfile
+    image: ghcr.io/vulwall/nightwatch-testssl-scanner:${IMAGE_TAG:-dev}
     container_name: nightwatch-testssl-scanner
     restart: unless-stopped
     env_file:
-      - .env
+      - /opt/vulwall/.env
     environment:
       - REDIS_URI=${REDIS_URI}
     networks:

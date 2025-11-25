@@ -1,12 +1,10 @@
 services:
   scan-coordinator:
-    build:
-      context: ../..
-      dockerfile: ops/scan-coordinator/Dockerfile
+    image: ghcr.io/vulwall/nightwatch-scan-coordinator:${IMAGE_TAG:-dev}
     container_name: nightwatch-scan-coordinator
     restart: unless-stopped
     env_file:
-      - .env
+      - /opt/vulwall/.env
     environment:
       - REDIS_URI=${REDIS_URI}
       - MONGO_URI=${MONGO_URI}
