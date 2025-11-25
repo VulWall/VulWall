@@ -91,6 +91,48 @@ git config --global user.name "Your Name"
 git config --global user.email "your.email@example.com"
 ```
 
+### 7. Setup Data Directory
+
+VulWall NightWatch requires a data directory for shared files like the IP geolocation database.
+
+```bash
+# Create data directory
+sudo mkdir -p /opt/vulwall
+
+# Set permissions (adjust user as needed)
+sudo chown $USER:$USER /opt/vulwall
+```
+
+#### Required Files
+
+**MMDB Database (IP Geolocation)**
+
+The `ingestion` and `discovery-enrichment` services require the DBIP ISP/Country database for IP geolocation:
+
+```bash
+# Copy MMDB file to data directory
+cp /path/to/dbip-isp-country.mmdb /opt/vulwall/
+
+# Verify file exists
+ls -la /opt/vulwall/dbip-isp-country.mmdb
+```
+
+The MMDB file is mounted read-only into containers at `/root/data/dbip-isp-country.mmdb`.
+
+**Custom MMDB Path (Optional)**
+
+To use a different path, set the `MMDB_PATH` environment variable:
+
+```bash
+export MMDB_PATH=/custom/path/dbip-isp-country.mmdb
+```
+
+Or add to your `.env` file:
+
+```
+MMDB_PATH=/custom/path/dbip-isp-country.mmdb
+```
+
 ---
 
 ## Doppler Configuration
@@ -576,6 +618,8 @@ Before going to production, ensure:
 - [ ] Docker and Docker Compose installed
 - [ ] Doppler CLI installed and authenticated
 - [ ] Doppler projects/configs created with all secrets
+- [ ] Data directory created (`/opt/vulwall`)
+- [ ] MMDB file copied to `/opt/vulwall/dbip-isp-country.mmdb`
 - [ ] Docker network created (`make prod-setup`)
 - [ ] Firewall configured
 - [ ] Redis Cloud IP whitelist configured
