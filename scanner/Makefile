@@ -13,8 +13,6 @@ build: ## Build all services
 	@go build -o bin/port-discovery ./cmd/discoveries/port-discovery
 	@echo "Building nuclei-scanner..."
 	@go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
-	@echo "Building nikto-scanner..."
-	@go build -o bin/nikto-scanner ./cmd/active_recon/nikto-scanner
 	@echo "Building testssl-scanner..."
 	@go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
 	@echo "Building webtechprofiler..."
@@ -37,9 +35,6 @@ build-port-discovery: ## Build port-discovery service
 
 build-nuclei-scanner: ## Build nuclei-scanner service
 	@go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
-
-build-nikto-scanner: ## Build nikto-scanner service
-	@go build -o bin/nikto-scanner ./cmd/active_recon/nikto-scanner
 
 build-testssl-scanner: ## Build testssl-scanner service
 	@go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
@@ -67,9 +62,6 @@ run-port-discovery: ## Run port-discovery service locally
 
 run-nuclei-scanner: ## Run nuclei-scanner service locally
 	@go run ./cmd/active_recon/nuclei-scanner/main.go
-
-run-nikto-scanner: ## Run nikto-scanner service locally
-	@go run ./cmd/active_recon/nikto-scanner/main.go
 
 run-testssl-scanner: ## Run testssl-scanner service locally
 	@go run ./cmd/active_recon/testssl-scanner/main.go
@@ -123,9 +115,6 @@ docker-scale-port-discovery: ## Scale port-discovery workers (usage: make docker
 
 docker-scale-nuclei-scanner: ## Scale nuclei-scanner workers (usage: make docker-scale-nuclei-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale nuclei-scanner=$(N)
-
-docker-scale-nikto-scanner: ## Scale nikto-scanner workers (usage: make docker-scale-nikto-scanner N=3)
-	@docker-compose -f ops/docker-compose.yml up -d --scale nikto-scanner=$(N)
 
 docker-scale-testssl-scanner: ## Scale testssl-scanner workers (usage: make docker-scale-testssl-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale testssl-scanner=$(N)
@@ -192,13 +181,6 @@ prod-deploy-nuclei: ## Deploy nuclei-scanner service (usage: make prod-deploy-nu
 		ops/scripts/deploy-service.sh nuclei-scanner; \
 	fi
 
-prod-deploy-nikto: ## Deploy nikto-scanner service (usage: make prod-deploy-nikto [PROJECT=name] [CONFIG=prd])
-	@if [ -n "$(PROJECT)" ]; then \
-		ops/scripts/deploy-service.sh nikto-scanner $(PROJECT) $(CONFIG); \
-	else \
-		ops/scripts/deploy-service.sh nikto-scanner; \
-	fi
-
 prod-deploy-testssl: ## Deploy testssl-scanner service (usage: make prod-deploy-testssl [PROJECT=name] [CONFIG=prd])
 	@if [ -n "$(PROJECT)" ]; then \
 		ops/scripts/deploy-service.sh testssl-scanner $(PROJECT) $(CONFIG); \
@@ -241,7 +223,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, discovery-enrichment, js-dependency-scanner"; \
+		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment, js-dependency-scanner"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)
