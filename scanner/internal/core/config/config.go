@@ -2,49 +2,48 @@ package config
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
+// Config holds universal settings needed by all services.
+// Service-specific settings should use GetEnv() with constants from env.go.
 type Config struct {
-	RedisURI             string
-	MongoURI             string
-	MongoDB              string
-	ServiceName          string
-	Environment          string
-	ShodanAPIKey         string
-	IPEnrichmentDBPath   string
-	WAFRulesPath         string
-	CloudDetectorEnabled bool
-	CloudDataDir         string
+	RedisURI    string
+	MongoURI    string
+	MongoDB     string
+	ServiceName string
+	Environment string
 }
 
+// Load loads universal configuration from environment variables.
+// Service-specific settings should use GetEnv() directly.
 func Load() (*Config, error) {
 	// Load .env file if it exists
 	_ = godotenv.Load()
 
 	return &Config{
-		RedisURI:             getEnv("REDIS_URI", "redis://localhost:6379/0"),
-		MongoURI:             getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDB:              getEnv("MONGO_DB", "VulWall-Dev"),
-		ServiceName:          getEnv("SERVICE_NAME", "vulwall-scanner"),
-		Environment:          getEnv("DOPPLER_ENVIRONMENT", "development"),
-		ShodanAPIKey:         getEnv("SHODAN_API_KEY", ""),
-		IPEnrichmentDBPath:   getEnv("IP_ENRICHMENT_DB_PATH", "./data/dbip-isp-country.mmdb"),
-		WAFRulesPath:         getEnv("WAF_RULES_PATH", "./internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json"),
-		CloudDetectorEnabled: getEnvBool("CLOUD_DETECTOR_ENABLED", true),
-		CloudDataDir:         getEnv("CLOUD_DATA_DIR", "./internal/active_recon/discovery_enrichment/cloud/data"),
+		RedisURI:    GetEnv(EnvRedisURI, "redis://localhost:6379/0"),
+		MongoURI:    GetEnv(EnvMongoURI, "mongodb://localhost:27017"),
+		MongoDB:     GetEnv(EnvMongoDB, "VulWall-Dev"),
+		ServiceName: GetEnv(EnvServiceName, "vulwall-scanner"),
+		Environment: GetEnv(EnvEnvironment, "development"),
 	}, nil
 }
 
-func getEnv(key, defaultValue string) string {
+// GetEnv returns the value of an environment variable or a default value.
+// Use with constants from env.go for compile-time safety.
+func GetEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
 	return defaultValue
 }
 
-func getEnvBool(key string, defaultValue bool) bool {
+// GetEnvBool returns a boolean environment variable or a default value.
+// Accepts: true/1/yes/on for true, false/0/no/off for false.
+func GetEnvBool(key string, defaultValue bool) bool {
 	value := os.Getenv(key)
 	if value == "" {
 		return defaultValue
@@ -56,6 +55,36 @@ func getEnvBool(key string, defaultValue bool) bool {
 	// Check for common false values
 	if value == "false" || value == "0" || value == "no" || value == "off" {
 		return false
+	}
+	return defaultValue
+}
+
+// GetEnvInt returns an integer environment variable or a default value.
+func GetEnvInt(key string, defaultValue int) int {
+	if val := os.Getenv(key); val != "" {
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
+		}
+	}
+	return defaultValue
+}
+
+// GetEnvInt64 returns an int64 environment variable or a default value.
+func GetEnvInt64(key string, defaultValue int64) int64 {
+	if val := os.Getenv(key); val != "" {
+		if i, err := strconv.ParseInt(val, 10, 64); err == nil {
+			return i
+		}
+	}
+	return defaultValue
+}
+
+// GetEnvFloat64 returns a float64 environment variable or a default value.
+func GetEnvFloat64(key string, defaultValue float64) float64 {
+	if val := os.Getenv(key); val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err == nil {
+			return f
+		}
 	}
 	return defaultValue
 }

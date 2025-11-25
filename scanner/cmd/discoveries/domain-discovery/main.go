@@ -16,7 +16,8 @@ func main() {
 		StreamName:    shared.StreamDomainDiscoveryQueue,
 		ConsumerGroup: domain_discovery.GroupShodanSubdomainService,
 		Factory: func(cfg *config.Config, redisClient *redis.Client, _ *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
-			return domain_discovery.NewConsumer(redisClient, cfg.ShodanAPIKey, logger)
+			shodanAPIKey := config.GetEnv(config.EnvShodanAPIKey, "")
+			return domain_discovery.NewConsumer(redisClient, shodanAPIKey, logger)
 		},
 	})
 }

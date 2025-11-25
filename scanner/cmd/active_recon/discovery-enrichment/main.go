@@ -12,7 +12,7 @@ func main() {
 	bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
 		ServiceName: "discovery-enrichment",
 		Factory: func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (bootstrap.ConsumerStarter, error) {
-			return discovery_enrichment.NewConsumer(redisClient, cfg, logger)
+			return discovery_enrichment.NewConsumer(redisClient, logger)
 		},
 	})
 }

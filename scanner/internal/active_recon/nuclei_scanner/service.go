@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/robfig/cron/v3"
 	"github.com/vulwall/scanners/internal/core/audit"
+	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -44,10 +44,7 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 // The schedule can be overridden via NUCLEI_TEMPLATE_UPDATE_CRON environment variable
 func (s *Service) StartTemplateUpdater(ctx context.Context) {
 	// Get cron schedule from environment or use default
-	cronSchedule := os.Getenv("NUCLEI_TEMPLATE_UPDATE_CRON")
-	if cronSchedule == "" {
-		cronSchedule = DefaultTemplateUpdateCron
-	}
+	cronSchedule := config.GetEnv(config.EnvNucleiTemplateUpdateCron, DefaultTemplateUpdateCron)
 
 	s.logger.Info("Starting Nuclei template updater",
 		zap.String("schedule", cronSchedule),

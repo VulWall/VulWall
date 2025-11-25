@@ -41,7 +41,7 @@ VulWall.NightWatch/
 ├── internal/
 │   ├── core/              # Shared infrastructure
 │   │   ├── bootstrap/     # Common service bootstrapping
-│   │   ├── config/        # Configuration loader
+│   │   ├── config/        # Configuration loader + env var constants
 │   │   ├── logger/        # Zap logger setup
 │   │   ├── mongox/        # MongoDB connection
 │   │   └── redisx/        # Redis client & consumer groups
@@ -1665,6 +1665,7 @@ console.log(`Targeted: ${targetedCount}, Discovered: ${discoveredCount}`)
 ### Infrastructure (`internal/core/`)
 - `bootstrap/bootstrap.go` - Common service initialization pattern (eliminates boilerplate)
 - `config/config.go` - Environment-based configuration loader
+- `config/env.go` - Centralized environment variable name constants (single source of truth)
 - `logger/logger.go` - Zap logger initialization
 - `redisx/client.go` - Redis client with consumer group helpers
 - `mongox/client.go` - MongoDB connection manager

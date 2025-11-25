@@ -3,10 +3,9 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
 	"time"
 
+	"github.com/vulwall/scanners/internal/core/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -61,10 +60,10 @@ func InitTracing(ctx context.Context, serviceName, environment string, logger *z
 
 	// Create batch processor for efficient span export
 	bsp := sdktrace.NewBatchSpanProcessor(exporter,
-		sdktrace.WithBatchTimeout(time.Duration(getDuration("OTEL_BSP_SCHEDULED_DELAY_MILLIS", 5000))*time.Millisecond),
-		sdktrace.WithMaxQueueSize(getInt("OTEL_BSP_MAX_QUEUE_SIZE", 2048)),
-		sdktrace.WithMaxExportBatchSize(getInt("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", 512)),
-		sdktrace.WithExportTimeout(time.Duration(getDuration("OTEL_BSP_EXPORT_TIMEOUT_MILLIS", 30000))*time.Millisecond),
+		sdktrace.WithBatchTimeout(time.Duration(config.GetEnvInt64(config.EnvOTELBSPScheduledDelay, 5000))*time.Millisecond),
+		sdktrace.WithMaxQueueSize(config.GetEnvInt(config.EnvOTELBSPMaxQueueSize, 2048)),
+		sdktrace.WithMaxExportBatchSize(config.GetEnvInt(config.EnvOTELBSPMaxExportBatch, 512)),
+		sdktrace.WithExportTimeout(time.Duration(config.GetEnvInt64(config.EnvOTELBSPExportTimeout, 30000))*time.Millisecond),
 	)
 
 	// Create TracerProvider with sampler
@@ -102,7 +101,6 @@ func (tp *TracerProvider) Shutdown(ctx context.Context) error {
 // buildSampler creates the appropriate sampler based on environment
 func buildSampler() sdktrace.Sampler {
 	samplerName := getSamplerName()
-	samplerArg := os.Getenv("OTEL_TRACES_SAMPLER_ARG")
 
 	switch samplerName {
 	case "always_on":
@@ -110,12 +108,12 @@ func buildSampler() sdktrace.Sampler {
 	case "always_off":
 		return sdktrace.NeverSample()
 	case "probabilistic":
-		ratio := parseFloat(samplerArg, 0.1)
+		ratio := config.GetEnvFloat64(config.EnvOTELTraceSamplerArg, 0.1)
 		return sdktrace.TraceIDRatioBased(ratio)
 	case "parentbased_always_on":
 		return sdktrace.ParentBased(sdktrace.AlwaysSample())
 	case "parentbased_probabilistic":
-		ratio := parseFloat(samplerArg, 0.1)
+		ratio := config.GetEnvFloat64(config.EnvOTELTraceSamplerArg, 0.1)
 		return sdktrace.ParentBased(sdktrace.TraceIDRatioBased(ratio))
 	default:
 		// Default to parent-based always on for development
@@ -125,60 +123,21 @@ func buildSampler() sdktrace.Sampler {
 
 // getOTLPEndpoint returns the OTLP endpoint (Honeycomb by default)
 func getOTLPEndpoint() string {
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	if endpoint == "" {
-		endpoint = "api.honeycomb.io"
-	}
-	return endpoint
+	return config.GetEnv(config.EnvOTELExporterEndpoint, "api.honeycomb.io")
 }
 
 // getHoneycombAPIKey returns the Honeycomb API key
 func getHoneycombAPIKey() string {
-	return os.Getenv("HONEYCOMB_API_KEY")
+	return config.GetEnv(config.EnvHoneycombAPIKey, "")
 }
 
 // getSamplerName returns the sampler name from environment
 func getSamplerName() string {
-	sampler := os.Getenv("OTEL_TRACES_SAMPLER")
-	if sampler == "" {
-		sampler = "parentbased_always_on"
-	}
-	return sampler
+	return config.GetEnv(config.EnvOTELTraceSampler, "parentbased_always_on")
 }
 
 // isTracingEnabled returns true if tracing is enabled
 func isTracingEnabled() bool {
-	enabled := os.Getenv("OTEL_ENABLED")
+	enabled := config.GetEnv(config.EnvOTELEnabled, "")
 	return enabled != "false" && enabled != "0"
-}
-
-// getInt returns an integer from environment or default value
-func getInt(key string, defaultValue int) int {
-	if val := os.Getenv(key); val != "" {
-		if i, err := strconv.Atoi(val); err == nil {
-			return i
-		}
-	}
-	return defaultValue
-}
-
-// getDuration returns a duration from environment or default value
-func getDuration(key string, defaultMs int64) int64 {
-	if val := os.Getenv(key); val != "" {
-		if i, err := strconv.ParseInt(val, 10, 64); err == nil {
-			return i
-		}
-	}
-	return defaultMs
-}
-
-// parseFloat returns a float from string or default value
-func parseFloat(val string, defaultValue float64) float64 {
-	if val == "" {
-		return defaultValue
-	}
-	if f, err := strconv.ParseFloat(val, 64); err == nil {
-		return f
-	}
-	return defaultValue
 }

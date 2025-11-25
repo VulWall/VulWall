@@ -30,42 +30,48 @@ type Service struct {
 }
 
 // NewService creates a new discovery enrichment service
-func NewService(redisClient *redis.Client, cfg *config.Config, logger *zap.Logger) (*Service, error) {
+func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error) {
+	// Load service-specific settings via GetEnv
+	wafRulesPath := config.GetEnv(config.EnvWAFRulesPath, "./internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json")
+	ipEnrichmentDBPath := config.GetEnv(config.EnvIPEnrichmentDBPath, "./data/dbip-isp-country.mmdb")
+	cloudDetectorEnabled := config.GetEnvBool(config.EnvCloudDetectorEnabled, true)
+	cloudDataDir := config.GetEnv(config.EnvCloudDataDir, "./internal/active_recon/discovery_enrichment/cloud/data")
+
 	// Initialize WAF detector
-	wafDetector, err := patterns.NewDetector(logger, cfg.WAFRulesPath)
+	wafDetector, err := patterns.NewDetector(logger, wafRulesPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WAF detector: %w", err)
 	}
 
 	logger.Info("WAF detector initialized",
-		zap.String("rules_path", cfg.WAFRulesPath),
+		zap.String("rules_path", wafRulesPath),
 	)
 
 	// Initialize IP geolocation enricher (graceful failure if DB missing)
 	var geoEnricher *geolocation.IPEnricher
-	if cfg.IPEnrichmentDBPath != "" {
-		geoEnricher, err = geolocation.NewIPEnricher(cfg.IPEnrichmentDBPath)
+	if ipEnrichmentDBPath != "" {
+		geoEnricher, err = geolocation.NewIPEnricher(ipEnrichmentDBPath)
 		if err != nil {
 			logger.Warn("Failed to initialize IP enricher, continuing without geolocation",
-				zap.String("db_path", cfg.IPEnrichmentDBPath),
+				zap.String("db_path", ipEnrichmentDBPath),
 				zap.Error(err))
 		} else {
 			logger.Info("IP geolocation enricher initialized",
-				zap.String("db_path", cfg.IPEnrichmentDBPath))
+				zap.String("db_path", ipEnrichmentDBPath))
 		}
 	}
 
 	// Initialize cloud detector (graceful failure if disabled or errors)
 	var cloudDetector *cloud.Detector
-	if cfg.CloudDetectorEnabled {
-		cloudDetector, err = cloud.NewDetector(cfg.CloudDataDir, logger)
+	if cloudDetectorEnabled {
+		cloudDetector, err = cloud.NewDetector(cloudDataDir, logger)
 		if err != nil {
 			logger.Warn("Failed to initialize cloud detector, continuing without cloud detection",
-				zap.String("data_dir", cfg.CloudDataDir),
+				zap.String("data_dir", cloudDataDir),
 				zap.Error(err))
 		} else {
 			logger.Info("Cloud detector initialized",
-				zap.String("data_dir", cfg.CloudDataDir))
+				zap.String("data_dir", cloudDataDir))
 		}
 	} else {
 		logger.Info("Cloud detector disabled")

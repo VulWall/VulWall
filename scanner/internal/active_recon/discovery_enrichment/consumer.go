@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
-	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -23,8 +22,8 @@ type Consumer struct {
 }
 
 // NewConsumer creates a new discovery enrichment consumer
-func NewConsumer(redisClient *redis.Client, cfg *config.Config, logger *zap.Logger) (*Consumer, error) {
-	service, err := NewService(redisClient, cfg, logger)
+func NewConsumer(redisClient *redis.Client, logger *zap.Logger) (*Consumer, error) {
+	service, err := NewService(redisClient, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service: %w", err)
 	}
