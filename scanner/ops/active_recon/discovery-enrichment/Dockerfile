@@ -30,9 +30,9 @@ COPY --from=builder /app/discovery-enrichment .
 # Copy WAF rules JSON file
 COPY --from=builder /app/internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json ./internal/active_recon/discovery_enrichment/waf/patterns/
 
-# Copy DBIP ISP/Country database for IP geolocation enrichment
-# To enable geolocation: place dbip-isp-country.mmdb in data/ directory before building
-COPY --from=builder /app/data/dbip-isp-country.mmdb ./data/dbip-isp-country.mmdb
+# Create data directory for MMDB volume mount
+# Mount the DBIP ISP/Country database at runtime: -v /path/to/dbip-isp-country.mmdb:/root/data/dbip-isp-country.mmdb
+RUN mkdir -p ./data
 
 # Run the binary
 CMD ["./discovery-enrichment"]

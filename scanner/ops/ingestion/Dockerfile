@@ -23,8 +23,9 @@ WORKDIR /root/
 # Copy the binary from builder
 COPY --from=builder /app/ingestion .
 
-# Copy MMDB database for IP enrichment
-COPY data/dbip-isp-country.mmdb /app/data/dbip-isp-country.mmdb
+# Create data directory for MMDB volume mount
+# Mount the DBIP ISP/Country database at runtime: -v /path/to/dbip-isp-country.mmdb:/root/data/dbip-isp-country.mmdb
+RUN mkdir -p ./data
 
 # Run the binary
 CMD ["./ingestion"]
