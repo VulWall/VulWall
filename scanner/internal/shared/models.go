@@ -151,7 +151,7 @@ type SecurityFinding struct {
 }
 
 // ScanTarget represents a target to be scanned by active recon scanners
-// Used by nuclei_scanner, nikto_scanner, testssl_scanner, webtechprofiler
+// Used by nuclei_scanner, testssl_scanner, webtechprofiler
 type ScanTarget struct {
 	Target      string  `json:"target"`        // URL, IP, or Host:port to scan
 	AssetType   string  `json:"asset_type"`    // Asset type: domain, subdomain, ip, port

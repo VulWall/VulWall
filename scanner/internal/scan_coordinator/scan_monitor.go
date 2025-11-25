@@ -108,14 +108,12 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 		// domain_discovery_results consumers
 		{shared.StreamDomainDiscoveryResults, "domain_ingestion_service"},
 		{shared.StreamDomainDiscoveryResults, "nuclei_scanner_service"},
-		{shared.StreamDomainDiscoveryResults, "nikto_scanner_service"},
 		{shared.StreamDomainDiscoveryResults, "testssl_scanner_service"},
 		{shared.StreamDomainDiscoveryResults, "webtechprofiler_service"},
 
 		// ip_discovery_results consumers
 		{shared.StreamIPDiscoveryResults, "port_ingestion_service"},
 		{shared.StreamIPDiscoveryResults, "nuclei_scanner_service"},
-		{shared.StreamIPDiscoveryResults, "nikto_scanner_service"},
 		{shared.StreamIPDiscoveryResults, "testssl_scanner_service"},
 		{shared.StreamIPDiscoveryResults, "webtechprofiler_service"},
 	}

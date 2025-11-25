@@ -85,11 +85,6 @@ VulWall.NightWatch/
 │       │   ├── models.go       # Nuclei output models
 │       │   ├── service.go      # Nuclei scanning logic
 │       │   └── consumer.go     # Dual-stream consumer (domain + IP results)
-│       ├── nikto_scanner/      # Nikto web scanner
-│       │   ├── constants.go    # Consumer group
-│       │   ├── models.go       # Nikto output models
-│       │   ├── service.go      # Nikto scanning logic
-│       │   └── consumer.go     # Consumes domain_discovery_results
 │       ├── testssl_scanner/    # TestSSL TLS/SSL scanner
 │       │   ├── constants.go    # Consumer group
 │       │   ├── models.go       # TestSSL output models
@@ -1732,7 +1727,7 @@ For services that:
 - Do NOT need MongoDB access
 - Handle their own consumer group creation
 
-**Example:** nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, discovery-enrichment
+**Example:** nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment
 
 ```go
 package main
@@ -1768,18 +1763,18 @@ func main() {
 
 #### Bootstrap Refactoring (2025)
 
-**Problem:** Five active reconnaissance scanners (Nikto, Nuclei, TestSSL, WebTechProfiler, Discovery Enrichment) were using manual initialization code instead of the bootstrap pattern. This resulted in:
+**Problem:** Four active reconnaissance scanners (Nuclei, TestSSL, WebTechProfiler, Discovery Enrichment) were using manual initialization code instead of the bootstrap pattern. This resulted in:
 
-- ❌ 293 lines of duplicate initialization code across 5 services
+- ❌ ~230 lines of duplicate initialization code across 4 services
 - ❌ Each main.go file was ~75-80 lines (mostly boilerplate)
 - ❌ **Missing OpenTelemetry initialization** - spans were created but silently dropped (no TracerProvider)
 - ❌ Inconsistent architecture (js-dependency-scanner used bootstrap, others didn't)
 
-**Solution:** Extended bootstrap pattern with `RunSimple()` variant and migrated all 5 scanners.
+**Solution:** Extended bootstrap pattern with `RunSimple()` variant and migrated all 4 scanners.
 
 **Results:**
 
-- ✅ Eliminated 293 lines of duplicate code (76% reduction)
+- ✅ Eliminated ~230 lines of duplicate code (76% reduction)
 - ✅ Reduced each main.go from ~75 lines to 18 lines
 - ✅ Automatic OpenTelemetry initialization now guaranteed
 - ✅ All active recon scanners now use consistent architecture
@@ -1903,7 +1898,7 @@ func main() {
 - Service consumes from **multiple Redis streams** (dual-stream pattern)
 - Service does **NOT need MongoDB**
 - Service handles its own consumer group creation
-- Examples: nuclei-scanner, nikto-scanner, testssl-scanner, webtechprofiler, discovery-enrichment
+- Examples: nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment
 
 **Use neither (manual initialization) when:**
 
