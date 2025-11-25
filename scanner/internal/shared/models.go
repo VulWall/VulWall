@@ -258,3 +258,17 @@ type AssetTarget struct {
 	Type    string `json:"type" bson:"type"`         // "domain" or "ip"
 	Value   string `json:"value" bson:"value"`       // Domain name or IP address
 }
+
+// SystemAuditEvent represents a system-level audit log event
+// Used by services to publish events to be persisted by ingestion
+// Persisted to the existing audit_logs collection
+type SystemAuditEvent struct {
+	TraceID        string                 `json:"trace_id,omitempty" bson:"trace_id,omitempty"`
+	TraceContext   map[string]string      `json:"trace_context,omitempty" bson:"-"` // W3C TraceContext (not stored in DB)
+	Category       string                 `json:"category" bson:"Category"`         // "TemplateUpdate", "ServiceStart", etc.
+	Action         string                 `json:"action" bson:"Action"`             // Human-readable action description
+	Service        string                 `json:"service" bson:"service"`           // "nuclei-scanner", "scan-coordinator", etc.
+	Success        bool                   `json:"success" bson:"success"`
+	AdditionalInfo map[string]interface{} `json:"additional_info,omitempty" bson:"AdditionalInfo"`
+	Timestamp      time.Time              `json:"timestamp" bson:"CreatedAt"`
+}

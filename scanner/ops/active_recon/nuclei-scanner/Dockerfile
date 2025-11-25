@@ -17,6 +17,9 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /root/
 
+# Create templates directory for volume mount
+RUN mkdir -p /root/nuclei-templates && chmod 755 /root/nuclei-templates
+
 # Copy the Go binary from builder
 COPY --from=builder /app/nuclei-scanner .
 
