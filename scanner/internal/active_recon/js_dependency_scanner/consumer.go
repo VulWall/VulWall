@@ -70,7 +70,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 				Group:    GroupJSDependencyScanner,
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
-				Count:    10,
+				Count:    ConsumerBatchSize,
 				Block:    0, // Block indefinitely
 			}).Result()
 

@@ -4,6 +4,10 @@ const (
 	// GroupWebTechProfiler is the consumer group name for the WebTechProfiler service
 	// Listens to both domain_discovery_results and ip_discovery_results
 	GroupWebTechProfiler = "webtechprofiler_service"
+
+	// ConsumerBatchSize is the number of messages to read at a time
+	// Higher value (10) because web tech profiling is fast
+	ConsumerBatchSize = 10
 )
 
 // WebPorts defines the list of common web service ports to scan

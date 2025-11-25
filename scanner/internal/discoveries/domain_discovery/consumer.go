@@ -51,7 +51,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 		Group:    GroupShodanSubdomainService,
 		Consumer: consumerName,
 		Streams:  []string{shared.StreamDomainDiscoveryQueue, ">"},
-		Count:    1,
+		Count:    ConsumerBatchSize,
 		Block:    5 * time.Second,
 	}).Result()
 

@@ -110,7 +110,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 				Group:    GroupNucleiScanner,
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
-				Count:    1,
+				Count:    ConsumerBatchSize,
 				Block:    5 * time.Second,
 			}).Result()
 
@@ -158,7 +158,7 @@ func (c *Consumer) processIPMessages(ctx context.Context, consumerName string) e
 				Group:    GroupNucleiScanner,
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamPortScanTriggers, ">"},
-				Count:    1,
+				Count:    ConsumerBatchSize,
 				Block:    5 * time.Second,
 			}).Result()
 

@@ -5,6 +5,10 @@ const (
 	// Input stream: shared.StreamIPDiscoveryQueue
 	// Output stream: shared.StreamIPDiscoveryResults
 	GroupPortDiscovery = "port_discovery_service"
+
+	// ConsumerBatchSize is the number of messages to read at a time
+	// Keep low (1) because port scanning involves multiple connections
+	ConsumerBatchSize = 1
 )
 
 // CommonPorts defines the most commonly scanned ports

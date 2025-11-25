@@ -103,7 +103,7 @@ func (c *Consumer) processDomainMessages(ctx context.Context, consumerName strin
 				Group:    GroupWebTechProfiler,
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
-				Count:    10,
+				Count:    ConsumerBatchSize,
 				Block:    0, // Block indefinitely
 			}).Result()
 
@@ -152,7 +152,7 @@ func (c *Consumer) processIPMessages(ctx context.Context, consumerName string) e
 				Group:    GroupWebTechProfiler,
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamIPDiscoveryResults, ">"},
-				Count:    10,
+				Count:    ConsumerBatchSize,
 				Block:    0, // Block indefinitely
 			}).Result()
 

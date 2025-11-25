@@ -66,7 +66,7 @@ func (c *Consumer) consumeEnrichmentJobs(ctx context.Context) error {
 				Group:    GroupDiscoveryEnrichment,
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamDiscoveryEnrichmentQueue, ">"},
-				Count:    1,
+				Count:    ConsumerBatchSize,
 				Block:    5 * time.Second,
 			}).Result()
 

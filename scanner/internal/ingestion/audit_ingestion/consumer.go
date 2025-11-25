@@ -67,7 +67,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 				Group:    GroupAuditIngestion,
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamSystemAuditLogs, ">"},
-				Count:    1,
+				Count:    ConsumerBatchSize,
 				Block:    5 * time.Second,
 			}).Result()
 

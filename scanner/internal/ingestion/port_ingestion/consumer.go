@@ -56,7 +56,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 				Group:    GroupPortIngestion,
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamIPDiscoveryResults, ">"},
-				Count:    1,
+				Count:    ConsumerBatchSize,
 				Block:    5 * time.Second,
 			}).Result()
 
