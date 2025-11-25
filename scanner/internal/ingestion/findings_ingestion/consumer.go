@@ -67,7 +67,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 				Group:    GroupFindingsIngestion,
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamSecurityFindings, ">"},
-				Count:    ConsumerBatchSize,
+				Count:    shared.IngestionBatchSize,
 				Block:    5 * time.Second,
 			}).Result()
 

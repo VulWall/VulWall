@@ -1,6 +1,10 @@
 package shared
 
 const (
+	// Ingestion Consumer Batch Size
+	// Higher value for faster ingestion - MongoDB writes are fast
+	IngestionBatchSize = 10
+
 	// Scan Status
 	StatusPending = "pending"
 	StatusRunning = "running"
