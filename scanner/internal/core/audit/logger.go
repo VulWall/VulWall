@@ -93,8 +93,8 @@ func (l *Logger) log(ctx context.Context, category, action string, success bool,
 		}
 	}
 
-	// Publish to Redis stream
-	if publishErr := redisx.PublishToStream(ctx, l.redis, shared.StreamSystemAuditLogs, event, 10000); publishErr != nil {
+	// Publish to Redis stream (keep last 1000 entries - audit events are infrequent)
+	if publishErr := redisx.PublishToStream(ctx, l.redis, shared.StreamSystemAuditLogs, event, 1000); publishErr != nil {
 		l.logger.Error("Failed to publish audit event",
 			zap.String("category", category),
 			zap.String("action", action),
