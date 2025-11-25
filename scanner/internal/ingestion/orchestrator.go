@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/vulwall/scanners/internal/ingestion/audit_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/domain_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/enrichment_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/findings_ingestion"
@@ -36,7 +37,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 
 	// Create wait group to manage goroutines
 	var wg sync.WaitGroup
-	errChan := make(chan error, 4) // Buffer for 4 consumers
+	errChan := make(chan error, 5) // Buffer for 5 consumers
 
 	// Start domain ingestion consumer
 	wg.Add(1)
@@ -87,6 +88,19 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		if err := enrichmentConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Enrichment ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("enrichment ingestion: %w", err)
+		}
+	}()
+
+	// Start audit ingestion consumer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		o.logger.Info("Starting audit ingestion consumer")
+
+		auditConsumer := audit_ingestion.NewConsumer(o.redis, o.db, o.logger)
+		if err := auditConsumer.Start(ctx); err != nil && err != context.Canceled {
+			o.logger.Error("Audit ingestion consumer failed", zap.Error(err))
+			errChan <- fmt.Errorf("audit ingestion: %w", err)
 		}
 	}()
 

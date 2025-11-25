@@ -36,6 +36,9 @@ func NewConsumer(redisClient *redis.Client, logger *zap.Logger) *Consumer {
 func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting Nuclei scanner consumer")
 
+	// Start template updater in background (cron-based)
+	go c.service.StartTemplateUpdater(ctx)
+
 	// Create consumer groups for both streams
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupNucleiScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)

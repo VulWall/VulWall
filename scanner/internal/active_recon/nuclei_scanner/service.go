@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/robfig/cron/v3"
+	"github.com/vulwall/scanners/internal/core/audit"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -20,18 +23,107 @@ import (
 
 // Service handles Nuclei vulnerability scanning
 type Service struct {
-	redis  *redis.Client
-	logger *zap.Logger
-	tracer trace.Tracer
+	redis       *redis.Client
+	logger      *zap.Logger
+	tracer      trace.Tracer
+	auditLogger *audit.Logger
+	cron        *cron.Cron
 }
 
 // NewService creates a new Nuclei scanner service
 func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
-		redis:  redisClient,
-		logger: logger,
-		tracer: otel.Tracer("nuclei-scanner"),
+		redis:       redisClient,
+		logger:      logger,
+		tracer:      otel.Tracer("nuclei-scanner"),
+		auditLogger: audit.NewLogger(redisClient, logger, "nuclei-scanner"),
 	}
+}
+
+// StartTemplateUpdater starts a cron job for periodic Nuclei template updates
+// The schedule can be overridden via NUCLEI_TEMPLATE_UPDATE_CRON environment variable
+func (s *Service) StartTemplateUpdater(ctx context.Context) {
+	// Get cron schedule from environment or use default
+	cronSchedule := os.Getenv("NUCLEI_TEMPLATE_UPDATE_CRON")
+	if cronSchedule == "" {
+		cronSchedule = DefaultTemplateUpdateCron
+	}
+
+	s.logger.Info("Starting Nuclei template updater",
+		zap.String("schedule", cronSchedule),
+	)
+
+	// Run update immediately on startup to ensure templates are current
+	s.updateTemplates(ctx)
+
+	// Create cron scheduler
+	s.cron = cron.New()
+
+	// Add the template update job
+	_, err := s.cron.AddFunc(cronSchedule, func() {
+		s.updateTemplates(ctx)
+	})
+	if err != nil {
+		s.logger.Error("Failed to schedule template update cron job",
+			zap.String("schedule", cronSchedule),
+			zap.Error(err),
+		)
+		return
+	}
+
+	// Start the cron scheduler
+	s.cron.Start()
+
+	// Wait for context cancellation to stop
+	go func() {
+		<-ctx.Done()
+		s.logger.Info("Stopping template updater")
+		s.cron.Stop()
+	}()
+}
+
+// updateTemplates runs nuclei -update-templates and publishes audit log
+func (s *Service) updateTemplates(ctx context.Context) {
+	ctx, span := s.tracer.Start(ctx, "update_templates")
+	defer span.End()
+
+	s.logger.Info("Checking for Nuclei template updates...")
+
+	// Get version before update
+	versionBefore := s.getTemplateVersion(ctx)
+
+	// Run update with 5-minute timeout
+	updateCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(updateCtx, "nuclei", "-update-templates")
+	output, err := cmd.CombinedOutput()
+
+	// Get version after update
+	versionAfter := s.getTemplateVersion(ctx)
+
+	// Log audit event using shared audit logger
+	s.auditLogger.LogOperation(ctx,
+		"TemplateUpdate",
+		"Nuclei templates updated",
+		"Nuclei template update failed",
+		err,
+		map[string]any{
+			"version_before": versionBefore,
+			"version_after":  versionAfter,
+			"output":         string(output),
+		},
+	)
+}
+
+// getTemplateVersion returns current Nuclei template version
+func (s *Service) getTemplateVersion(ctx context.Context) string {
+	cmd := exec.CommandContext(ctx, "nuclei", "-tv")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "unknown"
+	}
+	return strings.TrimSpace(string(output))
 }
 
 // ProcessDiscovery scans a discovered asset with Nuclei
