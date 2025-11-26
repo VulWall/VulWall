@@ -181,8 +181,10 @@ func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([
 	// -u: target URL
 	// -j: JSONL output (one JSON per line)
 	// -silent: suppress banner and update check
+	// -t: explicit templates path (required for volume mounts)
 	cmd := exec.CommandContext(ctx, "nuclei",
 		"-u", target,
+		"-t", "/root/nuclei-templates",
 		"-j",
 		"-silent",
 		"-severity", severity,
