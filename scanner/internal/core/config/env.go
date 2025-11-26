@@ -21,7 +21,7 @@ const (
 	// EnvServiceName is the service identifier for logging and telemetry
 	EnvServiceName = "SERVICE_NAME"
 	// EnvEnvironment is the deployment environment (development/production)
-	EnvEnvironment = "DOPPLER_ENVIRONMENT"
+	EnvEnvironment = "ENVIRONMENT"
 
 	// ===========================================
 	// API Keys
