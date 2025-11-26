@@ -190,18 +190,38 @@ func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL strin
 		metadata["github_id"] = vuln.GitHubID
 	}
 
+	// Determine finding type: use primary CVE if available, otherwise use component-based identifier
+	findingType := determineFindingType(vuln)
+
 	return shared.SecurityFinding{
 		TraceID:     target.TraceID,
 		ScanID:      target.ScanID,
 		OrgID:       target.OrgID,
 		Scanner:     "jsscanner",
 		DiscoveryID: target.DiscoveryID,
+		FindingType: findingType,
 		Severity:    vuln.Severity,
 		Title:       title, // Full summary - no truncation
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,
 		Timestamp:   time.Now(),
 	}
+}
+
+// determineFindingType creates a finding type identifier for the vulnerability
+// Uses primary CVE if available, otherwise falls back to component-based identifier
+func determineFindingType(vuln scanner.ProcessedVulnerability) string {
+	// Use primary CVE if available (e.g., "CVE-2020-28458")
+	if len(vuln.CVEs) > 0 {
+		return strings.ToLower(vuln.CVEs[0])
+	}
+
+	// Fall back to component-based identifier (e.g., "js:jquery:prototype-pollution")
+	// Sanitize component name for use as identifier
+	component := strings.ToLower(vuln.Component)
+	component = strings.ReplaceAll(component, " ", "-")
+
+	return fmt.Sprintf("js:%s:vulnerability", component)
 }
 
 // formatTitle formats the finding title: "Component Version - Summary (CVEs)"
