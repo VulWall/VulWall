@@ -4,8 +4,9 @@ services:
     container_name: nightwatch-testssl-scanner
     restart: unless-stopped
     env_file:
-      - /opt/vulwall/redis.env
-      - /opt/vulwall/honeycomb.env
+      - /opt/vulwall/config/general.env
+      - /opt/vulwall/config/redis.env
+      - /opt/vulwall/config/honeycomb.env
     networks:
       - core-network
     healthcheck:
