@@ -194,7 +194,7 @@ func (s *Service) buildFindingDocument(finding shared.SecurityFinding) (bson.M, 
 	}
 
 	// Add metadata if present
-	if finding.Metadata != nil && len(finding.Metadata) > 0 {
+	if len(finding.Metadata) > 0 {
 		doc["metadata"] = finding.Metadata
 	}
 
