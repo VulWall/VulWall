@@ -114,11 +114,21 @@ func Run(cfg ServiceConfig) {
 // SimpleConsumerFactory is a function that creates a consumer with minimal dependencies
 type SimpleConsumerFactory func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (ConsumerStarter, error)
 
+// StreamConfig defines a stream and consumer group pair for automatic creation
+type StreamConfig struct {
+	StreamName    string
+	ConsumerGroup string
+}
+
 // SimpleServiceConfig holds the configuration for bootstrapping a simple service
-// Simple services handle their own consumer group creation and don't need MongoDB
+// Simple services don't need MongoDB. Consumer groups can be created automatically
+// by specifying Streams, or handled by the service itself if Streams is empty.
 type SimpleServiceConfig struct {
 	ServiceName string
 	Factory     SimpleConsumerFactory
+	// Streams to create consumer groups for (optional)
+	// If empty, service handles its own consumer group creation
+	Streams []StreamConfig
 }
 
 // RunSimple bootstraps and runs a simple scanner service (no MongoDB, no consumer group management)
@@ -170,6 +180,21 @@ func RunSimple(cfg SimpleServiceConfig) {
 	logger.Log.Info("Connected to Redis",
 		zap.String("uri", appCfg.RedisURI),
 	)
+
+	// Create consumer groups if specified
+	for _, stream := range cfg.Streams {
+		if err := redisx.CreateConsumerGroup(ctx, redisClient, stream.StreamName, stream.ConsumerGroup); err != nil {
+			logger.Log.Fatal("Failed to create consumer group",
+				zap.String("stream", stream.StreamName),
+				zap.String("group", stream.ConsumerGroup),
+				zap.Error(err),
+			)
+		}
+		logger.Log.Info("Consumer group ready",
+			zap.String("stream", stream.StreamName),
+			zap.String("group", stream.ConsumerGroup),
+		)
+	}
 
 	// Create consumer using the factory function
 	consumer, err := cfg.Factory(appCfg, redisClient, logger.Log)
