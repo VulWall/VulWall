@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -16,17 +19,25 @@ import (
 	"go.uber.org/zap"
 )
 
+// AllowedSeveritiesForAI defines which severity levels trigger AI enrichment
+var AllowedSeveritiesForAI = map[string]bool{
+	shared.SeverityCritical: true,
+	shared.SeverityHigh:     true,
+}
+
 // Service handles persistence of security findings to MongoDB
 type Service struct {
 	db     *mongo.Database
+	redis  *redis.Client
 	logger *zap.Logger
 	tracer trace.Tracer
 }
 
 // NewService creates a new findings ingestion service
-func NewService(db *mongo.Database, logger *zap.Logger) *Service {
+func NewService(db *mongo.Database, redisClient *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
 		db:     db,
+		redis:  redisClient,
 		logger: logger,
 		tracer: otel.Tracer("findings-ingestion"),
 	}
@@ -64,16 +75,30 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 	)
 
 	// Upsert the finding (deduplicate by org_id + discovery_id + finding_type + title)
-	if err := s.upsertFinding(ctx, finding); err != nil {
+	needsAIEnrichment, err := s.upsertFinding(ctx, finding)
+	if err != nil {
 		span.RecordError(err)
 		return fmt.Errorf("failed to upsert finding: %w", err)
+	}
+
+	// Publish to AI enrichment queue if eligible (high/critical severity + not already enriched)
+	if needsAIEnrichment {
+		if err := s.publishAIEnrichmentJob(ctx, finding); err != nil {
+			// Log error but don't fail the ingestion
+			s.logger.Error("Failed to publish AI enrichment job",
+				zap.String("org_id", finding.OrgID),
+				zap.String("finding_type", finding.FindingType),
+				zap.Error(err),
+			)
+		}
 	}
 
 	return nil
 }
 
 // upsertFinding creates or updates a finding in the findings collection
-func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFinding) error {
+// Returns true if AI enrichment is needed (new finding with eligible severity and no existing AI recommendation)
+func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFinding) (bool, error) {
 	collection := s.db.Collection(shared.CollectionFindings)
 
 	// Check if finding already exists (deduplicate)
@@ -98,18 +123,18 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 		}
 
 		findingDoc := bson.M{
-			"_id":             uuid.New().String(),
-			"org_id":          finding.OrgID,
-			"discovery_id":    finding.DiscoveryID,
-			"finding_type":    finding.FindingType,
-			"severity":        finding.Severity,
-			"source":          finding.Scanner,
-			"title":           finding.Title,
-			"description":     finding.Description,
-			"metadata":        finding.Metadata,
-			"status":          finding.Status,
-			"first_detected":  now,
-			"last_detected":   now,
+			"_id":            uuid.New().String(),
+			"org_id":         finding.OrgID,
+			"discovery_id":   finding.DiscoveryID,
+			"finding_type":   finding.FindingType,
+			"severity":       finding.Severity,
+			"source":         finding.Scanner,
+			"title":          finding.Title,
+			"description":    finding.Description,
+			"metadata":       finding.Metadata,
+			"status":         finding.Status,
+			"first_detected": now,
+			"last_detected":  now,
 		}
 
 		// Add scan_ids array if present
@@ -119,7 +144,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 
 		_, err := collection.InsertOne(ctx, findingDoc)
 		if err != nil {
-			return fmt.Errorf("failed to insert finding: %w", err)
+			return false, fmt.Errorf("failed to insert finding: %w", err)
 		}
 
 		s.logger.Info("Created new finding",
@@ -128,9 +153,11 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 			zap.String("finding_type", finding.FindingType),
 		)
 
-		return nil
+		// New finding - check if it needs AI enrichment (high/critical severity)
+		needsAI := AllowedSeveritiesForAI[finding.Severity]
+		return needsAI, nil
 	} else if err != nil {
-		return fmt.Errorf("failed to query existing finding: %w", err)
+		return false, fmt.Errorf("failed to query existing finding: %w", err)
 	}
 
 	// Finding exists, update last_detected and metadata
@@ -139,8 +166,8 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 	update := bson.M{
 		"$set": bson.M{
 			"last_detected": now,
-			"metadata":      finding.Metadata, // Update with latest metadata
-			"severity":      finding.Severity,  // Update severity in case it changed
+			"metadata":      finding.Metadata,    // Update with latest metadata
+			"severity":      finding.Severity,    // Update severity in case it changed
 			"description":   finding.Description, // Update description
 		},
 	}
@@ -165,7 +192,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 
 	_, err = collection.UpdateOne(ctx, filter, update)
 	if err != nil {
-		return fmt.Errorf("failed to update finding: %w", err)
+		return false, fmt.Errorf("failed to update finding: %w", err)
 	}
 
 	s.logger.Info("Updated existing finding",
@@ -174,7 +201,12 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 		zap.String("finding_type", finding.FindingType),
 	)
 
-	return nil
+	// Check if existing finding needs AI enrichment:
+	// - Has eligible severity AND doesn't already have ai_recommendation
+	_, hasAIRecommendation := existingFinding["ai_recommendation"]
+	needsAI := AllowedSeveritiesForAI[finding.Severity] && !hasAIRecommendation
+
+	return needsAI, nil
 }
 
 // buildFindingDocument converts SecurityFinding to BSON, excluding nil fields
@@ -248,5 +280,37 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logger) 
 	}
 
 	logger.Info("Findings collection indexes created successfully")
+	return nil
+}
+
+// publishAIEnrichmentJob publishes an AI enrichment job to the queue
+func (s *Service) publishAIEnrichmentJob(ctx context.Context, finding shared.SecurityFinding) error {
+	job := shared.AIEnrichmentJob{
+		TraceID:     finding.TraceID,
+		OrgID:       finding.OrgID,
+		DiscoveryID: finding.DiscoveryID,
+		FindingType: finding.FindingType,
+		Title:       finding.Title,
+		Severity:    finding.Severity,
+		Scanner:     finding.Scanner,
+		Description: finding.Description,
+		Metadata:    finding.Metadata,
+		Created:     time.Now(),
+	}
+
+	// Inject trace context for distributed tracing
+	job.TraceContext = telemetry.InjectTraceContext(ctx)
+
+	// Publish to AI enrichment queue (no MAXLEN - queue should not be trimmed)
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamAIEnrichmentQueue, job, 0); err != nil {
+		return fmt.Errorf("failed to publish AI enrichment job: %w", err)
+	}
+
+	s.logger.Info("Published AI enrichment job",
+		zap.String("org_id", finding.OrgID),
+		zap.String("finding_type", finding.FindingType),
+		zap.String("severity", finding.Severity),
+	)
+
 	return nil
 }

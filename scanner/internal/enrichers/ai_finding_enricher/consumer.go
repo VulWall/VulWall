@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Consumer consumes security findings from Redis and generates AI recommendations
+// Consumer consumes AI enrichment jobs from Redis and generates AI recommendations
 type Consumer struct {
 	redis   *redis.Client
 	service *Service
@@ -30,12 +30,12 @@ func NewConsumer(redisClient *redis.Client, service *Service, logger *zap.Logger
 	}
 }
 
-// Start begins consuming messages from the security_findings stream
+// Start begins consuming messages from the ai_enrichment_queue stream
 func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting AI finding enricher consumer")
 
 	// Create consumer group
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamSecurityFindings, GroupAIFindingEnricher); err != nil {
+	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamAIEnrichmentQueue, GroupAIFindingEnricher); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
@@ -45,7 +45,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Consumer group created",
 		zap.String("group", GroupAIFindingEnricher),
 		zap.String("consumer", consumerName),
-		zap.String("stream", shared.StreamSecurityFindings),
+		zap.String("stream", shared.StreamAIEnrichmentQueue),
 	)
 
 	// Start processing messages
@@ -64,7 +64,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    GroupAIFindingEnricher,
 				Consumer: consumerName,
-				Streams:  []string{shared.StreamSecurityFindings, ">"},
+				Streams:  []string{shared.StreamAIEnrichmentQueue, ">"},
 				Count:    int64(ConsumerBatchSize),
 				Block:    5 * time.Second,
 			}).Result()
@@ -93,14 +93,14 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 					}
 
 					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamSecurityFindings, GroupAIFindingEnricher, message.ID)
+					c.redis.XAck(ctx, shared.StreamAIEnrichmentQueue, GroupAIFindingEnricher, message.ID)
 				}
 			}
 		}
 	}
 }
 
-// handleMessage processes a single security finding message
+// handleMessage processes a single AI enrichment job message
 func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) error {
 	// Extract data from message
 	data, ok := message.Values["data"].(string)
@@ -108,30 +108,32 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 		return fmt.Errorf("message data is not a string")
 	}
 
-	// Parse security finding
-	var finding shared.SecurityFinding
-	if err := json.Unmarshal([]byte(data), &finding); err != nil {
-		return fmt.Errorf("failed to unmarshal finding: %w", err)
+	// Parse AI enrichment job
+	var job shared.AIEnrichmentJob
+	if err := json.Unmarshal([]byte(data), &job); err != nil {
+		return fmt.Errorf("failed to unmarshal AI enrichment job: %w", err)
 	}
 
 	// Extract trace context from message to link spans across service boundaries
-	ctx = telemetry.ExtractTraceContext(ctx, finding.TraceContext)
+	ctx = telemetry.ExtractTraceContext(ctx, job.TraceContext)
 
 	// Validate required fields
-	if finding.Scanner == "" {
-		c.logger.Warn("Skipping finding without source field",
+	if job.OrgID == "" {
+		c.logger.Warn("Skipping job without org_id",
 			zap.String("message_id", message.ID),
 		)
 		return nil
 	}
 
-	if finding.OrgID == "" {
-		c.logger.Warn("Skipping finding without org_id",
+	if job.FindingType == "" || job.Title == "" {
+		c.logger.Warn("Skipping job with missing composite key fields",
 			zap.String("message_id", message.ID),
+			zap.String("finding_type", job.FindingType),
+			zap.String("title", job.Title),
 		)
 		return nil
 	}
 
-	// Process the finding (severity filtering happens in service)
-	return c.service.ProcessFinding(ctx, finding)
+	// Process the job (jobs are pre-filtered by findings_ingestion)
+	return c.service.ProcessJob(ctx, job)
 }

@@ -40,6 +40,7 @@ const (
 	StreamDiscoveryEnrichmentResults = "discovery_enrichment_results" // Output stream for discovery enrichment data (consumed by enrichment ingestion)
 
 	// Redis Streams - AI Enrichment
+	StreamAIEnrichmentQueue   = "ai_enrichment_queue"   // Input stream for AI enrichment jobs (published by findings_ingestion for high/critical severity)
 	StreamAIEnrichmentResults = "ai_enrichment_results" // Output stream for AI-generated finding recommendations (consumed by ai_enrichment_ingestion)
 
 	// Redis Streams - Active Scan Triggers (published by ingestion services AFTER persisting discoveries)

@@ -138,33 +138,25 @@ func (s *Service) getResponseSchema(name string) *groq.JSONSchema {
 	return s.responseSchemas[name]
 }
 
-// ProcessFinding processes a security finding and generates an AI recommendation
-func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFinding) error {
-	ctx, span := s.tracer.Start(ctx, "process_finding_enrichment",
+// ProcessJob processes an AI enrichment job and generates an AI recommendation
+// Jobs come from findings_ingestion which pre-filters by severity and checks for existing enrichment
+func (s *Service) ProcessJob(ctx context.Context, job shared.AIEnrichmentJob) error {
+	ctx, span := s.tracer.Start(ctx, "process_ai_enrichment_job",
 		trace.WithAttributes(
-			attribute.String("org.id", finding.OrgID),
-			attribute.String("trace.id", finding.TraceID),
-			attribute.String("discovery.id", finding.DiscoveryID),
-			attribute.String("finding.type", finding.FindingType),
-			attribute.String("severity", finding.Severity),
+			attribute.String("org.id", job.OrgID),
+			attribute.String("trace.id", job.TraceID),
+			attribute.String("discovery.id", job.DiscoveryID),
+			attribute.String("finding.type", job.FindingType),
+			attribute.String("severity", job.Severity),
 		),
 	)
 	defer span.End()
 
-	// Check severity filter
-	if !AllowedSeverities[finding.Severity] {
-		s.logger.Debug("Skipping finding: severity not in allowed list",
-			zap.String("severity", finding.Severity),
-			zap.String("finding_type", finding.FindingType),
-		)
-		return nil
-	}
-
-	s.logger.Info("Processing finding for AI enrichment",
-		zap.String("org_id", finding.OrgID),
-		zap.String("discovery_id", finding.DiscoveryID),
-		zap.String("severity", finding.Severity),
-		zap.String("finding_type", finding.FindingType),
+	s.logger.Info("Processing AI enrichment job",
+		zap.String("org_id", job.OrgID),
+		zap.String("discovery_id", job.DiscoveryID),
+		zap.String("severity", job.Severity),
+		zap.String("finding_type", job.FindingType),
 	)
 
 	// Get prompt (extensible: could map by finding_type in the future)
@@ -177,7 +169,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 	responseSchema := s.getResponseSchema("response")
 
 	// Build finding context for AI
-	findingContext := s.buildFindingContext(finding)
+	findingContext := s.buildJobContext(job)
 
 	// Generate AI recommendation with structured output
 	recommendation, err := s.groqClient.GenerateRecommendation(ctx, prompt, findingContext, responseSchema)
@@ -187,12 +179,12 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 	}
 
 	s.logger.Info("AI recommendation generated",
-		zap.String("finding_type", finding.FindingType),
+		zap.String("finding_type", job.FindingType),
 		zap.Int("recommendation_length", len(recommendation)),
 	)
 
 	// Publish enrichment to stream
-	return s.publishEnrichment(ctx, finding, recommendation, "recommendation")
+	return s.publishEnrichment(ctx, job, recommendation, "recommendation")
 }
 
 // getPrompt returns the prompt content for the given name
@@ -200,26 +192,26 @@ func (s *Service) getPrompt(name string) string {
 	return s.prompts[name]
 }
 
-// buildFindingContext creates a context string from the finding for the AI
-func (s *Service) buildFindingContext(finding shared.SecurityFinding) string {
+// buildJobContext creates a context string from the AI enrichment job for the AI
+func (s *Service) buildJobContext(job shared.AIEnrichmentJob) string {
 	var sb strings.Builder
 
 	sb.WriteString("## Security Finding\n\n")
 
-	sb.WriteString(fmt.Sprintf("**Type:** %s\n", finding.FindingType))
-	sb.WriteString(fmt.Sprintf("**Severity:** %s\n", finding.Severity))
-	sb.WriteString(fmt.Sprintf("**Title:** %s\n", finding.Title))
-	sb.WriteString(fmt.Sprintf("**Scanner:** %s\n", finding.Scanner))
+	sb.WriteString(fmt.Sprintf("**Type:** %s\n", job.FindingType))
+	sb.WriteString(fmt.Sprintf("**Severity:** %s\n", job.Severity))
+	sb.WriteString(fmt.Sprintf("**Title:** %s\n", job.Title))
+	sb.WriteString(fmt.Sprintf("**Scanner:** %s\n", job.Scanner))
 
-	if finding.Description != "" {
-		sb.WriteString(fmt.Sprintf("\n**Description:**\n%s\n", finding.Description))
+	if job.Description != "" {
+		sb.WriteString(fmt.Sprintf("\n**Description:**\n%s\n", job.Description))
 	}
 
 	// Include all metadata dynamically (different scanners have different fields)
-	if len(finding.Metadata) > 0 {
+	if len(job.Metadata) > 0 {
 		sb.WriteString("\n**Additional Details:**\n")
 
-		for key, value := range finding.Metadata {
+		for key, value := range job.Metadata {
 			// Format value based on type
 			sb.WriteString(fmt.Sprintf("- %s: %s\n", key, formatMetadataValue(value)))
 		}
@@ -269,14 +261,14 @@ func formatMetadataValue(value interface{}) string {
 }
 
 // publishEnrichment publishes the AI enrichment to the stream
-func (s *Service) publishEnrichment(ctx context.Context, finding shared.SecurityFinding, recommendationJSON, promptUsed string) error {
+func (s *Service) publishEnrichment(ctx context.Context, job shared.AIEnrichmentJob, recommendationJSON, promptUsed string) error {
 	// Parse JSON response into map for structured storage in MongoDB
 	var recommendation map[string]interface{}
 	if err := json.Unmarshal([]byte(recommendationJSON), &recommendation); err != nil {
 		// If parsing fails, store as raw text in a wrapper object
 		s.logger.Warn("Failed to parse AI response as JSON, storing as raw text",
 			zap.Error(err),
-			zap.String("finding_type", finding.FindingType),
+			zap.String("finding_type", job.FindingType),
 		)
 		recommendation = map[string]interface{}{
 			"raw_response": recommendationJSON,
@@ -284,11 +276,11 @@ func (s *Service) publishEnrichment(ctx context.Context, finding shared.Security
 	}
 
 	enrichment := shared.AIEnrichmentFinding{
-		TraceID:        finding.TraceID,
-		OrgID:          finding.OrgID,
-		DiscoveryID:    finding.DiscoveryID,
-		FindingType:    finding.FindingType,
-		Title:          finding.Title,
+		TraceID:        job.TraceID,
+		OrgID:          job.OrgID,
+		DiscoveryID:    job.DiscoveryID,
+		FindingType:    job.FindingType,
+		Title:          job.Title,
 		Recommendation: recommendation,
 		PromptUsed:     promptUsed,
 		Model:          s.groqClient.GetModel(),
@@ -303,7 +295,7 @@ func (s *Service) publishEnrichment(ctx context.Context, finding shared.Security
 	}
 
 	s.logger.Info("Published AI enrichment",
-		zap.String("finding_type", finding.FindingType),
+		zap.String("finding_type", job.FindingType),
 		zap.String("prompt_used", promptUsed),
 		zap.String("model", s.groqClient.GetModel()),
 	)
