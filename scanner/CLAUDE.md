@@ -36,6 +36,9 @@ VulWall.NightWatch/
 │   ├── active_recon/       # Active recon services entry points
 │   │   ├── nuclei-scanner/
 │   │   │   └── main.go
+│   ├── enrichers/          # Enricher services entry points
+│   │   └── ai-finding-enricher/
+│   │       └── main.go
 │   └── ingestion/          # Ingestion orchestrator entry point
 │       └── main.go
 ├── internal/
@@ -62,10 +65,23 @@ VulWall.NightWatch/
 │   │   │   ├── constants.go     # Consumer group
 │   │   │   ├── service.go       # discoveries persistence (ports with org_id)
 │   │   │   └── consumer.go      # Consumes ip_discovery_results
-│   │   └── findings_ingestion/  # Findings ingestion slice
+│   │   ├── findings_ingestion/  # Findings ingestion slice
+│   │   │   ├── constants.go     # Consumer group
+│   │   │   ├── service.go       # findings persistence (security vulnerabilities)
+│   │   │   └── consumer.go      # Consumes security_findings
+│   │   └── ai_enrichment_ingestion/  # AI enrichment ingestion slice
 │   │       ├── constants.go     # Consumer group
-│   │       ├── service.go       # findings persistence (security vulnerabilities)
-│   │       └── consumer.go      # Consumes security_findings
+│   │       ├── service.go       # Updates findings with AI recommendations
+│   │       └── consumer.go      # Consumes ai_enrichment_results
+│   ├── enrichers/         # Enricher services (external AI/API integrations)
+│   │   └── ai_finding_enricher/  # AI-powered finding recommendations
+│   │       ├── constants.go     # Consumer group, severity filter
+│   │       ├── service.go       # Orchestration, prompt loading, Groq calls
+│   │       ├── consumer.go      # Consumes security_findings stream
+│   │       ├── groq/
+│   │       │   └── client.go    # Groq API client with retry logic
+│   │       └── prompts/
+│   │           └── recommendation.txt  # System prompt for recommendations
 │   ├── discoveries/       # Discovery services (no MongoDB access)
 │   │   ├── domain_discovery/   # Shodan domain discovery
 │   │   │   ├── constants.go    # Consumer group name only
@@ -110,6 +126,9 @@ VulWall.NightWatch/
 ├── ops/                   # Docker and deployment files
 │   ├── active_recon/
 │   │   └── nuclei-scanner/
+│   │       └── Dockerfile
+│   ├── enrichers/
+│   │   └── ai-finding-enricher/
 │   │       └── Dockerfile
 │   ├── domain-discovery/
 │   │   └── Dockerfile
@@ -1328,6 +1347,103 @@ To add a new enrichment type (e.g., CDN detection, tech stack profiling):
 - Avoid arrays or complex history tracking
 - Example: `metadata.cdn = "Cloudflare"`, `metadata.cms = "WordPress"`
 
+## AI Finding Enricher (AI-Powered Recommendations)
+
+The AI Finding Enricher generates **AI-powered security recommendations** for high-severity findings using the Groq API.
+
+### AI Finding Enricher Architecture
+
+**Location:** `internal/enrichers/ai_finding_enricher/`
+
+**How it works:**
+1. Consumes from `security_findings` stream (parallel to findings_ingestion)
+2. Filters by severity: only processes `critical` and `high` severity findings
+3. Loads system prompt from embedded `.txt` file
+4. Calls Groq API to generate recommendations
+5. Publishes `AIEnrichmentFinding` to `ai_enrichment_results` stream
+6. AI enrichment ingestion updates the finding document with `ai_recommendation` field
+
+**Components:**
+
+- **Groq Client** (`groq/client.go`): HTTP client with retry logic (exponential backoff), handles rate limits
+- **Service** (`service.go`): Orchestrates prompt loading, context building, and API calls
+- **Prompts** (`prompts/recommendation.txt`): System prompt for generating recommendations
+
+### AI Enrichment Flow
+
+```
+security_findings stream
+        │
+        ├──► findings_ingestion (persists to MongoDB)
+        │
+        └──► ai_finding_enricher
+                │
+                ├── Filter: severity = "critical" OR "high"
+                ├── Load prompt from prompts/recommendation.txt
+                ├── Build finding context (type, severity, title, description, metadata)
+                ├── Call Groq API (llama-3.3-70b-versatile)
+                └── Publish AIEnrichmentFinding to ai_enrichment_results
+                        │
+                        └──► ai_enrichment_ingestion
+                                │
+                                └── Update finding: set ai_recommendation field
+```
+
+### Finding Document (After AI Enrichment)
+
+```javascript
+{
+  _id: "finding-uuid",
+  org_id: "org-uuid",
+  discovery_id: "discovery-uuid",
+  finding_type: "CVE-2024-1234",
+  severity: "critical",
+  source: "nuclei",
+  title: "Remote Code Execution",
+  description: "...",
+  metadata: { /* scanner-specific */ },
+  status: "open",
+  first_detected: ISODate("..."),
+  last_detected: ISODate("..."),
+
+  // AI-generated recommendation
+  ai_recommendation: {
+    text: "## Vulnerability Explanation\n...",
+    prompt_used: "recommendation",
+    model: "llama-3.3-70b-versatile",
+    generated_at: ISODate("2025-11-26T...")
+  }
+}
+```
+
+### Configuration
+
+**Environment Variables:**
+- `GROQ_API_KEY` - Required: Groq API key for AI recommendations
+- `GROQ_MODEL` - Optional: Model to use (default: `llama-3.3-70b-versatile`)
+
+### Running the Service
+
+```bash
+# Build
+make build-ai-finding-enricher
+
+# Run locally
+make run-ai-finding-enricher
+
+# Deploy to production
+make prod-deploy-ai-finding-enricher
+```
+
+### Extending the AI Enricher
+
+**Add new prompts:**
+1. Create new `.txt` file in `internal/enrichers/ai_finding_enricher/prompts/`
+2. Update `service.go` to select prompt based on finding type or severity
+
+**Modify severity filter:**
+Edit `AllowedSeverities` map in `internal/enrichers/ai_finding_enricher/constants.go`
+
 ## Scan Coordinator (Automated Scanning)
 
 The Scan Coordinator is a background service that **automatically schedules and triggers scans** based on organization subscription settings.
@@ -2136,6 +2252,7 @@ type ServiceHistoryEntry struct {
 - `shared.StreamIPDiscoveryQueue = "ip_discovery_queue"` - Input stream for IP port discovery jobs (requires `org_id`)
 - `shared.StreamIPDiscoveryResults = "ip_discovery_results"` - Output stream for IP port discovery findings (requires `source`)
 - `shared.StreamSecurityFindings = "security_findings"` - Output stream for security findings from scanners (requires `source`)
+- `shared.StreamAIEnrichmentResults = "ai_enrichment_results"` - Output stream for AI-generated finding recommendations (consumed by ai_enrichment_ingestion)
 
 **Collection Names:**
 - `shared.CollectionAssets = "assets"` - User-added assets to be scanned (includes org_id)

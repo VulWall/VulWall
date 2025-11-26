@@ -1,0 +1,38 @@
+{
+  "name": "security_recommendation",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "vulnerability_explanation": {
+        "type": "string",
+        "description": "A brief explanation of what this vulnerability is and how it works"
+      },
+      "potential_impact": {
+        "type": "string",
+        "description": "What could happen if this vulnerability is exploited, including specific risks"
+      },
+      "remediation_steps": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Step-by-step instructions to fix this vulnerability"
+      },
+      "best_practices": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Security best practices to prevent similar issues in the future"
+      },
+      "priority": {
+        "type": "string",
+        "enum": ["immediate", "high", "medium", "low"],
+        "description": "Recommended priority for addressing this vulnerability"
+      },
+      "estimated_effort": {
+        "type": "string",
+        "enum": ["trivial", "small", "medium", "large"],
+        "description": "Estimated effort to implement the fix"
+      }
+    },
+    "required": ["vulnerability_explanation", "potential_impact", "remediation_steps", "best_practices", "priority", "estimated_effort"],
+    "additionalProperties": false
+  }
+}

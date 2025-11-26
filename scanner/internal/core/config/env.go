@@ -29,6 +29,10 @@ const (
 
 	// EnvShodanAPIKey is the Shodan API key for domain discovery
 	EnvShodanAPIKey = "SHODAN_API_KEY"
+	// EnvGroqAPIKey is the Groq API key for AI-powered finding recommendations
+	EnvGroqAPIKey = "GROQ_API_KEY"
+	// EnvGroqModel is the Groq model to use for recommendations (default: llama-3.3-70b-versatile)
+	EnvGroqModel = "GROQ_MODEL"
 
 	// ===========================================
 	// OpenTelemetry / Tracing

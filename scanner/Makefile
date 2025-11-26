@@ -21,6 +21,8 @@ build: ## Build all services
 	@go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
 	@echo "Building js-dependency-scanner..."
 	@go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
+	@echo "Building ai-finding-enricher..."
+	@go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
 	@echo "Building ingestion..."
 	@go build -o bin/ingestion ./cmd/ingestion
 	@echo "Building scan-coordinator..."
@@ -48,6 +50,9 @@ build-discovery-enrichment: ## Build discovery-enrichment service
 build-js-dependency-scanner: ## Build js-dependency-scanner service
 	@go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
 
+build-ai-finding-enricher: ## Build ai-finding-enricher service
+	@go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
+
 build-ingestion: ## Build ingestion service
 	@go build -o bin/ingestion ./cmd/ingestion
 
@@ -74,6 +79,9 @@ run-discovery-enrichment: ## Run discovery-enrichment service locally
 
 run-js-dependency-scanner: ## Run js-dependency-scanner service locally
 	@go run ./cmd/active_recon/js-dependency-scanner/main.go
+
+run-ai-finding-enricher: ## Run ai-finding-enricher service locally
+	@go run ./cmd/enrichers/ai-finding-enricher/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@go run ./cmd/ingestion/main.go
@@ -127,6 +135,9 @@ docker-scale-discovery-enrichment: ## Scale discovery-enrichment workers (usage:
 
 docker-scale-js-dependency-scanner: ## Scale js-dependency-scanner workers (usage: make docker-scale-js-dependency-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale js-dependency-scanner=$(N)
+
+docker-scale-ai-finding-enricher: ## Scale ai-finding-enricher workers (usage: make docker-scale-ai-finding-enricher N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale ai-finding-enricher=$(N)
 
 docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ingestion N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
@@ -207,6 +218,13 @@ prod-deploy-js-dependency-scanner: ## Deploy js-dependency-scanner service (usag
 		ops/scripts/deploy-service.sh js-dependency-scanner $(PROJECT) $(CONFIG); \
 	else \
 		ops/scripts/deploy-service.sh js-dependency-scanner; \
+	fi
+
+prod-deploy-ai-finding-enricher: ## Deploy ai-finding-enricher service (usage: make prod-deploy-ai-finding-enricher [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh ai-finding-enricher $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh ai-finding-enricher; \
 	fi
 
 prod-deploy-scan-coordinator: ## Deploy scan-coordinator service (usage: make prod-deploy-scan-coordinator [PROJECT=name] [CONFIG=prd])

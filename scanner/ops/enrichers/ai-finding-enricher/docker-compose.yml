@@ -1,0 +1,27 @@
+services:
+  ai-finding-enricher:
+    image: ghcr.io/vulwall/nightwatch-ai-finding-enricher:${IMAGE_TAG:-dev}
+    container_name: nightwatch-ai-finding-enricher
+    restart: unless-stopped
+    env_file:
+      - /opt/vulwall/config/general.env
+      - /opt/vulwall/config/redis.env
+      - /opt/vulwall/config/honeycomb.env
+      - /opt/vulwall/config/groq.env
+    networks:
+      - core-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "ai-finding-enricher"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  core-network:
+    external: true

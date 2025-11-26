@@ -272,3 +272,19 @@ type SystemAuditEvent struct {
 	AdditionalInfo map[string]interface{} `json:"additional_info,omitempty" bson:"AdditionalInfo"`
 	Timestamp      time.Time              `json:"timestamp" bson:"CreatedAt"`
 }
+
+// AIEnrichmentFinding represents AI-generated recommendations for security findings
+// Published to ai_enrichment_results stream and merged into findings collection
+// Uses composite key (org_id + discovery_id + finding_type + title) to match findings
+type AIEnrichmentFinding struct {
+	TraceID        string                 `json:"trace_id" bson:"trace_id"`
+	TraceContext   map[string]string      `json:"trace_context,omitempty" bson:"-"`     // W3C TraceContext headers for span linking (not stored in DB)
+	OrgID          string                 `json:"org_id" bson:"org_id"`                 // Organization GUID
+	DiscoveryID    string                 `json:"discovery_id" bson:"discovery_id"`     // Part of composite key
+	FindingType    string                 `json:"finding_type" bson:"finding_type"`     // Part of composite key
+	Title          string                 `json:"title" bson:"title"`                   // Part of composite key
+	Recommendation map[string]interface{} `json:"recommendation" bson:"recommendation"` // AI-generated structured recommendation (stored as BSON object)
+	PromptUsed     string                 `json:"prompt_used" bson:"prompt_used"`       // Prompt identifier (e.g., "recommendation")
+	Model          string                 `json:"model" bson:"model"`                   // Model used (e.g., "llama-3.3-70b-versatile")
+	Timestamp      time.Time              `json:"timestamp" bson:"timestamp"`           // When recommendation was generated
+}
