@@ -1356,37 +1356,49 @@ The AI Finding Enricher generates **AI-powered security recommendations** for hi
 **Location:** `internal/enrichers/ai_finding_enricher/`
 
 **How it works:**
-1. Consumes from `security_findings` stream (parallel to findings_ingestion)
-2. Filters by severity: only processes `critical` and `high` severity findings
-3. Loads system prompt from embedded `.txt` file
-4. Calls Groq API to generate recommendations
-5. Publishes `AIEnrichmentFinding` to `ai_enrichment_results` stream
-6. AI enrichment ingestion updates the finding document with `ai_recommendation` field
+
+1. `findings_ingestion` persists findings to MongoDB
+2. `findings_ingestion` filters by severity (critical/high) and checks if `ai_recommendation` already exists
+3. If eligible, publishes `AIEnrichmentJob` to `ai_enrichment_queue`
+4. `ai_finding_enricher` consumes from `ai_enrichment_queue`
+5. Loads system prompt and response schema from embedded files
+6. Calls Groq API with structured JSON output
+7. Publishes `AIEnrichmentFinding` to `ai_enrichment_results` stream
+8. `ai_enrichment_ingestion` updates the finding document with `ai_recommendation` field
+
+**Key benefit:** Groq API is only called for findings that need enrichment (severity filter + no existing recommendation).
 
 **Components:**
 
-- **Groq Client** (`groq/client.go`): HTTP client with retry logic (exponential backoff), handles rate limits
+- **Groq Client** (`groq/client.go`): HTTP client with retry logic (exponential backoff), handles rate limits, supports structured JSON output
 - **Service** (`service.go`): Orchestrates prompt loading, context building, and API calls
 - **Prompts** (`prompts/recommendation.txt`): System prompt for generating recommendations
+- **Response Schema** (`prompts/response_schema.json`): JSON schema for structured AI output
 
 ### AI Enrichment Flow
 
 ```
 security_findings stream
         │
-        ├──► findings_ingestion (persists to MongoDB)
-        │
-        └──► ai_finding_enricher
+        └──► findings_ingestion
                 │
-                ├── Filter: severity = "critical" OR "high"
-                ├── Load prompt from prompts/recommendation.txt
-                ├── Build finding context (type, severity, title, description, metadata)
-                ├── Call Groq API (llama-3.3-70b-versatile)
-                └── Publish AIEnrichmentFinding to ai_enrichment_results
+                ├── Persist finding to MongoDB
+                ├── Check: severity = "critical" OR "high"?
+                ├── Check: ai_recommendation doesn't exist?
+                │
+                └── If both: publish AIEnrichmentJob to ai_enrichment_queue
                         │
-                        └──► ai_enrichment_ingestion
+                        └──► ai_finding_enricher
                                 │
-                                └── Update finding: set ai_recommendation field
+                                ├── Load prompt from prompts/recommendation.txt
+                                ├── Load schema from prompts/response_schema.json
+                                ├── Build finding context (type, severity, title, description, metadata)
+                                ├── Call Groq API with structured JSON output
+                                └── Publish AIEnrichmentFinding to ai_enrichment_results
+                                        │
+                                        └──► ai_enrichment_ingestion
+                                                │
+                                                └── Update finding: set ai_recommendation field
 ```
 
 ### Finding Document (After AI Enrichment)
@@ -1406,9 +1418,16 @@ security_findings stream
   first_detected: ISODate("..."),
   last_detected: ISODate("..."),
 
-  // AI-generated recommendation
+  // AI-generated structured recommendation
   ai_recommendation: {
-    text: "## Vulnerability Explanation\n...",
+    content: {
+      vulnerability_explanation: "...",
+      potential_impact: "...",
+      remediation_steps: ["Step 1", "Step 2", ...],
+      best_practices: ["Practice 1", ...],
+      priority: "immediate",
+      estimated_effort: "medium"
+    },
     prompt_used: "recommendation",
     model: "llama-3.3-70b-versatile",
     generated_at: ISODate("2025-11-26T...")
@@ -1439,10 +1458,11 @@ make prod-deploy-ai-finding-enricher
 
 **Add new prompts:**
 1. Create new `.txt` file in `internal/enrichers/ai_finding_enricher/prompts/`
-2. Update `service.go` to select prompt based on finding type or severity
+2. Create corresponding `_schema.json` file for structured output
+3. Update `service.go` to select prompt based on finding type or severity
 
 **Modify severity filter:**
-Edit `AllowedSeverities` map in `internal/enrichers/ai_finding_enricher/constants.go`
+Edit `AllowedSeveritiesForAI` map in `internal/ingestion/findings_ingestion/service.go`
 
 ## Scan Coordinator (Automated Scanning)
 
