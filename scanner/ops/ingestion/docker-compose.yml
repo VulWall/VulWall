@@ -11,7 +11,7 @@ services:
     environment:
       - IP_ENRICHMENT_DB_PATH=/root/data/dbip-isp-country.mmdb
     volumes:
-      - ${MMDB_PATH:-/opt/vulwall/dbip-isp-country.mmdb}:/root/data/dbip-isp-country.mmdb:ro
+      - /opt/vulwall/dbip-isp-country.mmdb:/root/data/dbip-isp-country.mmdb:ro
     networks:
       - core-network
     healthcheck:
