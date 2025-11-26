@@ -1720,27 +1720,37 @@ func main() {
 - ✅ Graceful shutdown handling (SIGTERM/SIGINT)
 - ✅ Error handling and panic recovery
 
-**2. `bootstrap.RunSimple()` - Simple Bootstrap (Multi-Stream without MongoDB)**
+**2. `bootstrap.RunSimple()` - Simple Bootstrap (No MongoDB)**
 
-For services that:
+For services that do NOT need MongoDB access. Supports two modes:
 
-- Consume from multiple Redis streams (dual-stream pattern)
-- Do NOT need MongoDB access
-- Handle their own consumer group creation
+**Mode A: Single-stream with automatic consumer group creation**
+- Specify `Streams` field with stream/group pairs
+- Bootstrap creates consumer groups automatically
+
+**Example:** domain-discovery, port-discovery
+
+```go
+func main() {
+    bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
+        ServiceName: "domain-discovery",
+        Streams: []bootstrap.StreamConfig{
+            {StreamName: shared.StreamDomainDiscoveryQueue, ConsumerGroup: domain_discovery.GroupShodanSubdomainService},
+        },
+        Factory: func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (bootstrap.ConsumerStarter, error) {
+            return domain_discovery.NewConsumer(redisClient, shodanAPIKey, logger), nil
+        },
+    })
+}
+```
+
+**Mode B: Multi-stream (service handles consumer groups)**
+- Leave `Streams` empty
+- Service creates consumer groups in its `Start()` method
 
 **Example:** nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment
 
 ```go
-package main
-
-import (
-    "github.com/go-redis/redis/v8"
-    "github.com/vulwall/scanners/internal/active_recon/nuclei_scanner"
-    "github.com/vulwall/scanners/internal/core/bootstrap"
-    "github.com/vulwall/scanners/internal/core/config"
-    "go.uber.org/zap"
-)
-
 func main() {
     bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
         ServiceName: "nuclei-scanner",
@@ -1757,8 +1767,8 @@ func main() {
 - ✅ Structured logging initialization (Zap)
 - ✅ **OpenTelemetry tracing initialization (automatic)**
 - ✅ Redis client connection
+- ✅ Consumer group creation (if `Streams` specified)
 - ❌ No MongoDB connection (not needed)
-- ❌ No automatic consumer group creation (service handles it)
 - ✅ Graceful shutdown handling (SIGTERM/SIGINT)
 - ✅ Error handling and panic recovery
 
@@ -1896,10 +1906,9 @@ func main() {
 
 **Use `bootstrap.RunSimple()` when:**
 
-- Service consumes from **multiple Redis streams** (dual-stream pattern)
 - Service does **NOT need MongoDB**
-- Service handles its own consumer group creation
-- Examples: nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment
+- Single-stream with `Streams` config: domain-discovery, port-discovery
+- Multi-stream (handles own consumer groups): nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment
 
 **Use neither (manual initialization) when:**
 
