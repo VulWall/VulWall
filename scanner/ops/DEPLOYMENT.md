@@ -12,17 +12,17 @@ make --version           # GNU Make
 
 ## Services
 
-| Service | Container Name | Replicas |
-|---------|---------------|----------|
-| domain-discovery | nightwatch-domain-discovery | 1-2 |
-| port-discovery | nightwatch-port-discovery | 1-5 |
-| ingestion | nightwatch-ingestion | 1-3 |
-| scan-coordinator | nightwatch-scan-coordinator | 1 (singleton) |
-| nuclei-scanner | nightwatch-nuclei-scanner | 1-3 |
-| testssl-scanner | nightwatch-testssl-scanner | 1-2 |
-| webtechprofiler | nightwatch-webtechprofiler | 1-2 |
-| js-dependency-scanner | nightwatch-js-dependency-scanner | 1-2 |
-| discovery-enrichment | nightwatch-discovery-enrichment | 1-2 |
+| Service | Default Replicas |
+|---------|-----------------|
+| scan-coordinator | 1 (singleton) |
+| domain-discovery | 1 |
+| port-discovery | 1 |
+| ingestion | 1 |
+| nuclei-scanner | 5 |
+| testssl-scanner | 5 |
+| webtechprofiler | 1 |
+| js-dependency-scanner | 1 |
+| discovery-enrichment | 1 |
 
 ## Quick Deploy
 

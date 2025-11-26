@@ -1,8 +1,9 @@
 services:
   testssl-scanner:
     image: ghcr.io/vulwall/nightwatch-testssl-scanner:${IMAGE_TAG:-dev}
-    container_name: nightwatch-testssl-scanner
     restart: unless-stopped
+    deploy:
+      replicas: 5
     env_file:
       - /opt/vulwall/config/general.env
       - /opt/vulwall/config/redis.env

@@ -1,8 +1,9 @@
 services:
   nuclei-scanner:
     image: ghcr.io/vulwall/nightwatch-nuclei-scanner:${IMAGE_TAG:-dev}
-    container_name: nightwatch-nuclei-scanner
     restart: unless-stopped
+    deploy:
+      replicas: 5
     env_file:
       - /opt/vulwall/config/general.env
       - /opt/vulwall/config/redis.env
