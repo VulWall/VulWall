@@ -79,18 +79,22 @@ func (s *Service) updateFinding(ctx context.Context, enrichment shared.AIEnrichm
 	collection := s.db.Collection(shared.CollectionFindings)
 
 	// Use composite key to find the finding (matches unique index)
+	// Also check that ai_recommendation doesn't already exist (skip if already enriched)
 	filter := bson.M{
 		"org_id":       enrichment.OrgID,
 		"discovery_id": enrichment.DiscoveryID,
 		"finding_type": enrichment.FindingType,
 		"title":        enrichment.Title,
+		"ai_recommendation": bson.M{
+			"$exists": false,
+		},
 	}
 
 	// Update with AI recommendation
 	update := bson.M{
 		"$set": bson.M{
 			"ai_recommendation": bson.M{
-				"text":         enrichment.Recommendation,
+				"content":      enrichment.Recommendation,
 				"prompt_used":  enrichment.PromptUsed,
 				"model":        enrichment.Model,
 				"generated_at": enrichment.Timestamp,
@@ -104,7 +108,8 @@ func (s *Service) updateFinding(ctx context.Context, enrichment shared.AIEnrichm
 	}
 
 	if result.MatchedCount == 0 {
-		s.logger.Warn("Finding not found for AI enrichment",
+		// Could be either: finding not found OR already has AI recommendation
+		s.logger.Debug("Finding not updated (not found or already enriched)",
 			zap.String("org_id", enrichment.OrgID),
 			zap.String("discovery_id", enrichment.DiscoveryID),
 			zap.String("finding_type", enrichment.FindingType),
