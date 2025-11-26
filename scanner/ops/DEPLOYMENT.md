@@ -3,10 +3,8 @@
 ## Prerequisites
 
 ```bash
-# Required on Ubuntu server
 docker --version         # Docker 20.10+
 docker-compose --version # Docker Compose 2.0+
-doppler --version        # Doppler CLI
 make --version           # GNU Make
 ```
 
@@ -24,79 +22,108 @@ make --version           # GNU Make
 | js-dependency-scanner | 1 |
 | discovery-enrichment | 1 |
 
-## Quick Deploy
+## Configuration
+
+All services read configuration from `/opt/vulwall/config/` directory.
+
+### Required Files
+
+```text
+/opt/vulwall/
+├── config/
+│   ├── general.env       # ENVIRONMENT=production
+│   ├── redis.env         # REDIS_URI=redis://...
+│   ├── mongo.env         # MONGO_URI=mongodb+srv://...
+│   ├── shodan.env        # SHODAN_API_KEY=... (domain-discovery only)
+│   └── honeycomb.env     # HONEYCOMB_API_KEY=... (optional, for tracing)
+└── dbip-isp-country.mmdb # IP geolocation database (ingestion, discovery-enrichment)
+```
+
+### Environment Files
+
+#### general.env
 
 ```bash
-# 1. Clone and setup
-git clone <repo-url>
-cd VulWall.NightWatch
-
-# 2. Configure Doppler for each service
-doppler login
-cd ops/domain-discovery && doppler setup && cd ../..
-cd ops/ingestion && doppler setup && cd ../..
-# ... repeat for each service
-
-# 3. Create network and deploy
-make prod-setup
-make prod-deploy-all
-```
-
-## Required Secrets (Doppler)
-
-**All services:**
-```
-REDIS_URI=redis://user:pass@host:port/db
-MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/db
 ENVIRONMENT=production
 ```
 
-**Domain discovery only:**
-```
-SHODAN_API_KEY=your-api-key
-```
-
-## Commands
-
-### Deploy
+#### redis.env
 
 ```bash
-make prod-deploy-all                  # Deploy all services
-make prod-deploy-domain               # Deploy domain-discovery
-make prod-deploy-ingestion            # Deploy ingestion
-make prod-deploy-port                 # Deploy port-discovery
-make prod-deploy-scan-coordinator     # Deploy scan-coordinator
-make prod-deploy-nuclei               # Deploy nuclei-scanner
+REDIS_URI=redis://user:password@host:port/db
 ```
 
-### Monitor
+#### mongo.env
 
 ```bash
-make prod-status                      # Check all services
-make prod-logs                        # View all logs
-make prod-logs SERVICE=ingestion      # View specific service
-make prod-logs SERVICE=ingestion OPTS=-f  # Follow logs
+MONGO_URI=mongodb+srv://user:password@cluster.mongodb.net/vulwall
 ```
 
-### Manage
+#### shodan.env (domain-discovery only)
 
 ```bash
-make prod-stop-all                    # Stop all services
-make prod-stop-service SERVICE=name   # Stop specific service
-make prod-restart-service SERVICE=name # Restart service
+SHODAN_API_KEY=your-shodan-api-key
 ```
 
-## Data Directory
-
-Required for IP geolocation (MMDB database):
+#### honeycomb.env (optional)
 
 ```bash
-# Create directory
-sudo mkdir -p /opt/vulwall
+HONEYCOMB_API_KEY=your-honeycomb-api-key
+OTEL_EXPORTER_OTLP_ENDPOINT=api.honeycomb.io
+```
+
+### Setup
+
+```bash
+# Create directories
+sudo mkdir -p /opt/vulwall/config
 sudo chown $USER:$USER /opt/vulwall
 
-# Copy MMDB file
+# Create env files
+nano /opt/vulwall/config/general.env
+nano /opt/vulwall/config/redis.env
+nano /opt/vulwall/config/mongo.env
+nano /opt/vulwall/config/shodan.env
+nano /opt/vulwall/config/honeycomb.env
+
+# Copy MMDB file (required for IP geolocation)
 cp dbip-isp-country.mmdb /opt/vulwall/
+```
+
+## Deploy
+
+```bash
+# Create Docker network (one-time)
+docker network create core-network
+
+# Deploy all services
+make prod-deploy-all
+
+# Or deploy individual services
+make prod-deploy-domain
+make prod-deploy-port
+make prod-deploy-ingestion
+make prod-deploy-scan-coordinator
+make prod-deploy-nuclei
+make prod-deploy-testssl
+```
+
+## Manage
+
+```bash
+# Status
+make prod-status
+
+# Logs
+make prod-logs                              # All services
+make prod-logs SERVICE=ingestion OPTS=-f    # Follow specific service
+
+# Stop
+make prod-stop-all
+make prod-stop-service SERVICE=domain-discovery
+
+# Restart
+make prod-restart-service SERVICE=ingestion
 ```
 
 ## Redis Streams
@@ -113,13 +140,6 @@ cp dbip-isp-country.mmdb /opt/vulwall/
 | discovery_enrichment_queue | Enrichment jobs |
 | discovery_enrichment_results | Enrichment results |
 
-### Monitor Redis
-
-```bash
-REDIS_URI=$(doppler secrets get REDIS_URI --plain)
-docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XLEN domain_discovery_queue
-```
-
 ## MongoDB Collections
 
 | Collection | Purpose |
@@ -130,13 +150,6 @@ docker run --rm redis:alpine redis-cli -u "$REDIS_URI" XLEN domain_discovery_que
 | organizations | Org settings |
 | scans | Scan execution records |
 
-### Monitor MongoDB
-
-```bash
-MONGO_URI=$(doppler secrets get MONGO_URI --plain)
-docker run --rm -it mongo:latest mongosh "$MONGO_URI" --eval "db.discoveries.countDocuments()"
-```
-
 ## Troubleshooting
 
 ### Service won't start
@@ -145,20 +158,18 @@ docker run --rm -it mongo:latest mongosh "$MONGO_URI" --eval "db.discoveries.cou
 # Check logs
 make prod-logs SERVICE=domain-discovery
 
-# Verify Doppler secrets
-cd ops/domain-discovery && doppler secrets
+# Check env files exist
+ls -la /opt/vulwall/config/
 ```
 
 ### Connection issues
 
 ```bash
 # Test Redis
-REDIS_URI=$(doppler secrets get REDIS_URI --plain)
-docker run --rm redis:alpine redis-cli -u "$REDIS_URI" PING
+docker run --rm redis:alpine redis-cli -u "$(cat /opt/vulwall/config/redis.env | grep REDIS_URI | cut -d= -f2)" PING
 
 # Test MongoDB
-MONGO_URI=$(doppler secrets get MONGO_URI --plain)
-docker run --rm mongo:latest mongosh "$MONGO_URI" --eval "db.adminCommand('ping')"
+docker run --rm mongo:latest mongosh "$(cat /opt/vulwall/config/mongo.env | grep MONGO_URI | cut -d= -f2)" --eval "db.adminCommand('ping')"
 ```
 
 ### Clean restart
@@ -171,7 +182,6 @@ make prod-deploy-all
 
 ## Security
 
-- Never commit `.env` files
-- Use Doppler for all secrets
+- Keep `/opt/vulwall/config/` files readable only by the user running Docker
 - Whitelist server IP in Redis Cloud and MongoDB Atlas
 - Run containers as non-root (configured in Dockerfiles)
