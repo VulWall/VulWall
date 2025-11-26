@@ -6,7 +6,6 @@ services:
     env_file:
       - /opt/vulwall/config/general.env
       - /opt/vulwall/config/redis.env
-      - /opt/vulwall/config/mongo.env
       - /opt/vulwall/config/honeycomb.env
     networks:
       - core-network
