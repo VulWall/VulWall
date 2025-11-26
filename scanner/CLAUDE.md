@@ -1045,7 +1045,7 @@ When adding a new discovery tool (e.g., `nmap_discovery`):
    import (
        "context"
        "encoding/json"
-       "github.com/go-redis/redis/v8"
+       "github.com/redis/go-redis/v9"
        "github.com/vulwall/scanners/internal/ingestion"
        "github.com/vulwall/scanners/internal/shared"
    )
@@ -1802,7 +1802,7 @@ import (
     "syscall"
     "time"
 
-    "github.com/go-redis/redis/v8"
+    "github.com/redis/go-redis/v9"
     "github.com/vulwall/scanners/internal/active_recon/nuclei_scanner"
     "github.com/vulwall/scanners/internal/core/config"
     "github.com/vulwall/scanners/internal/core/logger"
@@ -1876,7 +1876,7 @@ func main() {
 package main
 
 import (
-    "github.com/go-redis/redis/v8"
+    "github.com/redis/go-redis/v9"
     "github.com/vulwall/scanners/internal/active_recon/nuclei_scanner"
     "github.com/vulwall/scanners/internal/core/bootstrap"
     "github.com/vulwall/scanners/internal/core/config"
@@ -2439,7 +2439,7 @@ db.discoveries.aggregate([
 
 ## Dependencies
 
-- `github.com/go-redis/redis/v8` - Redis client with Streams support
+- `github.com/redis/go-redis/v9` - Redis client with Streams support
 - `go.mongodb.org/mongo-driver` - Official MongoDB driver
 - `go.uber.org/zap` - Structured logging
 - `github.com/joho/godotenv` - Environment variable management

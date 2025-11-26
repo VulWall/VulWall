@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/bootstrap"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/discoveries/domain_discovery"

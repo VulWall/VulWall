@@ -5,11 +5,11 @@ go 1.24.0
 toolchain go1.24.8
 
 require (
-	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/projectdiscovery/wappalyzergo v0.2.53
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/yl2chen/cidranger v1.0.2
 	go.mongodb.org/mongo-driver v1.17.4

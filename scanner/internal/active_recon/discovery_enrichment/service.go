@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/cloud"
 	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/geolocation"
 	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/waf/patterns"
