@@ -4,9 +4,9 @@ services:
     container_name: nightwatch-discovery-enrichment
     restart: unless-stopped
     env_file:
-      - /opt/vulwall/.env
+      - /opt/vulwall/redis.env
+      - /opt/vulwall/honeycomb.env
     environment:
-      - REDIS_URI=${REDIS_URI}
       - IP_ENRICHMENT_DB_PATH=/root/data/dbip-isp-country.mmdb
     volumes:
       - ${MMDB_PATH:-/opt/vulwall/dbip-isp-country.mmdb}:/root/data/dbip-isp-country.mmdb:ro

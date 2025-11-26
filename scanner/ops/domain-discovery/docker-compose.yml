@@ -4,11 +4,10 @@ services:
     container_name: nightwatch-domain-discovery
     restart: unless-stopped
     env_file:
-      - /opt/vulwall/.env
-    environment:
-      - REDIS_URI=${REDIS_URI}
-      - MONGO_URI=${MONGO_URI}
-      - SHODAN_API_KEY=${SHODAN_API_KEY}
+      - /opt/vulwall/redis.env
+      - /opt/vulwall/mongo.env
+      - /opt/vulwall/shodan.env
+      - /opt/vulwall/honeycomb.env
     networks:
       - core-network
     healthcheck:

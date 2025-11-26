@@ -4,9 +4,8 @@ services:
     container_name: nightwatch-nuclei-scanner
     restart: unless-stopped
     env_file:
-      - /opt/vulwall/.env
-    environment:
-      - REDIS_URI=${REDIS_URI}
+      - /opt/vulwall/redis.env
+      - /opt/vulwall/honeycomb.env
     volumes:
       # Persist Nuclei templates across container restarts
       - nuclei-templates:/root/nuclei-templates
