@@ -3,6 +3,10 @@
   "schema": {
     "type": "object",
     "properties": {
+      "title": {
+        "type": "string",
+        "description": "A concise, human-friendly title (max 80 chars) that a non-technical stakeholder can understand. Focus on the business risk, not technical jargon. Example: 'Outdated JavaScript Library Enables Service Disruption'"
+      },
       "vulnerability_explanation": {
         "type": "string",
         "description": "A brief explanation of what this vulnerability is and how it works"
@@ -32,7 +36,7 @@
         "description": "Estimated effort to implement the fix"
       }
     },
-    "required": ["vulnerability_explanation", "potential_impact", "remediation_steps", "best_practices", "priority", "estimated_effort"],
+    "required": ["title", "vulnerability_explanation", "potential_impact", "remediation_steps", "best_practices", "priority", "estimated_effort"],
     "additionalProperties": false
   }
 }
