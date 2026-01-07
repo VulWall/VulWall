@@ -29,7 +29,7 @@ type DiscoveryFinding struct {
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"` // W3C TraceContext headers for span linking (not stored in DB)
 	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
 	OrgID        string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
-	Scanner      string                 `json:"scanner" bson:"scanner"`                     // Scanner name: "shodan", "nmap", "masscan", etc.
+	Source       string                 `json:"source" bson:"source"`                       // Source name: "shodan", "nmap", "masscan", etc.
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host         string                 `json:"host" bson:"host"`
 	IP           *string                `json:"ip,omitempty" bson:"ip,omitempty"` // IP address (if resolved)
@@ -63,7 +63,7 @@ type IPDiscoveryFinding struct {
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`               // W3C TraceContext headers for span linking (not stored in DB)
 	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"`     // Optional: scan identifier for linking to UI scans
 	OrgID        string                 `json:"org_id" bson:"org_id"`                           // Required: organization GUID
-	Scanner      string                 `json:"scanner" bson:"scanner"`                         // Scanner name: "port_discovery", etc.
+	Source       string                 `json:"source" bson:"source"`                           // Source name: "shodan", "port_discovery", etc.
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"` // Parent IP discovery ID
 	IP           string                 `json:"ip" bson:"ip"`
 	Port         int                    `json:"port" bson:"port"`
@@ -85,7 +85,7 @@ type Discovery struct {
 	OrgID           string                 `json:"org_id" bson:"org_id"`                           // Organization GUID
 	ScanIDs         []string               `json:"scan_ids,omitempty" bson:"scan_ids,omitempty"`   // Array of scan identifiers that detected this asset
 	AssetType       string                 `json:"asset_type" bson:"asset_type"`                   // "domain", "subdomain", "ip", "port"
-	Scanner         string                 `json:"scanner" bson:"scanner"`                         // Scanner name that discovered this asset
+	Source          string                 `json:"source" bson:"source"`                           // Source name that discovered this asset
 	Status          string                 `json:"status" bson:"status"`                           // active, inactive, unknown (technical state)
 	OwnershipStatus string                 `json:"ownership_status" bson:"ownership_status"`       // "verified", "NotMine", "NotSure" (organizational state)
 	DiscoveredAt    time.Time              `json:"discovered_at" bson:"discovered_at"`             // When asset was discovered
@@ -139,7 +139,7 @@ type SecurityFinding struct {
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`             // W3C TraceContext headers for span linking (not stored in DB)
 	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"`   // Optional: scan identifier from current scan (for stream messages)
 	OrgID        string                 `json:"org_id" bson:"org_id"`                         // Organization GUID
-	Scanner      string                 `json:"scanner" bson:"scanner"`                       // Scanner name (e.g., "nuclei", "jsscanner")
+	Source       string                 `json:"source" bson:"source"`                         // Source name (e.g., "nuclei", "jsscanner")
 	DiscoveryID  string                 `json:"discovery_id" bson:"discovery_id"`             // Links to Discovery._id
 	FindingType  string                 `json:"finding_type" bson:"finding_type"`             // Type of finding (e.g., "xss", "sqli", "cve-2021-1234")
 	Severity     string                 `json:"severity" bson:"severity"`                     // info, low, medium, high, critical
@@ -182,7 +182,7 @@ type EnrichmentFinding struct {
 	TraceContext   map[string]string      `json:"trace_context,omitempty" bson:"-"`       // W3C TraceContext headers for span linking (not stored in DB)
 	ScanID         *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier
 	OrgID          string                 `json:"org_id" bson:"org_id"`                       // Organization GUID
-	Scanner        string                 `json:"scanner" bson:"scanner"`                     // Scanner name (e.g., "discovery_enrichment")
+	Source         string                 `json:"source" bson:"source"`                       // Source name (e.g., "discovery_enrichment")
 	DiscoveryID    string                 `json:"discovery_id" bson:"discovery_id"`           // Links to Discovery._id
 	EnrichmentType string                 `json:"enrichment_type" bson:"enrichment_type"`     // Type of enrichment (e.g., "waf", "cdn", "tech_stack")
 	Data           map[string]interface{} `json:"data" bson:"data"`                           // Enrichment data (e.g., {"waf_name": "Cloudflare"})
@@ -284,7 +284,7 @@ type AIEnrichmentJob struct {
 	FindingType  string                 `json:"finding_type" bson:"finding_type"` // Part of composite key
 	Title        string                 `json:"title" bson:"title"`               // Part of composite key
 	Severity     string                 `json:"severity" bson:"severity"`         // Finding severity
-	Scanner      string                 `json:"scanner" bson:"scanner"`           // Scanner that produced the finding
+	Source       string                 `json:"source" bson:"source"`             // Source that produced the finding
 	Description  string                 `json:"description" bson:"description"`   // Finding description
 	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 	Created      time.Time              `json:"created" bson:"created"`

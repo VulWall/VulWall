@@ -112,7 +112,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	c.logger.Info("Processing port discovery finding",
 		zap.String("message_id", message.ID),
 		zap.String("trace_id", finding.TraceID),
-		zap.String("source", finding.Scanner),
+		zap.String("source", finding.Source),
 		zap.String("ip", finding.IP),
 		zap.Int("port", finding.Port),
 	)

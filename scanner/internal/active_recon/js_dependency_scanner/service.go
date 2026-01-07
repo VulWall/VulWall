@@ -197,7 +197,7 @@ func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL strin
 		TraceID:     target.TraceID,
 		ScanID:      target.ScanID,
 		OrgID:       target.OrgID,
-		Scanner:     "jsscanner",
+		Source:     "jsscanner",
 		DiscoveryID: target.DiscoveryID,
 		FindingType: findingType,
 		Severity:    vuln.Severity,
