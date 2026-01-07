@@ -49,13 +49,13 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 	s.logger.Info("Processing port discovery finding",
 		zap.String("trace_id", finding.TraceID),
 		zap.String("org_id", finding.OrgID),
-		zap.String("source", finding.Scanner),
+		zap.String("source", finding.Source),
 		zap.String("ip", finding.IP),
 		zap.Int("port", finding.Port),
 	)
 
 	// Validate source is present (required)
-	if finding.Scanner == "" {
+	if finding.Source == "" {
 		s.logger.Warn("Skipping finding: missing source",
 			zap.String("trace_id", finding.TraceID),
 			zap.String("org_id", finding.OrgID),
@@ -143,7 +143,7 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 			OrgID:          finding.OrgID,                   // Organization GUID
 			ScanIDs:        scanIDs,                         // Array of scan identifiers
 			AssetType:      shared.AssetTypeIP,
-			Scanner:        finding.Scanner,
+			Source:        finding.Source,
 			Status:         finding.Status,
 			OwnershipStatus: shared.OwnershipStatusVerified,  // Default to verified
 			DiscoveredAt:   timestamp,                       // When asset was discovered
@@ -238,7 +238,7 @@ func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDisc
 			OrgID:          finding.OrgID,                      // Organization GUID
 			ScanIDs:        scanIDs,                            // Array of scan identifiers
 			AssetType:      shared.AssetTypePort,
-			Scanner:        finding.Scanner,
+			Source:        finding.Source,
 			Status:         finding.Status,
 			OwnershipStatus: shared.OwnershipStatusVerified,     // Default to verified
 			DiscoveredAt:   timestamp,                          // When asset was discovered
@@ -450,7 +450,7 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 		"_id":              discovery.ID,
 		"org_id":           discovery.OrgID,
 		"asset_type":       discovery.AssetType,
-		"source":           discovery.Scanner,
+		"source":           discovery.Source,
 		"status":           discovery.Status,
 		"ownership_status": discovery.OwnershipStatus,
 		"discovered_at":    discovery.DiscoveredAt,

@@ -120,7 +120,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	ctx = telemetry.ExtractTraceContext(ctx, finding.TraceContext)
 
 	// Validate source field
-	if finding.Scanner == "" {
+	if finding.Source == "" {
 		c.logger.Warn("Skipping finding without source field",
 			zap.String("message_id", message.ID),
 		)

@@ -47,7 +47,8 @@ VulWall.NightWatch/
 │   │   ├── config/        # Configuration loader + env var constants
 │   │   ├── logger/        # Zap logger setup
 │   │   ├── mongox/        # MongoDB connection
-│   │   └── redisx/        # Redis client & consumer groups
+│   │   ├── redisx/        # Redis client & consumer groups
+│   │   └── shodan/        # Shared Shodan API client (DNS + Host API)
 │   ├── shared/            # Cross-cutting concerns used by 2+ services
 │   │   ├── models.go      # Shared models (DiscoveryJob, IPDiscoveryJob, Organization, Scan, etc.)
 │   │   └── constants.go   # Shared constants (streams, protocols, statuses)
@@ -85,15 +86,14 @@ VulWall.NightWatch/
 │   ├── discoveries/       # Discovery services (no MongoDB access)
 │   │   ├── domain_discovery/   # Shodan domain discovery
 │   │   │   ├── constants.go    # Consumer group name only
-│   │   │   ├── service.go      # Discovery logic
+│   │   │   ├── service.go      # Discovery logic (uses shared shodan client)
 │   │   │   ├── consumer.go     # Redis consumer
-│   │   │   └── shodan/         # Shodan-specific client
-│   │   │       └── client.go   # Shodan API client
-│   │   └── port_discovery/     # Port scanner
+│   │   │   └── util.go         # Helper functions
+│   │   └── port_discovery/     # Port discovery (Shodan + TCP fallback)
 │   │       ├── constants.go    # Consumer group + common ports array
-│   │       ├── service.go      # Port scanning logic
+│   │       ├── service.go      # Shodan primary, TCP fallback
 │   │       ├── consumer.go     # Redis consumer
-│   │       └── services/       # Simple TCP scanner
+│   │       └── services/       # TCP scanner (fallback)
 │   │           └── port_scanner.go  # TCP connect with 2s timeout
 │   └── active_recon/      # Active reconnaissance services
 │       ├── nuclei_scanner/     # Nuclei vulnerability scanner
@@ -785,7 +785,7 @@ When implementing a new active recon scanner using this pattern:
    - [ ] Implement deduplication logic if needed
    - [ ] Convert scanner results to `shared.SecurityFinding`
    - [ ] Publish findings to `shared.StreamSecurityFindings`
-   - [ ] Set `Scanner` field to lowercase scanner name (e.g., "jsscanner")
+   - [ ] Set `Source` field to lowercase scanner name (e.g., "jsscanner")
    - [ ] Include proper error handling and logging
 
 4. **Performance Optimization:**
@@ -797,7 +797,7 @@ When implementing a new active recon scanner using this pattern:
 
 5. **Consumer:**
    - [ ] Consume from appropriate stream(s) (domain_discovery_results, ip_discovery_results)
-   - [ ] Validate required fields (org_id, scanner)
+   - [ ] Validate required fields (org_id, source)
    - [ ] Handle both single and dual-stream consumption if needed
    - [ ] Implement proper error handling
 
@@ -1807,6 +1807,8 @@ console.log(`Targeted: ${targetedCount}, Discovered: ${discoveredCount}`)
 - `mongox/client.go` - MongoDB connection manager
 - `telemetry/telemetry.go` - OpenTelemetry initialization and tracing setup
 - `telemetry/propagation.go` - W3C TraceContext injection/extraction utilities
+- `shodan/client.go` - Shared Shodan API client (subdomain discovery + host info)
+- `shodan/models.go` - Shodan API response models (HostInfo, PortData, DNSDomainResponse)
 
 ### Bootstrap Pattern Architecture
 
@@ -2415,7 +2417,18 @@ redis-cli XADD domain_discovery_queue * data '{
 #    - IPs with asset_type="ip", ownership_status="verified", as separate records with parent_id
 ```
 
-### Port Discovery (TCP Scanner)
+### Port Discovery (Shodan + TCP Fallback)
+
+Port discovery uses **Shodan Host API as primary** source with **TCP scanner as fallback**.
+
+**Flow:**
+1. Try Shodan Host API (`GET /shodan/host/{ip}`)
+2. If Shodan succeeds → publish findings with `source="shodan"` (richer data: product, version, HTTP/SSL info)
+3. If Shodan fails (404, rate limit, timeout) → fallback to TCP scanner
+4. TCP scanner scans 23 common ports → publish findings with `source="port_discovery"`
+
+**Configuration:**
+- `SHODAN_API_KEY` - Required for Shodan lookup (falls back to TCP if not set)
 
 To trigger port discovery:
 
@@ -2430,8 +2443,10 @@ redis-cli XADD ip_discovery_queue * data '{
 }'
 
 # Result:
-# 1. Port discovery service scans 23 common ports (TCP connect, 2s timeout)
-# 2. For each open port, finding published to ip_discovery_results with scan_id and source="port_discovery"
+# 1. Port discovery service tries Shodan first, falls back to TCP if needed
+# 2. For each open port, finding published to ip_discovery_results with:
+#    - source="shodan" (if Shodan succeeded) - includes product, version, HTTP/SSL metadata
+#    - source="port_discovery" (if TCP fallback used) - includes banner only
 # 3. Port ingestion consumer stores in discoveries collection (with org_id and scan_id):
 #    - Ensures IP record exists with asset_type="ip", ownership_status="verified"
 #    - Creates/updates port with asset_type="port", ownership_status="verified", banner, service_name, product, version

@@ -2,12 +2,14 @@ package domain_discovery
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/redisx"
+	"github.com/vulwall/scanners/internal/core/shodan"
 	"github.com/vulwall/scanners/internal/core/telemetry"
-	"github.com/vulwall/scanners/internal/discoveries/domain_discovery/shodan"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -53,7 +55,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	// Resolve IP for domain (if applicable)
 	var resolvedIP *string
 	if s.isDomain(job.Host) {
-		if ip, err := s.shodanClient.ResolveIP(ctx, job.Host); err == nil {
+		if ip, err := s.resolveIP(ctx, job.Host); err == nil {
 			resolvedIP = &ip
 			s.logger.Info("Resolved domain to IP",
 				zap.String("domain", job.Host),
@@ -78,7 +80,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		TraceID:     job.TraceID,
 		ScanID:      job.ScanID,  // Pass through scan_id
 		OrgID:       job.OrgID,
-		Scanner:     "shodan",
+		Source:     "shodan",
 		ParentID:    job.ParentID,
 		Host:        job.Host,
 		IP:          resolvedIP,
@@ -157,7 +159,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 
 		// Resolve IP for subdomain
 		var resolvedIP *string
-		if ip, err := s.shodanClient.ResolveIP(ctx, fullSubdomain); err == nil {
+		if ip, err := s.resolveIP(ctx, fullSubdomain); err == nil {
 			resolvedIP = &ip
 			s.logger.Debug("Resolved subdomain to IP",
 				zap.String("subdomain", fullSubdomain),
@@ -175,7 +177,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 			TraceID:     traceID,
 			ScanID:      scanID,  // Pass through scan_id
 			OrgID:       orgID,
-			Scanner:     "shodan",
+			Source:     "shodan",
 			ParentID:    &parentDomainID,
 			Host:        fullSubdomain,
 			IP:          resolvedIP,
@@ -217,7 +219,7 @@ func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFi
 	s.logger.Debug("Published finding to stream",
 		zap.String("stream", shared.StreamDomainDiscoveryResults),
 		zap.String("host", finding.Host),
-		zap.String("source", finding.Scanner),
+		zap.String("source", finding.Source),
 	)
 
 	return nil
@@ -238,4 +240,23 @@ func (s *Service) isDomain(host string) bool {
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
 		(s[len(s)-len(substr)-1:] == "."+substr || s[:len(substr)+1] == substr+"."))
+}
+
+// resolveIP resolves a domain name to its IP address using DNS
+func (s *Service) resolveIP(ctx context.Context, domain string) (string, error) {
+	resolver := &net.Resolver{}
+	ips, err := resolver.LookupIP(ctx, "ip4", domain)
+	if err != nil {
+		s.logger.Debug("Failed to resolve IP for domain",
+			zap.String("domain", domain),
+			zap.Error(err),
+		)
+		return "", err
+	}
+
+	if len(ips) == 0 {
+		return "", fmt.Errorf("no IP addresses found for domain: %s", domain)
+	}
+
+	return ips[0].String(), nil
 }

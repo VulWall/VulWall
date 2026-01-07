@@ -56,7 +56,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 	defer span.End()
 
 	// Validate required fields
-	if finding.Scanner == "" {
+	if finding.Source == "" {
 		s.logger.Warn("Skipping finding without source field")
 		return nil
 	}
@@ -68,7 +68,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 
 	s.logger.Info("Processing security finding",
 		zap.String("org_id", finding.OrgID),
-		zap.String("source", finding.Scanner),
+		zap.String("source", finding.Source),
 		zap.String("finding_type", finding.FindingType),
 		zap.String("severity", finding.Severity),
 		zap.String("title", finding.Title),
@@ -128,7 +128,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 			"discovery_id":   finding.DiscoveryID,
 			"finding_type":   finding.FindingType,
 			"severity":       finding.Severity,
-			"source":         finding.Scanner,
+			"source":         finding.Source,
 			"title":          finding.Title,
 			"description":    finding.Description,
 			"metadata":       finding.Metadata,
@@ -217,7 +217,7 @@ func (s *Service) buildFindingDocument(finding shared.SecurityFinding) (bson.M, 
 		"discovery_id":   finding.DiscoveryID,
 		"finding_type":   finding.FindingType,
 		"severity":       finding.Severity,
-		"source":         finding.Scanner,
+		"source":         finding.Source,
 		"title":          finding.Title,
 		"description":    finding.Description,
 		"status":         finding.Status,
@@ -292,7 +292,7 @@ func (s *Service) publishAIEnrichmentJob(ctx context.Context, finding shared.Sec
 		FindingType: finding.FindingType,
 		Title:       finding.Title,
 		Severity:    finding.Severity,
-		Scanner:     finding.Scanner,
+		Source:     finding.Source,
 		Description: finding.Description,
 		Metadata:    finding.Metadata,
 		Created:     time.Now(),

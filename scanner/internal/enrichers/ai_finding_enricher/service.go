@@ -201,7 +201,7 @@ func (s *Service) buildJobContext(job shared.AIEnrichmentJob) string {
 	sb.WriteString(fmt.Sprintf("**Type:** %s\n", job.FindingType))
 	sb.WriteString(fmt.Sprintf("**Severity:** %s\n", job.Severity))
 	sb.WriteString(fmt.Sprintf("**Title:** %s\n", job.Title))
-	sb.WriteString(fmt.Sprintf("**Scanner:** %s\n", job.Scanner))
+	sb.WriteString(fmt.Sprintf("**Scanner:** %s\n", job.Source))
 
 	if job.Description != "" {
 		sb.WriteString(fmt.Sprintf("\n**Description:**\n%s\n", job.Description))

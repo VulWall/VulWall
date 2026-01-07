@@ -246,7 +246,7 @@ func (s *Service) convertToSecurityFinding(testSSLFinding TestSSLFinding, target
 		TraceID:     target.TraceID,
 		ScanID:      target.ScanID,      // Optional: scan identifier for linking to UI scans
 		OrgID:       target.OrgID,
-		Scanner:     "testssl",
+		Source:     "testssl",
 		DiscoveryID: target.DiscoveryID,
 		FindingType: testSSLFinding.ID, // Use test ID as finding type (e.g., "BREACH", "heartbleed")
 		Severity:    severity,
