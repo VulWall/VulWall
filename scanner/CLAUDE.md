@@ -1466,40 +1466,38 @@ Edit `AllowedSeveritiesForAI` map in `internal/ingestion/findings_ingestion/serv
 
 ## Scan Coordinator (Automated Scanning)
 
-The Scan Coordinator is a background service that **automatically schedules and triggers scans** based on organization subscription settings.
+The Scan Coordinator is a background service that **automatically schedules and triggers scans** based on organization cron schedules.
 
 ### Overview
 
 **Location:** `internal/scan_coordinator/`
 
-**Purpose:** Automates recurring scans for organizations based on their subscription plans, eliminating the need for manual scan initiation.
+**Purpose:** Automates recurring scans for organizations using cron-based scheduling, eliminating the need for manual scan initiation.
 
 **Key Features:**
-- ✅ Runs on a schedule (default: every hour)
-- ✅ Queries organizations with `scan_interval_days > 0`
-- ✅ Checks time since last scan
+- ✅ Uses **cron expressions** for flexible scheduling (e.g., `"0 0 2 * * *"` = daily at 2 AM)
+- ✅ Per-organization scheduling with `scan_cron` field
 - ✅ Creates scan records and publishes discovery jobs automatically
 - ✅ Only scans **enabled user-added assets** from `assets` collection (`enabled = true`)
 - ✅ Tracks all scans in `scans` collection for auditing
+- ✅ **Restart nightly** to pick up subscription changes
 
 ### Architecture
 
 **Components:**
-- `constants.go` - Scheduler interval configuration (default: 3600 seconds)
-- `scheduler.go` - Periodic scheduler loop that runs coordination cycles
-- `service.go` - Core coordination logic (check org settings, trigger scans)
+- `constants.go` - Scan monitor interval configuration
+- `scheduler.go` - Cron-based scheduler using `robfig/cron/v3`
+- `service.go` - Core coordination logic (trigger scans, publish jobs)
 
 **How It Works:**
 
-1. **Scheduler Loop:** Runs every N seconds (configurable)
-2. **Query Organizations:** Finds orgs with `subscription_settings.scan_interval_days > 0`
-3. **For Each Organization:**
-   - Retrieve last scan from `scans` collection
-   - Calculate `days_since_last_scan = (now - last_scan.created_at) / 24h`
-   - If `days_since_last_scan >= scan_interval_days`:
-     - Create new `Scan` record (status=pending, type=scheduled, triggered_by=system)
-     - Query all enabled user-added assets for org from `assets` collection (`enabled = true`)
-     - Publish discovery jobs to Redis streams (with `scan_id` + `org_id`)
+1. **Startup:** Load all organizations with non-empty `scan_cron`
+2. **Schedule:** Create cron job for each organization based on their `scan_cron` expression
+3. **When cron fires for an organization:**
+   - Create new `Scan` record (status=running, type=scheduled, triggered_by=system)
+   - Query all enabled user-added assets for org from `assets` collection (`enabled = true`)
+   - Publish discovery jobs to Redis streams (with `scan_id` + `org_id`)
+4. **Subscription updates:** Restart the service nightly to pick up new/changed subscriptions
 
 ### Data Models
 
@@ -1535,8 +1533,8 @@ type Organization struct {
 }
 
 type SubscriptionSettings struct {
-    ScanIntervalDays int // How often to scan (0 = disabled)
-    MaxAssets        int // Maximum allowed assets
+    ScanCron  string // Cron expression (e.g., "0 0 2 * * *" = daily at 2 AM, empty = disabled)
+    MaxAssets int    // Maximum allowed assets
 }
 ```
 
@@ -1598,7 +1596,7 @@ type ScanStats struct {
   created_at: ISODate("2025-01-01"),
   updated_at: ISODate("2025-01-10"),
   subscription_settings: {
-    scan_interval_days: 7,  // Scan every 7 days
+    scan_cron: "0 0 2 * * *",  // Daily at 2 AM (6-field: sec min hour day month weekday)
     max_assets: 1000
   }
 }
@@ -1648,9 +1646,13 @@ The Scan Coordinator seamlessly integrates with existing discovery services:
 
 **Example Flow:**
 ```
-Scan Coordinator (every hour)
+Scan Coordinator starts
     ↓
-Check: Last scan was 8 days ago, scan_interval_days = 7
+Load organizations with scan_cron set (e.g., "0 0 2 * * *")
+    ↓
+Schedule cron jobs for each organization
+    ↓
+[2:00 AM] Cron fires for "Example Corp"
     ↓
 1. Create Scan (scan_id = "scan-abc-456")
 2. Query enabled user-added assets from assets collection (enabled = true)
@@ -1668,12 +1670,30 @@ Query discoveries by scan: db.discoveries.find({scan_ids: "scan-abc-456"})
 
 ### Configuration
 
-**Scheduler Interval:** Configured in `internal/scan_coordinator/constants.go`
-```go
-const SchedulerInterval = 3600 // 1 hour in seconds
+**Cron Expression Format:** The scheduler uses 6-field cron expressions (with seconds):
+
+```
+┌───────────── second (0 - 59)
+│ ┌───────────── minute (0 - 59)
+│ │ ┌───────────── hour (0 - 23)
+│ │ │ ┌───────────── day of month (1 - 31)
+│ │ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ │ ┌───────────── day of week (0 - 6, Sunday = 0)
+│ │ │ │ │ │
+* * * * * *
 ```
 
-To change the interval, modify this constant and rebuild.
+**Common Examples:**
+
+| Expression | Description |
+|------------|-------------|
+| `0 0 2 * * *` | Daily at 2:00 AM |
+| `0 0 2 * * 1` | Weekly on Monday at 2:00 AM |
+| `0 0 2 1 * *` | Monthly on the 1st at 2:00 AM |
+| `0 0 */6 * * *` | Every 6 hours |
+| `0 30 1 * * *` | Daily at 1:30 AM |
+
+**Note:** Restart the scan-coordinator service nightly (e.g., via cron or systemd timer) to pick up subscription changes.
 
 ### Deployment
 
@@ -1705,17 +1725,19 @@ To disable automated scans for an organization:
 ```javascript
 db.organizations.updateOne(
   { _id: "org-uuid" },
-  { $set: { "subscription_settings.scan_interval_days": 0 } }
+  { $set: { "subscription_settings.scan_cron": "" } }
 )
 ```
 
-To re-enable:
+To re-enable (daily at 2 AM):
 ```javascript
 db.organizations.updateOne(
   { _id: "org-uuid" },
-  { $set: { "subscription_settings.scan_interval_days": 7 } }
+  { $set: { "subscription_settings.scan_cron": "0 0 2 * * *" } }
 )
 ```
+
+**Note:** After changing subscription settings, restart the scan-coordinator service to apply changes.
 
 ### Monitoring Scans
 

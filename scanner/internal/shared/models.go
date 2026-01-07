@@ -219,8 +219,8 @@ type Organization struct {
 
 // SubscriptionSettings contains subscription-specific settings for scanning
 type SubscriptionSettings struct {
-	ScanIntervalDays int `json:"scan_interval_days" bson:"scan_interval_days"` // How often to scan assets
-	MaxAssets        int `json:"max_assets" bson:"max_assets"`                 // Maximum number of assets allowed
+	ScanCron  string `json:"scan_cron" bson:"scan_cron"`   // Cron expression for scan schedule (e.g., "0 2 * * *" = daily at 2 AM)
+	MaxAssets int    `json:"max_assets" bson:"max_assets"` // Maximum number of assets allowed
 }
 
 // Scan represents a scan execution in the system
