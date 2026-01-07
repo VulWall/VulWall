@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
 )
 
@@ -32,48 +31,13 @@ func NewService(redisClient *redis.Client, db *mongo.Database, logger *zap.Logge
 	}
 }
 
-// ProcessOrganization checks if an organization needs a scan and triggers it
+// ProcessOrganization triggers a scan for an organization (called by cron scheduler)
 func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organization) error {
 	s.logger.Info("Processing organization for scheduled scan",
 		zap.String("org_id", org.ID),
 		zap.String("company_name", org.CompanyName),
-		zap.Int("scan_interval_days", org.SubscriptionSettings.ScanIntervalDays),
+		zap.String("scan_cron", org.SubscriptionSettings.ScanCron),
 	)
-
-	// Get the most recent scan for this organization
-	lastScan, err := s.getLastScan(ctx, org.ID)
-	if err != nil && err != mongo.ErrNoDocuments {
-		return fmt.Errorf("failed to get last scan: %w", err)
-	}
-
-	// Determine if we need to trigger a new scan
-	needsScan := false
-	if lastScan == nil {
-		// No previous scan exists
-		s.logger.Info("No previous scan found, triggering initial scan", zap.String("org_id", org.ID))
-		needsScan = true
-	} else {
-		// Check if enough time has passed since last scan
-		daysSinceLastScan := time.Since(lastScan.CreatedAt).Hours() / 24
-		if int(daysSinceLastScan) >= org.SubscriptionSettings.ScanIntervalDays {
-			s.logger.Info("Scan interval elapsed, triggering new scan",
-				zap.String("org_id", org.ID),
-				zap.Float64("days_since_last_scan", daysSinceLastScan),
-				zap.Int("scan_interval_days", org.SubscriptionSettings.ScanIntervalDays),
-			)
-			needsScan = true
-		} else {
-			s.logger.Debug("Scan interval not yet elapsed, skipping",
-				zap.String("org_id", org.ID),
-				zap.Float64("days_since_last_scan", daysSinceLastScan),
-				zap.Int("scan_interval_days", org.SubscriptionSettings.ScanIntervalDays),
-			)
-		}
-	}
-
-	if !needsScan {
-		return nil
-	}
 
 	// Get all assets for this organization first (needed for targeted_assets)
 	assets, err := s.getOrgAssets(ctx, org.ID)
@@ -151,25 +115,6 @@ func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organizati
 	)
 
 	return nil
-}
-
-// getLastScan retrieves the most recent scan for an organization
-func (s *Service) getLastScan(ctx context.Context, orgID string) (*shared.Scan, error) {
-	coll := s.db.Collection(shared.CollectionScans)
-
-	// Sort by created_at descending to get the most recent scan
-	opts := options.FindOne().SetSort(bson.M{"created_at": -1})
-
-	var scan shared.Scan
-	err := coll.FindOne(ctx, bson.M{
-		"org_id": orgID,
-	}, opts).Decode(&scan)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &scan, nil
 }
 
 // createScan inserts a new scan record into the database
@@ -290,4 +235,3 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 
 	return nil
 }
-

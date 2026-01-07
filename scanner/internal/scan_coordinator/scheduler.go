@@ -2,9 +2,11 @@ package scan_coordinator
 
 import (
 	"context"
-	"time"
+	"fmt"
+	"sync"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/robfig/cron/v3"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -14,60 +16,61 @@ import (
 	"go.uber.org/zap"
 )
 
-// Scheduler runs the scan coordinator on a schedule
+// Scheduler runs the scan coordinator using cron-based scheduling per organization
 type Scheduler struct {
-	service *Service
-	db      *mongo.Database
-	logger  *zap.Logger
-	tracer  trace.Tracer
+	service     *Service
+	db          *mongo.Database
+	logger      *zap.Logger
+	tracer      trace.Tracer
+	cron        *cron.Cron
+	entryIDs    map[string]cron.EntryID // org_id -> cron entry ID
+	entryIDsMux sync.Mutex
 }
 
 // NewScheduler creates a new scheduler instance
 func NewScheduler(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Scheduler {
 	return &Scheduler{
-		service: NewService(redisClient, db, logger),
-		db:      db,
-		logger:  logger,
-		tracer:  otel.Tracer("scan-coordinator"),
+		service:  NewService(redisClient, db, logger),
+		db:       db,
+		logger:   logger,
+		tracer:   otel.Tracer("scan-coordinator"),
+		cron:     cron.New(cron.WithSeconds()), // Support 6-field cron expressions (seconds, minutes, hours, day, month, weekday)
+		entryIDs: make(map[string]cron.EntryID),
 	}
 }
 
-// Start begins the scheduler loop
+// Start begins the scheduler by loading organizations and scheduling their scans
 func (sc *Scheduler) Start(ctx context.Context) error {
-	sc.logger.Info("Scan coordinator scheduler started",
-		zap.Duration("interval", SchedulerInterval),
+	sc.logger.Info("Scan coordinator scheduler starting with cron-based scheduling")
+
+	// Load all organizations and schedule their scans
+	if err := sc.loadAndScheduleOrganizations(ctx); err != nil {
+		return fmt.Errorf("failed to load and schedule organizations: %w", err)
+	}
+
+	// Start the cron scheduler
+	sc.cron.Start()
+	sc.logger.Info("Cron scheduler started",
+		zap.Int("scheduled_orgs", len(sc.entryIDs)),
 	)
 
-	// Run immediately on startup
-	if err := sc.runCoordinationCycle(ctx); err != nil {
-		sc.logger.Error("Error running coordination cycle", zap.Error(err))
-	}
+	// Wait for context cancellation
+	<-ctx.Done()
+	sc.logger.Info("Shutting down cron scheduler")
 
-	// Then run on schedule
-	ticker := time.NewTicker(SchedulerInterval)
-	defer ticker.Stop()
+	// Stop cron and wait for running jobs to complete
+	stopCtx := sc.cron.Stop()
+	<-stopCtx.Done()
 
-	for {
-		select {
-		case <-ctx.Done():
-			sc.logger.Info("Scheduler stopped")
-			return ctx.Err()
-		case <-ticker.C:
-			if err := sc.runCoordinationCycle(ctx); err != nil {
-				sc.logger.Error("Error running coordination cycle", zap.Error(err))
-			}
-		}
-	}
+	sc.logger.Info("Cron scheduler stopped")
+	return ctx.Err()
 }
 
-// runCoordinationCycle runs a single coordination cycle
-func (sc *Scheduler) runCoordinationCycle(ctx context.Context) error {
-	ctx, span := sc.tracer.Start(ctx, "coordination_cycle")
+// loadAndScheduleOrganizations loads all organizations with scan_cron and schedules them
+func (sc *Scheduler) loadAndScheduleOrganizations(ctx context.Context) error {
+	ctx, span := sc.tracer.Start(ctx, "load_and_schedule_organizations")
 	defer span.End()
 
-	sc.logger.Info("Starting scan coordination cycle")
-
-	// Get all organizations with active subscriptions
 	orgs, err := sc.getActiveOrganizations(ctx)
 	if err != nil {
 		span.RecordError(err)
@@ -76,59 +79,113 @@ func (sc *Scheduler) runCoordinationCycle(ctx context.Context) error {
 
 	span.SetAttributes(attribute.Int("organization.count", len(orgs)))
 
-	sc.logger.Info("Processing organizations",
+	sc.logger.Info("Loading organizations for scheduling",
 		zap.Int("organization_count", len(orgs)),
 	)
 
-	// Process each organization
 	successCount := 0
 	errorCount := 0
 
 	for _, org := range orgs {
-		orgCtx, orgSpan := sc.tracer.Start(ctx, "process_organization",
-			trace.WithAttributes(
-				attribute.String("org.id", org.ID),
-				attribute.String("org.name", org.CompanyName),
-			),
-		)
-
-		if err := sc.service.ProcessOrganization(orgCtx, org); err != nil {
-			sc.logger.Error("Failed to process organization",
+		if err := sc.scheduleOrganization(ctx, org); err != nil {
+			sc.logger.Error("Failed to schedule organization",
 				zap.String("org_id", org.ID),
 				zap.String("company_name", org.CompanyName),
+				zap.String("scan_cron", org.SubscriptionSettings.ScanCron),
 				zap.Error(err),
 			)
-			orgSpan.RecordError(err)
 			errorCount++
 		} else {
 			successCount++
 		}
-
-		orgSpan.End()
 	}
 
 	span.SetAttributes(
-		attribute.Int("organizations.successful", successCount),
+		attribute.Int("organizations.scheduled", successCount),
 		attribute.Int("organizations.errors", errorCount),
 	)
 
-	sc.logger.Info("Scan coordination cycle completed",
+	sc.logger.Info("Organization scheduling completed",
 		zap.Int("total_organizations", len(orgs)),
-		zap.Int("successful", successCount),
+		zap.Int("scheduled", successCount),
 		zap.Int("errors", errorCount),
 	)
 
 	return nil
 }
 
-// getActiveOrganizations retrieves all organizations that should be scanned
+// scheduleOrganization adds a cron job for a single organization
+func (sc *Scheduler) scheduleOrganization(ctx context.Context, org shared.Organization) error {
+	cronExpr := org.SubscriptionSettings.ScanCron
+	if cronExpr == "" {
+		return fmt.Errorf("empty scan_cron for organization %s", org.ID)
+	}
+
+	// Create a closure that captures the organization
+	// We need to copy org to avoid closure issues
+	orgCopy := org
+	entryID, err := sc.cron.AddFunc(cronExpr, func() {
+		sc.triggerScan(orgCopy)
+	})
+
+	if err != nil {
+		return fmt.Errorf("invalid cron expression '%s': %w", cronExpr, err)
+	}
+
+	// Store the entry ID for potential future removal
+	sc.entryIDsMux.Lock()
+	sc.entryIDs[org.ID] = entryID
+	sc.entryIDsMux.Unlock()
+
+	sc.logger.Info("Scheduled organization scan",
+		zap.String("org_id", org.ID),
+		zap.String("company_name", org.CompanyName),
+		zap.String("scan_cron", cronExpr),
+	)
+
+	return nil
+}
+
+// triggerScan triggers a scan for an organization
+func (sc *Scheduler) triggerScan(org shared.Organization) {
+	ctx, span := sc.tracer.Start(context.Background(), "cron_triggered_scan",
+		trace.WithAttributes(
+			attribute.String("org.id", org.ID),
+			attribute.String("org.name", org.CompanyName),
+			attribute.String("org.scan_cron", org.SubscriptionSettings.ScanCron),
+		),
+	)
+	defer span.End()
+
+	sc.logger.Info("Cron triggered scan for organization",
+		zap.String("org_id", org.ID),
+		zap.String("company_name", org.CompanyName),
+	)
+
+	if err := sc.service.ProcessOrganization(ctx, org); err != nil {
+		sc.logger.Error("Failed to process organization scan",
+			zap.String("org_id", org.ID),
+			zap.String("company_name", org.CompanyName),
+			zap.Error(err),
+		)
+		span.RecordError(err)
+	} else {
+		sc.logger.Info("Scan triggered successfully",
+			zap.String("org_id", org.ID),
+			zap.String("company_name", org.CompanyName),
+		)
+	}
+}
+
+// getActiveOrganizations retrieves all organizations that have a valid scan_cron
 func (sc *Scheduler) getActiveOrganizations(ctx context.Context) ([]shared.Organization, error) {
 	coll := sc.db.Collection(shared.CollectionOrganizations)
 
-	// Query for organizations with scan_interval_days > 0
+	// Query for organizations with non-empty scan_cron
 	filter := bson.M{
-		"subscription_settings.scan_interval_days": bson.M{
-			"$gt": 0,
+		"subscription_settings.scan_cron": bson.M{
+			"$exists": true,
+			"$ne":     "",
 		},
 	}
 
