@@ -91,13 +91,16 @@ func (s *Service) processDiscovery(ctx context.Context, finding shared.Discovery
 	}
 
 	// 2. Upsert IP discovery (separate record with org_id)
-	ipDiscoveryID, isNewIP, err := s.upsertIPDiscovery(ctx, finding, discoveryID, now)
+	// isNewIP: true if IP was just created
+	// isNewScanForIP: true if this scan_id hasn't processed this IP yet (triggers re-scan)
+	ipDiscoveryID, isNewIP, isNewScanForIP, err := s.upsertIPDiscovery(ctx, finding, discoveryID, now)
 	if err != nil {
 		return err
 	}
 
-	// 3. Trigger port discovery if this is a new IP
-	if isNewIP {
+	// 3. Trigger port discovery if this is a new IP OR a new scan for this IP
+	// This ensures IPs are re-scanned on each scheduled scan to detect new ports
+	if isNewIP || isNewScanForIP {
 		if err := s.publishIPDiscoveryJob(ctx, finding, ipDiscoveryID); err != nil {
 			s.logger.Error("Failed to publish IP discovery job",
 				zap.String("trace_id", finding.TraceID),
@@ -110,6 +113,8 @@ func (s *Service) processDiscovery(ctx context.Context, finding shared.Discovery
 				zap.String("trace_id", finding.TraceID),
 				zap.String("ip", *finding.IP),
 				zap.String("ip_discovery_id", ipDiscoveryID),
+				zap.Bool("is_new_ip", isNewIP),
+				zap.Bool("is_new_scan", isNewScanForIP),
 			)
 		}
 	}
@@ -125,14 +130,16 @@ func (s *Service) processDiscovery(ctx context.Context, finding shared.Discovery
 		// Don't fail if enrichment trigger fails
 	}
 
-	// 5. Publish enrichment job for IP
-	if err := s.publishEnrichmentJob(ctx, finding, ipDiscoveryID, shared.AssetTypeIP); err != nil {
-		s.logger.Error("Failed to publish enrichment job for IP",
-			zap.String("trace_id", finding.TraceID),
-			zap.String("ip", *finding.IP),
-			zap.Error(err),
-		)
-		// Don't fail if enrichment trigger fails
+	// 5. Publish enrichment job for IP (only for new IPs or new scans to avoid duplicates within same scan)
+	if isNewIP || isNewScanForIP {
+		if err := s.publishEnrichmentJob(ctx, finding, ipDiscoveryID, shared.AssetTypeIP); err != nil {
+			s.logger.Error("Failed to publish enrichment job for IP",
+				zap.String("trace_id", finding.TraceID),
+				zap.String("ip", *finding.IP),
+				zap.Error(err),
+			)
+			// Don't fail if enrichment trigger fails
+		}
 	}
 
 	// 6. Publish scan trigger for active recon scanners (domain/subdomain only)
@@ -368,8 +375,10 @@ func (s *Service) updateResolutionHistory(ctx context.Context, discovery *shared
 }
 
 // upsertIPDiscovery creates or updates an IP discovery
-// Returns (ipDiscoveryID, isNewIP, error)
-func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.DiscoveryFinding, parentDiscoveryID string, timestamp time.Time) (string, bool, error) {
+// Returns (ipDiscoveryID, isNewIP, isNewScanForIP, error)
+// - isNewIP: true if the IP was just created
+// - isNewScanForIP: true if this scan_id hasn't scanned this IP yet (used to trigger re-scans)
+func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.DiscoveryFinding, parentDiscoveryID string, timestamp time.Time) (string, bool, bool, error) {
 	collection := s.db.Collection(shared.CollectionDiscoveries)
 
 	// Check if IP discovery already exists (org-scoped)
@@ -395,19 +404,19 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 		var metadata map[string]interface{}
 
 		newIPDiscovery := shared.Discovery{
-			ID:             ipDiscoveryID,
-			OrgID:          finding.OrgID,                   // Organization GUID
-			ScanIDs:        scanIDs,                         // Array of scan identifiers
-			AssetType:      shared.AssetTypeIP,
-			Source:        finding.Source,
-			Status:         finding.Status,
-			OwnershipStatus: shared.OwnershipStatusVerified,  // Default to verified
-			DiscoveredAt:   timestamp,                       // When asset was discovered
-			ParentID:       &parentDiscoveryID,
-			IP:             finding.IP,
-			FirstSeen:      timestamp,
-			LastSeen:       timestamp,
-			Metadata:       metadata,                        // Use enriched metadata
+			ID:              ipDiscoveryID,
+			OrgID:           finding.OrgID,                  // Organization GUID
+			ScanIDs:         scanIDs,                        // Array of scan identifiers
+			AssetType:       shared.AssetTypeIP,
+			Source:          finding.Source,
+			Status:          finding.Status,
+			OwnershipStatus: shared.OwnershipStatusVerified, // Default to verified
+			DiscoveredAt:    timestamp,                      // When asset was discovered
+			ParentID:        &parentDiscoveryID,
+			IP:              finding.IP,
+			FirstSeen:       timestamp,
+			LastSeen:        timestamp,
+			Metadata:        metadata, // Use enriched metadata
 		}
 
 		doc := s.buildDiscoveryDocument(newIPDiscovery)
@@ -418,7 +427,7 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 				zap.String("ip", *finding.IP),
 				zap.Error(err),
 			)
-			return "", false, err
+			return "", false, false, err
 		}
 
 		s.logger.Info("Created new IP discovery",
@@ -426,7 +435,8 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 			zap.String("ip", *finding.IP),
 			zap.String("parent_id", parentDiscoveryID),
 		)
-		return ipDiscoveryID, true, nil
+		// New IP: isNewIP=true, isNewScanForIP=true
+		return ipDiscoveryID, true, true, nil
 	}
 
 	if err != nil {
@@ -434,10 +444,24 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 			zap.String("trace_id", finding.TraceID),
 			zap.Error(err),
 		)
-		return "", false, err
+		return "", false, false, err
 	}
 
-	// IP exists - just update last_seen and add scan_id to array
+	// IP exists - check if this scan_id is new for this IP
+	isNewScanForIP := false
+	if finding.ScanID != nil {
+		// Check if scan_id is already in the scan_ids array
+		scanAlreadyProcessed := false
+		for _, existingScanID := range existingIPDiscovery.ScanIDs {
+			if existingScanID == *finding.ScanID {
+				scanAlreadyProcessed = true
+				break
+			}
+		}
+		isNewScanForIP = !scanAlreadyProcessed
+	}
+
+	// Update last_seen and add scan_id to array
 	update := bson.M{
 		"$set": bson.M{
 			"last_seen": timestamp,
@@ -456,14 +480,16 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 			zap.String("ip", *finding.IP),
 			zap.Error(err),
 		)
-		return "", false, err
+		return "", false, false, err
 	}
 
 	s.logger.Debug("Updated existing IP discovery",
 		zap.String("discovery_id", existingIPDiscovery.ID),
 		zap.String("ip", *finding.IP),
+		zap.Bool("is_new_scan", isNewScanForIP),
 	)
-	return existingIPDiscovery.ID, false, nil
+	// Existing IP: isNewIP=false, isNewScanForIP depends on scan_ids check
+	return existingIPDiscovery.ID, false, isNewScanForIP, nil
 }
 
 // publishIPDiscoveryJob publishes an IP discovery job to trigger port scanning
