@@ -3,6 +3,8 @@ package scan_coordinator
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -164,12 +166,15 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 				continue
 			}
 
+			// Sanitize domain to strip URL scheme (https://) and paths
+			host := sanitizeDomain(*asset.Domain)
+
 			job := shared.DiscoveryJob{
 				TraceID:      traceID,
 				TraceContext: telemetry.InjectTraceContext(ctx), // Inject trace context for distributed tracing
 				ScanID:       &scanID,
 				OrgID:        orgID,
-				Host:         *asset.Domain,
+				Host:         host,
 				Created:      time.Now(),
 			}
 
@@ -186,7 +191,8 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 			s.logger.Debug("Published domain discovery job",
 				zap.String("scan_id", scanID),
 				zap.String("asset_id", asset.ID),
-				zap.String("host", *asset.Domain),
+				zap.String("host", host),
+				zap.String("original", *asset.Domain),
 			)
 
 		case "ip":
@@ -234,4 +240,24 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 	}
 
 	return nil
+}
+
+// sanitizeDomain extracts the hostname from a domain string, stripping any URL scheme or path.
+// Examples: "https://example.com" -> "example.com", "example.com/path" -> "example.com"
+func sanitizeDomain(domain string) string {
+	domain = strings.TrimSpace(domain)
+
+	// If it looks like a URL (has scheme), parse it
+	if strings.Contains(domain, "://") {
+		if parsed, err := url.Parse(domain); err == nil && parsed.Host != "" {
+			return parsed.Host
+		}
+	}
+
+	// Strip any path component
+	if idx := strings.Index(domain, "/"); idx > 0 {
+		domain = domain[:idx]
+	}
+
+	return domain
 }
