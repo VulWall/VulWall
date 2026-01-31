@@ -48,6 +48,13 @@ func (sc *Scheduler) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to load and schedule organizations: %w", err)
 	}
 
+	// Schedule periodic refresh to pick up subscription changes
+	if _, err := sc.cron.AddFunc(RefreshCron, func() {
+		sc.refreshOrganizations()
+	}); err != nil {
+		return fmt.Errorf("failed to schedule organization refresh: %w", err)
+	}
+
 	// Start the cron scheduler
 	sc.cron.Start()
 	sc.logger.Info("Cron scheduler started",
@@ -175,6 +182,34 @@ func (sc *Scheduler) triggerScan(org shared.Organization) {
 			zap.String("company_name", org.CompanyName),
 		)
 	}
+}
+
+// refreshOrganizations clears all scheduled org scans and reloads from MongoDB
+func (sc *Scheduler) refreshOrganizations() {
+	ctx, span := sc.tracer.Start(context.Background(), "refresh_organizations")
+	defer span.End()
+
+	sc.logger.Info("Refreshing organization schedules")
+
+	// Remove all existing org scan entries
+	sc.entryIDsMux.Lock()
+	for orgID, entryID := range sc.entryIDs {
+		sc.cron.Remove(entryID)
+		sc.logger.Debug("Removed cron entry for organization", zap.String("org_id", orgID))
+	}
+	sc.entryIDs = make(map[string]cron.EntryID)
+	sc.entryIDsMux.Unlock()
+
+	// Reload and reschedule all organizations
+	if err := sc.loadAndScheduleOrganizations(ctx); err != nil {
+		sc.logger.Error("Failed to refresh organization schedules", zap.Error(err))
+		span.RecordError(err)
+		return
+	}
+
+	sc.logger.Info("Organization schedules refreshed",
+		zap.Int("scheduled_orgs", len(sc.entryIDs)),
+	)
 }
 
 // getActiveOrganizations retrieves all organizations that have a valid scan_cron
