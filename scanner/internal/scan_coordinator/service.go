@@ -33,22 +33,30 @@ func NewService(redisClient *redis.Client, db *mongo.Database, logger *zap.Logge
 	}
 }
 
-// ProcessOrganization triggers a scan for an organization (called by cron scheduler)
-func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organization) error {
-	s.logger.Info("Processing organization for scheduled scan",
-		zap.String("org_id", org.ID),
-		zap.String("company_name", org.CompanyName),
-		zap.String("scan_cron", org.SubscriptionSettings.ScanCron),
+// ScanRequest represents a request to trigger a scan for an organization.
+type ScanRequest struct {
+	OrgID       string // Organization GUID
+	Type        string // "scheduled", "on_demand", "manual"
+	TriggeredBy string // "system" or user ID
+}
+
+// TriggerScan creates a scan record and publishes discovery jobs for an organization.
+// Returns the scan ID on success.
+func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, error) {
+	s.logger.Info("Triggering scan for organization",
+		zap.String("org_id", req.OrgID),
+		zap.String("type", req.Type),
+		zap.String("triggered_by", req.TriggeredBy),
 	)
 
 	// Get all assets for this organization first (needed for targeted_assets)
-	assets, err := s.getOrgAssets(ctx, org.ID)
+	assets, err := s.getOrgAssets(ctx, req.OrgID)
 	if err != nil {
-		return fmt.Errorf("failed to get org assets: %w", err)
+		return "", fmt.Errorf("failed to get org assets: %w", err)
 	}
 
 	s.logger.Info("Found assets to scan",
-		zap.String("org_id", org.ID),
+		zap.String("org_id", req.OrgID),
 		zap.Int("asset_count", len(assets)),
 	)
 
@@ -68,7 +76,7 @@ func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organizati
 		} else {
 			// Skip assets with missing values
 			s.logger.Warn("Asset missing required field, skipping from targeted assets",
-				zap.String("org_id", org.ID),
+				zap.String("org_id", req.OrgID),
 				zap.String("asset_id", asset.ID),
 				zap.String("type", asset.Type),
 			)
@@ -82,10 +90,10 @@ func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organizati
 	scanID := uuid.New().String()
 	scan := shared.Scan{
 		ID:             scanID,
-		OrgID:          org.ID,
+		OrgID:          req.OrgID,
 		Status:         shared.StatusRunning,
-		Type:           shared.ScanTypeScheduled,
-		TriggeredBy:    "system",
+		Type:           req.Type,
+		TriggeredBy:    req.TriggeredBy,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 		TargetedAssets: targetedAssets,
@@ -96,27 +104,27 @@ func (s *Service) ProcessOrganization(ctx context.Context, org shared.Organizati
 
 	// Insert scan into database
 	if err := s.createScan(ctx, scan); err != nil {
-		return fmt.Errorf("failed to create scan: %w", err)
+		return "", fmt.Errorf("failed to create scan: %w", err)
 	}
 
 	s.logger.Info("Created new scan record",
 		zap.String("scan_id", scanID),
-		zap.String("org_id", org.ID),
+		zap.String("org_id", req.OrgID),
 		zap.Int("targeted_assets_count", len(targetedAssets)),
 	)
 
 	// Publish discovery jobs for each asset
-	if err := s.publishDiscoveryJobs(ctx, org.ID, scanID, assets); err != nil {
-		return fmt.Errorf("failed to publish discovery jobs: %w", err)
+	if err := s.publishDiscoveryJobs(ctx, req.OrgID, scanID, assets); err != nil {
+		return "", fmt.Errorf("failed to publish discovery jobs: %w", err)
 	}
 
 	s.logger.Info("Successfully triggered scan",
 		zap.String("scan_id", scanID),
-		zap.String("org_id", org.ID),
+		zap.String("org_id", req.OrgID),
 		zap.Int("jobs_published", len(assets)),
 	)
 
-	return nil
+	return scanID, nil
 }
 
 // createScan inserts a new scan record into the database

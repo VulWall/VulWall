@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
@@ -28,9 +27,9 @@ type Scheduler struct {
 }
 
 // NewScheduler creates a new scheduler instance
-func NewScheduler(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Scheduler {
+func NewScheduler(service *Service, db *mongo.Database, logger *zap.Logger) *Scheduler {
 	return &Scheduler{
-		service:  NewService(redisClient, db, logger),
+		service:  service,
 		db:       db,
 		logger:   logger,
 		tracer:   otel.Tracer("scan-coordinator"),
@@ -169,7 +168,11 @@ func (sc *Scheduler) triggerScan(org shared.Organization) {
 		zap.String("company_name", org.CompanyName),
 	)
 
-	if err := sc.service.ProcessOrganization(ctx, org); err != nil {
+	if _, err := sc.service.TriggerScan(ctx, ScanRequest{
+		OrgID:       org.ID,
+		Type:        shared.ScanTypeScheduled,
+		TriggeredBy: "system",
+	}); err != nil {
 		sc.logger.Error("Failed to process organization scan",
 			zap.String("org_id", org.ID),
 			zap.String("company_name", org.CompanyName),

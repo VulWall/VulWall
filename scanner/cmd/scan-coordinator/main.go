@@ -62,11 +62,18 @@ func main() {
 	}
 	defer db.Client().Disconnect(ctx)
 
+	// Create shared service (used by both scheduler and API)
+	service := scan_coordinator.NewService(redisClient, db, logger.Log)
+
 	// Create scheduler
-	scheduler := scan_coordinator.NewScheduler(redisClient, db, logger.Log)
+	scheduler := scan_coordinator.NewScheduler(service, db, logger.Log)
 
 	// Create scan monitor
 	scanMonitor := scan_coordinator.NewScanMonitor(redisClient, db, logger.Log)
+
+	// Create API server
+	apiPort := config.GetEnv(config.EnvAPIPort, "8080")
+	apiServer := scan_coordinator.NewAPIServer(service, logger.Log, apiPort)
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -77,6 +84,9 @@ func main() {
 
 	// Start scan monitor in goroutine (runs every 15 minutes)
 	go scanMonitor.Start(ctx)
+
+	// Start API server in goroutine
+	go apiServer.Start(ctx)
 
 	// Wait for shutdown signal
 	<-sigChan

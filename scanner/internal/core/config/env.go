@@ -74,4 +74,11 @@ const (
 	EnvCloudDetectorEnabled = "CLOUD_DETECTOR_ENABLED"
 	// EnvCloudDataDir is the directory containing cloud provider data files
 	EnvCloudDataDir = "CLOUD_DATA_DIR"
+
+	// ===========================================
+	// API Configuration
+	// ===========================================
+
+	// EnvAPIPort is the HTTP API server port (default: 8080)
+	EnvAPIPort = "API_PORT"
 )
