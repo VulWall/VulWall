@@ -8,10 +8,12 @@ services:
       - /opt/vulwall/config/redis.env
       - /opt/vulwall/config/mongo.env
       - /opt/vulwall/config/honeycomb.env
+    ports:
+      - "${API_PORT:-8080}:${API_PORT:-8080}"
     networks:
       - core-network
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "scan-coordinator"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:${API_PORT:-8080}/health"]
       interval: 10s
       timeout: 5s
       retries: 5
