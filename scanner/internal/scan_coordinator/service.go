@@ -36,7 +36,7 @@ func NewService(redisClient *redis.Client, db *mongo.Database, logger *zap.Logge
 // ScanRequest represents a request to trigger a scan for an organization.
 type ScanRequest struct {
 	OrgID       string // Organization GUID
-	Type        string // "scheduled", "on_demand", "manual"
+	Type        string // "scheduled", "requested", "manual"
 	TriggeredBy string // "system" or user ID
 }
 

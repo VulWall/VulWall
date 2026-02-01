@@ -14,7 +14,7 @@ const (
 	// Scan Type
 	ScanTypeManual    = "manual"
 	ScanTypeScheduled = "scheduled"
-	ScanTypeOnDemand  = "on_demand"
+	ScanTypeRequested = "requested"
 
 	// MongoDB Collections
 	CollectionAssets        = "assets"        // User-added assets to be scanned

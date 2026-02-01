@@ -85,7 +85,7 @@ func (a *APIServer) handleTriggerScan(w http.ResponseWriter, r *http.Request) {
 
 	scanID, err := a.service.TriggerScan(r.Context(), ScanRequest{
 		OrgID:       req.OrgID,
-		Type:        shared.ScanTypeOnDemand,
+		Type:        shared.ScanTypeRequested,
 		TriggeredBy: req.TriggeredBy,
 	})
 	if err != nil {
