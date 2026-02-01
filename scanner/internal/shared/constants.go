@@ -12,7 +12,6 @@ const (
 	StatusFailed  = "failed"
 
 	// Scan Type
-	ScanTypeManual    = "manual"
 	ScanTypeScheduled = "scheduled"
 	ScanTypeRequested = "requested"
 
