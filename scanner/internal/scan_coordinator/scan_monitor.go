@@ -14,17 +14,19 @@ import (
 
 // ScanMonitor monitors scan completion and marks scans as done
 type ScanMonitor struct {
-	redis  *redis.Client
-	db     *mongo.Database
-	logger *zap.Logger
+	redis    *redis.Client
+	db       *mongo.Database
+	logger   *zap.Logger
+	webhook  *WebhookNotifier
 }
 
 // NewScanMonitor creates a new scan monitor
-func NewScanMonitor(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *ScanMonitor {
+func NewScanMonitor(redisClient *redis.Client, db *mongo.Database, webhook *WebhookNotifier, logger *zap.Logger) *ScanMonitor {
 	return &ScanMonitor{
-		redis:  redisClient,
-		db:     db,
-		logger: logger,
+		redis:   redisClient,
+		db:      db,
+		logger:  logger,
+		webhook: webhook,
 	}
 }
 
@@ -179,7 +181,7 @@ func (m *ScanMonitor) hasPendingForScan(ctx context.Context, stream, group, scan
 	return false
 }
 
-// markDone marks a scan as done
+// markDone marks a scan as done and notifies the Dashboard webhook
 func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
 	now := time.Now()
 	update := bson.M{
@@ -209,6 +211,9 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
 			zap.String("scan_id", scanID),
 			zap.Time("completed_at", now),
 		)
+
+		// Notify Dashboard asynchronously (non-blocking, best-effort)
+		go m.webhook.NotifyScanComplete(scanID)
 	}
 
 	return nil

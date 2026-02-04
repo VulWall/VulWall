@@ -76,6 +76,15 @@ const (
 	EnvCloudDataDir = "CLOUD_DATA_DIR"
 
 	// ===========================================
+	// Webhooks
+	// ===========================================
+
+	// EnvDashboardWebhookURL is the Dashboard webhook URL for scan completion notifications (optional, empty = disabled)
+	EnvDashboardWebhookURL = "DASHBOARD_WEBHOOK_URL"
+	// EnvDashboardWebhookSecret is the shared secret sent in X-Webhook-Secret header
+	EnvDashboardWebhookSecret = "DASHBOARD_WEBHOOK_SECRET"
+
+	// ===========================================
 	// API Configuration
 	// ===========================================
 

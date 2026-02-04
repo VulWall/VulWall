@@ -68,8 +68,16 @@ func main() {
 	// Create scheduler
 	scheduler := scan_coordinator.NewScheduler(service, db, logger.Log)
 
+	// Create webhook notifier (empty URL = disabled)
+	webhookURL := config.GetEnv(config.EnvDashboardWebhookURL, "")
+	webhookSecret := config.GetEnv(config.EnvDashboardWebhookSecret, "")
+	webhook := scan_coordinator.NewWebhookNotifier(webhookURL, webhookSecret, logger.Log)
+	if webhook.Enabled() {
+		logger.Log.Info("Dashboard webhook enabled", zap.String("url", webhookURL))
+	}
+
 	// Create scan monitor
-	scanMonitor := scan_coordinator.NewScanMonitor(redisClient, db, logger.Log)
+	scanMonitor := scan_coordinator.NewScanMonitor(redisClient, db, webhook, logger.Log)
 
 	// Create API server
 	apiPort := config.GetEnv(config.EnvAPIPort, "8080")

@@ -2714,3 +2714,4 @@ internal/discoveries/port_discovery/
    - Stores port in `discoveries` collection (asset_type: "port", with org_id, ownership_status="verified", parent_id: ip_id)
    - Tracks service changes: if ANY characteristic changes (service_name, product, version, or banner), archives complete old service state to previous_services array
    - If port exists: updates `last_seen`, merges metadata, and updates service fields
+
