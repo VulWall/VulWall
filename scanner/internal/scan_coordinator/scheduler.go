@@ -33,7 +33,7 @@ func NewScheduler(service *Service, db *mongo.Database, logger *zap.Logger) *Sch
 		db:       db,
 		logger:   logger,
 		tracer:   otel.Tracer("scan-coordinator"),
-		cron:     cron.New(cron.WithSeconds()), // Support 6-field cron expressions (seconds, minutes, hours, day, month, weekday)
+		cron:     cron.New(), // Standard 5-field cron (minute, hour, day, month, weekday)
 		entryIDs: make(map[string]cron.EntryID),
 	}
 }
