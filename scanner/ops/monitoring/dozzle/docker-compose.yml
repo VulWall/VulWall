@@ -1,0 +1,18 @@
+services:
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: nightwatch-dozzle
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:9999:8080"
+    environment:
+      - DOZZLE_FILTER=name=nightwatch-*
+      - DOZZLE_USERNAME=${DOZZLE_USERNAME:-admin}
+      - DOZZLE_PASSWORD=${DOZZLE_PASSWORD:-}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
