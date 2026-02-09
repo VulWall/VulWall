@@ -35,8 +35,8 @@ func NewConsumer(redisClient *redis.Client, logger *zap.Logger) (*Consumer, erro
 func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting JSDependencyScanner consumer")
 
-	// Create consumer group for domain scan triggers
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupJSDependencyScanner); err != nil {
+	// Create consumer group for domain scan triggers (start from latest — triggers are ephemeral)
+	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupJSDependencyScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
 

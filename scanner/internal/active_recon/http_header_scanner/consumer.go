@@ -35,8 +35,8 @@ func NewConsumer(redisClient *redis.Client, logger *zap.Logger) (*Consumer, erro
 func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting HTTPHeaderScanner consumer")
 
-	// Create consumer group for domain scan triggers
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupHTTPHeaderScanner); err != nil {
+	// Create consumer group for domain scan triggers (start from latest — triggers are ephemeral)
+	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupHTTPHeaderScanner); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
 

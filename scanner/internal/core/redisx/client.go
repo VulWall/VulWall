@@ -27,9 +27,21 @@ func NewClient(cfg *config.Config) (*redis.Client, error) {
 	return client, nil
 }
 
-// CreateConsumerGroup creates a consumer group for a stream if it doesn't exist
+// CreateConsumerGroup creates a consumer group for a stream if it doesn't exist.
+// Starts reading from the beginning ("0") — use for job queues where every message must be processed.
 func CreateConsumerGroup(ctx context.Context, client *redis.Client, stream, group string) error {
 	err := client.XGroupCreateMkStream(ctx, stream, group, "0").Err()
+	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
+		return err
+	}
+	return nil
+}
+
+// CreateConsumerGroupFromLatest creates a consumer group that starts from the latest message ("$").
+// Use for trigger/notification streams where skipping old messages is acceptable.
+// If the group already exists, this is a no-op (does NOT change the existing group's position).
+func CreateConsumerGroupFromLatest(ctx context.Context, client *redis.Client, stream, group string) error {
+	err := client.XGroupCreateMkStream(ctx, stream, group, "$").Err()
 	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 		return err
 	}

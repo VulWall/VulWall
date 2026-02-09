@@ -36,12 +36,12 @@ func NewConsumer(redisClient *redis.Client, logger *zap.Logger) *Consumer {
 func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting testssl scanner consumer")
 
-	// Create consumer groups for both streams
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupTestSSLScanner); err != nil {
+	// Create consumer groups for both trigger streams (start from latest — triggers are ephemeral)
+	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupTestSSLScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
 
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamPortScanTriggers, GroupTestSSLScanner); err != nil {
+	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamPortScanTriggers, GroupTestSSLScanner); err != nil {
 		return fmt.Errorf("failed to create IP consumer group: %w", err)
 	}
 

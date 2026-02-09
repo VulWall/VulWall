@@ -39,11 +39,12 @@ func NewConsumer(redisClient *redis.Client, logger *zap.Logger) (*Consumer, erro
 func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("Starting WebTechProfiler consumer")
 
-	// Create consumer groups for both streams
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupWebTechProfiler); err != nil {
+	// Create consumer group for domain scan triggers (start from latest — triggers are ephemeral)
+	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupWebTechProfiler); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
 
+	// Create consumer group for IP discovery results (start from beginning — result stream needs guaranteed delivery)
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupWebTechProfiler); err != nil {
 		return fmt.Errorf("failed to create IP consumer group: %w", err)
 	}

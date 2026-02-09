@@ -39,12 +39,12 @@ func (c *Consumer) Start(ctx context.Context) error {
 	// Start template updater in background (cron-based)
 	go c.service.StartTemplateUpdater(ctx)
 
-	// Create consumer groups for both streams
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainScanTriggers, GroupNucleiScanner); err != nil {
+	// Create consumer groups for both trigger streams (start from latest — triggers are ephemeral)
+	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupNucleiScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
 
-	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamPortScanTriggers, GroupNucleiScanner); err != nil {
+	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamPortScanTriggers, GroupNucleiScanner); err != nil {
 		return fmt.Errorf("failed to create IP consumer group: %w", err)
 	}
 
