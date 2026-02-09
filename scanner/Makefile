@@ -21,6 +21,8 @@ build: ## Build all services
 	@go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
 	@echo "Building js-dependency-scanner..."
 	@go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
+	@echo "Building http-header-scanner..."
+	@go build -o bin/http-header-scanner ./cmd/active_recon/http-header-scanner
 	@echo "Building ai-finding-enricher..."
 	@go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
 	@echo "Building ingestion..."
@@ -49,6 +51,9 @@ build-discovery-enrichment: ## Build discovery-enrichment service
 
 build-js-dependency-scanner: ## Build js-dependency-scanner service
 	@go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
+
+build-http-header-scanner: ## Build http-header-scanner service
+	@go build -o bin/http-header-scanner ./cmd/active_recon/http-header-scanner
 
 build-ai-finding-enricher: ## Build ai-finding-enricher service
 	@go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
@@ -79,6 +84,9 @@ run-discovery-enrichment: ## Run discovery-enrichment service locally
 
 run-js-dependency-scanner: ## Run js-dependency-scanner service locally
 	@go run ./cmd/active_recon/js-dependency-scanner/main.go
+
+run-http-header-scanner: ## Run http-header-scanner service locally
+	@go run ./cmd/active_recon/http-header-scanner/main.go
 
 run-ai-finding-enricher: ## Run ai-finding-enricher service locally
 	@go run ./cmd/enrichers/ai-finding-enricher/main.go
@@ -135,6 +143,9 @@ docker-scale-discovery-enrichment: ## Scale discovery-enrichment workers (usage:
 
 docker-scale-js-dependency-scanner: ## Scale js-dependency-scanner workers (usage: make docker-scale-js-dependency-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale js-dependency-scanner=$(N)
+
+docker-scale-http-header-scanner: ## Scale http-header-scanner workers (usage: make docker-scale-http-header-scanner N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale http-header-scanner=$(N)
 
 docker-scale-ai-finding-enricher: ## Scale ai-finding-enricher workers (usage: make docker-scale-ai-finding-enricher N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ai-finding-enricher=$(N)
@@ -220,6 +231,13 @@ prod-deploy-js-dependency-scanner: ## Deploy js-dependency-scanner service (usag
 		ops/scripts/deploy-service.sh js-dependency-scanner; \
 	fi
 
+prod-deploy-http-header-scanner: ## Deploy http-header-scanner service (usage: make prod-deploy-http-header-scanner [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh http-header-scanner $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh http-header-scanner; \
+	fi
+
 prod-deploy-ai-finding-enricher: ## Deploy ai-finding-enricher service (usage: make prod-deploy-ai-finding-enricher [PROJECT=name] [CONFIG=prd])
 	@if [ -n "$(PROJECT)" ]; then \
 		ops/scripts/deploy-service.sh ai-finding-enricher $(PROJECT) $(CONFIG); \
@@ -241,7 +259,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment, js-dependency-scanner"; \
+		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment, js-dependency-scanner, http-header-scanner"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)
