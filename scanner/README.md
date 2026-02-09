@@ -150,8 +150,13 @@ ops/                         # Docker, compose, deploy scripts
 
 ## Documentation
 
-- **[CLAUDE.md](CLAUDE.md)** - Complete architecture and development guide
-- **[ops/PRODUCTION.md](ops/PRODUCTION.md)** - Production deployment guide
+- **[CLAUDE.md](CLAUDE.md)** — Compact entry point with critical rules and quick reference
+- **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** — All services, streams, consumer groups, scan monitor coverage
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — Communication flows, design patterns, model ownership
+- **[docs/DATABASE.md](docs/DATABASE.md)** — Go models, MongoDB schemas, query examples
+- **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** — OpenTelemetry tracing patterns
+- **[docs/ADDING_SERVICES.md](docs/ADDING_SERVICES.md)** — How to add new services, scanners, enrichment types
+- **[ops/PRODUCTION.md](ops/PRODUCTION.md)** — Production deployment guide
 
 ## Development
 

@@ -1,0 +1,453 @@
+# Database
+
+## Collections Overview
+
+| Collection | Constant | Purpose | Writer |
+|------------|----------|---------|--------|
+| `assets` | `CollectionAssets` | User-added assets to scan (managed via UI) | Dashboard |
+| `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (4 asset types) | Ingestion |
+| `findings` | `CollectionFindings` | Security vulnerabilities from scanners | Ingestion |
+| `organizations` | `CollectionOrganizations` | Org settings with subscription config | Dashboard |
+| `scans` | `CollectionScans` | Scan execution records | Scan coordinator |
+| `audit_logs` | `CollectionAuditLogs` | System audit events | Ingestion |
+
+---
+
+## Shared Go Models
+
+### Job Models (Input)
+
+**DiscoveryJob** — domain discovery jobs:
+```go
+type DiscoveryJob struct {
+    TraceID      string                 `json:"trace_id"`
+    TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`
+    ScanID       *string                `json:"scan_id,omitempty"`
+    OrgID        string                 `json:"org_id"`       // REQUIRED
+    ParentID     *string                `json:"parent_id,omitempty"`
+    Host         string                 `json:"host"`
+    Port         *int                   `json:"port,omitempty"`
+    Protocol     *string                `json:"protocol,omitempty"`
+    Metadata     map[string]interface{} `json:"metadata,omitempty"`
+    Created      time.Time              `json:"created"`
+}
+```
+
+**IPDiscoveryJob** — port discovery jobs:
+```go
+type IPDiscoveryJob struct {
+    TraceID      string                 `json:"trace_id"`
+    TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`
+    ScanID       *string                `json:"scan_id,omitempty"`
+    OrgID        string                 `json:"org_id"`       // REQUIRED
+    ParentID     *string                `json:"parent_id,omitempty"`
+    IP           string                 `json:"ip"`
+    PortRange    *string                `json:"port_range,omitempty"`
+    Metadata     map[string]interface{} `json:"metadata,omitempty"`
+    Created      time.Time              `json:"created"`
+}
+```
+
+### Finding Models (Output)
+
+**DiscoveryFinding** — domain discovery findings:
+```go
+type DiscoveryFinding struct {
+    TraceID      string                 `json:"trace_id"`
+    TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`
+    ScanID       *string                `json:"scan_id,omitempty"`
+    OrgID        string                 `json:"org_id"`       // REQUIRED
+    Source       string                 `json:"source"`       // REQUIRED: "shodan", etc.
+    ParentID     *string                `json:"parent_id,omitempty"`
+    Host         string                 `json:"host"`
+    IP           *string                `json:"ip,omitempty"`
+    Port         *int                   `json:"port,omitempty"`
+    Protocol     *string                `json:"protocol,omitempty"`
+    Status       string                 `json:"status"`
+    Metadata     map[string]interface{} `json:"metadata,omitempty"`
+    Timestamp    time.Time              `json:"timestamp"`
+}
+```
+
+**IPDiscoveryFinding** — port discovery findings:
+```go
+type IPDiscoveryFinding struct {
+    TraceID      string                 `json:"trace_id"`
+    TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`
+    ScanID       *string                `json:"scan_id,omitempty"`
+    OrgID        string                 `json:"org_id"`       // REQUIRED
+    Source       string                 `json:"source"`       // REQUIRED: "port_discovery", etc.
+    ParentID     *string                `json:"parent_id,omitempty"`
+    IP           string                 `json:"ip"`
+    Port         int                    `json:"port"`
+    Protocol     string                 `json:"protocol"`
+    Status       string                 `json:"status"`
+    Banner       *string                `json:"banner,omitempty"`
+    ServiceName  *string                `json:"service_name,omitempty"`
+    Product      *string                `json:"product,omitempty"`
+    Version      *string                `json:"version,omitempty"`
+    Metadata     map[string]interface{} `json:"metadata,omitempty"`
+    Timestamp    time.Time              `json:"timestamp"`
+}
+```
+
+**SecurityFinding** — security vulnerabilities:
+```go
+type SecurityFinding struct {
+    TraceID      string                 `json:"trace_id"`
+    TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`
+    ScanID       *string                `json:"scan_id,omitempty"`
+    OrgID        string                 `json:"org_id"`       // REQUIRED
+    Source       string                 `json:"source"`       // REQUIRED: "nuclei", etc.
+    DiscoveryID  string                 `json:"discovery_id"`
+    FindingType  string                 `json:"finding_type"`
+    Severity     string                 `json:"severity"`     // info, low, medium, high, critical
+    Title        string                 `json:"title"`
+    Description  string                 `json:"description"`
+    Metadata     map[string]interface{} `json:"metadata,omitempty"`
+    Status       string                 `json:"status"`       // open, resolved
+    Timestamp    time.Time              `json:"timestamp"`
+}
+```
+
+**EnrichmentFinding** — discovery enrichment data:
+```go
+type EnrichmentFinding struct {
+    TraceID        string                 `json:"trace_id"`
+    TraceContext   map[string]string      `json:"trace_context,omitempty" bson:"-"`
+    ScanID         *string                `json:"scan_id,omitempty"`
+    OrgID          string                 `json:"org_id"`
+    Source         string                 `json:"source"`         // "discovery_enrichment"
+    DiscoveryID    string                 `json:"discovery_id"`
+    EnrichmentType string                 `json:"enrichment_type"` // "waf", "geolocation"
+    Data           map[string]interface{} `json:"data"`
+    Timestamp      time.Time              `json:"timestamp"`
+}
+```
+
+### Asset Models
+
+**Asset** — user-added assets (read by scan-coordinator):
+```go
+type Asset struct {
+    ID            string     `bson:"_id"`
+    OrgID         string     `bson:"org_id"`
+    Type          string     `bson:"type"`          // "domain" or "ip"
+    Enabled       bool       `bson:"enabled"`
+    DNSVerifiedAt *time.Time `bson:"dns_verified_at,omitempty"`
+    Domain        *string    `bson:"domain,omitempty"`
+    IP            *string    `bson:"ip,omitempty"`
+    AddedOn       time.Time  `bson:"added_on"`
+}
+```
+
+**Discovery** — unified scan result model (type discrimination via `asset_type`):
+```go
+type Discovery struct {
+    ID              string                    `bson:"_id"`
+    OrgID           string                    `bson:"org_id"`
+    ScanIDs         []string                  `bson:"scan_ids"`
+    AssetType       string                    `bson:"asset_type"`       // domain, subdomain, ip, port
+    Source          string                    `bson:"source"`
+    Status          string                    `bson:"status"`           // active, inactive, unknown
+    OwnershipStatus string                    `bson:"ownership_status"` // verified, notMine, notSure
+    DiscoveredAt    time.Time                 `bson:"discovered_at"`
+    ParentID        *string                   `bson:"parent_id,omitempty"`
+    FirstSeen       time.Time                 `bson:"first_seen"`
+    LastSeen        time.Time                 `bson:"last_seen"`
+    Metadata        map[string]interface{}    `bson:"metadata"`
+
+    // Domain/Subdomain fields
+    Domain            *string                  `bson:"domain,omitempty"`
+    Subdomain         *string                  `bson:"subdomain,omitempty"`
+    ResolutionHistory []ResolutionHistoryEntry  `bson:"resolution_history,omitempty"`
+
+    // IP fields
+    IP *string `bson:"ip,omitempty"`
+
+    // Port fields
+    Port             *int                   `bson:"port,omitempty"`
+    Protocol         *string                `bson:"protocol,omitempty"`
+    Banner           *string                `bson:"banner,omitempty"`
+    ServiceName      *string                `bson:"service_name,omitempty"`
+    Product          *string                `bson:"product,omitempty"`
+    Version          *string                `bson:"version,omitempty"`
+    PreviousServices []ServiceHistoryEntry  `bson:"previous_services,omitempty"`
+}
+```
+
+### Scan/Organization Models
+
+```go
+type Organization struct {
+    ID                   string               `bson:"_id"`
+    UserIDs              []string             `bson:"user_ids"`
+    CompanyName          string               `bson:"company_name"`
+    Industry             string               `bson:"industry"`
+    Website              string               `bson:"website"`
+    CertVisible          bool                 `bson:"cert_visible"`
+    CreatedAt            time.Time            `bson:"created_at"`
+    UpdatedAt            time.Time            `bson:"updated_at"`
+    SubscriptionSettings SubscriptionSettings `bson:"subscription_settings"`
+}
+
+type SubscriptionSettings struct {
+    ScanCron  string `bson:"scan_cron"`  // 6-field cron (e.g., "0 0 2 * * *")
+    MaxAssets int    `bson:"max_assets"`
+}
+
+type Scan struct {
+    ID             string        `bson:"_id"`
+    OrgID          string        `bson:"org_id"`
+    Status         string        `bson:"status"`       // pending, running, done, failed
+    Type           string        `bson:"type"`          // scheduled, requested
+    TriggeredBy    string        `bson:"triggered_by"`  // user ID or "system"
+    StartedAt      *time.Time    `bson:"started_at,omitempty"`
+    CompletedAt    *time.Time    `bson:"completed_at,omitempty"`
+    CreatedAt      time.Time     `bson:"created_at"`
+    UpdatedAt      time.Time     `bson:"updated_at"`
+    TargetedAssets []AssetTarget `bson:"targeted_assets"`
+    Stats          ScanStats     `bson:"stats"`
+}
+
+type AssetTarget struct {
+    AssetID string `bson:"asset_id"`
+    Type    string `bson:"type"`   // "domain" or "ip"
+    Value   string `bson:"value"`  // domain name or IP address
+}
+
+type ScanStats struct {
+    TotalAssets      int `bson:"total_assets"`
+    AssetsScanned    int `bson:"assets_scanned"`
+    NewAssets        int `bson:"new_assets"`
+    FindingsDetected int `bson:"findings_detected"`
+}
+```
+
+---
+
+## MongoDB Document Schemas
+
+### Assets Collection
+```javascript
+{
+  _id: ObjectId("..."),
+  org_id: "507f1f77bcf86cd799439011",
+  type: "domain",                    // "domain" or "ip"
+  enabled: true,
+  dns_verified_at: ISODate("2025-11-09T08:53:38.744Z"),
+  domain: "moj.dev",                // For domain assets
+  added_on: ISODate("2025-11-09T08:53:27.775Z")
+}
+```
+
+### Discoveries Collection
+```javascript
+// Domain with enrichment
+{
+  _id: "uuid-123",
+  org_id: "org-456",
+  scan_ids: ["scan-abc-456", "scan-xyz-789"],
+  asset_type: "domain",
+  source: "shodan",
+  status: "active",
+  ownership_status: "verified",
+  domain: "example.com",
+  resolution_history: [
+    { ip: "93.184.216.34", first_seen: ISODate("..."), last_seen: null }
+  ],
+  metadata: {
+    waf: "Cloudflare",
+    geo: { continent: "North America", country: "United States", isp: "Cloudflare, Inc." }
+  },
+  first_seen: ISODate("..."),
+  last_seen: ISODate("...")
+}
+
+// Port with service tracking
+{
+  _id: "uuid-456",
+  org_id: "org-456",
+  scan_ids: ["scan-abc-456"],
+  asset_type: "port",
+  source: "port_discovery",
+  status: "active",
+  ownership_status: "verified",
+  parent_id: "ip-uuid",
+  port: 443,
+  protocol: "tcp",
+  service_name: "https",
+  product: "nginx",
+  version: "1.21.0",
+  previous_services: [
+    { service_name: "https", product: "Apache", version: "2.4.41", last_seen: ISODate("...") }
+  ]
+}
+```
+
+### Findings Collection
+```javascript
+{
+  _id: "uuid",
+  org_id: "uuid",
+  discovery_id: "uuid",
+  finding_type: "cve-2024-1234",
+  severity: "critical",
+  source: "nuclei",
+  title: "Remote Code Execution",
+  description: "...",
+  metadata: { /* scanner-specific */ },
+  status: "open",
+  scan_ids: ["scan-abc-456"],
+  first_detected: ISODate("..."),
+  last_detected: ISODate("..."),
+  resolved_at: null,
+  ai_recommendation: {           // Set by ai-enrichment-ingestion
+    content: {
+      vulnerability_explanation: "...",
+      potential_impact: "...",
+      remediation_steps: ["Step 1", "Step 2"],
+      best_practices: ["Practice 1"],
+      priority: "immediate",
+      estimated_effort: "medium"
+    },
+    prompt_used: "recommendation",
+    model: "llama-3.3-70b-versatile",
+    generated_at: ISODate("...")
+  }
+}
+```
+
+### Scans Collection
+```javascript
+{
+  _id: "scan-uuid-456",
+  org_id: "org-uuid-123",
+  status: "running",
+  type: "scheduled",
+  triggered_by: "system",
+  started_at: null,
+  completed_at: null,
+  created_at: ISODate("..."),
+  updated_at: ISODate("..."),
+  targeted_assets: [
+    { asset_id: "asset-uuid-1", type: "domain", value: "example.com" },
+    { asset_id: "asset-uuid-2", type: "ip", value: "192.168.1.100" }
+  ],
+  stats: { total_assets: 2, assets_scanned: 0, new_assets: 0, findings_detected: 0 }
+}
+```
+
+### Organizations Collection
+```javascript
+{
+  _id: "org-uuid-123",
+  user_ids: ["user-1", "user-2"],
+  company_name: "Example Corp",
+  industry: "Technology",
+  website: "https://example.com",
+  cert_visible: true,
+  created_at: ISODate("..."),
+  updated_at: ISODate("..."),
+  subscription_settings: {
+    scan_cron: "0 0 2 * * *",     // Daily at 2 AM (6-field: sec min hour day month weekday)
+    max_assets: 1000
+  }
+}
+```
+
+---
+
+## Query Examples
+
+### Asset Queries
+
+```javascript
+// All assets for an org
+db.discoveries.find({ org_id: "org-uuid" })
+
+// Only ports
+db.discoveries.find({ org_id: "org-uuid", asset_type: "port" })
+
+// Verified assets
+db.discoveries.find({ org_id: "org-uuid", ownership_status: "verified" })
+
+// Domain hierarchy: subdomains of a domain
+db.discoveries.find({ org_id: "org-uuid", asset_type: "subdomain", parent_id: "domain-uuid" })
+
+// IPs of a domain/subdomain
+db.discoveries.find({ org_id: "org-uuid", asset_type: "ip", parent_id: "domain-uuid" })
+
+// Ports on an IP
+db.discoveries.find({ org_id: "org-uuid", asset_type: "port", parent_id: "ip-uuid" })
+```
+
+### Enrichment Queries
+
+```javascript
+// Assets with specific WAF
+db.discoveries.find({ org_id: "org-uuid", "metadata.waf": "Cloudflare" })
+
+// Unprotected assets (no WAF)
+db.discoveries.find({
+  org_id: "org-uuid",
+  asset_type: { $in: ["domain", "subdomain"] },
+  $or: [{ "metadata.waf": { $exists: false } }, { "metadata.waf": null }]
+})
+
+// Assets by country
+db.discoveries.find({ org_id: "org-uuid", "metadata.geo.country": "United States" })
+```
+
+### Scan Queries
+
+```javascript
+// Discoveries from a specific scan
+db.discoveries.find({ org_id: "org-uuid", scan_ids: "scan-abc-456" })
+
+// Count by asset type per scan
+db.discoveries.aggregate([
+  { $match: { org_id: "org-uuid", scan_ids: "scan-abc-456" } },
+  { $group: { _id: "$asset_type", count: { $sum: 1 } } }
+])
+
+// Assets in multiple scans (intersection)
+db.discoveries.find({ org_id: "org-uuid", scan_ids: { $all: ["scan-1", "scan-2"] } })
+
+// All scans for an org
+db.scans.find({ org_id: "org-uuid" }).sort({ created_at: -1 })
+
+// Findings from a scan
+db.findings.find({ org_id: "org-uuid", scan_ids: "scan-abc-456" })
+```
+
+### Redis CLI Job Publishing
+
+```bash
+# Domain discovery job (with scan_id)
+redis-cli XADD domain_discovery_queue * data '{
+  "trace_id": "trace-123",
+  "scan_id": "scan-abc-456",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
+  "host": "example.com",
+  "created": "2025-10-15T10:00:00Z"
+}'
+
+# Port discovery job
+redis-cli XADD ip_discovery_queue * data '{
+  "trace_id": "trace-456",
+  "org_id": "550e8400-e29b-41d4-a716-446655440000",
+  "ip": "8.8.8.8",
+  "created": "2025-10-15T10:00:00Z"
+}'
+```
+
+---
+
+## Validation Rules
+
+- **org_id REQUIRED** — all jobs and findings must include `org_id` or they are skipped
+- **source REQUIRED** — ingestion skips findings without `source` field
+- **Dedup keys:** findings deduplicated by `(org_id, discovery_id, finding_type, title)`
+- **Scan tracking:** `scan_ids` array uses MongoDB `$addToSet` to prevent duplicates
+- **History:** IP resolution history and service history tracked via arrays, not overwrite
