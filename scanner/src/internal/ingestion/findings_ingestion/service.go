@@ -23,6 +23,7 @@ import (
 var AllowedSeveritiesForAI = map[string]bool{
 	shared.SeverityCritical: true,
 	shared.SeverityHigh:     true,
+	shared.SeverityMedium:   true,
 }
 
 // Service handles persistence of security findings to MongoDB
