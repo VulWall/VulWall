@@ -11,6 +11,6 @@ const (
 	RefreshCron = "0 * * * *"
 
 	// StreamCleanupCron defines how often the stream cleaner trims fully-processed messages.
-	// Every 10 minutes (at minute 5, 15, 25, 35, 45, 55 — offset from org refresh at minute 0).
-	StreamCleanupCron = "5/10 * * * *"
+	// Every 6 hours (at minute 5, offset from org refresh at minute 0).
+	StreamCleanupCron = "5 */6 * * *"
 )

@@ -107,16 +107,22 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 		stream string
 		group  string
 	}{
-		// domain_discovery_results consumers
-		{shared.StreamDomainDiscoveryResults, "domain_ingestion_service"},
-		{shared.StreamDomainDiscoveryResults, "nuclei_scanner_service"},
-		{shared.StreamDomainDiscoveryResults, "testssl_scanner_service"},
-		{shared.StreamDomainDiscoveryResults, "webtechprofiler_service"},
+		// domain_scan_triggers consumers (active recon scanners on domains/subdomains)
+		{shared.StreamDomainScanTriggers, "nuclei_scanner_service"},
+		{shared.StreamDomainScanTriggers, "testssl_scanner_service"},
+		{shared.StreamDomainScanTriggers, "webtechprofiler_service"},
+		{shared.StreamDomainScanTriggers, "js_dependency_scanner_service"},
+		{shared.StreamDomainScanTriggers, "http_header_scanner_service"},
 
-		// ip_discovery_results consumers
+		// port_scan_triggers consumers (active recon scanners on ports)
+		{shared.StreamPortScanTriggers, "nuclei_scanner_service"},
+		{shared.StreamPortScanTriggers, "testssl_scanner_service"},
+
+		// domain_discovery_results consumers (ingestion)
+		{shared.StreamDomainDiscoveryResults, "domain_ingestion_service"},
+
+		// ip_discovery_results consumers (ingestion + webtechprofiler)
 		{shared.StreamIPDiscoveryResults, "port_ingestion_service"},
-		{shared.StreamIPDiscoveryResults, "nuclei_scanner_service"},
-		{shared.StreamIPDiscoveryResults, "testssl_scanner_service"},
 		{shared.StreamIPDiscoveryResults, "webtechprofiler_service"},
 	}
 

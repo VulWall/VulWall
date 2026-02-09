@@ -115,26 +115,29 @@ ENVIRONMENT=production
 ## Project Structure
 
 ```
-cmd/
-├── discoveries/
-│   ├── domain-discovery/    # Shodan subdomain discovery
-│   └── port-discovery/      # TCP port scanner
-├── active_recon/
-│   ├── nuclei-scanner/      # Nuclei vulnerability scanner
-│   ├── testssl-scanner/     # TLS/SSL scanner
-│   ├── webtechprofiler/     # Web tech detection
-│   ├── js-dependency-scanner/  # JS vulnerability scanner
-│   └── discovery-enrichment/   # WAF + geolocation
-├── ingestion/               # MongoDB persistence orchestrator
-└── scan-coordinator/        # Automated scan scheduler
-
-internal/
-├── core/                    # Shared infrastructure (bootstrap, config, redis, mongo)
-├── shared/                  # Shared models and constants
-├── discoveries/             # Discovery service implementations
-├── active_recon/            # Active recon scanner implementations
-├── ingestion/               # Ingestion slice implementations
-└── scan_coordinator/        # Scan coordinator implementation
+src/                         # Go source code
+├── cmd/
+│   ├── discoveries/
+│   │   ├── domain-discovery/    # Shodan subdomain discovery
+│   │   └── port-discovery/      # TCP port scanner
+│   ├── active_recon/
+│   │   ├── nuclei-scanner/      # Nuclei vulnerability scanner
+│   │   ├── testssl-scanner/     # TLS/SSL scanner
+│   │   ├── webtechprofiler/     # Web tech detection
+│   │   ├── js-dependency-scanner/  # JS vulnerability scanner
+│   │   └── discovery-enrichment/   # WAF + geolocation
+│   ├── ingestion/               # MongoDB persistence orchestrator
+│   └── scan-coordinator/        # Automated scan scheduler
+├── internal/
+│   ├── core/                    # Shared infrastructure (bootstrap, config, redis, mongo)
+│   ├── shared/                  # Shared models and constants
+│   ├── discoveries/             # Discovery service implementations
+│   ├── active_recon/            # Active recon scanner implementations
+│   ├── ingestion/               # Ingestion slice implementations
+│   └── scan_coordinator/        # Scan coordinator implementation
+├── go.mod
+└── go.sum
+ops/                         # Docker, compose, deploy scripts
 ```
 
 ## MongoDB Collections

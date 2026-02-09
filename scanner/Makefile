@@ -1,5 +1,7 @@
 .PHONY: help build run test clean docker-build docker-up docker-down prod-setup prod-deploy-all prod-deploy-domain prod-deploy-ingestion prod-deploy-port prod-deploy-nuclei prod-stop-all prod-stop-service prod-restart-service prod-logs prod-status
 
+SRC_DIR := src
+
 help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
@@ -8,108 +10,108 @@ help: ## Show this help message
 
 build: ## Build all services
 	@echo "Building domain-discovery..."
-	@go build -o bin/domain-discovery ./cmd/discoveries/domain-discovery
+	@cd $(SRC_DIR) && go build -o bin/domain-discovery ./cmd/discoveries/domain-discovery
 	@echo "Building port-discovery..."
-	@go build -o bin/port-discovery ./cmd/discoveries/port-discovery
+	@cd $(SRC_DIR) && go build -o bin/port-discovery ./cmd/discoveries/port-discovery
 	@echo "Building nuclei-scanner..."
-	@go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
+	@cd $(SRC_DIR) && go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
 	@echo "Building testssl-scanner..."
-	@go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
+	@cd $(SRC_DIR) && go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
 	@echo "Building webtechprofiler..."
-	@go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
+	@cd $(SRC_DIR) && go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
 	@echo "Building discovery-enrichment..."
-	@go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
+	@cd $(SRC_DIR) && go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
 	@echo "Building js-dependency-scanner..."
-	@go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
+	@cd $(SRC_DIR) && go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
 	@echo "Building http-header-scanner..."
-	@go build -o bin/http-header-scanner ./cmd/active_recon/http-header-scanner
+	@cd $(SRC_DIR) && go build -o bin/http-header-scanner ./cmd/active_recon/http-header-scanner
 	@echo "Building ai-finding-enricher..."
-	@go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
+	@cd $(SRC_DIR) && go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
 	@echo "Building ingestion..."
-	@go build -o bin/ingestion ./cmd/ingestion
+	@cd $(SRC_DIR) && go build -o bin/ingestion ./cmd/ingestion
 	@echo "Building scan-coordinator..."
-	@go build -o bin/scan-coordinator ./cmd/scan-coordinator
+	@cd $(SRC_DIR) && go build -o bin/scan-coordinator ./cmd/scan-coordinator
 	@echo "Build complete!"
 
 build-domain-discovery: ## Build domain-discovery service
-	@go build -o bin/domain-discovery ./cmd/discoveries/domain-discovery
+	@cd $(SRC_DIR) && go build -o bin/domain-discovery ./cmd/discoveries/domain-discovery
 
 build-port-discovery: ## Build port-discovery service
-	@go build -o bin/port-discovery ./cmd/discoveries/port-discovery
+	@cd $(SRC_DIR) && go build -o bin/port-discovery ./cmd/discoveries/port-discovery
 
 build-nuclei-scanner: ## Build nuclei-scanner service
-	@go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
+	@cd $(SRC_DIR) && go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
 
 build-testssl-scanner: ## Build testssl-scanner service
-	@go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
+	@cd $(SRC_DIR) && go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
 
 build-webtechprofiler: ## Build webtechprofiler service
-	@go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
+	@cd $(SRC_DIR) && go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
 
 build-discovery-enrichment: ## Build discovery-enrichment service
-	@go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
+	@cd $(SRC_DIR) && go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
 
 build-js-dependency-scanner: ## Build js-dependency-scanner service
-	@go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
+	@cd $(SRC_DIR) && go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
 
 build-http-header-scanner: ## Build http-header-scanner service
-	@go build -o bin/http-header-scanner ./cmd/active_recon/http-header-scanner
+	@cd $(SRC_DIR) && go build -o bin/http-header-scanner ./cmd/active_recon/http-header-scanner
 
 build-ai-finding-enricher: ## Build ai-finding-enricher service
-	@go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
+	@cd $(SRC_DIR) && go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
 
 build-ingestion: ## Build ingestion service
-	@go build -o bin/ingestion ./cmd/ingestion
+	@cd $(SRC_DIR) && go build -o bin/ingestion ./cmd/ingestion
 
 build-scan-coordinator: ## Build scan-coordinator service
-	@go build -o bin/scan-coordinator ./cmd/scan-coordinator
+	@cd $(SRC_DIR) && go build -o bin/scan-coordinator ./cmd/scan-coordinator
 
 run-domain-discovery: ## Run domain-discovery service locally
-	@go run ./cmd/discoveries/domain-discovery/main.go
+	@cd $(SRC_DIR) && go run ./cmd/discoveries/domain-discovery/main.go
 
 run-port-discovery: ## Run port-discovery service locally
-	@go run ./cmd/discoveries/port-discovery/main.go
+	@cd $(SRC_DIR) && go run ./cmd/discoveries/port-discovery/main.go
 
 run-nuclei-scanner: ## Run nuclei-scanner service locally
-	@go run ./cmd/active_recon/nuclei-scanner/main.go
+	@cd $(SRC_DIR) && go run ./cmd/active_recon/nuclei-scanner/main.go
 
 run-testssl-scanner: ## Run testssl-scanner service locally
-	@go run ./cmd/active_recon/testssl-scanner/main.go
+	@cd $(SRC_DIR) && go run ./cmd/active_recon/testssl-scanner/main.go
 
 run-webtechprofiler: ## Run webtechprofiler service locally
-	@go run ./cmd/active_recon/webtechprofiler/main.go
+	@cd $(SRC_DIR) && go run ./cmd/active_recon/webtechprofiler/main.go
 
 run-discovery-enrichment: ## Run discovery-enrichment service locally
-	@go run ./cmd/active_recon/discovery-enrichment/main.go
+	@cd $(SRC_DIR) && go run ./cmd/active_recon/discovery-enrichment/main.go
 
 run-js-dependency-scanner: ## Run js-dependency-scanner service locally
-	@go run ./cmd/active_recon/js-dependency-scanner/main.go
+	@cd $(SRC_DIR) && go run ./cmd/active_recon/js-dependency-scanner/main.go
 
 run-http-header-scanner: ## Run http-header-scanner service locally
-	@go run ./cmd/active_recon/http-header-scanner/main.go
+	@cd $(SRC_DIR) && go run ./cmd/active_recon/http-header-scanner/main.go
 
 run-ai-finding-enricher: ## Run ai-finding-enricher service locally
-	@go run ./cmd/enrichers/ai-finding-enricher/main.go
+	@cd $(SRC_DIR) && go run ./cmd/enrichers/ai-finding-enricher/main.go
 
 run-ingestion: ## Run ingestion service locally
-	@go run ./cmd/ingestion/main.go
+	@cd $(SRC_DIR) && go run ./cmd/ingestion/main.go
 
 run-scan-coordinator: ## Run scan-coordinator service locally
-	@go run ./cmd/scan-coordinator/main.go
+	@cd $(SRC_DIR) && go run ./cmd/scan-coordinator/main.go
 
 test: ## Run tests
-	@go test -v ./...
+	@cd $(SRC_DIR) && go test -v ./...
 
 test-coverage: ## Run tests with coverage
-	@go test -v -coverprofile=coverage.out ./...
-	@go tool cover -html=coverage.out -o coverage.html
+	@cd $(SRC_DIR) && go test -v -coverprofile=coverage.out ./...
+	@cd $(SRC_DIR) && go tool cover -html=coverage.out -o coverage.html
 
 lint: ## Run linter
-	@golangci-lint run
+	@cd $(SRC_DIR) && golangci-lint run
 
 clean: ## Clean build artifacts
-	@rm -rf bin/
-	@rm -f coverage.out coverage.html
+	@rm -rf $(SRC_DIR)/bin/
+	@rm -f $(SRC_DIR)/coverage.out $(SRC_DIR)/coverage.html
 
 docker-build: ## Build Docker images
 	@docker-compose -f ops/docker-compose.yml build
@@ -154,14 +156,14 @@ docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ing
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
 
 deps: ## Download dependencies
-	@go mod download
-	@go mod tidy
+	@cd $(SRC_DIR) && go mod download
+	@cd $(SRC_DIR) && go mod tidy
 
 fmt: ## Format code
-	@go fmt ./...
+	@cd $(SRC_DIR) && go fmt ./...
 
 vet: ## Run go vet
-	@go vet ./...
+	@cd $(SRC_DIR) && go vet ./...
 
 # Production Deployment Targets
 

@@ -32,16 +32,16 @@ ops/**/.env
 ops/**/.env.local
 
 # Build artifacts
-bin/
+src/bin/
 
 # Editor/IDE
 .idea/
 .vscode/
 
 # Data files (MMDB databases)
-data/*.mmdb
-!data/.gitkeep
+src/data/*.mmdb
+!src/data/.gitkeep
 
 # Cloud provider IP range data (downloaded at runtime)
-internal/active_recon/discovery_enrichment/cloud/data/*.json
-!internal/active_recon/discovery_enrichment/cloud/data/.gitkeep
+src/internal/active_recon/discovery_enrichment/cloud/data/*.json
+!src/internal/active_recon/discovery_enrichment/cloud/data/.gitkeep
