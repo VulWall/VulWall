@@ -1,7 +1,7 @@
 services:
   discovery-enrichment:
     image: ghcr.io/vulwall/nightwatch-discovery-enrichment:${IMAGE_TAG:-dev}
-    container_name: nightwatch-discovery-enrichment
+    container_name: nw-discovery-enrichment
     restart: unless-stopped
     env_file:
       - /opt/vulwall/config/general.env

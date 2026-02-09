@@ -1,7 +1,7 @@
 services:
   ingestion:
     image: ghcr.io/vulwall/nightwatch-ingestion:${IMAGE_TAG:-dev}
-    container_name: nightwatch-ingestion
+    container_name: nw-ingestion
     restart: unless-stopped
     env_file:
       - /opt/vulwall/config/general.env

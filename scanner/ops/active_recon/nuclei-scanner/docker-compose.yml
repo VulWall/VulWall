@@ -1,3 +1,5 @@
+name: nw
+
 services:
   nuclei-scanner:
     image: ghcr.io/vulwall/nightwatch-nuclei-scanner:${IMAGE_TAG:-dev}

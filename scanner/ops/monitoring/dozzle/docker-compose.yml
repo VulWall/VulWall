@@ -1,14 +1,14 @@
 services:
   dozzle:
     image: amir20/dozzle:latest
-    container_name: nightwatch-dozzle
+    container_name: nw-dozzle
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
       - "127.0.0.1:9999:8080"
     environment:
-      - DOZZLE_FILTER=name=nightwatch-*
+      - DOZZLE_FILTER=name=nw-*
       - DOZZLE_USERNAME=${DOZZLE_USERNAME:-admin}
       - DOZZLE_PASSWORD=${DOZZLE_PASSWORD:-}
     logging:

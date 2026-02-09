@@ -1,7 +1,7 @@
 services:
   domain-discovery:
     image: ghcr.io/vulwall/nightwatch-domain-discovery:${IMAGE_TAG:-dev}
-    container_name: nightwatch-domain-discovery
+    container_name: nw-domain-discovery
     restart: unless-stopped
     env_file:
       - /opt/vulwall/config/general.env

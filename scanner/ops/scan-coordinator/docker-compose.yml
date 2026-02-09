@@ -1,7 +1,7 @@
 services:
   scan-coordinator:
     image: ghcr.io/vulwall/nightwatch-scan-coordinator:${IMAGE_TAG:-dev}
-    container_name: nightwatch-scan-coordinator
+    container_name: nw-scan-coordinator
     restart: unless-stopped
     env_file:
       - /opt/vulwall/config/general.env

@@ -1,7 +1,7 @@
 services:
   webtechprofiler:
     image: ghcr.io/vulwall/nightwatch-webtechprofiler:${IMAGE_TAG:-dev}
-    container_name: nightwatch-webtechprofiler
+    container_name: nw-webtechprofiler
     restart: unless-stopped
     env_file:
       - /opt/vulwall/config/general.env

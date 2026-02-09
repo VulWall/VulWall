@@ -1,3 +1,5 @@
+name: nw
+
 services:
   testssl-scanner:
     image: ghcr.io/vulwall/nightwatch-testssl-scanner:${IMAGE_TAG:-dev}
