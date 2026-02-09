@@ -34,9 +34,17 @@
         "type": "string",
         "enum": ["trivial", "small", "medium", "large"],
         "description": "Estimated effort to implement the fix"
+      },
+      "owasp_category": {
+        "type": "string",
+        "description": "The most relevant OWASP Top 10 (2025) category identifier. Example: 'A03' for Injection, 'A01' for Broken Access Control"
+      },
+      "is_exploitable": {
+        "type": "boolean",
+        "description": "Whether this vulnerability is realistically exploitable in a typical deployment based on the CVE context, attack vector, and required conditions"
       }
     },
-    "required": ["title", "vulnerability_explanation", "potential_impact", "remediation_steps", "best_practices", "priority", "estimated_effort"],
+    "required": ["title", "vulnerability_explanation", "potential_impact", "remediation_steps", "best_practices", "priority", "estimated_effort", "owasp_category", "is_exploitable"],
     "additionalProperties": false
   }
 }

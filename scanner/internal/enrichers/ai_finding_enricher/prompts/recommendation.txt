@@ -8,5 +8,7 @@ Analyze the finding and provide:
 5. Security best practices to prevent similar issues in the future
 6. Priority level for addressing this (immediate, high, medium, or low)
 7. Estimated effort to implement the fix (trivial, small, medium, or large)
+8. The most relevant OWASP Top 10 (2025) category (e.g., "A01" for Broken Access Control, "A03" for Injection, "A07" for Identification and Authentication Failures)
+9. Whether this vulnerability is realistically exploitable in a typical deployment (true/false), considering the attack vector, required privileges, and conditions
 
 Be concise but thorough. Focus on practical, actionable advice that a developer or security engineer can implement.
