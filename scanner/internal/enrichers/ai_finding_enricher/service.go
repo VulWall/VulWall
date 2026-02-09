@@ -290,7 +290,8 @@ func (s *Service) publishEnrichment(ctx context.Context, job shared.AIEnrichment
 	// Inject trace context for distributed tracing
 	enrichment.TraceContext = telemetry.InjectTraceContext(ctx)
 
-	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamAIEnrichmentResults, enrichment, 5000); err != nil {
+	// Publish WITHOUT MAXLEN — safe cleanup job handles trimming after all consumers process
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamAIEnrichmentResults, enrichment, 0); err != nil {
 		return fmt.Errorf("failed to publish enrichment: %w", err)
 	}
 

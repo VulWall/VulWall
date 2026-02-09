@@ -307,5 +307,6 @@ func (s *Service) mapSeverity(nucleiSeverity string) string {
 func (s *Service) publishFinding(ctx context.Context, finding shared.SecurityFinding) error {
 	// Inject trace context for span linking across service boundaries
 	finding.TraceContext = telemetry.InjectTraceContext(ctx)
-	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 20000)
+	// Publish WITHOUT MAXLEN — safe cleanup job handles trimming after all consumers process
+	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 0)
 }

@@ -151,7 +151,8 @@ func (s *Service) publishUniqueFindings(ctx context.Context, results []protocolS
 // publishFinding publishes a security finding to the Redis stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.SecurityFinding) error {
 	finding.TraceContext = telemetry.InjectTraceContext(ctx)
-	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 20000)
+	// Publish WITHOUT MAXLEN — safe cleanup job handles trimming after all consumers process
+	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 0)
 }
 
 // convertToSecurityFinding converts a header check result to SecurityFinding format

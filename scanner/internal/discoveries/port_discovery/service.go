@@ -257,8 +257,8 @@ func (s *Service) publishFinding(ctx context.Context, finding shared.IPDiscovery
 	// Inject trace context for span linking across service boundaries
 	finding.TraceContext = telemetry.InjectTraceContext(ctx)
 
-	// Use shared publisher utility with MAXLEN=10000 to prevent unbounded growth
-	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryResults, finding, 10000); err != nil {
+	// Publish WITHOUT MAXLEN — safe cleanup job handles trimming after all consumers process
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryResults, finding, 0); err != nil {
 		s.logger.Error("Failed to publish finding to stream",
 			zap.String("stream", shared.StreamIPDiscoveryResults),
 			zap.Error(err),

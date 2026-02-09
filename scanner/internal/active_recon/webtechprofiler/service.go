@@ -225,5 +225,6 @@ func (s *Service) determineSeverity(technology string) string {
 
 // publishFinding publishes a security finding to the Redis stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.SecurityFinding) error {
-	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 20000)
+	// Publish WITHOUT MAXLEN — safe cleanup job handles trimming after all consumers process
+	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 0)
 }

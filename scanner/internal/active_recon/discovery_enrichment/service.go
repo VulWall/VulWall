@@ -303,8 +303,8 @@ func (s *Service) enrichCloud(ctx context.Context, job shared.EnrichmentJob) {
 
 // publishEnrichment publishes enrichment data to Redis stream
 func (s *Service) publishEnrichment(ctx context.Context, enrichment shared.EnrichmentFinding) error {
-	// Use PublishToStream helper with MAXLEN=5000 for result streams
-	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDiscoveryEnrichmentResults, enrichment, 5000); err != nil {
+	// Publish WITHOUT MAXLEN — safe cleanup job handles trimming after all consumers process
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDiscoveryEnrichmentResults, enrichment, 0); err != nil {
 		return fmt.Errorf("failed to publish to stream: %w", err)
 	}
 
