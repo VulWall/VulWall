@@ -65,8 +65,11 @@ func main() {
 	// Create shared service (used by both scheduler and API)
 	service := scan_coordinator.NewService(redisClient, db, logger.Log)
 
-	// Create scheduler
-	scheduler := scan_coordinator.NewScheduler(service, db, logger.Log)
+	// Create stream cleaner (scheduled via cron inside the scheduler)
+	streamCleaner := scan_coordinator.NewStreamCleaner(redisClient, logger.Log)
+
+	// Create scheduler (includes stream cleanup cron job)
+	scheduler := scan_coordinator.NewScheduler(service, db, streamCleaner, logger.Log)
 
 	// Create webhook notifier (empty URL = disabled)
 	webhookURL := config.GetEnv(config.EnvDashboardWebhookURL, "")
@@ -87,7 +90,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Start scheduler in goroutine (runs every 1 hour)
+	// Start scheduler in goroutine (includes org scan scheduling + stream cleanup cron)
 	go scheduler.Start(ctx)
 
 	// Start scan monitor in goroutine (runs every 15 minutes)

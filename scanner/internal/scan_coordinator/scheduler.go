@@ -17,24 +17,26 @@ import (
 
 // Scheduler runs the scan coordinator using cron-based scheduling per organization
 type Scheduler struct {
-	service     *Service
-	db          *mongo.Database
-	logger      *zap.Logger
-	tracer      trace.Tracer
-	cron        *cron.Cron
-	entryIDs    map[string]cron.EntryID // org_id -> cron entry ID
-	entryIDsMux sync.Mutex
+	service       *Service
+	db            *mongo.Database
+	logger        *zap.Logger
+	tracer        trace.Tracer
+	cron          *cron.Cron
+	entryIDs      map[string]cron.EntryID // org_id -> cron entry ID
+	entryIDsMux   sync.Mutex
+	streamCleaner *StreamCleaner
 }
 
 // NewScheduler creates a new scheduler instance
-func NewScheduler(service *Service, db *mongo.Database, logger *zap.Logger) *Scheduler {
+func NewScheduler(service *Service, db *mongo.Database, streamCleaner *StreamCleaner, logger *zap.Logger) *Scheduler {
 	return &Scheduler{
-		service:  service,
-		db:       db,
-		logger:   logger,
-		tracer:   otel.Tracer("scan-coordinator"),
-		cron:     cron.New(), // Standard 5-field cron (minute, hour, day, month, weekday)
-		entryIDs: make(map[string]cron.EntryID),
+		service:       service,
+		db:            db,
+		logger:        logger,
+		tracer:        otel.Tracer("scan-coordinator"),
+		cron:          cron.New(), // Standard 5-field cron (minute, hour, day, month, weekday)
+		entryIDs:      make(map[string]cron.EntryID),
+		streamCleaner: streamCleaner,
 	}
 }
 
@@ -52,6 +54,13 @@ func (sc *Scheduler) Start(ctx context.Context) error {
 		sc.refreshOrganizations()
 	}); err != nil {
 		return fmt.Errorf("failed to schedule organization refresh: %w", err)
+	}
+
+	// Schedule periodic stream cleanup (trims fully-processed messages)
+	if _, err := sc.cron.AddFunc(StreamCleanupCron, func() {
+		sc.streamCleaner.Run()
+	}); err != nil {
+		return fmt.Errorf("failed to schedule stream cleanup: %w", err)
 	}
 
 	// Start the cron scheduler
