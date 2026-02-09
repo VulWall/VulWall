@@ -1,3 +1,5 @@
+name: nw-scan-coordinator
+
 services:
   scan-coordinator:
     image: ghcr.io/vulwall/nightwatch-scan-coordinator:${IMAGE_TAG:-dev}

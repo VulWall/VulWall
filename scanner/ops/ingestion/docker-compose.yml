@@ -1,3 +1,5 @@
+name: nw-ingestion
+
 services:
   ingestion:
     image: ghcr.io/vulwall/nightwatch-ingestion:${IMAGE_TAG:-dev}

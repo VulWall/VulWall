@@ -1,4 +1,4 @@
-name: nw
+name: nw-testssl-scanner
 
 services:
   testssl-scanner:

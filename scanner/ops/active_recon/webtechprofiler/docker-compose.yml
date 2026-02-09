@@ -1,3 +1,5 @@
+name: nw-webtechprofiler
+
 services:
   webtechprofiler:
     image: ghcr.io/vulwall/nightwatch-webtechprofiler:${IMAGE_TAG:-dev}

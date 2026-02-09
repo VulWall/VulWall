@@ -1,3 +1,5 @@
+name: nw-port-discovery
+
 services:
   port-discovery:
     image: ghcr.io/vulwall/nightwatch-port-discovery:${IMAGE_TAG:-dev}

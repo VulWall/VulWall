@@ -1,3 +1,5 @@
+name: nw-ai-finding-enricher
+
 services:
   ai-finding-enricher:
     image: ghcr.io/vulwall/nightwatch-ai-finding-enricher:${IMAGE_TAG:-dev}

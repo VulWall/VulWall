@@ -1,4 +1,4 @@
-name: nw
+name: nw-nuclei-scanner
 
 services:
   nuclei-scanner:
