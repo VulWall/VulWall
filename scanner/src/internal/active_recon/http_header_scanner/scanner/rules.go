@@ -117,7 +117,17 @@ func SecurityHeaderRules() []HeaderRule {
 
 // DisclosureHeaderRules returns rules for headers that should NOT be present (information leakage)
 func DisclosureHeaderRules() []string {
-	return []string{"Server", "X-Powered-By"}
+	return []string{
+		"Server",
+		"X-Powered-By",
+		"X-AspNet-Version",
+		"X-AspNetMvc-Version",
+		"X-Generator",
+		"X-Runtime",
+		"X-Varnish",
+		"X-Page-Speed",
+		"X-Drupal-Cache",
+	}
 }
 
 // checkHSTS validates the HSTS header value
