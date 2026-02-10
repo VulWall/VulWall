@@ -13,4 +13,12 @@ const (
 	// Default: 2:00 AM UTC daily ("0 2 * * *")
 	// Can be overridden with NUCLEI_TEMPLATE_UPDATE_CRON environment variable
 	DefaultTemplateUpdateCron = "0 2 * * *"
+
+	// DefaultIncludeTags are the Nuclei template tags to run by default.
+	// Focuses on proven vulnerability classes relevant to external attack surface.
+	DefaultIncludeTags = "cve,vuln,exposure,misconfig,default-login,token,takeover,kev,xss,lfi,ssrf,rce,sqli,auth-bypass,unauth,panel"
+
+	// DefaultExcludeTags are the Nuclei template tags to exclude by default.
+	// Prevents intrusive/destructive templates from running against production targets.
+	DefaultExcludeTags = "intrusive,dos,fuzz"
 )

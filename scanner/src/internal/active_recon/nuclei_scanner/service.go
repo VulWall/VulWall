@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -135,10 +136,15 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	)
 	defer span.End()
 
+	includeTags := getTagEnv(config.EnvNucleiIncludeTags, DefaultIncludeTags)
+	excludeTags := getTagEnv(config.EnvNucleiExcludeTags, DefaultExcludeTags)
+
 	s.logger.Info("Processing scan target",
 		zap.String("target", target.Target),
 		zap.String("discovery_id", target.DiscoveryID),
 		zap.String("org_id", target.OrgID),
+		zap.String("include_tags", includeTags),
+		zap.String("exclude_tags", excludeTags),
 	)
 
 	// Run Nuclei scan
@@ -177,18 +183,26 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 
 // runNucleiScan executes Nuclei scanner on the target
 func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([]NucleiOutput, error) {
-	// Build Nuclei command
-	// -u: target URL
-	// -j: JSONL output (one JSON per line)
-	// -silent: suppress banner and update check
-	// -t: explicit templates path (required for volume mounts)
-	cmd := exec.CommandContext(ctx, "nuclei",
+	// Build Nuclei command args dynamically
+	args := []string{
 		"-u", target,
 		"-t", "/root/nuclei-templates",
 		"-j",
 		"-silent",
 		"-severity", severity,
-	)
+	}
+
+	// Append tag filters only when non-empty
+	includeTags := getTagEnv(config.EnvNucleiIncludeTags, DefaultIncludeTags)
+	if includeTags != "" {
+		args = append(args, "-tags", includeTags)
+	}
+	excludeTags := getTagEnv(config.EnvNucleiExcludeTags, DefaultExcludeTags)
+	if excludeTags != "" {
+		args = append(args, "-etags", excludeTags)
+	}
+
+	cmd := exec.CommandContext(ctx, "nuclei", args...)
 
 	// Execute command and capture both stdout and stderr
 	output, err := cmd.CombinedOutput()
@@ -301,6 +315,19 @@ func (s *Service) mapSeverity(nucleiSeverity string) string {
 	default:
 		return shared.SeverityInfo
 	}
+}
+
+// getTagEnv retrieves Nuclei tag configuration with empty-string-aware semantics.
+// Uses os.LookupEnv instead of config.GetEnv because config.GetEnv treats "" and
+// unset identically. For Nuclei tags the distinction matters:
+//   - Unset       → use opinionated defaults (DefaultIncludeTags/DefaultExcludeTags)
+//   - Set to ""   → disable the filter (omit the CLI flag, run all templates)
+//   - Set to val  → use the custom value
+func getTagEnv(envKey, defaultValue string) string {
+	if val, ok := os.LookupEnv(envKey); ok {
+		return val
+	}
+	return defaultValue
 }
 
 // publishFinding publishes a security finding to Redis stream
