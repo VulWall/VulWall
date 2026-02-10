@@ -36,6 +36,7 @@ VulWall.NightWatch/
     │   │   ├── webtechprofiler/
     │   │   ├── js-dependency-scanner/
     │   │   ├── http-header-scanner/
+    │   │   ├── email-security-scanner/
     │   │   └── discovery-enrichment/
     │   ├── enrichers/
     │   │   └── ai-finding-enricher/
@@ -45,7 +46,7 @@ VulWall.NightWatch/
     │   ├── shared/          # models.go, constants.go (cross-service)
     │   ├── scan_coordinator/
     │   ├── discoveries/     # domain_discovery, port_discovery
-    │   ├── active_recon/    # nuclei, testssl, webtechprofiler, js_dep, http_header, discovery_enrichment
+    │   ├── active_recon/    # nuclei, testssl, webtechprofiler, js_dep, http_header, email_security, discovery_enrichment
     │   ├── enrichers/       # ai_finding_enricher
     │   └── ingestion/       # orchestrator + 6 slices (domain, port, findings, enrichment, ai_enrichment, audit)
     ├── go.mod
@@ -74,6 +75,7 @@ make build-port-discovery
 make build-nuclei-scanner
 make build-ingestion
 make build-ai-finding-enricher
+make build-email-security-scanner
 ```
 
 ### Running Locally
@@ -84,6 +86,7 @@ make run-port-discovery
 make run-nuclei-scanner
 make run-ingestion              # Runs all 6 ingestion slices
 make run-ai-finding-enricher
+make run-email-security-scanner
 ```
 
 ### Docker Operations
@@ -167,7 +170,7 @@ make deps                   # Download and tidy dependencies
 ### Key Constants Location
 - Stream/collection names: `src/internal/shared/constants.go`
 - Consumer groups: each service's `constants.go`
-- Scan monitor tracking: `src/internal/scan_coordinator/scan_monitor.go:105-127`
+- Scan monitor tracking: `src/internal/scan_coordinator/scan_monitor.go:105-128`
 - Stream cleanup: `src/internal/scan_coordinator/stream_cleanup.go:30-38`
 
 ## Configuration
@@ -183,6 +186,8 @@ Environment variables (`.env`):
 | `GROQ_API_KEY` | Groq API key for AI enrichment |
 | `ENVIRONMENT` | development / production |
 | `HONEYCOMB_API_KEY` | Honeycomb API key for tracing |
+| `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
+| `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
 
 See `.env.example` for full list.
 

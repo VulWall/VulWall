@@ -113,6 +113,7 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 		{shared.StreamDomainScanTriggers, "webtechprofiler_service"},
 		{shared.StreamDomainScanTriggers, "js_dependency_scanner_service"},
 		{shared.StreamDomainScanTriggers, "http_header_scanner_service"},
+		{shared.StreamDomainScanTriggers, "email_security_scanner_service"},
 
 		// port_scan_triggers consumers (active recon scanners on ports)
 		{shared.StreamPortScanTriggers, "nuclei_scanner_service"},

@@ -25,6 +25,8 @@ build: ## Build all services
 	@cd $(SRC_DIR) && go build -o bin/js-dependency-scanner ./cmd/active_recon/js-dependency-scanner
 	@echo "Building http-header-scanner..."
 	@cd $(SRC_DIR) && go build -o bin/http-header-scanner ./cmd/active_recon/http-header-scanner
+	@echo "Building email-security-scanner..."
+	@cd $(SRC_DIR) && go build -o bin/email-security-scanner ./cmd/active_recon/email-security-scanner
 	@echo "Building ai-finding-enricher..."
 	@cd $(SRC_DIR) && go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
 	@echo "Building ingestion..."
@@ -56,6 +58,9 @@ build-js-dependency-scanner: ## Build js-dependency-scanner service
 
 build-http-header-scanner: ## Build http-header-scanner service
 	@cd $(SRC_DIR) && go build -o bin/http-header-scanner ./cmd/active_recon/http-header-scanner
+
+build-email-security-scanner: ## Build email-security-scanner service
+	@cd $(SRC_DIR) && go build -o bin/email-security-scanner ./cmd/active_recon/email-security-scanner
 
 build-ai-finding-enricher: ## Build ai-finding-enricher service
 	@cd $(SRC_DIR) && go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
@@ -89,6 +94,9 @@ run-js-dependency-scanner: ## Run js-dependency-scanner service locally
 
 run-http-header-scanner: ## Run http-header-scanner service locally
 	@cd $(SRC_DIR) && go run ./cmd/active_recon/http-header-scanner/main.go
+
+run-email-security-scanner: ## Run email-security-scanner service locally
+	@cd $(SRC_DIR) && go run ./cmd/active_recon/email-security-scanner/main.go
 
 run-ai-finding-enricher: ## Run ai-finding-enricher service locally
 	@cd $(SRC_DIR) && go run ./cmd/enrichers/ai-finding-enricher/main.go
@@ -148,6 +156,9 @@ docker-scale-js-dependency-scanner: ## Scale js-dependency-scanner workers (usag
 
 docker-scale-http-header-scanner: ## Scale http-header-scanner workers (usage: make docker-scale-http-header-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale http-header-scanner=$(N)
+
+docker-scale-email-security-scanner: ## Scale email-security-scanner workers (usage: make docker-scale-email-security-scanner N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale email-security-scanner=$(N)
 
 docker-scale-ai-finding-enricher: ## Scale ai-finding-enricher workers (usage: make docker-scale-ai-finding-enricher N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ai-finding-enricher=$(N)
@@ -240,6 +251,13 @@ prod-deploy-http-header-scanner: ## Deploy http-header-scanner service (usage: m
 		ops/scripts/deploy-service.sh http-header-scanner; \
 	fi
 
+prod-deploy-email-security-scanner: ## Deploy email-security-scanner service (usage: make prod-deploy-email-security-scanner [PROJECT=name] [CONFIG=prd])
+	@if [ -n "$(PROJECT)" ]; then \
+		ops/scripts/deploy-service.sh email-security-scanner $(PROJECT) $(CONFIG); \
+	else \
+		ops/scripts/deploy-service.sh email-security-scanner; \
+	fi
+
 prod-deploy-ai-finding-enricher: ## Deploy ai-finding-enricher service (usage: make prod-deploy-ai-finding-enricher [PROJECT=name] [CONFIG=prd])
 	@if [ -n "$(PROJECT)" ]; then \
 		ops/scripts/deploy-service.sh ai-finding-enricher $(PROJECT) $(CONFIG); \
@@ -261,7 +279,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment, js-dependency-scanner, http-header-scanner"; \
+		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment, js-dependency-scanner, http-header-scanner, email-security-scanner"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)

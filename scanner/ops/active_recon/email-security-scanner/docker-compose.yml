@@ -1,0 +1,28 @@
+name: nw-email-security-scanner
+
+services:
+  email-security-scanner:
+    image: ghcr.io/vulwall/nightwatch-email-security-scanner:${IMAGE_TAG:-dev}
+    container_name: nw-email-security-scanner
+    restart: unless-stopped
+    env_file:
+      - /opt/vulwall/config/general.env
+      - /opt/vulwall/config/redis.env
+      - /opt/vulwall/config/honeycomb.env
+    networks:
+      - core-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "email-security-scanner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  core-network:
+    external: true
