@@ -2,6 +2,7 @@ package email_security_scanner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -17,20 +18,33 @@ var dkimSelectors = []string{
 	"s1", "s2", "mail", "dkim1", "dkim2", "mx", "smtp", "email",
 }
 
+// isDNSNotFound checks if the error is a DNS NXDOMAIN error (record genuinely doesn't exist).
+// Returns true only for NXDOMAIN; returns false for timeouts, SERVFAIL, and other transient errors.
+func isDNSNotFound(err error) bool {
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.IsNotFound
+	}
+	return false
+}
+
 // checkSPF performs SPF record validation for a domain
 func checkSPF(ctx context.Context, resolver *net.Resolver, domain string) []EmailCheckResult {
 	var results []EmailCheckResult
 
 	records, err := resolver.LookupTXT(ctx, domain)
 	if err != nil {
-		// No TXT records at all — SPF is missing
-		results = append(results, EmailCheckResult{
-			FindingType: "missing-spf",
-			Severity:    shared.SeverityMedium,
-			Title:       "Missing SPF Record",
-			Description: "No SPF (Sender Policy Framework) record was found for this domain. Without SPF, attackers can send emails that appear to come from this domain, enabling phishing and spam campaigns. SPF helps receiving mail servers verify that incoming mail from a domain comes from an authorized IP address.",
-			References:  []string{"https://datatracker.ietf.org/doc/html/rfc7208"},
-		})
+		// Only report missing SPF if the DNS record genuinely doesn't exist (NXDOMAIN).
+		// Skip silently for transient errors (timeout, SERVFAIL) to avoid false positives.
+		if isDNSNotFound(err) {
+			results = append(results, EmailCheckResult{
+				FindingType: "missing-spf",
+				Severity:    shared.SeverityMedium,
+				Title:       "Missing SPF Record",
+				Description: "No SPF (Sender Policy Framework) record was found for this domain. Without SPF, attackers can send emails that appear to come from this domain, enabling phishing and spam campaigns. SPF helps receiving mail servers verify that incoming mail from a domain comes from an authorized IP address.",
+				References:  []string{"https://datatracker.ietf.org/doc/html/rfc7208"},
+			})
+		}
 		return results
 	}
 
@@ -90,13 +104,17 @@ func checkDMARC(ctx context.Context, resolver *net.Resolver, domain string) []Em
 	dmarcDomain := "_dmarc." + domain
 	records, err := resolver.LookupTXT(ctx, dmarcDomain)
 	if err != nil {
-		results = append(results, EmailCheckResult{
-			FindingType: "missing-dmarc",
-			Severity:    shared.SeverityMedium,
-			Title:       "Missing DMARC Record",
-			Description: "No DMARC (Domain-based Message Authentication, Reporting & Conformance) record was found at _dmarc." + domain + ". DMARC builds on SPF and DKIM to provide domain-level email authentication. Without DMARC, there is no policy instructing receiving servers how to handle emails that fail authentication checks, leaving the domain vulnerable to spoofing.",
-			References:  []string{"https://datatracker.ietf.org/doc/html/rfc7489"},
-		})
+		// Only report missing DMARC if the DNS record genuinely doesn't exist (NXDOMAIN).
+		// Skip silently for transient errors (timeout, SERVFAIL) to avoid false positives.
+		if isDNSNotFound(err) {
+			results = append(results, EmailCheckResult{
+				FindingType: "missing-dmarc",
+				Severity:    shared.SeverityMedium,
+				Title:       "Missing DMARC Record",
+				Description: "No DMARC (Domain-based Message Authentication, Reporting & Conformance) record was found at _dmarc." + domain + ". DMARC builds on SPF and DKIM to provide domain-level email authentication. Without DMARC, there is no policy instructing receiving servers how to handle emails that fail authentication checks, leaving the domain vulnerable to spoofing.",
+				References:  []string{"https://datatracker.ietf.org/doc/html/rfc7489"},
+			})
+		}
 		return results
 	}
 
