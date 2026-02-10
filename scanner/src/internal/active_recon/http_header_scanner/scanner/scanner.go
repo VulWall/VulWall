@@ -246,7 +246,7 @@ func (s *HTTPHeaderScanner) hasSecurityTxt(ctx context.Context, url string) bool
 
 	if resp.StatusCode == http.StatusOK {
 		ct := resp.Header.Get("Content-Type")
-		return strings.Contains(ct, "text/")
+		return strings.Contains(ct, "text/plain")
 	}
 	return false
 }
