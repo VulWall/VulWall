@@ -12,7 +12,10 @@ import (
 )
 
 // Common DKIM selectors to check
-var dkimSelectors = []string{"default", "google", "selector1", "selector2", "k1", "dkim"}
+var dkimSelectors = []string{
+	"default", "google", "selector1", "selector2", "k1", "dkim",
+	"s1", "s2", "mail", "dkim1", "dkim2", "mx", "smtp", "email",
+}
 
 // checkSPF performs SPF record validation for a domain
 func checkSPF(ctx context.Context, resolver *net.Resolver, domain string) []EmailCheckResult {
