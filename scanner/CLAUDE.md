@@ -119,8 +119,10 @@ make deps                   # Download and tidy dependencies
 5. **Update SERVICE_REGISTRY.md** — add to all relevant tables
 6. Inject TraceContext before publishing, extract after consuming
 7. Add Makefile targets, Dockerfile, docker-compose entry
+8. **Update CI/CD pipeline** — add to build matrix in `.github/workflows/docker-build-push.yml`
+9. **Update deploy scripts** — add to `ops/scripts/deploy-all.sh` service list AND `ops/scripts/deploy-service.sh` routing + help text
 
-> **Why this matters:** Missing step 3 causes scans to complete before the new scanner finishes. This is the scan_monitor bug class.
+> **Why this matters:** Missing step 3 causes scans to complete before the new scanner finishes. Missing steps 8-9 means the service won't be built or deployed by CI/CD.
 
 ### Architecture Invariants
 
@@ -172,6 +174,9 @@ make deps                   # Download and tidy dependencies
 - Consumer groups: each service's `constants.go`
 - Scan monitor tracking: `src/internal/scan_coordinator/scan_monitor.go:105-128`
 - Stream cleanup: `src/internal/scan_coordinator/stream_cleanup.go:30-38`
+- CI/CD build matrix: `.github/workflows/docker-build-push.yml`
+- Deploy service list: `ops/scripts/deploy-all.sh`
+- Deploy service routing: `ops/scripts/deploy-service.sh`
 
 ## Configuration
 
