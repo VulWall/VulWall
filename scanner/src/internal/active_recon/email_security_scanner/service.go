@@ -60,6 +60,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	allResults = append(allResults, checkSPF(dnsCtx, s.resolver, target.Target)...)
 	allResults = append(allResults, checkDMARC(dnsCtx, s.resolver, target.Target)...)
 	allResults = append(allResults, checkDKIM(dnsCtx, s.resolver, target.Target)...)
+	allResults = append(allResults, checkZoneTransfer(dnsCtx, s.resolver, target.Target)...)
 
 	span.SetAttributes(attribute.Int("findings.count", len(allResults)))
 

@@ -2,9 +2,12 @@ package email_security_scanner
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
+	"time"
 
+	"github.com/miekg/dns"
 	"github.com/vulwall/scanners/internal/shared"
 )
 
@@ -170,6 +173,71 @@ func checkDKIM(ctx context.Context, resolver *net.Resolver, domain string) []Ema
 			References:  []string{"https://datatracker.ietf.org/doc/html/rfc6376"},
 		},
 	}
+}
+
+// checkZoneTransfer attempts AXFR queries against each nameserver for a domain.
+// An open zone transfer is a confirmed critical recon finding — it exposes the
+// entire DNS zone (internal hostnames, staging servers, database subdomains).
+func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain string) []EmailCheckResult {
+	var results []EmailCheckResult
+
+	nameservers, err := resolver.LookupNS(ctx, domain)
+	if err != nil || len(nameservers) == 0 {
+		return nil
+	}
+
+	for _, ns := range nameservers {
+		host := strings.TrimSuffix(ns.Host, ".")
+		if host == "" {
+			continue
+		}
+
+		recordCount := tryAXFR(ctx, domain, host)
+		if recordCount > 0 {
+			results = append(results, EmailCheckResult{
+				FindingType: "dns-zone-transfer",
+				Severity:    shared.SeverityHigh,
+				Title:       "DNS Zone Transfer Allowed",
+				Description: fmt.Sprintf(
+					"The nameserver %s allows public DNS zone transfers (AXFR) for %s. "+
+						"This exposes the complete DNS zone (%d records), giving attackers a full map of "+
+						"internal hostnames, staging servers, and services. Zone transfers should be restricted "+
+						"to authorized secondary nameservers only.",
+					host, domain, recordCount,
+				),
+				Value:      host,
+				References: []string{"https://datatracker.ietf.org/doc/html/rfc5936"},
+			})
+		}
+	}
+
+	return results
+}
+
+// tryAXFR attempts an AXFR transfer against a single nameserver.
+// Returns the number of records received, or 0 if the transfer was refused/failed.
+func tryAXFR(ctx context.Context, domain, nameserver string) int {
+	m := new(dns.Msg)
+	m.SetAxfr(dns.Fqdn(domain))
+
+	t := new(dns.Transfer)
+	if deadline, ok := ctx.Deadline(); ok {
+		t.DialTimeout = time.Until(deadline)
+	}
+
+	ch, err := t.In(m, net.JoinHostPort(nameserver, "53"))
+	if err != nil {
+		return 0
+	}
+
+	var count int
+	for envelope := range ch {
+		if envelope.Error != nil {
+			return 0
+		}
+		count += len(envelope.RR)
+	}
+	return count
 }
 
 // containsTag checks if a DMARC record contains a specific tag=value pair
