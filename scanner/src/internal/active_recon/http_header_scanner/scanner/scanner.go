@@ -99,6 +99,11 @@ func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]Heade
 		results = append(results, s.checkHTTPSRedirect(ctx, targetURL)...)
 	}
 
+	// Check security.txt (only on HTTPS to avoid duplicate findings)
+	if strings.HasPrefix(targetURL, "https://") {
+		results = append(results, s.checkSecurityTxt(ctx, targetURL)...)
+	}
+
 	return results, nil
 }
 
@@ -199,6 +204,49 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []H
 	}
 
 	return results
+}
+
+// checkSecurityTxt checks for the presence of a security.txt file at the
+// well-known URI (RFC 9116). This signals a vulnerability disclosure policy.
+func (s *HTTPHeaderScanner) checkSecurityTxt(ctx context.Context, targetURL string) []HeaderCheckResult {
+	// Extract base URL (strip any path) and build well-known URI
+	securityTxtURL := strings.TrimRight(targetURL, "/") + "/.well-known/security.txt"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, securityTxtURL, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", shared.DefaultUserAgent)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	// A 200 with text content type means security.txt exists
+	if resp.StatusCode == http.StatusOK {
+		ct := resp.Header.Get("Content-Type")
+		if strings.Contains(ct, "text/") {
+			return nil // security.txt exists
+		}
+	}
+
+	return []HeaderCheckResult{
+		{
+			HeaderName:  "security.txt",
+			Present:     false,
+			IsSecure:    false,
+			Severity:    shared.SeverityInfo,
+			FindingType: "missing-security-txt",
+			Title:       "Missing security.txt",
+			Description: "No security.txt file was found at /.well-known/security.txt. This file (RFC 9116) provides a standardized way to communicate your vulnerability disclosure policy, making it easy for security researchers to report issues responsibly. Many security questionnaires now ask whether a vulnerability disclosure policy is in place.",
+			References: []string{
+				"https://datatracker.ietf.org/doc/html/rfc9116",
+				"https://securitytxt.org/",
+			},
+		},
+	}
 }
 
 // checkHTTPSRedirect checks whether an HTTP URL redirects to HTTPS.
