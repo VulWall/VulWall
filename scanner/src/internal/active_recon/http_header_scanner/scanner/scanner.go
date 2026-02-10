@@ -94,6 +94,11 @@ func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]Heade
 	// Check CORS misconfiguration (requires its own request with Origin header)
 	results = append(results, s.checkCORS(ctx, targetURL)...)
 
+	// Check HTTPS redirect (only for HTTP URLs)
+	if strings.HasPrefix(targetURL, "http://") {
+		results = append(results, s.checkHTTPSRedirect(ctx, targetURL)...)
+	}
+
 	return results, nil
 }
 
@@ -194,6 +199,55 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []H
 	}
 
 	return results
+}
+
+// checkHTTPSRedirect checks whether an HTTP URL redirects to HTTPS.
+// A missing redirect means users can be served over plaintext.
+func (s *HTTPHeaderScanner) checkHTTPSRedirect(ctx context.Context, targetURL string) []HeaderCheckResult {
+	// Use a client that does not follow redirects
+	noRedirectClient := &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: s.httpClient.Transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", shared.DefaultUserAgent)
+
+	resp, err := noRedirectClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	// Check if response is a redirect to HTTPS
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		location := resp.Header.Get("Location")
+		if strings.HasPrefix(strings.ToLower(location), "https://") {
+			return nil // Correctly redirects to HTTPS
+		}
+	}
+
+	return []HeaderCheckResult{
+		{
+			HeaderName:  "Location",
+			Present:     false,
+			IsSecure:    false,
+			Severity:    shared.SeverityMedium,
+			FindingType: "missing-https-redirect",
+			Title:       "HTTP Does Not Redirect to HTTPS",
+			Description: "The HTTP version of this site does not redirect to HTTPS. Users or links pointing to the HTTP URL will be served over an unencrypted connection, exposing traffic to interception and man-in-the-middle attacks.",
+			References: []string{
+				"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/02-Testing_for_Padding_Oracle",
+				"https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections",
+			},
+		},
+	}
 }
 
 // fetchHeaders sends a GET request and returns the response headers
