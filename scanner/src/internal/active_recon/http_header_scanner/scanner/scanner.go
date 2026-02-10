@@ -136,11 +136,10 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []H
 
 	switch {
 	case acao == testOrigin:
-		// Origin is reflected back — worst case
-		severity := shared.SeverityHigh
+		// Origin is reflected back — worst case, fully exploitable
 		description := fmt.Sprintf(
 			"The server reflects the arbitrary Origin header value back in Access-Control-Allow-Origin (%s). "+
-				"This allows any website to make authenticated cross-origin requests to your application, "+
+				"This allows any website to make cross-origin requests to your application, "+
 				"potentially stealing sensitive data from logged-in users.",
 			acao,
 		)
@@ -148,18 +147,13 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []H
 			description += " This is compounded by Access-Control-Allow-Credentials: true, which means cookies and authentication headers are included in cross-origin requests."
 		}
 
-		findingType := "cors-origin-reflected"
-		if acac {
-			findingType = "cors-credentials-with-wildcard"
-		}
-
 		results = append(results, HeaderCheckResult{
 			HeaderName:  "Access-Control-Allow-Origin",
 			Present:     true,
 			Value:       acao,
 			IsSecure:    false,
-			Severity:    severity,
-			FindingType: findingType,
+			Severity:    shared.SeverityHigh,
+			FindingType: "cors-origin-reflected",
 			Title:       "CORS Reflects Arbitrary Origins",
 			Description: description,
 			References: []string{
@@ -176,10 +170,10 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []H
 				Present:     true,
 				Value:       acao,
 				IsSecure:    false,
-				Severity:    shared.SeverityHigh,
+				Severity:    shared.SeverityMedium,
 				FindingType: "cors-credentials-with-wildcard",
 				Title:       "CORS Allows Credentials with Wildcard Origin",
-				Description: "The server sets Access-Control-Allow-Origin: * together with Access-Control-Allow-Credentials: true. While modern browsers block this combination, it indicates a fundamental CORS misconfiguration that may be exploitable in older clients or via other attack vectors.",
+				Description: "The server sets Access-Control-Allow-Origin: * together with Access-Control-Allow-Credentials: true. Modern browsers block this combination, but it indicates a fundamental CORS misconfiguration that should be corrected.",
 				References: []string{
 					"https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS",
 					"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/07-Testing_Cross_Origin_Resource_Sharing",
@@ -207,28 +201,15 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []H
 }
 
 // checkSecurityTxt checks for the presence of a security.txt file at the
-// well-known URI (RFC 9116). This signals a vulnerability disclosure policy.
+// well-known URI and legacy root path (RFC 9116 Section 3).
 func (s *HTTPHeaderScanner) checkSecurityTxt(ctx context.Context, targetURL string) []HeaderCheckResult {
-	// Extract base URL (strip any path) and build well-known URI
-	securityTxtURL := strings.TrimRight(targetURL, "/") + "/.well-known/security.txt"
+	baseURL := strings.TrimRight(targetURL, "/")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, securityTxtURL, nil)
-	if err != nil {
-		return nil
-	}
-	req.Header.Set("User-Agent", shared.DefaultUserAgent)
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer resp.Body.Close()
-
-	// A 200 with text content type means security.txt exists
-	if resp.StatusCode == http.StatusOK {
-		ct := resp.Header.Get("Content-Type")
-		if strings.Contains(ct, "text/") {
-			return nil // security.txt exists
+	// Check both RFC 9116 well-known path and legacy root path
+	paths := []string{"/.well-known/security.txt", "/security.txt"}
+	for _, path := range paths {
+		if s.hasSecurityTxt(ctx, baseURL+path) {
+			return nil
 		}
 	}
 
@@ -247,6 +228,27 @@ func (s *HTTPHeaderScanner) checkSecurityTxt(ctx context.Context, targetURL stri
 			},
 		},
 	}
+}
+
+// hasSecurityTxt checks if a security.txt file exists at the given URL.
+func (s *HTTPHeaderScanner) hasSecurityTxt(ctx context.Context, url string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("User-Agent", shared.DefaultUserAgent)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		ct := resp.Header.Get("Content-Type")
+		return strings.Contains(ct, "text/")
+	}
+	return false
 }
 
 // checkHTTPSRedirect checks whether an HTTP URL redirects to HTTPS.
@@ -291,7 +293,7 @@ func (s *HTTPHeaderScanner) checkHTTPSRedirect(ctx context.Context, targetURL st
 			Title:       "HTTP Does Not Redirect to HTTPS",
 			Description: "The HTTP version of this site does not redirect to HTTPS. Users or links pointing to the HTTP URL will be served over an unencrypted connection, exposing traffic to interception and man-in-the-middle attacks.",
 			References: []string{
-				"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/02-Testing_for_Padding_Oracle",
+				"https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html",
 				"https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections",
 			},
 		},

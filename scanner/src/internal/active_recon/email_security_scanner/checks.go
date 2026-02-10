@@ -182,12 +182,13 @@ func checkDKIM(ctx context.Context, resolver *net.Resolver, domain string) []Ema
 // An open zone transfer is a confirmed critical recon finding — it exposes the
 // entire DNS zone (internal hostnames, staging servers, database subdomains).
 func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain string) []EmailCheckResult {
-	var results []EmailCheckResult
-
 	nameservers, err := resolver.LookupNS(ctx, domain)
 	if err != nil || len(nameservers) == 0 {
 		return nil
 	}
+
+	var vulnerableNS []string
+	var totalRecords int
 
 	for _, ns := range nameservers {
 		host := strings.TrimSuffix(ns.Host, ".")
@@ -197,29 +198,39 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 
 		recordCount := tryAXFR(ctx, domain, host)
 		if recordCount > 0 {
-			results = append(results, EmailCheckResult{
-				FindingType: "dns-zone-transfer",
-				Severity:    shared.SeverityHigh,
-				Title:       "DNS Zone Transfer Allowed",
-				Description: fmt.Sprintf(
-					"The nameserver %s allows public DNS zone transfers (AXFR) for %s. "+
-						"This exposes the complete DNS zone (%d records), giving attackers a full map of "+
-						"internal hostnames, staging servers, and services. Zone transfers should be restricted "+
-						"to authorized secondary nameservers only.",
-					host, domain, recordCount,
-				),
-				Value:      host,
-				References: []string{"https://datatracker.ietf.org/doc/html/rfc5936"},
-			})
+			vulnerableNS = append(vulnerableNS, fmt.Sprintf("%s (%d records)", host, recordCount))
+			totalRecords += recordCount
 		}
 	}
 
-	return results
+	if len(vulnerableNS) == 0 {
+		return nil
+	}
+
+	return []EmailCheckResult{
+		{
+			FindingType: "dns-zone-transfer",
+			Severity:    shared.SeverityHigh,
+			Title:       "DNS Zone Transfer Allowed",
+			Description: fmt.Sprintf(
+				"The following nameservers allow public DNS zone transfers (AXFR) for %s, "+
+					"exposing %d total DNS records: %s. This gives attackers a full map of internal "+
+					"hostnames, staging servers, and services. Zone transfers should be restricted "+
+					"to authorized secondary nameservers only.",
+				domain, totalRecords, strings.Join(vulnerableNS, ", "),
+			),
+			Value:      strings.Join(vulnerableNS, ", "),
+			References: []string{"https://datatracker.ietf.org/doc/html/rfc5936"},
+		},
+	}
 }
 
 // tryAXFR attempts an AXFR transfer against a single nameserver.
 // Returns the number of records received, or 0 if the transfer was refused/failed.
+// Caps at maxAXFRRecords to prevent resource exhaustion from malicious nameservers.
 func tryAXFR(ctx context.Context, domain, nameserver string) int {
+	const maxAXFRRecords = 10000
+
 	m := new(dns.Msg)
 	m.SetAxfr(dns.Fqdn(domain))
 
@@ -239,6 +250,9 @@ func tryAXFR(ctx context.Context, domain, nameserver string) int {
 			return 0
 		}
 		count += len(envelope.RR)
+		if count > maxAXFRRecords {
+			return count
+		}
 	}
 	return count
 }
