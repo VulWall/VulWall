@@ -91,7 +91,109 @@ func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]Heade
 		}
 	}
 
+	// Check CORS misconfiguration (requires its own request with Origin header)
+	results = append(results, s.checkCORS(ctx, targetURL)...)
+
 	return results, nil
+}
+
+// checkCORS sends a request with a spoofed Origin header and checks if the server
+// reflects it or uses a wildcard — both indicate CORS misconfiguration.
+func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []HeaderCheckResult {
+	const testOrigin = "https://evil-cors-test.com"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", shared.DefaultUserAgent)
+	req.Header.Set("Origin", testOrigin)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	acao := resp.Header.Get("Access-Control-Allow-Origin")
+	if acao == "" {
+		return nil // No CORS header — not misconfigured
+	}
+
+	acac := strings.EqualFold(resp.Header.Get("Access-Control-Allow-Credentials"), "true")
+
+	var results []HeaderCheckResult
+
+	switch {
+	case acao == testOrigin:
+		// Origin is reflected back — worst case
+		severity := shared.SeverityHigh
+		description := fmt.Sprintf(
+			"The server reflects the arbitrary Origin header value back in Access-Control-Allow-Origin (%s). "+
+				"This allows any website to make authenticated cross-origin requests to your application, "+
+				"potentially stealing sensitive data from logged-in users.",
+			acao,
+		)
+		if acac {
+			description += " This is compounded by Access-Control-Allow-Credentials: true, which means cookies and authentication headers are included in cross-origin requests."
+		}
+
+		findingType := "cors-origin-reflected"
+		if acac {
+			findingType = "cors-credentials-with-wildcard"
+		}
+
+		results = append(results, HeaderCheckResult{
+			HeaderName:  "Access-Control-Allow-Origin",
+			Present:     true,
+			Value:       acao,
+			IsSecure:    false,
+			Severity:    severity,
+			FindingType: findingType,
+			Title:       "CORS Reflects Arbitrary Origins",
+			Description: description,
+			References: []string{
+				"https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS",
+				"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/07-Testing_Cross_Origin_Resource_Sharing",
+			},
+		})
+
+	case acao == "*":
+		if acac {
+			// Wildcard + credentials — browsers block this, but it signals misconfiguration
+			results = append(results, HeaderCheckResult{
+				HeaderName:  "Access-Control-Allow-Origin",
+				Present:     true,
+				Value:       acao,
+				IsSecure:    false,
+				Severity:    shared.SeverityHigh,
+				FindingType: "cors-credentials-with-wildcard",
+				Title:       "CORS Allows Credentials with Wildcard Origin",
+				Description: "The server sets Access-Control-Allow-Origin: * together with Access-Control-Allow-Credentials: true. While modern browsers block this combination, it indicates a fundamental CORS misconfiguration that may be exploitable in older clients or via other attack vectors.",
+				References: []string{
+					"https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS",
+					"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/07-Testing_Cross_Origin_Resource_Sharing",
+				},
+			})
+		} else {
+			results = append(results, HeaderCheckResult{
+				HeaderName:  "Access-Control-Allow-Origin",
+				Present:     true,
+				Value:       acao,
+				IsSecure:    false,
+				Severity:    shared.SeverityMedium,
+				FindingType: "cors-wildcard-origin",
+				Title:       "CORS Allows Any Origin",
+				Description: "The server sets Access-Control-Allow-Origin: *, allowing any website to read responses from your application. While credentials are not included with wildcard origins, this may still expose sensitive data from unauthenticated endpoints.",
+				References: []string{
+					"https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS",
+					"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/07-Testing_Cross_Origin_Resource_Sharing",
+				},
+			})
+		}
+	}
+
+	return results
 }
 
 // fetchHeaders sends a GET request and returns the response headers
