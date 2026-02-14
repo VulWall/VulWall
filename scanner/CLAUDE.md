@@ -172,7 +172,7 @@ make deps                   # Download and tidy dependencies
 ### Key Constants Location
 - Stream/collection names: `src/internal/shared/constants.go`
 - Consumer groups: each service's `constants.go`
-- Scan monitor tracking: `src/internal/scan_coordinator/scan_monitor.go:105-128`
+- Scan monitor tracking: `src/internal/scan_coordinator/scan_monitor.go:105-131`
 - Stream cleanup: `src/internal/scan_coordinator/stream_cleanup.go:30-38`
 - CI/CD build matrix: `.github/workflows/docker-build-push.yml`
 - Deploy service list: `ops/scripts/deploy-all.sh`

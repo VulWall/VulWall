@@ -56,7 +56,7 @@
 
 ## Scan Monitor Coverage
 
-**Source:** `src/internal/scan_coordinator/scan_monitor.go:105-127` — `isComplete()`
+**Source:** `src/internal/scan_coordinator/scan_monitor.go:105-131` — `isComplete()`
 
 The scan monitor tracks these consumer groups to determine when a scan is complete. A scan is marked "done" when ALL of these have 0 pending messages for the scan_id:
 
@@ -73,6 +73,7 @@ The scan monitor tracks these consumer groups to determine when a scan is comple
 | `domain_discovery_results` | `domain_ingestion_service` | domain-ingestion |
 | `ip_discovery_results` | `port_ingestion_service` | port-ingestion |
 | `ip_discovery_results` | `webtechprofiler_service` | webtechprofiler |
+| `security_findings` | `findings_ingestion_service` | findings-ingestion |
 
 **When adding a new active recon scanner:** You MUST add its consumer group to this list or scans will complete before the new scanner finishes processing.
 

@@ -125,6 +125,9 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 		// ip_discovery_results consumers (ingestion + webtechprofiler)
 		{shared.StreamIPDiscoveryResults, "port_ingestion_service"},
 		{shared.StreamIPDiscoveryResults, "webtechprofiler_service"},
+
+		// security_findings consumers (findings ingestion to MongoDB)
+		{shared.StreamSecurityFindings, "findings_ingestion_service"},
 	}
 
 	for _, cg := range consumerGroups {
