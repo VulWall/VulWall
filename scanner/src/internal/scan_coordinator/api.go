@@ -80,7 +80,8 @@ func (a *APIServer) handleTriggerScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.TriggeredBy == "" {
-		req.TriggeredBy = "api"
+		a.writeJSON(w, http.StatusBadRequest, errorResponse{Error: "triggered_by is required"})
+		return
 	}
 
 	scanID, err := a.service.TriggerScan(r.Context(), ScanRequest{
