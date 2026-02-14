@@ -93,9 +93,6 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 							zap.Error(err),
 						)
 					}
-
-					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID)
 				}
 			}
 		}
@@ -136,5 +133,18 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	}
 
 	// Process the finding
-	return c.service.ProcessFinding(ctx, finding)
+	if err := c.service.ProcessFinding(ctx, finding); err != nil {
+		return err
+	}
+
+	// Acknowledge message only after successful processing
+	if err := c.redis.XAck(ctx, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID).Err(); err != nil {
+		c.logger.Error("Failed to acknowledge message",
+			zap.String("message_id", message.ID),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to acknowledge message: %w", err)
+	}
+
+	return nil
 }

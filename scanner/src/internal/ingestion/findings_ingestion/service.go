@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -100,7 +101,11 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 // upsertFinding creates or updates a finding in the findings collection
 // Returns true if AI enrichment is needed (new finding with eligible severity and no existing AI recommendation)
 func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFinding) (bool, error) {
-	collection := s.db.Collection(shared.CollectionFindings)
+	// Use majority write concern to ensure writes are confirmed before ACK
+	collection := s.db.Collection(
+		shared.CollectionFindings,
+		options.Collection().SetWriteConcern(writeconcern.Majority()),
+	)
 
 	// Check if finding already exists (deduplicate)
 	filter := bson.M{
