@@ -273,6 +273,18 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logger) 
 			},
 			Options: options.Index().SetUnique(true),
 		},
+		{
+			// Index for scan_ids array queries (used by scan stats computation)
+			Keys: bson.D{
+				{Key: "org_id", Value: 1},
+				{Key: "scan_ids", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_org_scan_ids").
+				SetPartialFilterExpression(bson.D{
+					{Key: "scan_ids", Value: bson.D{{Key: "$exists", Value: true}}},
+				}),
+		},
 	}
 
 	_, err := collection.Indexes().CreateMany(ctx, indexes)
