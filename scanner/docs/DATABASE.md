@@ -217,10 +217,13 @@ type AssetTarget struct {
 }
 
 type ScanStats struct {
-    TotalAssets      int `bson:"total_assets"`
-    AssetsScanned    int `bson:"assets_scanned"`
-    NewAssets        int `bson:"new_assets"`
-    FindingsDetected int `bson:"findings_detected"`
+    TotalAssets         int `bson:"total_assets"`
+    TotalDiscoveries    int `bson:"total_discoveries"`
+    NewDiscoveries      int `bson:"new_discoveries"`
+    ResolvedDiscoveries int `bson:"resolved_discoveries"`
+    TotalFindings       int `bson:"total_findings"`
+    NewFindings         int `bson:"new_findings"`
+    ResolvedFindings    int `bson:"resolved_findings"`
 }
 ```
 
@@ -334,7 +337,15 @@ type ScanStats struct {
     { asset_id: "asset-uuid-1", type: "domain", value: "example.com" },
     { asset_id: "asset-uuid-2", type: "ip", value: "192.168.1.100" }
   ],
-  stats: { total_assets: 2, assets_scanned: 0, new_assets: 0, findings_detected: 0 }
+  stats: {
+    total_assets: 2,
+    total_discoveries: 15,
+    new_discoveries: 3,
+    resolved_discoveries: 1,
+    total_findings: 8,
+    new_findings: 2,
+    resolved_findings: 0
+  }
 }
 ```
 
