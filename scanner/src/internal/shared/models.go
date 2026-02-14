@@ -245,10 +245,13 @@ type Scan struct {
 
 // ScanStats tracks statistics for a scan execution
 type ScanStats struct {
-	TotalAssets      int `json:"total_assets" bson:"total_assets"`
-	AssetsScanned    int `json:"assets_scanned" bson:"assets_scanned"`
-	NewAssets        int `json:"new_assets" bson:"new_assets"`
-	FindingsDetected int `json:"findings_detected" bson:"findings_detected"`
+	TotalAssets         int `json:"total_assets" bson:"total_assets"`
+	TotalDiscoveries    int `json:"total_discoveries" bson:"total_discoveries"`
+	NewDiscoveries      int `json:"new_discoveries" bson:"new_discoveries"`
+	ResolvedDiscoveries int `json:"resolved_discoveries" bson:"resolved_discoveries"`
+	TotalFindings       int `json:"total_findings" bson:"total_findings"`
+	NewFindings         int `json:"new_findings" bson:"new_findings"`
+	ResolvedFindings    int `json:"resolved_findings" bson:"resolved_findings"`
 }
 
 // AssetTarget represents an asset that was targeted for scanning
