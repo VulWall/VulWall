@@ -7,6 +7,7 @@
 | `assets` | `CollectionAssets` | User-added assets to scan (managed via UI) | Dashboard |
 | `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (4 asset types) | Ingestion |
 | `findings` | `CollectionFindings` | Security vulnerabilities from scanners | Ingestion |
+| `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries by finding_type (~84 entries) | Ingestion |
 | `organizations` | `CollectionOrganizations` | Org settings with subscription config | Dashboard |
 | `scans` | `CollectionScans` | Scan execution records | Scan coordinator |
 | `audit_logs` | `CollectionAuditLogs` | System audit events | Ingestion |
@@ -122,6 +123,35 @@ type EnrichmentFinding struct {
     EnrichmentType string                 `json:"enrichment_type"` // "waf", "geolocation"
     Data           map[string]interface{} `json:"data"`
     Timestamp      time.Time              `json:"timestamp"`
+}
+```
+
+### Knowledge Base Models
+
+**KBGenerationJob** — published by findings_ingestion for new finding_types:
+```go
+type KBGenerationJob struct {
+    FindingType  string                 `json:"finding_type"`
+    Title        string                 `json:"title"`
+    Severity     string                 `json:"severity"`
+    Source       string                 `json:"source"`
+    Description  string                 `json:"description"`
+    Metadata     map[string]interface{} `json:"metadata,omitempty"`
+    TraceID      string                 `json:"trace_id"`
+    TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`
+    Created      time.Time              `json:"created"`
+}
+```
+
+**KBGenerationResult** — published by knowledge-base-engine after Anthropic API call:
+```go
+type KBGenerationResult struct {
+    FindingType  string                 `json:"finding_type"`
+    Entry        map[string]interface{} `json:"entry"`        // Structured KB entry (business + technical content)
+    Model        string                 `json:"model"`
+    TraceID      string                 `json:"trace_id"`
+    TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`
+    Timestamp    time.Time              `json:"timestamp"`
 }
 ```
 
@@ -304,20 +334,49 @@ type ScanStats struct {
   scan_ids: ["scan-abc-456"],
   first_detected: ISODate("..."),
   last_detected: ISODate("..."),
-  resolved_at: null,
-  ai_recommendation: {           // Set by ai-enrichment-ingestion
-    content: {
-      vulnerability_explanation: "...",
-      potential_impact: "...",
-      remediation_steps: ["Step 1", "Step 2"],
-      best_practices: ["Practice 1"],
-      priority: "immediate",
-      estimated_effort: "medium"
-    },
-    prompt_used: "recommendation",
-    model: "llama-3.3-70b-versatile",
-    generated_at: ISODate("...")
-  }
+  resolved_at: null
+}
+```
+
+### Knowledge Base Collection
+```javascript
+// One entry per unique finding_type (~84 entries), shared across all orgs
+// _id = "kb_" + finding_type (e.g., "kb_cve-2024-1234")
+{
+  _id: "kb_cve-2024-1234",
+  finding_type: "cve-2024-1234",
+  business: {
+    title: "Critical Security Vulnerability in...",
+    summary: "A brief explanation for non-technical stakeholders...",
+    impact: "Potential business impact...",
+    urgency: "immediate",
+    actions: ["Action 1", "Action 2"],
+    blog_slug: "cve-2024-1234-what-businesses-need-to-know"
+  },
+  technical: {
+    title: "CVE-2024-1234: Remote Code Execution",
+    vulnerability_explanation: "Detailed technical explanation...",
+    root_cause: "The underlying cause...",
+    impact: "Technical impact assessment...",
+    severity: { level: "critical", cvss_score: 9.8, vector: "CVSS:3.1/..." },
+    affected_versions: "< 1.10.23",
+    remediation_steps: ["Step 1", "Step 2", "Step 3"],
+    verification_steps: ["Verify 1", "Verify 2"],
+    code_examples: { vulnerable: "...", fixed: "..." },
+    best_practices: ["Practice 1", "Practice 2"],
+    references: ["https://..."],
+    blog_slug: "cve-2024-1234-technical-remediation-guide"
+  },
+  metadata: {
+    components: ["component-name"],
+    owasp_category: "A03:2021 - Injection",
+    estimated_effort: "medium",
+    is_exploitable: true,
+    tags: ["rce", "critical"]
+  },
+  model: "claude-sonnet-4-5-20250514",
+  created_at: ISODate("..."),
+  updated_at: ISODate("...")
 }
 ```
 

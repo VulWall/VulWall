@@ -39,7 +39,7 @@ VulWall.NightWatch/
     │   │   ├── email-security-scanner/
     │   │   └── discovery-enrichment/
     │   ├── enrichers/
-    │   │   └── ai-finding-enricher/
+    │   │   └── knowledge-base-engine/
     │   └── ingestion/
     ├── internal/
     │   ├── core/            # bootstrap, config, logger, mongox, redisx, telemetry, shodan
@@ -47,8 +47,8 @@ VulWall.NightWatch/
     │   ├── scan_coordinator/
     │   ├── discoveries/     # domain_discovery, port_discovery
     │   ├── active_recon/    # nuclei, testssl, webtechprofiler, js_dep, http_header, email_security, discovery_enrichment
-    │   ├── enrichers/       # ai_finding_enricher
-    │   └── ingestion/       # orchestrator + 6 slices (domain, port, findings, enrichment, ai_enrichment, audit)
+    │   ├── enrichers/       # knowledge_base (Anthropic Claude KB engine)
+    │   └── ingestion/       # orchestrator + 6 slices (domain, port, findings, enrichment, kb, audit)
     ├── go.mod
     └── go.sum
 ```
@@ -57,7 +57,7 @@ VulWall.NightWatch/
 
 | Document | Purpose |
 |----------|---------|
-| **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** | All 16 services, Redis streams, consumer groups, scan monitor coverage — **the ground truth** |
+| **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** | All 17 services, Redis streams, consumer groups, scan monitor coverage — **the ground truth** |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Communication flows, design patterns, model ownership rules |
 | **[docs/DATABASE.md](docs/DATABASE.md)** | Go models, MongoDB schemas, query examples |
 | **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** | OpenTelemetry tracing patterns, Honeycomb queries |
@@ -74,7 +74,7 @@ make build-domain-discovery
 make build-port-discovery
 make build-nuclei-scanner
 make build-ingestion
-make build-ai-finding-enricher
+make build-knowledge-base-engine
 make build-email-security-scanner
 ```
 
@@ -84,8 +84,8 @@ make run-scan-coordinator
 make run-domain-discovery
 make run-port-discovery
 make run-nuclei-scanner
-make run-ingestion              # Runs all 6 ingestion slices
-make run-ai-finding-enricher
+make run-ingestion              # Runs all 6 ingestion slices (domain, port, findings, enrichment, kb, audit)
+make run-knowledge-base-engine
 make run-email-security-scanner
 ```
 
@@ -155,8 +155,8 @@ make deps                   # Download and tidy dependencies
 | `security_findings` | result |
 | `discovery_enrichment_queue` | job |
 | `discovery_enrichment_results` | result |
-| `ai_enrichment_queue` | job |
-| `ai_enrichment_results` | result |
+| `kb_generation_queue` | job |
+| `kb_generation_results` | result |
 | `system_audit_logs` | audit |
 
 ### MongoDB Collections
@@ -165,6 +165,7 @@ make deps                   # Download and tidy dependencies
 | `assets` | User-added assets (UI-managed) |
 | `discoveries` | Scan results (4 asset types, org-scoped) |
 | `findings` | Security vulnerabilities |
+| `knowledge_base` | Shared KB entries by finding_type (~84 entries) |
 | `organizations` | Org settings with scan_cron |
 | `scans` | Scan execution records |
 | `audit_logs` | System audit events |
@@ -188,7 +189,8 @@ Environment variables (`.env`):
 | `MONGO_URI` | MongoDB Atlas connection string |
 | `MONGO_DB` | Database name (default: vulwall) |
 | `SHODAN_API_KEY` | Shodan API key for discovery |
-| `GROQ_API_KEY` | Groq API key for AI enrichment |
+| `ANTHROPIC_API_KEY` | Anthropic API key for KB generation |
+| `ANTHROPIC_MODEL` | Anthropic model (default: claude-sonnet-4-5-20250514) |
 | `ENVIRONMENT` | development / production |
 | `HONEYCOMB_API_KEY` | Honeycomb API key for tracing |
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |

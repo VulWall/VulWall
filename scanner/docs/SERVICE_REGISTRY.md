@@ -16,12 +16,12 @@
 | 7 | **http-header-scanner** | `http_header_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
 | 8 | **email-security-scanner** | `email_security_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
 | 9 | **discovery-enrichment** | `discovery_enrichment_service` | `discovery_enrichment_queue` | `discovery_enrichment_results` | RunSimple (manual) | No |
-| 10 | **ai-finding-enricher** | `ai_finding_enricher_service` | `ai_enrichment_queue` | `ai_enrichment_results` | RunSimple (Streams) | No |
+| 10 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | RunSimple (Streams) | No |
 | 11 | **domain-ingestion** | `domain_ingestion_service` | `domain_discovery_results` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` | Orchestrator | Yes |
 | 12 | **port-ingestion** | `port_ingestion_service` | `ip_discovery_results` | `discovery_enrichment_queue`, `port_scan_triggers` | Orchestrator | Yes |
-| 13 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | `ai_enrichment_queue` | Orchestrator | Yes |
+| 13 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | `kb_generation_queue` | Orchestrator | Yes |
 | 14 | **enrichment-ingestion** | `enrichment_ingestion_service` | `discovery_enrichment_results` | MongoDB `discoveries` | Orchestrator | Yes |
-| 15 | **ai-enrichment-ingestion** | `ai_enrichment_ingestion_service` | `ai_enrichment_results` | MongoDB `findings` | Orchestrator | Yes |
+| 15 | **kb-ingestion** | `kb_ingestion_service` | `kb_generation_results` | MongoDB `knowledge_base` | Orchestrator | Yes |
 | 16 | **audit-ingestion** | `audit_ingestion_service` | `system_audit_logs` | MongoDB `audit_logs` | Orchestrator | Yes |
 | 17 | **scan-coordinator** | _(scheduler, not consumer)_ | — | `domain_discovery_queue`, `ip_discovery_queue` | Manual | Yes (read) |
 
@@ -44,8 +44,8 @@
 | `security_findings` | `StreamSecurityFindings` | result | nuclei, testssl, webtechprofiler, js-dep, http-header, email-security | findings-ingestion | `0` |
 | `discovery_enrichment_queue` | `StreamDiscoveryEnrichmentQueue` | job | domain-ingestion, port-ingestion | discovery-enrichment | `0` |
 | `discovery_enrichment_results` | `StreamDiscoveryEnrichmentResults` | result | discovery-enrichment | enrichment-ingestion | `0` |
-| `ai_enrichment_queue` | `StreamAIEnrichmentQueue` | job | findings-ingestion | ai-finding-enricher | `0` |
-| `ai_enrichment_results` | `StreamAIEnrichmentResults` | result | ai-finding-enricher | ai-enrichment-ingestion | `0` |
+| `kb_generation_queue` | `StreamKBGenerationQueue` | job | findings-ingestion | knowledge-base-engine | `0` |
+| `kb_generation_results` | `StreamKBGenerationResults` | result | knowledge-base-engine | kb-ingestion | `0` |
 | `system_audit_logs` | `StreamSystemAuditLogs` | audit | various | audit-ingestion | `0` |
 
 **Start Position Key:**
@@ -91,7 +91,7 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 | `ip_discovery_results` | `StreamIPDiscoveryResults` |
 | `security_findings` | `StreamSecurityFindings` |
 | `discovery_enrichment_results` | `StreamDiscoveryEnrichmentResults` |
-| `ai_enrichment_results` | `StreamAIEnrichmentResults` |
+| `kb_generation_results` | `StreamKBGenerationResults` |
 
 **NOT cleaned (by design):**
 - Trigger streams (`domain_scan_triggers`, `port_scan_triggers`) — use MAXLEN at publish time
@@ -121,7 +121,8 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 |------------|----------|---------|-----------|
 | `assets` | `CollectionAssets` | User-added assets to scan (managed via UI) | Dashboard |
 | `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (domain, subdomain, ip, port) | domain-ingestion, port-ingestion, enrichment-ingestion |
-| `findings` | `CollectionFindings` | Security vulnerabilities from scanners | findings-ingestion, ai-enrichment-ingestion |
+| `findings` | `CollectionFindings` | Security vulnerabilities from scanners | findings-ingestion |
+| `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries keyed by finding_type (~84 entries) | kb-ingestion |
 | `organizations` | `CollectionOrganizations` | Org settings with subscription/scan config | Dashboard |
 | `scans` | `CollectionScans` | Scan execution records | scan-coordinator, scan-monitor |
 | `audit_logs` | `CollectionAuditLogs` | System audit events | audit-ingestion |
@@ -145,12 +146,12 @@ Each service defines its consumer group constant in its own `constants.go`:
 | http-header-scanner | `src/internal/active_recon/http_header_scanner/constants.go` | `GroupHTTPHeaderScanner` |
 | email-security-scanner | `src/internal/active_recon/email_security_scanner/constants.go` | `GroupEmailSecurityScanner` |
 | discovery-enrichment | `src/internal/active_recon/discovery_enrichment/constants.go` | `GroupDiscoveryEnrichment` |
-| ai-finding-enricher | `src/internal/enrichers/ai_finding_enricher/constants.go` | `GroupAIFindingEnricher` |
+| knowledge-base-engine | `src/internal/enrichers/knowledge_base/constants.go` | `GroupKBEngine` |
 | domain-ingestion | `src/internal/ingestion/domain_ingestion/constants.go` | `GroupDomainIngestion` |
 | port-ingestion | `src/internal/ingestion/port_ingestion/constants.go` | `GroupPortIngestion` |
 | findings-ingestion | `src/internal/ingestion/findings_ingestion/constants.go` | `GroupFindingsIngestion` |
 | enrichment-ingestion | `src/internal/ingestion/enrichment_ingestion/constants.go` | `GroupEnrichmentIngestion` |
-| ai-enrichment-ingestion | `src/internal/ingestion/ai_enrichment_ingestion/constants.go` | `GroupAIEnrichmentIngestion` |
+| kb-ingestion | `src/internal/ingestion/kb_ingestion/constants.go` | `GroupKBIngestion` |
 | audit-ingestion | `src/internal/ingestion/audit_ingestion/constants.go` | `GroupAuditIngestion` |
 
 Shared stream/collection constants live in `src/internal/shared/constants.go`.
