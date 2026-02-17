@@ -276,35 +276,29 @@ type SystemAuditEvent struct {
 	Timestamp      time.Time              `json:"timestamp" bson:"CreatedAt"`
 }
 
-// AIEnrichmentJob represents a job to generate AI recommendations for a security finding
-// Published to ai_enrichment_queue by findings_ingestion for high/critical severity findings
-// that don't already have AI recommendations
-type AIEnrichmentJob struct {
+// KBGenerationJob represents a job to generate a knowledge base entry for a finding type
+// Published to kb_generation_queue by findings_ingestion when a new finding_type is encountered
+// that doesn't already have a KB entry
+type KBGenerationJob struct {
+	FindingType  string                 `json:"finding_type" bson:"finding_type"`             // Unique finding type identifier
+	Title        string                 `json:"title" bson:"title"`                           // Representative title for this finding type
+	Severity     string                 `json:"severity" bson:"severity"`                     // Finding severity
+	Source       string                 `json:"source" bson:"source"`                         // Source that produced the finding
+	Description  string                 `json:"description" bson:"description"`               // Finding description
+	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"` // Scanner-specific data
 	TraceID      string                 `json:"trace_id" bson:"trace_id"`
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"` // W3C TraceContext headers for span linking (not stored in DB)
-	OrgID        string                 `json:"org_id" bson:"org_id"`             // Organization GUID
-	DiscoveryID  string                 `json:"discovery_id" bson:"discovery_id"` // Part of composite key
-	FindingType  string                 `json:"finding_type" bson:"finding_type"` // Part of composite key
-	Title        string                 `json:"title" bson:"title"`               // Part of composite key
-	Severity     string                 `json:"severity" bson:"severity"`         // Finding severity
-	Source       string                 `json:"source" bson:"source"`             // Source that produced the finding
-	Description  string                 `json:"description" bson:"description"`   // Finding description
-	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 	Created      time.Time              `json:"created" bson:"created"`
 }
 
-// AIEnrichmentFinding represents AI-generated recommendations for security findings
-// Published to ai_enrichment_results stream and merged into findings collection
-// Uses composite key (org_id + discovery_id + finding_type + title) to match findings
-type AIEnrichmentFinding struct {
-	TraceID        string                 `json:"trace_id" bson:"trace_id"`
-	TraceContext   map[string]string      `json:"trace_context,omitempty" bson:"-"`     // W3C TraceContext headers for span linking (not stored in DB)
-	OrgID          string                 `json:"org_id" bson:"org_id"`                 // Organization GUID
-	DiscoveryID    string                 `json:"discovery_id" bson:"discovery_id"`     // Part of composite key
-	FindingType    string                 `json:"finding_type" bson:"finding_type"`     // Part of composite key
-	Title          string                 `json:"title" bson:"title"`                   // Part of composite key
-	Recommendation map[string]interface{} `json:"recommendation" bson:"recommendation"` // AI-generated structured recommendation (stored as BSON object)
-	PromptUsed     string                 `json:"prompt_used" bson:"prompt_used"`       // Prompt identifier (e.g., "recommendation")
-	Model          string                 `json:"model" bson:"model"`                   // Model used (e.g., "llama-3.3-70b-versatile")
-	Timestamp      time.Time              `json:"timestamp" bson:"timestamp"`           // When recommendation was generated
+// KBGenerationResult represents a generated knowledge base entry
+// Published to kb_generation_results by the knowledge-base-engine
+type KBGenerationResult struct {
+	FindingType  string                 `json:"finding_type" bson:"finding_type"`
+	Entry        map[string]interface{} `json:"entry" bson:"entry"`               // Structured KB entry (business + technical content)
+	Model        string                 `json:"model" bson:"model"`               // Model used for generation
+	TraceID      string                 `json:"trace_id" bson:"trace_id"`
+	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"` // W3C TraceContext headers for span linking (not stored in DB)
+	Timestamp    time.Time              `json:"timestamp" bson:"timestamp"`
 }
+

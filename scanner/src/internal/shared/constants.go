@@ -38,9 +38,12 @@ const (
 	StreamDiscoveryEnrichmentQueue   = "discovery_enrichment_queue"   // Input stream for enrichment jobs (published by ingestion services)
 	StreamDiscoveryEnrichmentResults = "discovery_enrichment_results" // Output stream for discovery enrichment data (consumed by enrichment ingestion)
 
-	// Redis Streams - AI Enrichment
-	StreamAIEnrichmentQueue   = "ai_enrichment_queue"   // Input stream for AI enrichment jobs (published by findings_ingestion for high/critical severity)
-	StreamAIEnrichmentResults = "ai_enrichment_results" // Output stream for AI-generated finding recommendations (consumed by ai_enrichment_ingestion)
+	// Redis Streams - Knowledge Base Generation
+	StreamKBGenerationQueue   = "kb_generation_queue"   // Input stream for KB generation jobs (published by findings_ingestion for new finding_types)
+	StreamKBGenerationResults = "kb_generation_results" // Output stream for KB entries (consumed by kb_ingestion)
+
+	// MongoDB Collections - Knowledge Base
+	CollectionKnowledgeBase = "knowledge_base" // Shared KB entries keyed by finding_type (one entry per unique finding_type)
 
 	// Redis Streams - Active Scan Triggers (published by ingestion services AFTER persisting discoveries)
 	StreamDomainScanTriggers = "domain_scan_triggers" // Triggers for active recon scanners on domains/subdomains (published by domain_ingestion)
