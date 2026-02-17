@@ -1,0 +1,29 @@
+name: nw-knowledge-base-engine
+
+services:
+  knowledge-base-engine:
+    image: ghcr.io/vulwall/nightwatch-knowledge-base-engine:${IMAGE_TAG:-dev}
+    container_name: nw-knowledge-base-engine
+    restart: unless-stopped
+    env_file:
+      - /opt/vulwall/config/general.env
+      - /opt/vulwall/config/redis.env
+      - /opt/vulwall/config/honeycomb.env
+      - /opt/vulwall/config/anthropic.env
+    networks:
+      - core-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "knowledge-base-engine"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  core-network:
+    external: true

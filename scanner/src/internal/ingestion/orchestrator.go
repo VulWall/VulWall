@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/vulwall/scanners/internal/ingestion/ai_enrichment_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/audit_ingestion"
+	"github.com/vulwall/scanners/internal/ingestion/kb_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/domain_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/enrichment_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/findings_ingestion"
@@ -105,16 +105,16 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		}
 	}()
 
-	// Start AI enrichment ingestion consumer
+	// Start KB ingestion consumer
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		o.logger.Info("Starting AI enrichment ingestion consumer")
+		o.logger.Info("Starting KB ingestion consumer")
 
-		aiEnrichmentConsumer := ai_enrichment_ingestion.NewConsumer(o.redis, o.db, o.logger)
-		if err := aiEnrichmentConsumer.Start(ctx); err != nil && err != context.Canceled {
-			o.logger.Error("AI enrichment ingestion consumer failed", zap.Error(err))
-			errChan <- fmt.Errorf("ai enrichment ingestion: %w", err)
+		kbConsumer := kb_ingestion.NewConsumer(o.redis, o.db, o.logger)
+		if err := kbConsumer.Start(ctx); err != nil && err != context.Canceled {
+			o.logger.Error("KB ingestion consumer failed", zap.Error(err))
+			errChan <- fmt.Errorf("kb ingestion: %w", err)
 		}
 	}()
 
