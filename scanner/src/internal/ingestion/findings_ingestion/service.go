@@ -20,13 +20,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// AllowedSeveritiesForAI defines which severity levels trigger AI enrichment
-var AllowedSeveritiesForAI = map[string]bool{
-	shared.SeverityCritical: true,
-	shared.SeverityHigh:     true,
-	shared.SeverityMedium:   true,
-}
-
 // Service handles persistence of security findings to MongoDB
 type Service struct {
 	db     *mongo.Database
@@ -77,21 +70,32 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 	)
 
 	// Upsert the finding (deduplicate by org_id + discovery_id + finding_type + title)
-	needsAIEnrichment, err := s.upsertFinding(ctx, finding)
-	if err != nil {
+	if err := s.upsertFinding(ctx, finding); err != nil {
 		span.RecordError(err)
 		return fmt.Errorf("failed to upsert finding: %w", err)
 	}
 
-	// Publish to AI enrichment queue if eligible (high/critical severity + not already enriched)
-	if needsAIEnrichment {
-		if err := s.publishAIEnrichmentJob(ctx, finding); err != nil {
-			// Log error but don't fail the ingestion
-			s.logger.Error("Failed to publish AI enrichment job",
-				zap.String("org_id", finding.OrgID),
+	// Check if a KB entry needs to be generated for this finding_type.
+	// Only generate for actionable severities (critical, high, medium) — info and low
+	// findings are not worth the API cost and are rarely remediated by SME customers.
+	// Uses Redis SETNX lock to prevent duplicate API calls for the same finding_type.
+	if finding.FindingType != "" && kbEligibleSeverity(finding.Severity) {
+		lockKey := "kb_generating:" + finding.FindingType
+		locked, err := s.redis.SetNX(ctx, lockKey, "1", 24*time.Hour).Result()
+		if err != nil {
+			s.logger.Warn("Failed to check KB dedup lock, skipping KB generation",
 				zap.String("finding_type", finding.FindingType),
 				zap.Error(err),
 			)
+		} else if locked && !s.kbEntryExists(ctx, finding.FindingType) {
+			if err := s.publishKBGenerationJob(ctx, finding); err != nil {
+				// Log error but don't fail the ingestion; release lock so it can be retried
+				s.logger.Error("Failed to publish KB generation job",
+					zap.String("finding_type", finding.FindingType),
+					zap.Error(err),
+				)
+				s.redis.Del(ctx, lockKey)
+			}
 		}
 	}
 
@@ -99,8 +103,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 }
 
 // upsertFinding creates or updates a finding in the findings collection
-// Returns true if AI enrichment is needed (new finding with eligible severity and no existing AI recommendation)
-func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFinding) (bool, error) {
+func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFinding) error {
 	// Use majority write concern to ensure writes are confirmed before ACK
 	collection := s.db.Collection(
 		shared.CollectionFindings,
@@ -150,7 +153,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 
 		_, err := collection.InsertOne(ctx, findingDoc)
 		if err != nil {
-			return false, fmt.Errorf("failed to insert finding: %w", err)
+			return fmt.Errorf("failed to insert finding: %w", err)
 		}
 
 		s.logger.Info("Created new finding",
@@ -159,11 +162,9 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 			zap.String("finding_type", finding.FindingType),
 		)
 
-		// New finding - check if it needs AI enrichment (high/critical severity)
-		needsAI := AllowedSeveritiesForAI[finding.Severity]
-		return needsAI, nil
+		return nil
 	} else if err != nil {
-		return false, fmt.Errorf("failed to query existing finding: %w", err)
+		return fmt.Errorf("failed to query existing finding: %w", err)
 	}
 
 	// Finding exists, update last_detected and metadata
@@ -198,7 +199,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 
 	_, err = collection.UpdateOne(ctx, filter, update)
 	if err != nil {
-		return false, fmt.Errorf("failed to update finding: %w", err)
+		return fmt.Errorf("failed to update finding: %w", err)
 	}
 
 	s.logger.Info("Updated existing finding",
@@ -207,12 +208,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 		zap.String("finding_type", finding.FindingType),
 	)
 
-	// Check if existing finding needs AI enrichment:
-	// - Has eligible severity AND doesn't already have ai_recommendation
-	_, hasAIRecommendation := existingFinding["ai_recommendation"]
-	needsAI := AllowedSeveritiesForAI[finding.Severity] && !hasAIRecommendation
-
-	return needsAI, nil
+	return nil
 }
 
 // buildFindingDocument converts SecurityFinding to BSON, excluding nil fields
@@ -301,31 +297,87 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logger) 
 	return nil
 }
 
-// publishAIEnrichmentJob publishes an AI enrichment job to the queue
-func (s *Service) publishAIEnrichmentJob(ctx context.Context, finding shared.SecurityFinding) error {
-	job := shared.AIEnrichmentJob{
-		TraceID:     finding.TraceID,
-		OrgID:       finding.OrgID,
-		DiscoveryID: finding.DiscoveryID,
+// kbEligibleSeverity returns true for severities that warrant KB entry generation.
+// Info and low findings are excluded — they are rarely actionable for SME customers
+// and not worth the Anthropic API + web search cost.
+func kbEligibleSeverity(severity string) bool {
+	switch severity {
+	case shared.SeverityCritical, shared.SeverityHigh, shared.SeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// kbEntryExists checks if a knowledge base entry already exists for the given finding type
+func (s *Service) kbEntryExists(ctx context.Context, findingType string) bool {
+	collection := s.db.Collection(shared.CollectionKnowledgeBase)
+	docID := "kb_" + findingType
+
+	err := collection.FindOne(ctx, bson.M{"_id": docID}).Err()
+	return err == nil
+}
+
+// safeMetadataForKB returns a filtered copy of metadata safe for LLM prompts.
+// Uses an ALLOWLIST — only explicitly safe keys are included. Everything else
+// is dropped because scanner metadata may contain attacker-controlled content
+// from scanned targets (HTTP responses, headers, page content, etc.).
+//
+// When adding a new scanner, only add keys here if they contain structured,
+// scanner-generated data — never raw content from scan targets.
+func safeMetadataForKB(metadata map[string]interface{}) map[string]interface{} {
+	if metadata == nil {
+		return nil
+	}
+
+	// Only these keys are safe for LLM prompts. They contain structured,
+	// scanner-generated data that is not influenced by scanned targets.
+	allowKeys := map[string]bool{
+		"cve_id":            true, // CVE identifier (e.g., "CVE-2024-1234")
+		"cvss_score":        true, // CVSS score from scanner
+		"cvss_vector":       true, // CVSS vector string
+		"affected_versions": true, // Version range affected
+		"technology":        true, // Technology name (e.g., "jQuery", "nginx")
+		"template_severity": true, // Nuclei template severity
+		"reference":         true, // Reference URLs from template (not from target)
+		"classification":    true, // Scanner classification data
+		"tags":              true, // Scanner-assigned tags
+	}
+
+	safe := make(map[string]interface{})
+	for k, v := range metadata {
+		if allowKeys[k] {
+			safe[k] = v
+		}
+	}
+	if len(safe) == 0 {
+		return nil
+	}
+	return safe
+}
+
+// publishKBGenerationJob publishes a KB generation job to the queue
+func (s *Service) publishKBGenerationJob(ctx context.Context, finding shared.SecurityFinding) error {
+	job := shared.KBGenerationJob{
 		FindingType: finding.FindingType,
 		Title:       finding.Title,
 		Severity:    finding.Severity,
-		Source:     finding.Source,
+		Source:      finding.Source,
 		Description: finding.Description,
-		Metadata:    finding.Metadata,
+		Metadata:    safeMetadataForKB(finding.Metadata),
+		TraceID:     finding.TraceID,
 		Created:     time.Now(),
 	}
 
 	// Inject trace context for distributed tracing
 	job.TraceContext = telemetry.InjectTraceContext(ctx)
 
-	// Publish to AI enrichment queue (no MAXLEN - queue should not be trimmed)
-	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamAIEnrichmentQueue, job, 0); err != nil {
-		return fmt.Errorf("failed to publish AI enrichment job: %w", err)
+	// Publish to KB generation queue (no MAXLEN - queue should not be trimmed)
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamKBGenerationQueue, job, 0); err != nil {
+		return fmt.Errorf("failed to publish KB generation job: %w", err)
 	}
 
-	s.logger.Info("Published AI enrichment job",
-		zap.String("org_id", finding.OrgID),
+	s.logger.Info("Published KB generation job",
 		zap.String("finding_type", finding.FindingType),
 		zap.String("severity", finding.Severity),
 	)
