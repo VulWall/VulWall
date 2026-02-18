@@ -94,6 +94,14 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 
 					// Only acknowledge on success
 					c.redis.XAck(ctx, shared.StreamKBGenerationQueue, GroupKBEngine, message.ID)
+
+					// Cooldown to avoid immediately hitting the 30K input tokens/min rate limit.
+					c.logger.Debug("Post-generation cooldown", zap.Duration("duration", PostGenerationCooldown))
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-time.After(PostGenerationCooldown):
+					}
 				}
 			}
 		}

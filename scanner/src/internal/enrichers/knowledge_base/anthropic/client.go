@@ -65,15 +65,23 @@ type Message struct {
 }
 
 // Tool represents an Anthropic tool definition. For standard tools (like
-// generate_kb_entry) only Name, Description, and InputSchema are used. For
-// server-managed tools (like web_search), only Type and Name are required —
+// generate_kb_entry) only Name, Description, InputSchema, and Strict are used.
+// For server-managed tools (like web_search), only Type and Name are required —
 // Anthropic's API executes the tool server-side and does not accept InputSchema
-// for server tools.
+// or Strict for server tools.
+//
+// Strict enables constrained decoding: the API guarantees that the tool Input
+// exactly matches InputSchema (no extra properties, no missing required fields).
+// Without Strict, the schema is advisory only — the model can add fields outside
+// the schema, which is the root cause of unexpected fields appearing in output.
+// Use a pointer so that false is also representable; omitempty drops nil (server
+// tools like web_search must not send this field at all).
 type Tool struct {
 	Type        string          `json:"type,omitempty"`
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
 	InputSchema json.RawMessage `json:"input_schema,omitempty"`
+	Strict      *bool           `json:"strict,omitempty"`
 	MaxUses     int             `json:"max_uses,omitempty"`
 }
 
@@ -207,8 +215,12 @@ const (
 	webSearchMaxUses = 5
 )
 
+// boolPtr returns a pointer to b. Used to set optional boolean fields in API
+// structs where nil (omitempty) means "omit" and false is a distinct value.
+func boolPtr(b bool) *bool { return &b }
+
 // GenerateKBEntry generates a knowledge base entry for a finding type using
-// structured output (tool_use with input_schema) and optionally web search.
+// structured output (tool_use with strict: true) and optionally web search.
 //
 // When web search is active, Claude may perform up to webSearchMaxUses searches
 // before calling generate_kb_entry — all executed server-side by Anthropic. We
@@ -217,6 +229,12 @@ const (
 // The inputSchema must be valid JSON Schema bytes from response_schema.json.
 // The returned string is guaranteed-valid JSON matching that schema, ready for
 // direct json.Unmarshal by the caller.
+//
+// strict: true on the generate_kb_entry tool enables constrained decoding at the
+// API level. This is the critical difference between advisory schema enforcement
+// (where the model CAN emit extra fields) and guaranteed enforcement (where the
+// API rejects any output that does not match the schema exactly). Without this,
+// additionalProperties: false in the schema is treated as a hint only.
 func (c *Client) GenerateKBEntry(ctx context.Context, systemPrompt, findingContext string, inputSchema json.RawMessage) (string, error) {
 	if c.apiKey == "" {
 		return "", fmt.Errorf("anthropic API key not configured")
@@ -238,7 +256,8 @@ func (c *Client) GenerateKBEntry(ctx context.Context, systemPrompt, findingConte
 			{
 				// Server-side web search tool. Anthropic executes searches and
 				// returns results as web_search_tool_result content blocks.
-				// No InputSchema is used — this is not a client-side tool.
+				// No InputSchema or Strict — this is a server-managed tool;
+				// the Anthropic API does not accept those fields for server tools.
 				Type:    webSearchToolType,
 				Name:    webSearchToolName,
 				MaxUses: webSearchMaxUses,
@@ -246,9 +265,15 @@ func (c *Client) GenerateKBEntry(ctx context.Context, systemPrompt, findingConte
 			{
 				// Client-side structured output tool. Claude calls this last,
 				// after researching, to emit the validated JSON KB entry.
+				//
+				// Strict: true activates constrained decoding: the API guarantees
+				// the tool Input matches InputSchema exactly. Without this, the
+				// model treats additionalProperties: false as advisory and can
+				// emit extra fields (e.g. cvss_estimate appearing inside metadata).
 				Name:        kbToolName,
 				Description: kbToolDescription,
 				InputSchema: inputSchema,
+				Strict:      boolPtr(true),
 			},
 		},
 		ToolChoice: &ToolChoice{
