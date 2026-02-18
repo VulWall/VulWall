@@ -1,8 +1,10 @@
 {
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "business": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Business-friendly content for SME owners and managers",
       "properties": {
         "title": {
@@ -36,6 +38,7 @@
     },
     "technical": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Technical remediation content for developers and IT contractors",
       "properties": {
         "title": {
@@ -56,6 +59,7 @@
         },
         "severity": {
           "type": "object",
+          "additionalProperties": false,
           "properties": {
             "level": {
               "type": "string",
@@ -73,9 +77,10 @@
           },
           "required": ["level", "justification"]
         },
-        "affected_versions": {
-          "type": "string",
-          "description": "Version range affected by this vulnerability (e.g., '< 1.10.23', '>= 1.8.0 && < 2.2.0'). Use 'all' if all versions are affected or 'N/A' if not version-specific."
+        "affected_components": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Affected components with their vulnerable version ranges (e.g., ['jQuery < 3.5.0', 'Bootstrap < 3.4.1', 'OpenSSL 1.0.x - 1.0.2h']). Each entry pairs a component name with the specific versions affected. Use 'all versions' if every version is vulnerable."
         },
         "remediation_steps": {
           "type": "array",
@@ -89,6 +94,7 @@
         },
         "code_examples": {
           "type": "object",
+          "additionalProperties": false,
           "properties": {
             "vulnerable": {
               "type": "string",
@@ -119,10 +125,11 @@
           "description": "URL-friendly slug for the technical blog post. Example: 'remediating-jquery-xss-cve-2020-11022'"
         }
       },
-      "required": ["title", "vulnerability_explanation", "root_cause", "impact", "severity", "affected_versions", "remediation_steps", "verification_steps", "best_practices", "blog_slug"]
+      "required": ["title", "vulnerability_explanation", "root_cause", "impact", "severity", "affected_components", "remediation_steps", "verification_steps", "best_practices", "blog_slug"]
     },
     "metadata": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Structured metadata for filtering and categorization",
       "properties": {
         "components": {
