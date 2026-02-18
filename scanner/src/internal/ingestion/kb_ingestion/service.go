@@ -77,6 +77,7 @@ func (s *Service) upsertKBEntry(ctx context.Context, result shared.KBGenerationR
 			"technical":    extractSection(result.Entry, "technical"),
 			"metadata":     extractSection(result.Entry, "metadata"),
 			"model":        result.Model,
+			"published":    false,
 			"created_at":   time.Now(),
 		},
 	}
