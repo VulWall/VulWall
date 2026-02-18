@@ -24,9 +24,12 @@ const (
 	// API version header
 	anthropicVersion = "2023-06-01"
 
-	// Retry configuration
-	maxRetries     = 3
-	initialBackoff = 2 * time.Second
+	// Retry configuration — backoff must exceed the 1-minute token rate limit
+	// window (30K input tokens/min on Tier 1). A single KB request with web
+	// search can use 25-55K input tokens, so we need retries spaced far enough
+	// apart for the per-minute budget to reset.
+	maxRetries     = 4
+	initialBackoff = 15 * time.Second
 
 	// maxAgenticLoopIterations caps pause_turn continuation loops to prevent
 	// runaway billing. In practice web search completes in one turn; this guards
@@ -350,7 +353,7 @@ func (c *Client) messagesWithRetry(ctx context.Context, request MessagesRequest)
 	var lastErr error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Backoff delay: 0s, 2s, 4s, 8s
+		// Backoff delay: 0s, 15s, 30s, 60s, 120s
 		if attempt > 0 {
 			backoff := initialBackoff * time.Duration(1<<(attempt-1))
 			c.logger.Debug("Retrying Anthropic API request",
