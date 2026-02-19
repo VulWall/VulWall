@@ -67,15 +67,15 @@
               "description": "Severity level based on exploitability and impact"
             },
             "cvss_estimate": {
-              "type": "string",
-              "description": "Estimated CVSS range (e.g., '7.0-8.0')"
+              "type": ["string", "null"],
+              "description": "Estimated CVSS range (e.g., '7.0-8.0'), or null if unknown"
             },
             "justification": {
               "type": "string",
               "description": "Brief justification for the severity rating"
             }
           },
-          "required": ["level", "justification"]
+          "required": ["level", "cvss_estimate", "justification"]
         },
         "affected_components": {
           "type": "array",
@@ -93,22 +93,24 @@
           "description": "Steps to verify the fix was applied correctly"
         },
         "code_examples": {
-          "type": "object",
+          "type": ["object", "null"],
           "additionalProperties": false,
+          "description": "Code examples showing vulnerable and fixed versions, or null if not applicable (e.g., infrastructure/config findings)",
           "properties": {
             "vulnerable": {
-              "type": "string",
-              "description": "Example of vulnerable code or configuration (if applicable)"
+              "type": ["string", "null"],
+              "description": "Example of vulnerable code or configuration, or null if not applicable"
             },
             "fixed": {
-              "type": "string",
-              "description": "Example of the fixed code or configuration"
+              "type": ["string", "null"],
+              "description": "Example of the fixed code or configuration, or null if not applicable"
             },
             "language": {
-              "type": "string",
-              "description": "Programming language or config format of the examples"
+              "type": ["string", "null"],
+              "description": "Programming language or config format of the examples, or null if no code examples"
             }
-          }
+          },
+          "required": ["vulnerable", "fixed", "language"]
         },
         "best_practices": {
           "type": "array",
@@ -116,16 +118,16 @@
           "description": "Security best practices to prevent similar issues"
         },
         "references": {
-          "type": "array",
+          "type": ["array", "null"],
           "items": { "type": "string" },
-          "description": "Relevant URLs: CVE entries, vendor advisories, OWASP pages"
+          "description": "Relevant URLs: CVE entries, vendor advisories, OWASP pages. Null if no references found."
         },
         "blog_slug": {
           "type": "string",
           "description": "URL-friendly slug for the technical blog post. Example: 'remediating-jquery-xss-cve-2020-11022'"
         }
       },
-      "required": ["title", "vulnerability_explanation", "root_cause", "impact", "severity", "affected_components", "remediation_steps", "verification_steps", "best_practices", "blog_slug"]
+      "required": ["title", "vulnerability_explanation", "root_cause", "impact", "severity", "affected_components", "remediation_steps", "verification_steps", "code_examples", "best_practices", "references", "blog_slug"]
     },
     "metadata": {
       "type": "object",
@@ -133,9 +135,9 @@
       "description": "Structured metadata for filtering and categorization",
       "properties": {
         "components": {
-          "type": "array",
+          "type": ["array", "null"],
           "items": { "type": "string" },
-          "description": "Affected components or technologies (e.g., ['jQuery', 'JavaScript', 'Frontend'])"
+          "description": "Affected components or technologies (e.g., ['jQuery', 'JavaScript', 'Frontend']), or null if not applicable"
         },
         "owasp_category": {
           "type": "string",
@@ -156,7 +158,7 @@
           "description": "Tags for categorization (e.g., ['xss', 'frontend', 'library', 'cve'])"
         }
       },
-      "required": ["owasp_category", "estimated_effort", "is_exploitable", "tags"]
+      "required": ["components", "owasp_category", "estimated_effort", "is_exploitable", "tags"]
     }
   },
   "required": ["business", "technical", "metadata"]

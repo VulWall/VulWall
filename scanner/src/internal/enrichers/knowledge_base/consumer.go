@@ -77,7 +77,11 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 					return ctx.Err()
 				}
 				c.logger.Error("Failed to read from stream", zap.Error(err))
-				time.Sleep(5 * time.Second)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(5 * time.Second):
+				}
 				continue
 			}
 
@@ -93,7 +97,12 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 					}
 
 					// Only acknowledge on success
-					c.redis.XAck(ctx, shared.StreamKBGenerationQueue, GroupKBEngine, message.ID)
+					if err := c.redis.XAck(ctx, shared.StreamKBGenerationQueue, GroupKBEngine, message.ID).Err(); err != nil {
+						c.logger.Warn("Failed to acknowledge message — will be redelivered",
+							zap.String("message_id", message.ID),
+							zap.Error(err),
+						)
+					}
 
 					// Cooldown to avoid immediately hitting the 30K input tokens/min rate limit.
 					c.logger.Debug("Post-generation cooldown", zap.Duration("duration", PostGenerationCooldown))
