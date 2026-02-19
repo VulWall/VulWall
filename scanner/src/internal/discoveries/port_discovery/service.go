@@ -2,6 +2,7 @@ package port_discovery
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -14,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+	"golang.org/x/net/publicsuffix"
 )
 
 type Service struct {
@@ -56,32 +58,56 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 	// Try Shodan first
 	hostInfo, err := s.shodanClient.GetHostInfo(ctx, job.IP)
 	if err == nil && hostInfo != nil {
-		// Shodan succeeded - publish findings with source="shodan"
-		span.SetAttributes(attribute.String("source", "shodan"))
-		return s.publishShodanFindings(ctx, job, hostInfo)
+		hostnameCount := len(hostInfo.Hostnames)
+
+		// Shodan succeeded — verify hostnames match target domain before trusting findings.
+		// CDNs (CloudFront, Cloudflare, etc.) use shared IPs, so Shodan may return TLS certs
+		// and service data belonging to a completely different domain on the same IP.
+		if s.shodanHostnamesMatchTarget(job, hostInfo.Hostnames) {
+			span.SetAttributes(attribute.String("source", "shodan"))
+			return s.publishShodanFindings(ctx, job, hostInfo, hostnameCount)
+		}
+
+		// Hostnames don't match — likely shared CDN infrastructure.
+		// Skip Shodan findings to avoid false attribution, fall through to TCP scan.
+		s.logger.Warn("Skipping Shodan findings — hostnames do not match target domain, likely shared CDN infrastructure",
+			zap.String("trace_id", job.TraceID),
+			zap.String("ip", job.IP),
+			zap.String("target_domain", job.TargetDomain),
+			zap.Strings("shodan_hostnames", hostInfo.Hostnames),
+		)
+		span.SetAttributes(
+			attribute.String("shodan.skip_reason", "hostname_mismatch"),
+			attribute.String("shodan.target_domain", job.TargetDomain),
+			attribute.StringSlice("shodan.hostnames", hostInfo.Hostnames),
+		)
+
+		// Fall through to TCP scan with Shodan hostname metadata (mismatch)
+		span.SetAttributes(attribute.String("source", "port_discovery"))
+		return s.processTCPScan(ctx, job, &hostnameCount)
 	}
 
-	// Log why Shodan failed
+	// Log why Shodan failed (only when err != nil or hostInfo == nil — not on hostname mismatch)
 	if err != nil {
 		s.logger.Debug("Shodan lookup failed, falling back to TCP scan",
 			zap.String("ip", job.IP),
 			zap.Error(err),
 		)
 		span.SetAttributes(attribute.String("shodan.error", err.Error()))
-	} else {
+	} else if hostInfo == nil {
 		s.logger.Debug("IP not found in Shodan, falling back to TCP scan",
 			zap.String("ip", job.IP),
 		)
 		span.SetAttributes(attribute.String("shodan.error", "not_found"))
 	}
 
-	// Fallback to TCP scanner
+	// Fallback to TCP scanner — Shodan unavailable, no hostname metadata
 	span.SetAttributes(attribute.String("source", "port_discovery"))
-	return s.processTCPScan(ctx, job)
+	return s.processTCPScan(ctx, job, nil)
 }
 
 // publishShodanFindings publishes port findings from Shodan Host API response
-func (s *Service) publishShodanFindings(ctx context.Context, job shared.IPDiscoveryJob, hostInfo *shodan.HostInfo) error {
+func (s *Service) publishShodanFindings(ctx context.Context, job shared.IPDiscoveryJob, hostInfo *shodan.HostInfo, hostnameCount int) error {
 	s.logger.Info("Publishing Shodan port findings",
 		zap.String("trace_id", job.TraceID),
 		zap.String("ip", job.IP),
@@ -117,6 +143,8 @@ func (s *Service) publishShodanFindings(ctx context.Context, job shared.IPDiscov
 
 		// Build metadata with Shodan-specific info
 		metadata := make(map[string]interface{})
+		metadata["hostname_match"] = true
+		metadata["hostname_count"] = hostnameCount
 		if portData.HTTP != nil {
 			metadata["http"] = map[string]interface{}{
 				"server": portData.HTTP.Server,
@@ -181,8 +209,10 @@ func (s *Service) publishShodanFindings(ctx context.Context, job shared.IPDiscov
 	return nil
 }
 
-// processTCPScan performs TCP port scanning as fallback
-func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob) error {
+// processTCPScan performs TCP port scanning as fallback.
+// shodanHostnameCount is non-nil when Shodan returned data but hostnames didn't match
+// (hostname mismatch — shared CDN infrastructure). nil means Shodan was unavailable.
+func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob, shodanHostnameCount *int) error {
 	// Determine which ports to scan
 	portsToScan := CommonPorts
 	// TODO: In the future, support custom port ranges from job.PortRange
@@ -209,6 +239,15 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 			banner = &portResult.Banner
 		}
 
+		// Build metadata — include Shodan hostname info when available (hostname mismatch path)
+		var metadata map[string]interface{}
+		if shodanHostnameCount != nil {
+			metadata = map[string]interface{}{
+				"hostname_match":       false,
+				"hostname_count": *shodanHostnameCount,
+			}
+		}
+
 		finding := shared.IPDiscoveryFinding{
 			DiscoveryID: portID,
 			AssetType:   shared.AssetTypePort,
@@ -221,6 +260,7 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 			Protocol:    shared.ProtocolTCP,
 			Status:      shared.AssetStatusActive,
 			Banner:      banner,
+			Metadata:    metadata,
 			Timestamp:   now,
 		}
 
@@ -267,6 +307,52 @@ func (s *Service) publishFinding(ctx context.Context, finding shared.IPDiscovery
 	}
 
 	return nil
+}
+
+// shodanHostnamesMatchTarget checks whether any Shodan hostname shares the same
+// eTLD+1 (effective top-level domain + 1) as the target domain. This prevents
+// false attribution of Shodan findings when an IP is shared across unrelated
+// domains (common with CDNs like CloudFront and Cloudflare).
+//
+// Returns true (safe to use Shodan data) when:
+//   - TargetDomain is empty (job didn't originate from domain discovery)
+//   - Shodan returned no hostnames (can't determine ownership — assume safe)
+//   - Any Shodan hostname shares the same eTLD+1 as the target domain
+func (s *Service) shodanHostnamesMatchTarget(job shared.IPDiscoveryJob, shodanHostnames []string) bool {
+	// No target domain available — can't filter, allow Shodan findings
+	if job.TargetDomain == "" {
+		return true
+	}
+
+	// Shodan returned no hostnames — likely shared CDN infrastructure with no reverse DNS.
+	// Deny when we have a target domain (domain-discovered IP) to avoid false attribution.
+	// Allow when no target domain (direct IP asset added by user).
+	if len(shodanHostnames) == 0 {
+		return job.TargetDomain == ""
+	}
+
+	targetETLD1 := etldPlusOne(job.TargetDomain)
+
+	for _, hostname := range shodanHostnames {
+		if etldPlusOne(hostname) == targetETLD1 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// etldPlusOne extracts the eTLD+1 (registered domain) from a hostname.
+// Examples: "app.acme.com" -> "acme.com", "sub.example.co.uk" -> "example.co.uk"
+// Falls back to the lowercased input if extraction fails.
+func etldPlusOne(hostname string) string {
+	hostname = strings.ToLower(strings.TrimSuffix(hostname, "."))
+	registered, err := publicsuffix.EffectiveTLDPlusOne(hostname)
+	if err != nil {
+		// Fallback: return the hostname itself (handles bare TLDs, IPs, etc.)
+		return hostname
+	}
+	return registered
 }
 
 // truncateBanner truncates banner to specified max length

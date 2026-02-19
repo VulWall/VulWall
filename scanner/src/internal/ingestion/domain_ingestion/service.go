@@ -501,6 +501,7 @@ func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.Disc
 		OrgID:        finding.OrgID,
 		ParentID:     &ipDiscoveryID,
 		IP:           *finding.IP,
+		TargetDomain: finding.Host, // Domain that resolved to this IP (for Shodan hostname validation)
 		Metadata: map[string]interface{}{
 			"source":          "domain_discovery",
 			"ip_discovery_id": ipDiscoveryID,

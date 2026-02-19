@@ -40,9 +40,10 @@ type IPDiscoveryJob struct {
     TraceID      string                 `json:"trace_id"`
     TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`
     ScanID       *string                `json:"scan_id,omitempty"`
-    OrgID        string                 `json:"org_id"`       // REQUIRED
+    OrgID        string                 `json:"org_id"`            // REQUIRED
     ParentID     *string                `json:"parent_id,omitempty"`
     IP           string                 `json:"ip"`
+    TargetDomain string                 `json:"target_domain,omitempty"` // Domain that resolved to this IP (for Shodan hostname validation)
     PortRange    *string                `json:"port_range,omitempty"`
     Metadata     map[string]interface{} `json:"metadata,omitempty"`
     Created      time.Time              `json:"created"`

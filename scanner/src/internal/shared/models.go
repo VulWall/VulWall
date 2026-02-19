@@ -49,6 +49,7 @@ type IPDiscoveryJob struct {
 	OrgID        string                 `json:"org_id" bson:"org_id"`                             // Required: organization GUID
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`   // Parent IP discovery ID
 	IP           string                 `json:"ip" bson:"ip"`                                     // Target IP address
+	TargetDomain string                 `json:"target_domain,omitempty" bson:"target_domain,omitempty"` // Domain that resolved to this IP (for Shodan hostname validation)
 	PortRange    *string                `json:"port_range,omitempty" bson:"port_range,omitempty"` // Optional: "1-1000" or "80,443,22"
 	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 	Created      time.Time              `json:"created" bson:"created"`
