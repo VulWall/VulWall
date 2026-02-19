@@ -79,6 +79,8 @@ func (s *Service) upsertKBEntry(ctx context.Context, result shared.KBGenerationR
 			"model":        result.Model,
 			"published":    false,
 			"created_at":   time.Now(),
+			"version":    1,
+			"updated_at": nil,
 		},
 	}
 
