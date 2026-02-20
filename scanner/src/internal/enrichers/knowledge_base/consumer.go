@@ -52,6 +52,8 @@ func (c *Consumer) Start(ctx context.Context) error {
 	return c.processMessages(ctx, consumerName)
 }
 
+const redisReadBlockTimeout = 5 * time.Second
+
 // processMessages is the main message processing loop
 func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
 	for {
@@ -66,7 +68,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamKBGenerationQueue, ">"},
 				Count:    int64(ConsumerBatchSize),
-				Block:    5 * time.Second,
+				Block:    redisReadBlockTimeout,
 			}).Result()
 
 			if err != nil {
@@ -80,7 +82,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case <-time.After(5 * time.Second):
+				case <-time.After(redisReadBlockTimeout):
 				}
 				continue
 			}
@@ -136,10 +138,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 
 	// Validate required fields
 	if job.FindingType == "" {
-		c.logger.Warn("Skipping job without finding_type",
-			zap.String("message_id", message.ID),
-		)
-		return nil
+		return fmt.Errorf("invalid KB generation job: missing finding_type")
 	}
 
 	// Process the job

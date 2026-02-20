@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -478,8 +479,9 @@ func isRetryableError(err error) bool {
 		return true
 	}
 
-	// Check net.Error interface
-	if netErr, ok := err.(net.Error); ok {
+	// Check net.Error interface (including wrapped errors)
+	var netErr net.Error
+	if errors.As(err, &netErr) {
 		return netErr.Timeout()
 	}
 
