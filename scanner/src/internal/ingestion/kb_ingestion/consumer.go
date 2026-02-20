@@ -3,6 +3,7 @@ package kb_ingestion
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -59,6 +60,12 @@ func (c *Consumer) Start(ctx context.Context) error {
 	return c.processMessages(ctx, consumerName)
 }
 
+// permanentError wraps errors that should not be retried (e.g., invalid message data).
+type permanentError struct{ err error }
+
+func (e *permanentError) Error() string { return e.err.Error() }
+func (e *permanentError) Unwrap() error { return e.err }
+
 // processMessages is the main message processing loop
 func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
 	for {
@@ -92,15 +99,38 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			for _, stream := range streams {
 				for _, message := range stream.Messages {
 					if err := c.handleMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to process message, leaving unacknowledged for retry",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
+						var permErr *permanentError
+						if errors.As(err, &permErr) {
+							c.logger.Error("Permanently invalid message, acknowledging to prevent retry loop",
+								zap.String("message_id", message.ID),
+								zap.Error(err),
+							)
+
+							data, _ := message.Values["data"].(string)
+							if dlErr := redisx.PublishDeadLetter(ctx, c.redis, shared.StreamKBGenerationResults, GroupKBIngestion, message.ID, data, err); dlErr != nil {
+								c.logger.Warn("Failed to publish to dead-letter stream",
+									zap.String("message_id", message.ID),
+									zap.Error(dlErr),
+								)
+							}
+
+							_ = c.redis.XAck(ctx, shared.StreamKBGenerationResults, GroupKBIngestion, message.ID).Err()
+						} else {
+							c.logger.Error("Failed to process message, leaving unacknowledged for retry",
+								zap.String("message_id", message.ID),
+								zap.Error(err),
+							)
+						}
 						continue
 					}
 
 					// Only acknowledge on success
-					c.redis.XAck(ctx, shared.StreamKBGenerationResults, GroupKBIngestion, message.ID)
+					if err := c.redis.XAck(ctx, shared.StreamKBGenerationResults, GroupKBIngestion, message.ID).Err(); err != nil {
+						c.logger.Warn("Failed to acknowledge message — will be redelivered",
+							zap.String("message_id", message.ID),
+							zap.Error(err),
+						)
+					}
 				}
 			}
 		}
@@ -112,13 +142,13 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	// Extract data from message
 	data, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("message data is not a string")
+		return &permanentError{err: fmt.Errorf("message data is not a string")}
 	}
 
 	// Parse KB generation result
 	var result shared.KBGenerationResult
 	if err := json.Unmarshal([]byte(data), &result); err != nil {
-		return fmt.Errorf("failed to unmarshal KB result: %w", err)
+		return &permanentError{err: fmt.Errorf("failed to unmarshal KB result: %w", err)}
 	}
 
 	// Extract trace context from message to link spans across service boundaries

@@ -52,6 +52,9 @@ const (
 	// Redis Streams - System Audit Logs
 	StreamSystemAuditLogs = "system_audit_logs" // System-level audit events (template updates, service events, etc.)
 
+	// Redis Streams - Dead Letter
+	StreamDeadLetter = "dead_letter" // Messages that failed processing permanently (poison messages)
+
 	// MongoDB Collections - Audit
 	CollectionAuditLogs = "audit_logs" // Existing audit logs collection (shared with Dashboard)
 

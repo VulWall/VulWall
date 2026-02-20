@@ -3,11 +3,12 @@ package findings_ingestion
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -54,6 +55,14 @@ func (c *Consumer) Start(ctx context.Context) error {
 	return c.processMessages(ctx, consumerName)
 }
 
+const redisReadBlockTimeout = 5 * time.Second
+
+// permanentError wraps errors that should not be retried (e.g., invalid message data).
+type permanentError struct{ err error }
+
+func (e *permanentError) Error() string { return e.err.Error() }
+func (e *permanentError) Unwrap() error { return e.err }
+
 // processMessages is the main message processing loop
 func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
 	for {
@@ -68,7 +77,7 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 				Consumer: consumerName,
 				Streams:  []string{shared.StreamSecurityFindings, ">"},
 				Count:    shared.IngestionBatchSize,
-				Block:    5 * time.Second,
+				Block:    redisReadBlockTimeout,
 			}).Result()
 
 			if err != nil {
@@ -80,7 +89,11 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 					return ctx.Err()
 				}
 				c.logger.Error("Failed to read from stream", zap.Error(err))
-				time.Sleep(5 * time.Second)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(redisReadBlockTimeout):
+				}
 				continue
 			}
 
@@ -88,7 +101,34 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			for _, stream := range streams {
 				for _, message := range stream.Messages {
 					if err := c.handleMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to process message",
+						var permErr *permanentError
+						if errors.As(err, &permErr) {
+							c.logger.Error("Permanently invalid message, acknowledging to prevent retry loop",
+								zap.String("message_id", message.ID),
+								zap.Error(err),
+							)
+
+							data, _ := message.Values["data"].(string)
+							if dlErr := redisx.PublishDeadLetter(ctx, c.redis, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID, data, err); dlErr != nil {
+								c.logger.Warn("Failed to publish to dead-letter stream",
+									zap.String("message_id", message.ID),
+									zap.Error(dlErr),
+								)
+							}
+
+							_ = c.redis.XAck(ctx, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID).Err()
+						} else {
+							c.logger.Error("Failed to process message, leaving unacknowledged for retry",
+								zap.String("message_id", message.ID),
+								zap.Error(err),
+							)
+						}
+						continue
+					}
+
+					// Only acknowledge on success
+					if err := c.redis.XAck(ctx, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID).Err(); err != nil {
+						c.logger.Warn("Failed to acknowledge message — will be redelivered",
 							zap.String("message_id", message.ID),
 							zap.Error(err),
 						)
@@ -104,13 +144,13 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	// Extract data from message
 	data, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("message data is not a string")
+		return &permanentError{err: fmt.Errorf("message data is not a string")}
 	}
 
 	// Parse security finding
 	var finding shared.SecurityFinding
 	if err := json.Unmarshal([]byte(data), &finding); err != nil {
-		return fmt.Errorf("failed to unmarshal finding: %w", err)
+		return &permanentError{err: fmt.Errorf("failed to unmarshal finding: %w", err)}
 	}
 
 	// Extract trace context from message to link spans across service boundaries
@@ -118,33 +158,14 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 
 	// Validate source field
 	if finding.Source == "" {
-		c.logger.Warn("Skipping finding without source field",
-			zap.String("message_id", message.ID),
-		)
-		return nil
+		return &permanentError{err: fmt.Errorf("missing required field: source")}
 	}
 
 	// Validate org_id
 	if finding.OrgID == "" {
-		c.logger.Warn("Skipping finding without org_id",
-			zap.String("message_id", message.ID),
-		)
-		return nil
+		return &permanentError{err: fmt.Errorf("missing required field: org_id")}
 	}
 
 	// Process the finding
-	if err := c.service.ProcessFinding(ctx, finding); err != nil {
-		return err
-	}
-
-	// Acknowledge message only after successful processing
-	if err := c.redis.XAck(ctx, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID).Err(); err != nil {
-		c.logger.Error("Failed to acknowledge message",
-			zap.String("message_id", message.ID),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to acknowledge message: %w", err)
-	}
-
-	return nil
+	return c.service.ProcessFinding(ctx, finding)
 }
