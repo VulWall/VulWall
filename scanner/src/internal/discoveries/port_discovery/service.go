@@ -164,13 +164,14 @@ func (s *Service) publishShodanFindings(ctx context.Context, job shared.IPDiscov
 			}
 		}
 		if portData.SSL != nil {
-			metadata["ssl"] = map[string]interface{}{
+			sslMetadata := map[string]interface{}{
 				"versions": portData.SSL.Versions,
 			}
 			if portData.SSL.Cert != nil {
-				metadata["ssl"].(map[string]interface{})["cert_expired"] = portData.SSL.Cert.Expired
-				metadata["ssl"].(map[string]interface{})["cert_expires"] = portData.SSL.Cert.Expires
+				sslMetadata["cert_expired"] = portData.SSL.Cert.Expired
+				sslMetadata["cert_expires"] = portData.SSL.Cert.Expires
 			}
+			metadata["ssl"] = sslMetadata
 		}
 
 		finding := shared.IPDiscoveryFinding{
@@ -254,6 +255,7 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 			TraceID:     job.TraceID,
 			ScanID:      job.ScanID,
 			OrgID:       job.OrgID,
+			ParentID:    job.ParentID,
 			Source:      "port_discovery",
 			IP:          job.IP,
 			Port:        portResult.Port,
