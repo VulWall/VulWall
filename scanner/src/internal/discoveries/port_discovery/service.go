@@ -69,22 +69,20 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 		}
 
 		// Hostnames don't match — likely shared CDN infrastructure.
-		// Skip Shodan findings to avoid false attribution, fall through to TCP scan.
-		s.logger.Warn("Skipping Shodan findings — hostnames do not match target domain, likely shared CDN infrastructure",
+		// Skip entirely to avoid publishing junk data from other tenants' IPs.
+		s.logger.Info("Skipping port discovery — hostnames do not match target domain (shared CDN IP)",
 			zap.String("trace_id", job.TraceID),
+			zap.String("org_id", job.OrgID),
 			zap.String("ip", job.IP),
 			zap.String("target_domain", job.TargetDomain),
 			zap.Strings("shodan_hostnames", hostInfo.Hostnames),
 		)
 		span.SetAttributes(
-			attribute.String("shodan.skip_reason", "hostname_mismatch"),
+			attribute.String("skip_reason", "hostname_mismatch"),
 			attribute.String("shodan.target_domain", job.TargetDomain),
 			attribute.StringSlice("shodan.hostnames", hostInfo.Hostnames),
 		)
-
-		// Fall through to TCP scan with Shodan hostname metadata (mismatch)
-		span.SetAttributes(attribute.String("source", "port_discovery"))
-		return s.processTCPScan(ctx, job, &hostnameCount)
+		return nil
 	}
 
 	// Log why Shodan failed (only when err != nil or hostInfo == nil — not on hostname mismatch)
@@ -101,9 +99,22 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 		span.SetAttributes(attribute.String("shodan.error", "not_found"))
 	}
 
-	// Fallback to TCP scanner — Shodan unavailable, no hostname metadata
+	// If this IP came from a domain resolution, skip TCP fallback — we can't verify
+	// ownership without Shodan hostnames, so scanning may attribute shared CDN ports
+	// to the wrong customer. TCP fallback is only safe for direct IP assets.
+	if job.TargetDomain != "" {
+		s.logger.Info("Skipping TCP fallback — Shodan unavailable and cannot verify ownership for domain-resolved IP",
+			zap.String("trace_id", job.TraceID),
+			zap.String("ip", job.IP),
+			zap.String("target_domain", job.TargetDomain),
+		)
+		span.SetAttributes(attribute.String("skip_reason", "no_shodan_domain_resolved"))
+		return nil
+	}
+
+	// Fallback to TCP scanner — direct IP asset, no domain ownership check needed
 	span.SetAttributes(attribute.String("source", "port_discovery"))
-	return s.processTCPScan(ctx, job, nil)
+	return s.processTCPScan(ctx, job)
 }
 
 // publishShodanFindings publishes port findings from Shodan Host API response
@@ -209,10 +220,8 @@ func (s *Service) publishShodanFindings(ctx context.Context, job shared.IPDiscov
 	return nil
 }
 
-// processTCPScan performs TCP port scanning as fallback.
-// shodanHostnameCount is non-nil when Shodan returned data but hostnames didn't match
-// (hostname mismatch — shared CDN infrastructure). nil means Shodan was unavailable.
-func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob, shodanHostnameCount *int) error {
+// processTCPScan performs TCP port scanning as fallback when Shodan is unavailable.
+func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob) error {
 	// Determine which ports to scan
 	portsToScan := CommonPorts
 	// TODO: In the future, support custom port ranges from job.PortRange
@@ -239,15 +248,6 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob,
 			banner = &portResult.Banner
 		}
 
-		// Build metadata — include Shodan hostname info when available (hostname mismatch path)
-		var metadata map[string]interface{}
-		if shodanHostnameCount != nil {
-			metadata = map[string]interface{}{
-				"hostname_match":       false,
-				"hostname_count": *shodanHostnameCount,
-			}
-		}
-
 		finding := shared.IPDiscoveryFinding{
 			DiscoveryID: portID,
 			AssetType:   shared.AssetTypePort,
@@ -260,7 +260,6 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob,
 			Protocol:    shared.ProtocolTCP,
 			Status:      shared.AssetStatusActive,
 			Banner:      banner,
-			Metadata:    metadata,
 			Timestamp:   now,
 		}
 
