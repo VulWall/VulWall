@@ -117,7 +117,6 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 
 		// port_scan_triggers consumers (active recon scanners on ports)
 		{shared.StreamPortScanTriggers, "nuclei_scanner_service"},
-		{shared.StreamPortScanTriggers, "testssl_scanner_service"},
 
 		// domain_discovery_results consumers (ingestion)
 		{shared.StreamDomainDiscoveryResults, "domain_ingestion_service"},

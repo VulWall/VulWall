@@ -10,7 +10,7 @@
 | 1 | **domain-discovery** | `shodan_subdomain_service` | `domain_discovery_queue` | `domain_discovery_results` | RunSimple (Streams) | No |
 | 2 | **port-discovery** | `port_discovery_service` | `ip_discovery_queue` | `ip_discovery_results` | RunSimple (Streams) | No |
 | 3 | **nuclei-scanner** | `nuclei_scanner_service` | `domain_scan_triggers` + `port_scan_triggers` | `security_findings` | RunSimple (manual) | No |
-| 4 | **testssl-scanner** | `testssl_scanner_service` | `domain_scan_triggers` + `port_scan_triggers` | `security_findings` | RunSimple (manual) | No |
+| 4 | **testssl-scanner** | `testssl_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
 | 5 | **webtechprofiler** | `webtechprofiler_service` | `domain_scan_triggers` + `ip_discovery_results` | `security_findings` | RunSimple (manual) | No |
 | 6 | **js-dependency-scanner** | `js_dependency_scanner_service` | `domain_scan_triggers` | `security_findings` | Run | No |
 | 7 | **http-header-scanner** | `http_header_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
@@ -40,7 +40,7 @@
 | `ip_discovery_queue` | `StreamIPDiscoveryQueue` | job | scan-coordinator, domain-ingestion | port-discovery | `0` |
 | `ip_discovery_results` | `StreamIPDiscoveryResults` | result | port-discovery | port-ingestion, webtechprofiler | `0` |
 | `domain_scan_triggers` | `StreamDomainScanTriggers` | trigger | domain-ingestion | nuclei, testssl, webtechprofiler, js-dep, http-header, email-security | `$` |
-| `port_scan_triggers` | `StreamPortScanTriggers` | trigger | port-ingestion | nuclei, testssl | `$` |
+| `port_scan_triggers` | `StreamPortScanTriggers` | trigger | port-ingestion | nuclei | `$` |
 | `security_findings` | `StreamSecurityFindings` | result | nuclei, testssl, webtechprofiler, js-dep, http-header, email-security | findings-ingestion | `0` |
 | `discovery_enrichment_queue` | `StreamDiscoveryEnrichmentQueue` | job | domain-ingestion, port-ingestion | discovery-enrichment | `0` |
 | `discovery_enrichment_results` | `StreamDiscoveryEnrichmentResults` | result | discovery-enrichment | enrichment-ingestion | `0` |
@@ -69,7 +69,7 @@ The scan monitor tracks these consumer groups to determine when a scan is comple
 | `domain_scan_triggers` | `http_header_scanner_service` | http-header-scanner |
 | `domain_scan_triggers` | `email_security_scanner_service` | email-security-scanner |
 | `port_scan_triggers` | `nuclei_scanner_service` | nuclei-scanner |
-| `port_scan_triggers` | `testssl_scanner_service` | testssl-scanner |
+
 | `domain_discovery_results` | `domain_ingestion_service` | domain-ingestion |
 | `ip_discovery_results` | `port_ingestion_service` | port-ingestion |
 | `ip_discovery_results` | `webtechprofiler_service` | webtechprofiler |
@@ -111,7 +111,7 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 **Dual-strategy consumers:**
 - **webtechprofiler**: `$` on `domain_scan_triggers` (ephemeral) + `0` on `ip_discovery_results` (guaranteed)
 - **nuclei-scanner**: `$` on both `domain_scan_triggers` and `port_scan_triggers`
-- **testssl-scanner**: `$` on both `domain_scan_triggers` and `port_scan_triggers`
+- **testssl-scanner**: `$` on `domain_scan_triggers` only
 
 ---
 

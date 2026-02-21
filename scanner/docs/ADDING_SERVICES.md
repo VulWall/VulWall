@@ -147,7 +147,7 @@ bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
 ```
 Service handles consumer group creation internally using `CreateConsumerGroupFromLatest`.
 
-**Dual-stream (nuclei, testssl):**
+**Dual-stream (nuclei):**
 Consumer creates groups on both `domain_scan_triggers` and `port_scan_triggers`.
 
 ### 5. Consumer group start position
@@ -249,7 +249,7 @@ Add the new slice to the service inventory and stream tables.
 |-----------|-----------|---------|
 | Single stream + MongoDB | `bootstrap.Run()` | js-dependency-scanner |
 | Single stream + no MongoDB | `bootstrap.RunSimple()` with `Streams` | domain-discovery, port-discovery |
-| Multi-stream + no MongoDB | `bootstrap.RunSimple()` without `Streams` | nuclei-scanner, testssl-scanner |
+| Multi-stream + no MongoDB | `bootstrap.RunSimple()` without `Streams` | nuclei-scanner |
 | Custom init (scheduler, orchestrator) | Manual | scan-coordinator, ingestion |
 
 ### bootstrap.Run() — Single-stream with MongoDB
@@ -287,7 +287,7 @@ func main() {
 **Mode B: Multi-stream (service handles own consumer groups):**
 
 Services listed as "RunSimple (manual)" in SERVICE_REGISTRY.md use this mode. The service creates its own consumer groups inside `consumer.go`'s `Start()` method. Use when:
-- Service consumes from multiple streams (nuclei, testssl)
+- Service consumes from multiple streams (nuclei)
 - Different start positions per stream (webtechprofiler: `$` on triggers, `0` on results)
 
 ```go
