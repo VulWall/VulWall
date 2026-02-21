@@ -2,7 +2,7 @@ name: nw-ingestion
 
 services:
   ingestion:
-    image: ghcr.io/vulwall/nightwatch-ingestion:${IMAGE_TAG:-dev}
+    image: ghcr.io/mojtabatajik/nightwatch-ingestion:${IMAGE_TAG:-dev}
     container_name: nw-ingestion
     restart: unless-stopped
     env_file:

@@ -2,7 +2,7 @@ name: nw-discovery-enrichment
 
 services:
   discovery-enrichment:
-    image: ghcr.io/vulwall/nightwatch-discovery-enrichment:${IMAGE_TAG:-dev}
+    image: ghcr.io/mojtabatajik/nightwatch-discovery-enrichment:${IMAGE_TAG:-dev}
     container_name: nw-discovery-enrichment
     restart: unless-stopped
     env_file:

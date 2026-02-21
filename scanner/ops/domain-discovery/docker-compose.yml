@@ -2,7 +2,7 @@ name: nw-domain-discovery
 
 services:
   domain-discovery:
-    image: ghcr.io/vulwall/nightwatch-domain-discovery:${IMAGE_TAG:-dev}
+    image: ghcr.io/mojtabatajik/nightwatch-domain-discovery:${IMAGE_TAG:-dev}
     container_name: nw-domain-discovery
     restart: unless-stopped
     env_file:

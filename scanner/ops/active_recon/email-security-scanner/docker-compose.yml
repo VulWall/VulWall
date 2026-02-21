@@ -2,7 +2,7 @@ name: nw-email-security-scanner
 
 services:
   email-security-scanner:
-    image: ghcr.io/vulwall/nightwatch-email-security-scanner:${IMAGE_TAG:-dev}
+    image: ghcr.io/mojtabatajik/nightwatch-email-security-scanner:${IMAGE_TAG:-dev}
     container_name: nw-email-security-scanner
     restart: unless-stopped
     env_file:
