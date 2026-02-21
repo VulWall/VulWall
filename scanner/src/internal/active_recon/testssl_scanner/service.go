@@ -195,9 +195,10 @@ func (s *Service) parseTestSSLOutput(output []byte) ([]TestSSLFinding, error) {
 	// Filter findings: only include actual security issues
 	var filteredFindings []TestSSLFinding
 	for _, finding := range allFindings {
-		// Skip informational findings (severity "OK" or "INFO")
+		// Skip non-security findings (case-insensitive)
 		// We only want actual security issues: LOW, MEDIUM, HIGH, CRITICAL
-		if finding.Severity != "" && finding.Severity != "OK" && finding.Severity != "INFO" {
+		sev := strings.ToUpper(finding.Severity)
+		if sev != "" && sev != "OK" && sev != "INFO" && sev != "WARN" && sev != "FATAL" {
 			filteredFindings = append(filteredFindings, finding)
 		}
 	}
