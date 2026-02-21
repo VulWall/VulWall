@@ -33,7 +33,13 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 	}
 }
 
-// ProcessDiscovery processes a discovery target and checks email security (SPF, DKIM, DMARC)
+// ProcessDiscovery processes a discovery target and checks email security (SPF, DKIM, DMARC).
+//
+// Root domains (eTLD+1) get the full check suite: SPF, DMARC, DKIM, and AXFR.
+// Subdomains are MX-gated: only scanned if they have MX records (i.e., actually handle email).
+// When a subdomain has MX records, only SPF and DKIM are checked because:
+//   - DMARC inherits from the parent domain (RFC 7489 Section 6.6.3)
+//   - AXFR is a zone-level check already covered by the root domain
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
 	ctx, span := s.tracer.Start(ctx, "emailscanner",
 		trace.WithAttributes(
@@ -41,12 +47,14 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 			attribute.String("trace.id", target.TraceID),
 			attribute.String("discovery.id", target.DiscoveryID),
 			attribute.String("target", target.Target),
+			attribute.String("asset.type", target.AssetType),
 		),
 	)
 	defer span.End()
 
 	s.logger.Info("Processing discovery for EmailSecurityScanner",
 		zap.String("target", target.Target),
+		zap.String("asset_type", target.AssetType),
 		zap.String("discovery_id", target.DiscoveryID),
 		zap.String("org_id", target.OrgID),
 	)
@@ -55,12 +63,13 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	dnsCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	// Run all email security checks
 	var allResults []EmailCheckResult
-	allResults = append(allResults, checkSPF(dnsCtx, s.resolver, target.Target)...)
-	allResults = append(allResults, checkDMARC(dnsCtx, s.resolver, target.Target)...)
-	allResults = append(allResults, checkDKIM(dnsCtx, s.resolver, target.Target)...)
-	allResults = append(allResults, checkZoneTransfer(dnsCtx, s.resolver, target.Target)...)
+
+	if target.AssetType == shared.AssetTypeSubdomain {
+		allResults = s.scanSubdomain(dnsCtx, span, target)
+	} else {
+		allResults = s.scanRootDomain(dnsCtx, span, target)
+	}
 
 	span.SetAttributes(attribute.Int("findings.count", len(allResults)))
 
@@ -68,6 +77,63 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	s.publishUniqueFindings(ctx, allResults, target)
 
 	return nil
+}
+
+// scanRootDomain runs the full email security check suite on a root domain (eTLD+1):
+// SPF, DMARC, DKIM, and zone transfer (AXFR).
+func (s *Service) scanRootDomain(ctx context.Context, span trace.Span, target ScanTarget) []EmailCheckResult {
+	span.SetAttributes(attribute.String("email.scan_scope", "full"))
+
+	var results []EmailCheckResult
+	results = append(results, checkSPF(ctx, s.resolver, target.Target)...)
+	results = append(results, checkDMARC(ctx, s.resolver, target.Target)...)
+	results = append(results, checkDKIM(ctx, s.resolver, target.Target)...)
+	results = append(results, checkZoneTransfer(ctx, s.resolver, target.Target)...)
+	return results
+}
+
+// scanSubdomain performs an MX lookup to determine if the subdomain handles email.
+// If MX records exist, it runs SPF and DKIM checks only (DMARC inherits from parent,
+// AXFR is zone-level). If no MX records exist, the subdomain is skipped entirely.
+func (s *Service) scanSubdomain(ctx context.Context, span trace.Span, target ScanTarget) []EmailCheckResult {
+	mxRecords, err := s.resolver.LookupMX(ctx, target.Target)
+	if err != nil {
+		if isDNSNotFound(err) {
+			span.SetAttributes(attribute.String("email.scan_scope", "skipped_no_mx"))
+			s.logger.Debug("Skipping subdomain with no MX records",
+				zap.String("target", target.Target),
+				zap.String("org_id", target.OrgID),
+			)
+			return nil
+		}
+		// Transient error (timeout, SERVFAIL) — skip silently
+		span.SetAttributes(attribute.String("email.scan_scope", "skipped_mx_error"))
+		s.logger.Debug("MX lookup failed, skipping subdomain",
+			zap.String("target", target.Target),
+			zap.Error(err),
+		)
+		return nil
+	}
+	if len(mxRecords) == 0 {
+		span.SetAttributes(attribute.String("email.scan_scope", "skipped_no_mx"))
+		s.logger.Debug("Skipping subdomain with no MX records",
+			zap.String("target", target.Target),
+			zap.String("org_id", target.OrgID),
+		)
+		return nil
+	}
+
+	span.SetAttributes(attribute.String("email.scan_scope", "mx_only"))
+	s.logger.Info("Subdomain has MX records, scanning SPF and DKIM",
+		zap.String("target", target.Target),
+		zap.Int("mx_count", len(mxRecords)),
+		zap.String("org_id", target.OrgID),
+	)
+
+	var results []EmailCheckResult
+	results = append(results, checkSPF(ctx, s.resolver, target.Target)...)
+	results = append(results, checkDKIM(ctx, s.resolver, target.Target)...)
+	return results
 }
 
 // publishUniqueFindings publishes deduplicated findings to Redis
