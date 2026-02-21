@@ -170,7 +170,7 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []H
 				Present:     true,
 				Value:       acao,
 				IsSecure:    false,
-				Severity:    shared.SeverityMedium,
+				Severity:    shared.SeverityLow,
 				FindingType: "cors-credentials-with-wildcard",
 				Title:       "CORS Allows Credentials with Wildcard Origin",
 				Description: "The server sets Access-Control-Allow-Origin: * together with Access-Control-Allow-Credentials: true. Modern browsers block this combination, but it indicates a fundamental CORS misconfiguration that should be corrected.",

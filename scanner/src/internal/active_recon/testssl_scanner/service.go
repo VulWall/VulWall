@@ -223,6 +223,11 @@ func (s *Service) convertToSecurityFinding(testSSLFinding TestSSLFinding, target
 	// Map testssl.sh severity to our severity constants
 	severity := s.mapSeverity(testSSLFinding.Severity)
 
+	// Apply finding-specific severity overrides
+	if override, ok := severityOverrides[testSSLFinding.ID]; ok {
+		severity = override
+	}
+
 	// Build metadata with all testssl.sh-specific data
 	metadata := map[string]interface{}{
 		"test_id": testSSLFinding.ID,

@@ -37,7 +37,7 @@ func SecurityHeaderRules() []HeaderRule {
 		{
 			Name:        "Strict-Transport-Security",
 			Required:    true,
-			Severity:    shared.SeverityHigh,
+			Severity:    shared.SeverityMedium,
 			FindingType: "missing-hsts",
 			Title:       "Missing Strict-Transport-Security (HSTS) header",
 			Description: "The server does not set the Strict-Transport-Security header. Without HSTS, browsers may connect over insecure HTTP, leaving users vulnerable to man-in-the-middle attacks and SSL stripping.",
