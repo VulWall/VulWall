@@ -50,6 +50,14 @@ func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]Heade
 		value, present := getHeaderCaseInsensitive(headers, rule.Name)
 
 		if !present {
+			// Skip missing X-Frame-Options if CSP frame-ancestors is set (it supersedes X-Frame-Options)
+			if rule.Name == "X-Frame-Options" {
+				if csp, hasCSP := getHeaderCaseInsensitive(headers, "Content-Security-Policy"); hasCSP &&
+					strings.Contains(strings.ToLower(csp), "frame-ancestors") {
+					continue
+				}
+			}
+
 			results = append(results, HeaderCheckResult{
 				HeaderName:  rule.Name,
 				Present:     false,
