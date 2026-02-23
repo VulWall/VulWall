@@ -2,6 +2,7 @@ package scan_coordinator
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -16,13 +17,17 @@ type APIServer struct {
 	service *Service
 	server  *http.Server
 	logger  *zap.Logger
+	apiKey  string
 }
 
 // NewAPIServer creates a new API server on the given port.
-func NewAPIServer(service *Service, logger *zap.Logger, port string) *APIServer {
+// apiKey is the value callers must provide in the X-API-Key header.
+// Pass an empty string to disable authentication (development only).
+func NewAPIServer(service *Service, logger *zap.Logger, port string, apiKey string) *APIServer {
 	s := &APIServer{
 		service: service,
 		logger:  logger,
+		apiKey:  apiKey,
 	}
 
 	mux := http.NewServeMux()
@@ -68,6 +73,15 @@ type errorResponse struct {
 }
 
 func (a *APIServer) handleTriggerScan(w http.ResponseWriter, r *http.Request) {
+	if a.apiKey != "" {
+		provided := r.Header.Get("X-API-Key")
+		// Use constant-time comparison to prevent timing-based key enumeration.
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(a.apiKey)) != 1 {
+			a.writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "unauthorized"})
+			return
+		}
+	}
+
 	var req triggerScanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid request body"})

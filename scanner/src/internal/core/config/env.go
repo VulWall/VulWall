@@ -85,7 +85,8 @@ const (
 
 	// EnvDashboardWebhookURL is the Dashboard webhook URL for scan completion notifications (optional, empty = disabled)
 	EnvDashboardWebhookURL = "DASHBOARD_WEBHOOK_URL"
-	// EnvDashboardWebhookSecret is the shared secret sent in X-Webhook-Secret header
+	// EnvDashboardWebhookSecret is the shared HMAC secret used to sign webhook payloads.
+	// The signature is computed as HMAC-SHA256(secret, body) and sent in X-Webhook-Signature: sha256={hex}.
 	EnvDashboardWebhookSecret = "DASHBOARD_WEBHOOK_SECRET"
 
 	// ===========================================
@@ -94,4 +95,7 @@ const (
 
 	// EnvAPIPort is the HTTP API server port (default: 8080)
 	EnvAPIPort = "API_PORT"
+	// EnvAPIKey is the bearer secret that callers must supply in the X-API-Key header
+	// to access protected endpoints (e.g. POST /api/scans). Empty = auth disabled (dev only).
+	EnvAPIKey = "NIGHTWATCH_API_KEY"
 )

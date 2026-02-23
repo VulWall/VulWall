@@ -195,6 +195,9 @@ Environment variables (`.env`):
 | `HONEYCOMB_API_KEY` | Honeycomb API key for tracing |
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
+| `NIGHTWATCH_API_KEY` | Bearer key callers must send in `X-API-Key` to access `POST /api/scans`. Empty = auth disabled (dev only) |
+| `DASHBOARD_WEBHOOK_URL` | Dashboard webhook endpoint for scan-completion notifications (empty = disabled) |
+| `DASHBOARD_WEBHOOK_SECRET` | HMAC-SHA256 signing secret. Sent as `X-Webhook-Signature: sha256={hex}`. Must match Dashboard's `NIGHTWATCH_WEBHOOK_SECRET` |
 
 See `.env.example` for full list.
 
