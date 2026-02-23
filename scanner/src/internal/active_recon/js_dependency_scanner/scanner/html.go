@@ -109,10 +109,13 @@ func CreateHTTPClient() *http.Client {
 		IdleConnTimeout:       30 * time.Second,
 	}
 
-	// Set dial timeout using custom dialer
-	transport.DialContext = (&net.Dialer{
+	// SSRFSafeDialContext resolves DNS once, validates every returned IP against
+	// the full reserved-range list, then dials directly to the first safe IP.
+	// This closes the DNS-rebinding TOCTOU gap: the OS never performs a second
+	// lookup that could be rebound to a private address at connection time.
+	transport.DialContext = shared.SSRFSafeDialContext(&net.Dialer{
 		Timeout: 5 * time.Second, // Fast DNS/TCP connection timeout
-	}).DialContext
+	})
 
 	return &http.Client{
 		Timeout:   15 * time.Second, // Reduced from 30s for faster failure detection

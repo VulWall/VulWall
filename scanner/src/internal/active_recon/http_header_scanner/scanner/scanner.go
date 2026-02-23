@@ -346,9 +346,9 @@ func createHTTPClient() *http.Client {
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   20,
 		IdleConnTimeout:       30 * time.Second,
-		DialContext: (&net.Dialer{
+		DialContext: shared.SSRFSafeDialContext(&net.Dialer{
 			Timeout: 5 * time.Second,
-		}).DialContext,
+		}),
 	}
 
 	return &http.Client{

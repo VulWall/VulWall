@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -38,7 +39,11 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error)
 		return nil, fmt.Errorf("failed to initialize wappalyzer: %w", err)
 	}
 
-	// Create HTTP client with timeout and TLS config
+	// Create HTTP client with timeout, TLS config, and SSRF-safe dialer.
+	// SSRFSafeDialContext resolves DNS once, validates all returned IPs against
+	// the full reserved-range list, then dials directly by IP — closing the
+	// DNS-rebinding TOCTOU gap that would otherwise allow a second OS lookup
+	// at connection time to return a private address.
 	httpClient := &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
@@ -48,6 +53,9 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error)
 			MaxIdleConns:        100,
 			MaxIdleConnsPerHost: 10,
 			IdleConnTimeout:     30 * time.Second,
+			DialContext: shared.SSRFSafeDialContext(&net.Dialer{
+				Timeout: 10 * time.Second,
+			}),
 		},
 	}
 

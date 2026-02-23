@@ -56,6 +56,17 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	var resolvedIP *string
 	if s.isDomain(job.Host) {
 		if ip, err := s.resolveIP(ctx, job.Host); err == nil {
+			// Reject domains that resolve to private/reserved IPs to prevent
+			// SSRF attacks against internal infrastructure via DNS.
+			if isPrivate, checkErr := shared.IsPrivateIP(ip); checkErr == nil && isPrivate {
+				s.logger.Warn("Blocking domain job: resolves to private IP",
+					zap.String("trace_id", job.TraceID),
+					zap.String("org_id", job.OrgID),
+					zap.String("host", job.Host),
+					zap.String("resolved_ip", ip),
+				)
+				return nil
+			}
 			resolvedIP = &ip
 			s.logger.Info("Resolved domain to IP",
 				zap.String("domain", job.Host),
@@ -157,9 +168,18 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 			fullSubdomain = subdomainName + "." + domain
 		}
 
-		// Resolve IP for subdomain
+		// Resolve IP for subdomain, filtering private IPs to prevent SSRF
 		var resolvedIP *string
 		if ip, err := s.resolveIP(ctx, fullSubdomain); err == nil {
+			if isPrivate, checkErr := shared.IsPrivateIP(ip); checkErr == nil && isPrivate {
+				s.logger.Warn("Skipping subdomain: resolves to private IP",
+					zap.String("trace_id", traceID),
+					zap.String("org_id", orgID),
+					zap.String("subdomain", fullSubdomain),
+					zap.String("resolved_ip", ip),
+				)
+				continue
+			}
 			resolvedIP = &ip
 			s.logger.Debug("Resolved subdomain to IP",
 				zap.String("subdomain", fullSubdomain),
