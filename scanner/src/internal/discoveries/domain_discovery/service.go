@@ -13,6 +13,7 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -84,6 +85,9 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		discoveryID = shared.GenerateSubdomainID(job.OrgID, job.Host)
 	}
 
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
+
 	// Publish root asset finding
 	if err := s.publishFinding(ctx, shared.DiscoveryFinding{
 		DiscoveryID: discoveryID,
@@ -141,8 +145,13 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 	subdomains, err := s.shodanClient.DiscoverSubdomains(ctx, domain)
 	if err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("scan.success", false))
 		return err
 	}
+
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	span.SetAttributes(attribute.Int("subdomain.count", len(subdomains)))
 

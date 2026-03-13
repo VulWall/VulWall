@@ -15,6 +15,7 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -131,6 +132,9 @@ func (s *Service) ProcessEnrichment(ctx context.Context, job shared.EnrichmentJo
 			zap.String("discovery_id", job.DiscoveryID),
 		)
 	}
+
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	return nil
 }
