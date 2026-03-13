@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -72,8 +73,13 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 	// Upsert the finding (deduplicate by org_id + discovery_id + finding_type + title)
 	if err := s.upsertFinding(ctx, finding); err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("scan.success", false))
 		return fmt.Errorf("failed to upsert finding: %w", err)
 	}
+
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	// Check if a KB entry needs to be generated for this finding_type.
 	// Only generate for actionable severities (critical, high, medium) — info and low

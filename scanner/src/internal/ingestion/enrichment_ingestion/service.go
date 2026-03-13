@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -90,8 +91,13 @@ func (s *Service) ProcessEnrichment(ctx context.Context, enrichment shared.Enric
 
 	if err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("scan.success", false))
 		return err
 	}
+
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	return nil
 }

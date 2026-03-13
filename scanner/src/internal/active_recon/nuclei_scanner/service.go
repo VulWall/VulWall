@@ -18,6 +18,7 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -100,6 +101,13 @@ func (s *Service) updateTemplates(ctx context.Context) {
 	// Get version after update
 	versionAfter := s.getTemplateVersion(ctx)
 
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+
 	// Log audit event using shared audit logger
 	s.auditLogger.LogOperation(ctx,
 		"TemplateUpdate",
@@ -155,10 +163,14 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 			zap.Error(err),
 		)
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("scan.success", false))
 		return err
 	}
 
 	span.SetAttributes(attribute.Int("findings.count", len(findings)))
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	s.logger.Info("Nuclei scan completed",
 		zap.String("target", target.Target),

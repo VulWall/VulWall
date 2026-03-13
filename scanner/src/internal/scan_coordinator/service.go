@@ -14,6 +14,10 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -22,6 +26,7 @@ type Service struct {
 	redis  *redis.Client
 	db     *mongo.Database
 	logger *zap.Logger
+	tracer trace.Tracer
 }
 
 // NewService creates a new scan coordinator service
@@ -30,6 +35,7 @@ func NewService(redisClient *redis.Client, db *mongo.Database, logger *zap.Logge
 		redis:  redisClient,
 		db:     db,
 		logger: logger,
+		tracer: otel.Tracer("scan-coordinator"),
 	}
 }
 
@@ -43,6 +49,13 @@ type ScanRequest struct {
 // TriggerScan creates a scan record and publishes discovery jobs for an organization.
 // Returns the scan ID on success.
 func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, error) {
+	ctx, span := s.tracer.Start(ctx, "trigger_scan",
+		trace.WithAttributes(
+			attribute.String("org.id", req.OrgID),
+		),
+	)
+	defer span.End()
+
 	s.logger.Info("Triggering scan for organization",
 		zap.String("org_id", req.OrgID),
 		zap.String("type", req.Type),
@@ -52,6 +65,8 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 	// Get all assets for this organization first (needed for targeted_assets)
 	assets, err := s.getOrgAssets(ctx, req.OrgID)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return "", fmt.Errorf("failed to get org assets: %w", err)
 	}
 
@@ -104,8 +119,12 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 
 	// Insert scan into database
 	if err := s.createScan(ctx, scan); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return "", fmt.Errorf("failed to create scan: %w", err)
 	}
+
+	span.SetAttributes(attribute.String("scan.id", scanID))
 
 	s.logger.Info("Created new scan record",
 		zap.String("scan_id", scanID),
@@ -115,8 +134,12 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 
 	// Publish discovery jobs for each asset
 	if err := s.publishDiscoveryJobs(ctx, req.OrgID, scanID, assets); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return "", fmt.Errorf("failed to publish discovery jobs: %w", err)
 	}
+
+	span.SetStatus(codes.Ok, "")
 
 	s.logger.Info("Successfully triggered scan",
 		zap.String("scan_id", scanID),
@@ -160,7 +183,13 @@ func (s *Service) getOrgAssets(ctx context.Context, orgID string) ([]shared.Asse
 
 // publishDiscoveryJobs publishes discovery jobs to Redis for each asset
 func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string, assets []shared.Asset) error {
+	ctx, span := s.tracer.Start(ctx, "publish_discovery_jobs")
+	defer span.End()
+
 	traceID := uuid.New().String()
+
+	domainCount := 0
+	ipCount := 0
 
 	for _, asset := range assets {
 		switch asset.Type {
@@ -195,6 +224,8 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 				)
 				continue
 			}
+
+			domainCount++
 
 			s.logger.Debug("Published domain discovery job",
 				zap.String("scan_id", scanID),
@@ -232,6 +263,8 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 				continue
 			}
 
+			ipCount++
+
 			s.logger.Debug("Published IP discovery job",
 				zap.String("scan_id", scanID),
 				zap.String("asset_id", asset.ID),
@@ -246,6 +279,14 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 			)
 		}
 	}
+
+	span.SetAttributes(
+		attribute.Int("jobs.domain_count", domainCount),
+		attribute.Int("jobs.ip_count", ipCount),
+		attribute.Int("jobs.total_count", domainCount+ipCount),
+	)
+
+	span.SetStatus(codes.Ok, "")
 
 	return nil
 }

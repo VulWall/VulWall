@@ -14,6 +14,7 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -64,6 +65,8 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		totalVulns += len(result.vulnerabilities)
 	}
 	span.SetAttributes(attribute.Int("vulnerabilities.count", totalVulns))
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	// Publish unique vulnerabilities to Redis
 	s.publishUniqueVulnerabilities(ctx, allVulnerabilities, target)

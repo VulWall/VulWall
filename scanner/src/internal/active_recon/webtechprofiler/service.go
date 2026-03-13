@@ -18,6 +18,7 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -116,6 +117,8 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	}
 
 	span.SetAttributes(attribute.Int("technologies.count", len(detectedTechs)))
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	// Convert and publish findings
 	for _, tech := range detectedTechs {

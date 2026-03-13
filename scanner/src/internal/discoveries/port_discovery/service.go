@@ -13,6 +13,7 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"golang.org/x/net/publicsuffix"
@@ -64,7 +65,11 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 		// CDNs (CloudFront, Cloudflare, etc.) use shared IPs, so Shodan may return TLS certs
 		// and service data belonging to a completely different domain on the same IP.
 		if s.shodanHostnamesMatchTarget(job, hostInfo.Hostnames) {
-			span.SetAttributes(attribute.String("source", "shodan"))
+			span.SetAttributes(
+				attribute.String("source", "shodan"),
+				attribute.Bool("scan.success", true),
+			)
+			span.SetStatus(codes.Ok, "")
 			return s.publishShodanFindings(ctx, job, hostInfo, hostnameCount)
 		}
 
@@ -81,7 +86,9 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 			attribute.String("skip_reason", "hostname_mismatch"),
 			attribute.String("shodan.target_domain", job.TargetDomain),
 			attribute.StringSlice("shodan.hostnames", hostInfo.Hostnames),
+			attribute.Bool("scan.success", true),
 		)
+		span.SetStatus(codes.Ok, "")
 		return nil
 	}
 
@@ -108,12 +115,20 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 			zap.String("ip", job.IP),
 			zap.String("target_domain", job.TargetDomain),
 		)
-		span.SetAttributes(attribute.String("skip_reason", "no_shodan_domain_resolved"))
+		span.SetAttributes(
+			attribute.String("skip_reason", "no_shodan_domain_resolved"),
+			attribute.Bool("scan.success", true),
+		)
+		span.SetStatus(codes.Ok, "")
 		return nil
 	}
 
 	// Fallback to TCP scanner — direct IP asset, no domain ownership check needed
-	span.SetAttributes(attribute.String("source", "port_discovery"))
+	span.SetAttributes(
+		attribute.String("source", "port_discovery"),
+		attribute.Bool("scan.success", true),
+	)
+	span.SetStatus(codes.Ok, "")
 	return s.processTCPScan(ctx, job)
 }
 
