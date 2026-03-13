@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -72,12 +73,16 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 
 	cursor, err := m.db.Collection(shared.CollectionScans).Find(ctx, filter)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	defer cursor.Close(ctx)
 
 	var scans []shared.Scan
 	if err := cursor.All(ctx, &scans); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -123,6 +128,8 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 			m.markDone(ctx, scan.ID)
 		}
 	}
+
+	span.SetStatus(codes.Ok, "")
 
 	return nil
 }

@@ -286,6 +286,8 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 		attribute.Int("jobs.total_count", domainCount+ipCount),
 	)
 
+	span.SetStatus(codes.Ok, "")
+
 	return nil
 }
 
