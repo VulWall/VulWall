@@ -84,7 +84,15 @@ func main() {
 
 	// Create API server
 	apiPort := config.GetEnv(config.EnvAPIPort, "8080")
-	apiServer := scan_coordinator.NewAPIServer(service, logger.Log, apiPort)
+	apiKey := config.GetEnv(config.EnvAPIKey, "")
+	if apiKey == "" {
+		env := config.GetEnv(config.EnvEnvironment, "development")
+		if env == "production" {
+			logger.Log.Fatal("NIGHTWATCH_API_KEY must be set in production")
+		}
+		logger.Log.Warn("NIGHTWATCH_API_KEY is not set — scan trigger API is unauthenticated")
+	}
+	apiServer := scan_coordinator.NewAPIServer(service, logger.Log, apiPort, apiKey)
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)

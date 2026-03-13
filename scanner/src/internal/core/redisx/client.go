@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/config"
+	"github.com/vulwall/scanners/internal/shared"
 )
 
 func NewClient(cfg *config.Config) (*redis.Client, error) {
@@ -79,5 +81,25 @@ func PublishToStream(ctx context.Context, client *redis.Client, stream string, m
 		return fmt.Errorf("failed to publish to stream %s: %w", stream, err)
 	}
 
+	return nil
+}
+
+// PublishDeadLetter sends a permanently failed message to the dead-letter stream.
+// This preserves the original message data alongside error context for debugging and replay.
+func PublishDeadLetter(ctx context.Context, client *redis.Client, sourceStream, consumerGroup, messageID, data string, err error) error {
+	_, xaddErr := client.XAdd(ctx, &redis.XAddArgs{
+		Stream: shared.StreamDeadLetter,
+		Values: map[string]interface{}{
+			"source_stream":  sourceStream,
+			"consumer_group": consumerGroup,
+			"message_id":     messageID,
+			"data":           data,
+			"error":          err.Error(),
+			"timestamp":      time.Now().UTC().Format(time.RFC3339),
+		},
+	}).Result()
+	if xaddErr != nil {
+		return fmt.Errorf("failed to publish to dead-letter stream: %w", xaddErr)
+	}
 	return nil
 }

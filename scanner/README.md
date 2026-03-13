@@ -52,7 +52,7 @@ DISCOVERY ENRICHMENT (WAF + IP Geolocation)
 | **port-discovery** | TCP port scanning | ip_discovery_queue | ip_discovery_results |
 | **ingestion** | MongoDB persistence (5 slices) | multiple | multiple |
 | **nuclei-scanner** | Vulnerability scanning | domain/port_scan_triggers | security_findings |
-| **testssl-scanner** | TLS/SSL analysis | domain/port_scan_triggers | security_findings |
+| **testssl-scanner** | TLS/SSL analysis | domain_scan_triggers | security_findings |
 | **webtechprofiler** | Web technology detection | domain_scan_triggers | security_findings |
 | **js-dependency-scanner** | JS library vulnerabilities | domain_scan_triggers | security_findings |
 | **discovery-enrichment** | WAF + IP geolocation | discovery_enrichment_queue | discovery_enrichment_results |

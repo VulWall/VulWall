@@ -27,8 +27,8 @@ build: ## Build all services
 	@cd $(SRC_DIR) && go build -o bin/http-header-scanner ./cmd/active_recon/http-header-scanner
 	@echo "Building email-security-scanner..."
 	@cd $(SRC_DIR) && go build -o bin/email-security-scanner ./cmd/active_recon/email-security-scanner
-	@echo "Building ai-finding-enricher..."
-	@cd $(SRC_DIR) && go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
+	@echo "Building knowledge-base-engine..."
+	@cd $(SRC_DIR) && go build -o bin/knowledge-base-engine ./cmd/enrichers/knowledge-base-engine
 	@echo "Building ingestion..."
 	@cd $(SRC_DIR) && go build -o bin/ingestion ./cmd/ingestion
 	@echo "Building scan-coordinator..."
@@ -62,8 +62,8 @@ build-http-header-scanner: ## Build http-header-scanner service
 build-email-security-scanner: ## Build email-security-scanner service
 	@cd $(SRC_DIR) && go build -o bin/email-security-scanner ./cmd/active_recon/email-security-scanner
 
-build-ai-finding-enricher: ## Build ai-finding-enricher service
-	@cd $(SRC_DIR) && go build -o bin/ai-finding-enricher ./cmd/enrichers/ai-finding-enricher
+build-knowledge-base-engine: ## Build knowledge-base-engine service
+	@cd $(SRC_DIR) && go build -o bin/knowledge-base-engine ./cmd/enrichers/knowledge-base-engine
 
 build-ingestion: ## Build ingestion service
 	@cd $(SRC_DIR) && go build -o bin/ingestion ./cmd/ingestion
@@ -98,8 +98,8 @@ run-http-header-scanner: ## Run http-header-scanner service locally
 run-email-security-scanner: ## Run email-security-scanner service locally
 	@cd $(SRC_DIR) && go run ./cmd/active_recon/email-security-scanner/main.go
 
-run-ai-finding-enricher: ## Run ai-finding-enricher service locally
-	@cd $(SRC_DIR) && go run ./cmd/enrichers/ai-finding-enricher/main.go
+run-knowledge-base-engine: ## Run knowledge-base-engine service locally
+	@cd $(SRC_DIR) && go run ./cmd/enrichers/knowledge-base-engine/main.go
 
 run-ingestion: ## Run ingestion service locally
 	@cd $(SRC_DIR) && go run ./cmd/ingestion/main.go
@@ -160,8 +160,8 @@ docker-scale-http-header-scanner: ## Scale http-header-scanner workers (usage: m
 docker-scale-email-security-scanner: ## Scale email-security-scanner workers (usage: make docker-scale-email-security-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale email-security-scanner=$(N)
 
-docker-scale-ai-finding-enricher: ## Scale ai-finding-enricher workers (usage: make docker-scale-ai-finding-enricher N=3)
-	@docker-compose -f ops/docker-compose.yml up -d --scale ai-finding-enricher=$(N)
+docker-scale-knowledge-base-engine: ## Scale knowledge-base-engine workers (usage: make docker-scale-knowledge-base-engine N=3)
+	@docker-compose -f ops/docker-compose.yml up -d --scale knowledge-base-engine=$(N)
 
 docker-scale-ingestion: ## Scale ingestion workers (usage: make docker-scale-ingestion N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale ingestion=$(N)
@@ -258,11 +258,11 @@ prod-deploy-email-security-scanner: ## Deploy email-security-scanner service (us
 		ops/scripts/deploy-service.sh email-security-scanner; \
 	fi
 
-prod-deploy-ai-finding-enricher: ## Deploy ai-finding-enricher service (usage: make prod-deploy-ai-finding-enricher [PROJECT=name] [CONFIG=prd])
+prod-deploy-knowledge-base-engine: ## Deploy knowledge-base-engine service (usage: make prod-deploy-knowledge-base-engine [PROJECT=name] [CONFIG=prd])
 	@if [ -n "$(PROJECT)" ]; then \
-		ops/scripts/deploy-service.sh ai-finding-enricher $(PROJECT) $(CONFIG); \
+		ops/scripts/deploy-service.sh knowledge-base-engine $(PROJECT) $(CONFIG); \
 	else \
-		ops/scripts/deploy-service.sh ai-finding-enricher; \
+		ops/scripts/deploy-service.sh knowledge-base-engine; \
 	fi
 
 prod-deploy-scan-coordinator: ## Deploy scan-coordinator service (usage: make prod-deploy-scan-coordinator [PROJECT=name] [CONFIG=prd])

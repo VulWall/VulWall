@@ -3,11 +3,13 @@ package domain_ingestion
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -44,6 +46,12 @@ func (c *Consumer) Start(ctx context.Context) error {
 	return c.processMessages(ctx, uuid.New().String())
 }
 
+// permanentError wraps errors that should not be retried (e.g., invalid message data).
+type permanentError struct{ err error }
+
+func (e *permanentError) Error() string { return e.err.Error() }
+func (e *permanentError) Unwrap() error { return e.err }
+
 func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
 	for {
 		select {
@@ -66,7 +74,11 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 					continue
 				}
 				c.logger.Error("Failed to read from stream", zap.Error(err))
-				time.Sleep(2 * time.Second)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(2 * time.Second):
+				}
 				continue
 			}
 
@@ -74,10 +86,28 @@ func (c *Consumer) processMessages(ctx context.Context, consumerName string) err
 			for _, stream := range streams {
 				for _, message := range stream.Messages {
 					if err := c.handleMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to handle message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
+						var permErr *permanentError
+						if errors.As(err, &permErr) {
+							c.logger.Error("Permanently invalid message, acknowledging to prevent retry loop",
+								zap.String("message_id", message.ID),
+								zap.Error(err),
+							)
+
+							data, _ := message.Values["data"].(string)
+							if dlErr := redisx.PublishDeadLetter(ctx, c.redis, shared.StreamDomainDiscoveryResults, GroupDomainIngestion, message.ID, data, err); dlErr != nil {
+								c.logger.Warn("Failed to publish to dead-letter stream",
+									zap.String("message_id", message.ID),
+									zap.Error(dlErr),
+								)
+							}
+
+							_ = c.redis.XAck(ctx, shared.StreamDomainDiscoveryResults, GroupDomainIngestion, message.ID).Err()
+						} else {
+							c.logger.Error("Failed to process message, leaving unacknowledged for retry",
+								zap.String("message_id", message.ID),
+								zap.Error(err),
+							)
+						}
 						continue
 					}
 
@@ -98,12 +128,12 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	// Extract finding data from message
 	dataStr, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("message missing 'data' field")
+		return &permanentError{err: fmt.Errorf("message missing 'data' field")}
 	}
 
 	var finding shared.DiscoveryFinding
 	if err := json.Unmarshal([]byte(dataStr), &finding); err != nil {
-		return fmt.Errorf("failed to unmarshal finding: %w", err)
+		return &permanentError{err: fmt.Errorf("failed to unmarshal finding: %w", err)}
 	}
 
 	// Extract trace context from message to link spans across service boundaries

@@ -33,7 +33,7 @@ func streamsToClean() []string {
 		shared.StreamIPDiscoveryResults,
 		shared.StreamSecurityFindings,
 		shared.StreamDiscoveryEnrichmentResults,
-		shared.StreamAIEnrichmentResults,
+		shared.StreamKBGenerationResults,
 	}
 }
 

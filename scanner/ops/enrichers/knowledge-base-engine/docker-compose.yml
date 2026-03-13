@@ -1,19 +1,19 @@
-name: nw-ai-finding-enricher
+name: nw-knowledge-base-engine
 
 services:
-  ai-finding-enricher:
-    image: ghcr.io/vulwall/nightwatch-ai-finding-enricher:${IMAGE_TAG:-dev}
-    container_name: nw-ai-finding-enricher
+  knowledge-base-engine:
+    image: ghcr.io/mojtabatajik/nightwatch-knowledge-base-engine:${IMAGE_TAG:-dev}
+    container_name: nw-knowledge-base-engine
     restart: unless-stopped
     env_file:
       - /opt/vulwall/config/general.env
       - /opt/vulwall/config/redis.env
       - /opt/vulwall/config/honeycomb.env
-      - /opt/vulwall/config/groq.env
+      - /opt/vulwall/config/anthropic.env
     networks:
       - core-network
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "ai-finding-enricher"]
+      test: ["CMD", "pgrep", "-f", "knowledge-base-engine"]
       interval: 10s
       timeout: 5s
       retries: 5

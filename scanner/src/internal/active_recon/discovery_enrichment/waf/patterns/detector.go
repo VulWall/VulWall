@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -62,7 +63,9 @@ func NewDetector(logger *zap.Logger, rulesPath string) (*Detector, error) {
 		return nil, fmt.Errorf("failed to compile signatures: %w", err)
 	}
 
-	// Create HTTP client with timeout and TLS config
+	// Create HTTP client with timeout, TLS config, and SSRF-safe dialer.
+	// SSRFSafeDialContext resolves DNS once, validates all IPs, then dials by
+	// address — closing the DNS-rebinding TOCTOU gap.
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
@@ -72,6 +75,9 @@ func NewDetector(logger *zap.Logger, rulesPath string) (*Detector, error) {
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 10,
 			IdleConnTimeout:     30 * time.Second,
+			DialContext: shared.SSRFSafeDialContext(&net.Dialer{
+				Timeout: 10 * time.Second,
+			}),
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			// Don't follow redirects

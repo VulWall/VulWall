@@ -1,0 +1,165 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "business": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Business-friendly content for SME owners and managers",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Concise, human-friendly title (max 80 chars) focused on business risk. Example: 'Outdated JavaScript Library Enables Service Disruption'"
+        },
+        "summary": {
+          "type": "string",
+          "description": "2-3 sentence plain-English summary of what this vulnerability means for the business"
+        },
+        "impact": {
+          "type": "string",
+          "description": "Business impact explanation: revenue, reputation, compliance, customer trust implications"
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["immediate", "high", "medium", "low"],
+          "description": "How urgently the business should prioritize this fix"
+        },
+        "actions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "2-4 actionable steps the business owner can take or delegate"
+        },
+        "blog_slug": {
+          "type": "string",
+          "description": "URL-friendly slug for the business blog post. Example: 'outdated-jquery-library-risk'"
+        }
+      },
+      "required": ["title", "summary", "impact", "urgency", "actions", "blog_slug"]
+    },
+    "technical": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Technical remediation content for developers and IT contractors",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Technical title describing the vulnerability. Example: 'jQuery 1.x XSS via Selector Injection (CVE-2020-11022)'"
+        },
+        "vulnerability_explanation": {
+          "type": "string",
+          "description": "Technical explanation of the vulnerability mechanism and attack vector"
+        },
+        "root_cause": {
+          "type": "string",
+          "description": "Root cause analysis — why this vulnerability exists in the first place"
+        },
+        "impact": {
+          "type": "string",
+          "description": "Technical impact: what an attacker can achieve (RCE, data exfiltration, session hijacking, etc.)"
+        },
+        "severity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "level": {
+              "type": "string",
+              "enum": ["critical", "high", "medium", "low", "info"],
+              "description": "Severity level based on exploitability and impact"
+            },
+            "cvss_estimate": {
+              "type": ["string", "null"],
+              "description": "Estimated CVSS range (e.g., '7.0-8.0'), or null if unknown"
+            },
+            "justification": {
+              "type": "string",
+              "description": "Brief justification for the severity rating"
+            }
+          },
+          "required": ["level", "cvss_estimate", "justification"]
+        },
+        "affected_components": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Affected components with their vulnerable version ranges (e.g., ['jQuery < 3.5.0', 'Bootstrap < 3.4.1', 'OpenSSL 1.0.x - 1.0.2h']). Each entry pairs a component name with the specific versions affected. Use 'all versions' if every version is vulnerable."
+        },
+        "remediation_steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered step-by-step remediation instructions"
+        },
+        "verification_steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Steps to verify the fix was applied correctly"
+        },
+        "code_examples": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "description": "Code examples showing vulnerable and fixed versions, or null if not applicable (e.g., infrastructure/config findings)",
+          "properties": {
+            "vulnerable": {
+              "type": ["string", "null"],
+              "description": "Example of vulnerable code or configuration, or null if not applicable"
+            },
+            "fixed": {
+              "type": ["string", "null"],
+              "description": "Example of the fixed code or configuration, or null if not applicable"
+            },
+            "language": {
+              "type": ["string", "null"],
+              "description": "Programming language or config format of the examples, or null if no code examples"
+            }
+          },
+          "required": ["vulnerable", "fixed", "language"]
+        },
+        "best_practices": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Security best practices to prevent similar issues"
+        },
+        "references": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Relevant URLs: CVE entries, vendor advisories, OWASP pages. Null if no references found."
+        },
+        "blog_slug": {
+          "type": "string",
+          "description": "URL-friendly slug for the technical blog post. Example: 'remediating-jquery-xss-cve-2020-11022'"
+        }
+      },
+      "required": ["title", "vulnerability_explanation", "root_cause", "impact", "severity", "affected_components", "remediation_steps", "verification_steps", "code_examples", "best_practices", "references", "blog_slug"]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Structured metadata for filtering and categorization",
+      "properties": {
+        "components": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Affected components or technologies (e.g., ['jQuery', 'JavaScript', 'Frontend']), or null if not applicable"
+        },
+        "owasp_category": {
+          "type": "string",
+          "description": "Most relevant OWASP Top 10 2025 category (e.g., 'A03' for Injection)"
+        },
+        "estimated_effort": {
+          "type": "string",
+          "enum": ["trivial", "small", "medium", "large"],
+          "description": "Estimated effort to implement the fix"
+        },
+        "is_exploitable": {
+          "type": "boolean",
+          "description": "Whether this is realistically exploitable in a typical deployment"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags for categorization (e.g., ['xss', 'frontend', 'library', 'cve'])"
+        }
+      },
+      "required": ["components", "owasp_category", "estimated_effort", "is_exploitable", "tags"]
+    }
+  },
+  "required": ["business", "technical", "metadata"]
+}

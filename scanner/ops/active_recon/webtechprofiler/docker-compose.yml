@@ -2,7 +2,7 @@ name: nw-webtechprofiler
 
 services:
   webtechprofiler:
-    image: ghcr.io/vulwall/nightwatch-webtechprofiler:${IMAGE_TAG:-dev}
+    image: ghcr.io/mojtabatajik/nightwatch-webtechprofiler:${IMAGE_TAG:-dev}
     container_name: nw-webtechprofiler
     restart: unless-stopped
     env_file:

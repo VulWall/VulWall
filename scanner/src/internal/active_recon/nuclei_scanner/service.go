@@ -259,6 +259,11 @@ func (s *Service) convertToSecurityFinding(nucleiOutput NucleiOutput, target Sca
 	// Map Nuclei severity to our severity constants
 	severity := s.mapSeverity(nucleiOutput.Info.Severity)
 
+	// Apply template-specific severity overrides
+	if override, ok := severityOverrides[nucleiOutput.TemplateID]; ok {
+		severity = override
+	}
+
 	// Build metadata with all Nuclei-specific data
 	metadata := map[string]interface{}{
 		"template_id":       nucleiOutput.TemplateID,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/miekg/dns"
@@ -167,24 +168,51 @@ func checkDMARC(ctx context.Context, resolver *net.Resolver, domain string) []Em
 	return results
 }
 
-// checkDKIM checks for DKIM records at common selectors
+// checkDKIM checks for DKIM records at common selectors in parallel.
+// Returns immediately when the first valid DKIM record is found.
 func checkDKIM(ctx context.Context, resolver *net.Resolver, domain string) []EmailCheckResult {
-	for _, selector := range dkimSelectors {
-		dkimDomain := selector + "._domainkey." + domain
-		records, err := resolver.LookupTXT(ctx, dkimDomain)
-		if err != nil {
-			continue
-		}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-		for _, record := range records {
-			if strings.Contains(strings.ToLower(record), "v=dkim1") {
-				// Found a valid DKIM record — no finding to report
-				return nil
+	found := make(chan struct{}, 1)
+	var wg sync.WaitGroup
+
+	for _, selector := range dkimSelectors {
+		wg.Add(1)
+		go func(sel string) {
+			defer wg.Done()
+			dkimDomain := sel + "._domainkey." + domain
+			records, err := resolver.LookupTXT(ctx, dkimDomain)
+			if err != nil {
+				return
 			}
-		}
+			for _, record := range records {
+				if strings.Contains(strings.ToLower(record), "v=dkim1") {
+					select {
+					case found <- struct{}{}:
+						cancel() // stop remaining lookups
+					default:
+					}
+					return
+				}
+			}
+		}(selector)
 	}
 
-	// No DKIM record found at any common selector
+	// Wait for all goroutines in a separate goroutine so we can select
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-found:
+		return nil
+	case <-done:
+		// All selectors checked, none found
+	}
+
 	return []EmailCheckResult{
 		{
 			FindingType: "missing-dkim",
@@ -245,17 +273,22 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 
 // tryAXFR attempts an AXFR transfer against a single nameserver.
 // Returns the number of records received, or 0 if the transfer was refused/failed.
-// Caps at maxAXFRRecords to prevent resource exhaustion from malicious nameservers.
+// Caps at maxAXFRRecords and cancels the transfer to stop the underlying read.
 func tryAXFR(ctx context.Context, domain, nameserver string) int {
-	const maxAXFRRecords = 10000
+	const (
+		maxAXFRRecords = 10000
+		axfrTimeout    = 10 * time.Second
+	)
+
+	axfrCtx, axfrCancel := context.WithTimeout(ctx, axfrTimeout)
+	defer axfrCancel()
 
 	m := new(dns.Msg)
 	m.SetAxfr(dns.Fqdn(domain))
 
 	t := new(dns.Transfer)
-	if deadline, ok := ctx.Deadline(); ok {
-		t.DialTimeout = time.Until(deadline)
-	}
+	t.DialTimeout = axfrTimeout
+	t.ReadTimeout = axfrTimeout
 
 	ch, err := t.In(m, net.JoinHostPort(nameserver, "53"))
 	if err != nil {
@@ -264,15 +297,30 @@ func tryAXFR(ctx context.Context, domain, nameserver string) int {
 
 	var count int
 	for envelope := range ch {
+		select {
+		case <-axfrCtx.Done():
+			go drainChannel(ch)
+			return count
+		default:
+		}
 		if envelope.Error != nil {
 			return 0
 		}
 		count += len(envelope.RR)
 		if count > maxAXFRRecords {
+			go drainChannel(ch)
 			return count
 		}
 	}
 	return count
+}
+
+// drainChannel consumes remaining envelopes so the dns.Transfer goroutine
+// can complete its cleanup (close connection, close channel) instead of
+// blocking forever on an unbuffered channel send.
+func drainChannel(ch <-chan *dns.Envelope) {
+	for range ch {
+	}
 }
 
 // containsTag checks if a DMARC record contains a specific tag=value pair

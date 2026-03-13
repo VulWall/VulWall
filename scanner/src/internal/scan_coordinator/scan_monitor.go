@@ -117,7 +117,6 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 
 		// port_scan_triggers consumers (active recon scanners on ports)
 		{shared.StreamPortScanTriggers, "nuclei_scanner_service"},
-		{shared.StreamPortScanTriggers, "testssl_scanner_service"},
 
 		// domain_discovery_results consumers (ingestion)
 		{shared.StreamDomainDiscoveryResults, "domain_ingestion_service"},
@@ -125,6 +124,9 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 		// ip_discovery_results consumers (ingestion + webtechprofiler)
 		{shared.StreamIPDiscoveryResults, "port_ingestion_service"},
 		{shared.StreamIPDiscoveryResults, "webtechprofiler_service"},
+
+		// security_findings consumers (findings ingestion to MongoDB)
+		{shared.StreamSecurityFindings, "findings_ingestion_service"},
 	}
 
 	for _, cg := range consumerGroups {
@@ -190,12 +192,29 @@ func (m *ScanMonitor) hasPendingForScan(ctx context.Context, stream, group, scan
 
 // markDone marks a scan as done and notifies the Dashboard webhook
 func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
+	// Compute scan statistics before marking as done
+	stats, err := m.computeStats(ctx, scanID)
+	if err != nil {
+		m.logger.Error("Failed to compute scan statistics",
+			zap.String("scan_id", scanID),
+			zap.Error(err),
+		)
+		// Continue with marking scan as done even if stats computation fails
+		stats = &shared.ScanStats{} // Use empty stats as fallback
+	}
+
 	now := time.Now()
 	update := bson.M{
 		"$set": bson.M{
-			"status":       shared.StatusDone,
-			"completed_at": now,
-			"updated_at":   now,
+			"status":                      shared.StatusDone,
+			"completed_at":                now,
+			"updated_at":                  now,
+			"stats.total_discoveries":     stats.TotalDiscoveries,
+			"stats.new_discoveries":       stats.NewDiscoveries,
+			"stats.resolved_discoveries":  stats.ResolvedDiscoveries,
+			"stats.total_findings":        stats.TotalFindings,
+			"stats.new_findings":          stats.NewFindings,
+			"stats.resolved_findings":     stats.ResolvedFindings,
 		},
 	}
 

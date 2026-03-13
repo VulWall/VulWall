@@ -50,6 +50,14 @@ func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]Heade
 		value, present := getHeaderCaseInsensitive(headers, rule.Name)
 
 		if !present {
+			// Skip missing X-Frame-Options if CSP frame-ancestors is set (it supersedes X-Frame-Options)
+			if rule.Name == "X-Frame-Options" {
+				if csp, hasCSP := getHeaderCaseInsensitive(headers, "Content-Security-Policy"); hasCSP &&
+					strings.Contains(strings.ToLower(csp), "frame-ancestors") {
+					continue
+				}
+			}
+
 			results = append(results, HeaderCheckResult{
 				HeaderName:  rule.Name,
 				Present:     false,
@@ -170,7 +178,7 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []H
 				Present:     true,
 				Value:       acao,
 				IsSecure:    false,
-				Severity:    shared.SeverityMedium,
+				Severity:    shared.SeverityLow,
 				FindingType: "cors-credentials-with-wildcard",
 				Title:       "CORS Allows Credentials with Wildcard Origin",
 				Description: "The server sets Access-Control-Allow-Origin: * together with Access-Control-Allow-Credentials: true. Modern browsers block this combination, but it indicates a fundamental CORS misconfiguration that should be corrected.",
@@ -338,9 +346,9 @@ func createHTTPClient() *http.Client {
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   20,
 		IdleConnTimeout:       30 * time.Second,
-		DialContext: (&net.Dialer{
+		DialContext: shared.SSRFSafeDialContext(&net.Dialer{
 			Timeout: 5 * time.Second,
-		}).DialContext,
+		}),
 	}
 
 	return &http.Client{

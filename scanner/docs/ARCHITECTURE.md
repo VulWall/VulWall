@@ -57,7 +57,7 @@ SECURITY FINDINGS FLOW:
        ├─→ Deduplicates by (org_id, discovery_id, finding_type, title)
        ├─→ Updates last_detected on duplicates
        └─→ Reopens resolved findings if detected again
-   └─→ For high/critical: publishes to ai_enrichment_queue
+   └─→ For new finding_types: publishes to kb_generation_queue (Redis SETNX dedup lock)
 
 DISCOVERY ENRICHMENT FLOW:
 1. Discovery Enrichment Service consumes from discovery_enrichment_queue
@@ -71,10 +71,13 @@ DISCOVERY ENRICHMENT FLOW:
    ├─→ metadata.waf = "WAF_Name"
    └─→ metadata.geo.{continent, country, isp}
 
-AI ENRICHMENT FLOW:
-1. findings_ingestion publishes AIEnrichmentJob (high/critical, no existing AI rec)
-2. ai_finding_enricher calls Groq API with structured JSON output
-3. ai_enrichment_ingestion updates finding with ai_recommendation field
+KNOWLEDGE BASE FLOW:
+1. findings_ingestion checks if KB entry exists for finding_type (Redis SETNX lock + MongoDB check)
+2. If new finding_type: publishes KBGenerationJob to kb_generation_queue
+3. knowledge-base-engine calls Anthropic Claude API to generate business + technical KB content
+4. Publishes KBGenerationResult to kb_generation_results
+5. kb_ingestion upserts to knowledge_base collection (_id = "kb_" + findingType, $setOnInsert for idempotency)
+6. Dashboard reads from knowledge_base collection (shared across all orgs, ~84 entries)
 
 SCAN COORDINATOR FLOW:
 1. Runs on cron schedule per organization (scan_cron field)
@@ -93,6 +96,7 @@ SCAN COORDINATOR FLOW:
 **Put in `src/internal/shared/models.go`** — models used by 2+ services:
 - Job formats: `DiscoveryJob`, `IPDiscoveryJob`
 - Finding formats: `DiscoveryFinding`, `IPDiscoveryFinding`, `SecurityFinding`, `EnrichmentFinding`
+- KB formats: `KBGenerationJob`, `KBGenerationResult`
 - Asset models: `Asset`, `Discovery`, `ResolutionHistoryEntry`, `ServiceHistoryEntry`
 - Scan models: `Organization`, `SubscriptionSettings`, `Scan`, `ScanStats`, `AssetTarget`
 
@@ -150,25 +154,30 @@ Benefits: independent scaling, deploy/update independently, single MongoDB write
 
 ---
 
-## AI Finding Enricher Architecture
+## Knowledge Base Engine Architecture
 
-**Location:** `src/internal/enrichers/ai_finding_enricher/`
+**Location:** `src/internal/enrichers/knowledge_base/`
 
 ```
 security_findings → findings_ingestion
     ├── Persist to MongoDB
-    ├── Check: severity = critical/high?
-    ├── Check: ai_recommendation doesn't exist?
-    └── If both: publish to ai_enrichment_queue
-            └──► ai_finding_enricher
-                    ├── Load prompt + schema from embedded files
-                    ├── Call Groq API (structured JSON output)
-                    └── Publish to ai_enrichment_results
-                            └──► ai_enrichment_ingestion
-                                    └── Update finding: set ai_recommendation
+    ├── Check: finding_type not empty?
+    ├── Check: Redis SETNX lock (kb_generating:{findingType}, 24h TTL)
+    ├── Check: knowledge_base collection has no entry for this finding_type?
+    └── If all pass: publish to kb_generation_queue
+            └──► knowledge-base-engine
+                    ├── Load system prompt + response schema from embedded files
+                    ├── Filter attacker-controlled metadata (safeMetadataForKB)
+                    ├── Call Anthropic Claude API (temperature 0.3, max_tokens 8192)
+                    ├── Parse JSON response (business + technical sections)
+                    └── Publish to kb_generation_results
+                            └──► kb_ingestion
+                                    └── Upsert to knowledge_base collection (_id = "kb_" + findingType)
 ```
 
-**Components:** Groq client with retry logic, embedded prompts, response schema for structured output.
+**Key design:** ONE entry per unique finding_type (~84 types), shared across all orgs. Uses `$setOnInsert` for idempotent writes. Dashboard reads from this collection for recommendations, reports, and security scores.
+
+**Components:** Anthropic client with retry logic (429/502/503/504/529), embedded prompts, bounded response reads (1MB), prompt injection mitigation via metadata filtering.
 
 ---
 
@@ -224,9 +233,9 @@ The orchestrator runs all consumer slices concurrently:
 |-------|----------|-----------|----------------|
 | domain_ingestion | `domain_discovery_results` | `discoveries` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` |
 | port_ingestion | `ip_discovery_results` | `discoveries` | `discovery_enrichment_queue`, `port_scan_triggers` |
-| findings_ingestion | `security_findings` | `findings` | `ai_enrichment_queue` |
+| findings_ingestion | `security_findings` | `findings` | `kb_generation_queue` |
 | enrichment_ingestion | `discovery_enrichment_results` | `discoveries` | — |
-| ai_enrichment_ingestion | `ai_enrichment_results` | `findings` | — |
+| kb_ingestion | `kb_generation_results` | `knowledge_base` | — |
 | audit_ingestion | `system_audit_logs` | `audit_logs` | — |
 
 ---

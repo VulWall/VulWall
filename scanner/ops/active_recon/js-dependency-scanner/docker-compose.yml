@@ -2,7 +2,7 @@ name: nw-js-dependency-scanner
 
 services:
   js-dependency-scanner:
-    image: ghcr.io/vulwall/nightwatch-js-dependency-scanner:${IMAGE_TAG:-dev}
+    image: ghcr.io/mojtabatajik/nightwatch-js-dependency-scanner:${IMAGE_TAG:-dev}
     container_name: nw-js-dependency-scanner
     restart: unless-stopped
     env_file:

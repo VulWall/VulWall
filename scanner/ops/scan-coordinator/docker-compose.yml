@@ -2,7 +2,7 @@ name: nw-scan-coordinator
 
 services:
   scan-coordinator:
-    image: ghcr.io/vulwall/nightwatch-scan-coordinator:${IMAGE_TAG:-dev}
+    image: ghcr.io/mojtabatajik/nightwatch-scan-coordinator:${IMAGE_TAG:-dev}
     container_name: nw-scan-coordinator
     restart: unless-stopped
     env_file:

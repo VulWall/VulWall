@@ -3,6 +3,9 @@ package scan_coordinator
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -95,7 +98,10 @@ func (w *WebhookNotifier) send(ctx context.Context, scanID string) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if w.secret != "" {
-		req.Header.Set("X-Webhook-Secret", w.secret)
+		mac := hmac.New(sha256.New, []byte(w.secret))
+		mac.Write(body)
+		sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+		req.Header.Set("X-Webhook-Signature", sig)
 	}
 
 	resp, err := w.client.Do(req)

@@ -2,7 +2,7 @@ name: nw-testssl-scanner
 
 services:
   testssl-scanner:
-    image: ghcr.io/vulwall/nightwatch-testssl-scanner:${IMAGE_TAG:-dev}
+    image: ghcr.io/mojtabatajik/nightwatch-testssl-scanner:${IMAGE_TAG:-dev}
     restart: unless-stopped
     deploy:
       replicas: 5
