@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -65,8 +66,13 @@ func (s *Service) ProcessAuditEvent(ctx context.Context, event shared.SystemAudi
 	_, err := collection.InsertOne(ctx, doc)
 	if err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("scan.success", false))
 		return fmt.Errorf("failed to insert audit log: %w", err)
 	}
+
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	s.logger.Info("Persisted system audit event",
 		zap.String("category", event.Category),

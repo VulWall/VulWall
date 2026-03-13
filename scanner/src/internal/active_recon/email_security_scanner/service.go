@@ -11,6 +11,7 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -72,6 +73,8 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	}
 
 	span.SetAttributes(attribute.Int("findings.count", len(allResults)))
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	// Publish deduplicated findings
 	s.publishUniqueFindings(ctx, allResults, target)

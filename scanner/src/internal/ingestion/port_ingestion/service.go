@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -70,6 +71,8 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 	ipDiscoveryID, isNewIP, err := s.ensureIPDiscovery(ctx, finding, now)
 	if err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("scan.success", false))
 		return err
 	}
 
@@ -93,6 +96,8 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 		portDiscoveryID, err = s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
 		if err != nil {
 			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			span.SetAttributes(attribute.Bool("scan.success", false))
 			return err
 		}
 
@@ -107,6 +112,9 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 			// Don't fail if trigger fails
 		}
 	}
+
+	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetStatus(codes.Ok, "")
 
 	return nil
 }

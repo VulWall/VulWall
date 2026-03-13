@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -102,6 +103,13 @@ func (sc *Scheduler) loadAndScheduleOrganizations(ctx context.Context) error {
 	errorCount := 0
 
 	for _, org := range orgs {
+		_, orgSpan := sc.tracer.Start(ctx, "schedule_organization",
+			trace.WithAttributes(
+				attribute.String("org.id", org.ID),
+				attribute.String("org.name", org.CompanyName),
+			),
+		)
+
 		if err := sc.scheduleOrganization(ctx, org); err != nil {
 			sc.logger.Error("Failed to schedule organization",
 				zap.String("org_id", org.ID),
@@ -109,10 +117,15 @@ func (sc *Scheduler) loadAndScheduleOrganizations(ctx context.Context) error {
 				zap.String("scan_cron", org.SubscriptionSettings.ScanCron),
 				zap.Error(err),
 			)
+			orgSpan.RecordError(err)
+			orgSpan.SetStatus(codes.Error, err.Error())
 			errorCount++
 		} else {
+			orgSpan.SetStatus(codes.Ok, "")
 			successCount++
 		}
+
+		orgSpan.End()
 	}
 
 	span.SetAttributes(

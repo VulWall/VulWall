@@ -9,6 +9,9 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -18,6 +21,7 @@ type ScanMonitor struct {
 	db       *mongo.Database
 	logger   *zap.Logger
 	webhook  *WebhookNotifier
+	tracer   trace.Tracer
 }
 
 // NewScanMonitor creates a new scan monitor
@@ -27,6 +31,7 @@ func NewScanMonitor(redisClient *redis.Client, db *mongo.Database, webhook *Webh
 		db:      db,
 		logger:  logger,
 		webhook: webhook,
+		tracer:  otel.Tracer("scan-monitor"),
 	}
 }
 
@@ -57,6 +62,9 @@ func (m *ScanMonitor) Start(ctx context.Context) {
 
 // checkAndMarkComplete checks all active scans and marks them as done if complete
 func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
+	ctx, span := m.tracer.Start(ctx, "check_scan_completion")
+	defer span.End()
+
 	// Find scans with status="pending" or "running"
 	filter := bson.M{
 		"status": bson.M{"$in": []string{shared.StatusPending, shared.StatusRunning}},
@@ -73,6 +81,8 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 		return err
 	}
 
+	span.SetAttributes(attribute.Int("active_scans.count", len(scans)))
+
 	if len(scans) > 0 {
 		m.logger.Info("Monitoring scans", zap.Int("active_scans", len(scans)))
 	}
@@ -84,6 +94,14 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 				zap.String("scan_id", scan.ID),
 				zap.Duration("age", time.Since(scan.CreatedAt)),
 			)
+			span.AddEvent("scan_completed",
+				trace.WithAttributes(
+					attribute.String("scan.id", scan.ID),
+					attribute.String("org.id", scan.OrgID),
+					attribute.String("completion_reason", "timeout"),
+					attribute.String("scan.duration", time.Since(scan.CreatedAt).String()),
+				),
+			)
 			m.markDone(ctx, scan.ID)
 			continue
 		}
@@ -93,6 +111,14 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 			m.logger.Info("Scan complete, all consumers finished",
 				zap.String("scan_id", scan.ID),
 				zap.Duration("duration", time.Since(scan.CreatedAt)),
+			)
+			span.AddEvent("scan_completed",
+				trace.WithAttributes(
+					attribute.String("scan.id", scan.ID),
+					attribute.String("org.id", scan.OrgID),
+					attribute.String("completion_reason", "all_consumers_finished"),
+					attribute.String("scan.duration", time.Since(scan.CreatedAt).String()),
+				),
 			)
 			m.markDone(ctx, scan.ID)
 		}
