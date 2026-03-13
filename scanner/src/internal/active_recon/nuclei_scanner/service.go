@@ -101,6 +101,13 @@ func (s *Service) updateTemplates(ctx context.Context) {
 	// Get version after update
 	versionAfter := s.getTemplateVersion(ctx)
 
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+
 	// Log audit event using shared audit logger
 	s.auditLogger.LogOperation(ctx,
 		"TemplateUpdate",

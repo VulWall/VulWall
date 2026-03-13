@@ -15,6 +15,7 @@ import (
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -122,6 +123,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.KBGenerationJob) er
 	responseText, err := s.anthropicClient.GenerateKBEntry(ctx, s.systemPrompt, findingContext, s.responseSchema)
 	if err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("failed to generate KB entry: %w", err)
 	}
 
@@ -131,7 +133,14 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.KBGenerationJob) er
 	)
 
 	// Publish result to stream
-	return s.publishResult(ctx, job, responseText)
+	if err := s.publishResult(ctx, job, responseText); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	span.SetStatus(codes.Ok, "")
+	return nil
 }
 
 // buildJobContext creates a context string from the KB generation job
