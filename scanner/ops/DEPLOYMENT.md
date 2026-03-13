@@ -74,28 +74,60 @@ OTEL_EXPORTER_OTLP_ENDPOINT=api.honeycomb.io
 
 ### Setup
 
-```bash
-# Create directories
-sudo mkdir -p /opt/vulwall/config
-sudo chown $USER:$USER /opt/vulwall
+The `server-setup.sh` script handles all first-time setup automatically (idempotent — safe to re-run):
 
-# Create env files
+```bash
+# Run the setup script (installs Docker, creates directories, downloads GeoIP DB)
+./ops/scripts/server-setup.sh
+```
+
+This script:
+1. Installs Docker + Docker Compose (if missing)
+2. Creates `/opt/vulwall/config/` directory
+3. Creates `core-network` Docker network (if missing)
+4. Downloads the GeoIP database to `/opt/vulwall/dbip-isp-country.mmdb` (if missing)
+5. Validates that config files exist
+
+After running the setup script, create the env files:
+
+```bash
 nano /opt/vulwall/config/general.env
 nano /opt/vulwall/config/redis.env
 nano /opt/vulwall/config/mongo.env
 nano /opt/vulwall/config/shodan.env
 nano /opt/vulwall/config/honeycomb.env
-
-# Copy MMDB file (required for IP geolocation)
-cp dbip-isp-country.mmdb /opt/vulwall/
 ```
+
+### Server Hardening (First-Time Only)
+
+SSH into the new server as root and run the hardening script **before** `server-setup.sh`:
+
+```bash
+# Harden the server (creates deploy user, UFW, SSH, Fail2ban, Docker daemon, kernel)
+./server-harden.sh
+
+# Skip auditd if not needed
+./server-harden.sh --skip-auditd
+```
+
+> **NOTE:** The script will ask you to paste your SSH public key (e.g. `ssh-ed25519 AAAA...`). Generate one locally with `ssh-keygen -t ed25519` if you don't have one. This key will be used for the deploy user and CI/CD access. After SSH hardening, only the `deploy` user can login via key-based auth — root and password login are disabled.
+
+This script is idempotent — safe to re-run. It configures:
+1. Deploy user (`deploy`) with Docker group + scoped passwordless sudo for CI/CD
+2. UFW firewall (allow SSH only — Docker manages its own ports)
+3. SSH hardening via drop-in config (key-only auth, no root login, session limits)
+4. Fail2ban (SSH brute-force protection: 3 retries, 2h ban)
+5. Unattended-upgrades (automatic daily security patches)
+6. File permissions (`600` on `.env` files, `700` on config dir)
+7. Docker daemon (`no-new-privileges`, `live-restore`, log rotation: 10MB x 3 files)
+8. Kernel hardening via sysctl (anti-spoofing, ASLR, ICMP hardening)
+9. Timezone set to UTC
+10. Swap file (2GB, prevents OOM kills from memory-hungry scanners)
+11. Auditd rules for `/opt/vulwall/config/` monitoring (optional)
 
 ## Deploy
 
 ```bash
-# Create Docker network (one-time)
-docker network create core-network
-
 # Deploy all services
 make prod-deploy-all
 
