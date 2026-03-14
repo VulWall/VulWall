@@ -147,8 +147,10 @@ type SecurityFinding struct {
 	Title        string                 `json:"title" bson:"title"`                           // Short title
 	Description  string                 `json:"description" bson:"description"`               // Detailed description
 	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"` // Scanner-specific data
-	Status       string                 `json:"status" bson:"status"`                         // open, resolved
-	Timestamp    time.Time              `json:"timestamp" bson:"timestamp"`                   // When finding was discovered
+	Status           string                 `json:"status" bson:"status"`                                                   // open, resolved
+	Timestamp        time.Time              `json:"timestamp" bson:"timestamp"`                                             // When finding was discovered
+	ResolvedAt       *time.Time             `json:"resolved_at,omitempty" bson:"resolved_at,omitempty"`                     // When finding was resolved (nil if open)
+	ResolvedByScanID string                 `json:"resolved_by_scan_id,omitempty" bson:"resolved_by_scan_id,omitempty"`     // Scan that resolved this finding
 }
 
 // ScanTarget represents a target to be scanned by active recon scanners
