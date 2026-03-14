@@ -173,7 +173,7 @@ func (s *Service) publishFinding(ctx context.Context, finding shared.SecurityFin
 
 // convertToSecurityFinding converts a vulnerability to SecurityFinding format
 func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL string, target ScanTarget) shared.SecurityFinding {
-	// Format title: "Component Version - Summary (CVEs)"
+	// Format title: "Component Version - Summary (CVEs)" with truncated summary
 	title := formatTitle(vuln.Component, vuln.Version, vuln.Summary, vuln.CVEs)
 
 	// Build metadata
@@ -205,7 +205,8 @@ func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL strin
 		DiscoveryID: target.DiscoveryID,
 		FindingType: findingType,
 		Severity:    vuln.Severity,
-		Title:       title, // Full summary - no truncation
+		Title:       title,
+		Description: vuln.Summary,
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,
 		Timestamp:   time.Now(),
@@ -228,7 +229,14 @@ func determineFindingType(vuln scanner.ProcessedVulnerability) string {
 	return fmt.Sprintf("js:%s:vulnerability", component)
 }
 
+// maxTitleSummaryLength is the maximum character length for the summary portion of a finding title.
+// Some retire.js advisories (e.g., GitHub Security Advisories) embed entire markdown documents
+// in the summary field. We truncate to keep titles readable in Reports and Scans pages.
+const maxTitleSummaryLength = 120
+
 // formatTitle formats the finding title: "Component Version - Summary (CVEs)"
+// The summary is truncated to the first sentence or ~120 chars to keep titles readable.
+// If the summary contains markdown headers, only the text before the first header is used.
 func formatTitle(component, version, summary string, cves []string) string {
 	var cveStr string
 	if len(cves) > 0 {
@@ -238,8 +246,37 @@ func formatTitle(component, version, summary string, cves []string) string {
 	// Capitalize component name
 	component = strings.Title(component)
 
-	// Full summary - no truncation
+	summary = truncateSummary(summary)
+
 	return fmt.Sprintf("%s %s - %s%s", component, version, summary, cveStr)
+}
+
+// truncateSummary shortens a vulnerability summary for use in finding titles.
+// Strips markdown headers and truncates to ~120 chars on a word boundary.
+func truncateSummary(summary string) string {
+	if len(summary) <= maxTitleSummaryLength {
+		return summary
+	}
+
+	// Strip markdown headers and everything after
+	if idx := strings.Index(summary, "\n#"); idx > 0 {
+		summary = strings.TrimSpace(summary[:idx])
+	}
+
+	// Clean up for single-line use
+	summary = strings.TrimLeft(summary, "# ")
+	summary = strings.ReplaceAll(summary, "\n", " ")
+
+	if len(summary) <= maxTitleSummaryLength {
+		return summary
+	}
+
+	// Truncate on word boundary
+	truncated := summary[:maxTitleSummaryLength]
+	if lastSpace := strings.LastIndexByte(truncated, ' '); lastSpace > 0 {
+		truncated = truncated[:lastSpace]
+	}
+	return truncated + "..."
 }
 
 // protocolScanResult holds the result of scanning a single protocol
