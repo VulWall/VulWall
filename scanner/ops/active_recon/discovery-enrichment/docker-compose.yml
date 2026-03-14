@@ -13,8 +13,10 @@ services:
       - /opt/vulwall/config/honeycomb.env
     environment:
       - IP_ENRICHMENT_DB_PATH=/app/data/dbip-isp-country.mmdb
+      - CLOUD_DATA_DIR=/app/cloud-data
     volumes:
       - /opt/vulwall/dbip-isp-country.mmdb:/app/data/dbip-isp-country.mmdb:ro
+      - cloud-ip-ranges:/app/cloud-data
     deploy:
       resources:
         limits:
@@ -33,6 +35,10 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  cloud-ip-ranges:
+    driver: local
 
 networks:
   core-network:
