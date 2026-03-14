@@ -1,26 +1,20 @@
-FROM golang:1.25-alpine AS builder
-
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 
-# Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
-# Copy source code
 COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" \
+    -o /app/bin/domain-discovery ./cmd/discoveries/domain-discovery
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o domain-discovery ./cmd/discoveries/domain-discovery
-
-# Final stage
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates
-
-WORKDIR /root/
-
-# Copy the binary from builder
-COPY --from=builder /app/domain-discovery .
-
-# Run the binary
-CMD ["./domain-discovery"]
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates && \
+    addgroup -g 1001 appgroup && \
+    adduser -D -u 1001 -G appgroup appuser
+WORKDIR /app
+COPY --from=builder /app/bin/domain-discovery /app/domain-discovery
+USER appuser
+ENTRYPOINT ["/app/domain-discovery"]

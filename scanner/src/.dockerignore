@@ -1,0 +1,5 @@
+bin/
+quick-scan/
+data/
+*.md
+.env*

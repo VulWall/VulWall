@@ -1,31 +1,25 @@
-FROM golang:1.25-alpine AS builder
-
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 
-# Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
-# Copy source code
 COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" \
+    -o /app/bin/ingestion ./cmd/ingestion
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ingestion ./cmd/ingestion
-
-# Final stage
-FROM alpine:latest
-
-# Install ca-certificates for HTTPS requests
-RUN apk add --no-cache ca-certificates
-
-WORKDIR /root/
-
-# Copy the binary from builder
-COPY --from=builder /app/ingestion .
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates && \
+    addgroup -g 1001 appgroup && \
+    adduser -D -u 1001 -G appgroup appuser
+WORKDIR /app
 
 # Create data directory for MMDB volume mount
-# Mount the DBIP ISP/Country database at runtime: -v /path/to/dbip-isp-country.mmdb:/root/data/dbip-isp-country.mmdb
-RUN mkdir -p ./data
+# Mount the DBIP ISP/Country database at runtime: -v /path/to/dbip-isp-country.mmdb:/app/data/dbip-isp-country.mmdb
+RUN mkdir -p ./data && chown appuser:appgroup ./data
 
-# Run the binary
-CMD ["./ingestion"]
+COPY --from=builder /app/bin/ingestion /app/ingestion
+USER appuser
+ENTRYPOINT ["/app/ingestion"]

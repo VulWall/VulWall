@@ -5,11 +5,18 @@ services:
     image: ghcr.io/mojtabatajik/nightwatch-knowledge-base-engine:${IMAGE_TAG:-dev}
     container_name: nw-knowledge-base-engine
     restart: unless-stopped
+    read_only: true
+    stop_grace_period: 30s
     env_file:
       - /opt/vulwall/config/general.env
       - /opt/vulwall/config/redis.env
       - /opt/vulwall/config/honeycomb.env
       - /opt/vulwall/config/anthropic.env
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
     networks:
       - core-network
     healthcheck:

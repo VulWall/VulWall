@@ -4,8 +4,16 @@ services:
   testssl-scanner:
     image: ghcr.io/mojtabatajik/nightwatch-testssl-scanner:${IMAGE_TAG:-dev}
     restart: unless-stopped
+    read_only: true
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp
     deploy:
       replicas: 5
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
     env_file:
       - /opt/vulwall/config/general.env
       - /opt/vulwall/config/redis.env

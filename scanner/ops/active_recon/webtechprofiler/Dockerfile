@@ -1,33 +1,20 @@
-# Build stage
-FROM golang:1.25-alpine AS builder
-
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache git ca-certificates
-
-# Copy go mod files
 COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
-# Download dependencies
-RUN go mod download
-
-# Copy source code
 COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" \
+    -o /app/bin/webtechprofiler ./cmd/active_recon/webtechprofiler
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o webtechprofiler ./cmd/active_recon/webtechprofiler
-
-# Runtime stage
-FROM alpine:latest
-
-WORKDIR /root/
-
-# Install CA certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
-
-# Copy binary from builder
-COPY --from=builder /app/webtechprofiler .
-
-# Run the scanner
-CMD ["./webtechprofiler"]
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates && \
+    addgroup -g 1001 appgroup && \
+    adduser -D -u 1001 -G appgroup appuser
+WORKDIR /app
+COPY --from=builder /app/bin/webtechprofiler /app/webtechprofiler
+USER appuser
+ENTRYPOINT ["/app/webtechprofiler"]
