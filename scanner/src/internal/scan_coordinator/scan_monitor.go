@@ -107,7 +107,7 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 					attribute.String("scan.duration", time.Since(scan.CreatedAt).String()),
 				),
 			)
-			m.markDone(ctx, scan.ID)
+			m.markDone(ctx, scan.ID, true)
 			continue
 		}
 
@@ -125,7 +125,7 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 					attribute.String("scan.duration", time.Since(scan.CreatedAt).String()),
 				),
 			)
-			m.markDone(ctx, scan.ID)
+			m.markDone(ctx, scan.ID, false)
 		}
 	}
 
@@ -223,8 +223,9 @@ func (m *ScanMonitor) hasPendingForScan(ctx context.Context, stream, group, scan
 	return false
 }
 
-// markDone marks a scan as done, resolves disappeared findings, and notifies the Dashboard webhook
-func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
+// markDone marks a scan as done, resolves disappeared findings, and notifies the Dashboard webhook.
+// When timedOut is true, finding resolution is skipped because ingestion may be incomplete.
+func (m *ScanMonitor) markDone(ctx context.Context, scanID string, timedOut bool) error {
 	// Compute scan statistics before marking as done
 	stats, resolvedFindingIDs, err := m.computeStats(ctx, scanID)
 	if err != nil {
@@ -272,8 +273,15 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
 			zap.Time("completed_at", now),
 		)
 
-		// Mark disappeared findings as resolved (best-effort, non-blocking for scan completion)
-		m.resolveDisappearedFindings(ctx, scanID, resolvedFindingIDs)
+		// Mark disappeared findings as resolved (skip on timeout — ingestion may be incomplete)
+		if timedOut {
+			m.logger.Warn("Skipping finding resolution for timed-out scan",
+				zap.String("scan_id", scanID),
+				zap.Int("would_resolve", len(resolvedFindingIDs)),
+			)
+		} else {
+			m.resolveDisappearedFindings(ctx, scanID, resolvedFindingIDs)
+		}
 
 		// Notify Dashboard asynchronously (non-blocking, best-effort)
 		go m.webhook.NotifyScanComplete(scanID)
