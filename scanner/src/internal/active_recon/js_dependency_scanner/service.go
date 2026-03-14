@@ -189,11 +189,6 @@ func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL strin
 		"detection_method":  "filecontent",
 	}
 
-	// Preserve the full untruncated summary in metadata so no data is lost
-	if len(vuln.Summary) > maxTitleSummaryLength {
-		metadata["full_summary"] = vuln.Summary
-	}
-
 	// Add optional GitHub ID if present
 	if vuln.GitHubID != "" {
 		metadata["github_id"] = vuln.GitHubID
@@ -211,6 +206,7 @@ func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL strin
 		FindingType: findingType,
 		Severity:    vuln.Severity,
 		Title:       title,
+		Description: vuln.Summary,
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,
 		Timestamp:   time.Now(),
@@ -256,55 +252,30 @@ func formatTitle(component, version, summary string, cves []string) string {
 }
 
 // truncateSummary shortens a vulnerability summary for use in finding titles.
-// It extracts the meaningful first sentence, stripping markdown headers and
-// truncating at ~120 characters on a word boundary.
+// Strips markdown headers and truncates to ~120 chars on a word boundary.
 func truncateSummary(summary string) string {
-	if summary == "" {
-		return summary
-	}
-
-	// If the summary contains markdown headers, use only the text before the first one
-	if idx := strings.Index(summary, "\n#"); idx > 0 {
-		summary = strings.TrimSpace(summary[:idx])
-	}
-
-	// Strip any leading markdown header prefix (e.g., "# Title\n...")
-	if strings.HasPrefix(summary, "#") {
-		if newline := strings.IndexByte(summary, '\n'); newline > 0 {
-			// Use the header text itself (without the # prefix) as the summary
-			header := strings.TrimSpace(strings.TrimLeft(summary[:newline], "# "))
-			rest := strings.TrimSpace(summary[newline+1:])
-			if rest != "" {
-				summary = header + " - " + rest
-			} else {
-				summary = header
-			}
-		} else {
-			summary = strings.TrimSpace(strings.TrimLeft(summary, "# "))
-		}
-	}
-
-	// Replace newlines with spaces for a clean single-line title
-	summary = strings.ReplaceAll(summary, "\n", " ")
-
-	// Already short enough — return as-is
 	if len(summary) <= maxTitleSummaryLength {
 		return summary
 	}
 
-	// Try to truncate at the first sentence boundary within the limit
-	for _, sep := range []string{". ", ".\t"} {
-		if idx := strings.Index(summary, sep); idx > 0 && idx <= maxTitleSummaryLength {
-			return summary[:idx+1]
-		}
+	// Strip markdown headers and everything after
+	if idx := strings.Index(summary, "\n#"); idx > 0 {
+		summary = strings.TrimSpace(summary[:idx])
 	}
 
-	// No sentence boundary found — truncate on a word boundary
+	// Clean up for single-line use
+	summary = strings.TrimLeft(summary, "# ")
+	summary = strings.ReplaceAll(summary, "\n", " ")
+
+	if len(summary) <= maxTitleSummaryLength {
+		return summary
+	}
+
+	// Truncate on word boundary
 	truncated := summary[:maxTitleSummaryLength]
 	if lastSpace := strings.LastIndexByte(truncated, ' '); lastSpace > 0 {
 		truncated = truncated[:lastSpace]
 	}
-
 	return truncated + "..."
 }
 
