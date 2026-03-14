@@ -14,7 +14,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/http-header-scanner ./cmd/active_recon/http-header-scanner
 
 # Runtime stage
-FROM alpine:3.21
+FROM alpine:latest
 
 WORKDIR /app
 
