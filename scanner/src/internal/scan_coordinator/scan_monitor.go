@@ -93,8 +93,8 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 	}
 
 	for _, scan := range scans {
-		// Check timeout (30 minutes since creation)
-		if time.Since(scan.CreatedAt) > 30*time.Minute {
+		// Check timeout (1 hour since creation)
+		if time.Since(scan.CreatedAt) > 60*time.Minute {
 			m.logger.Info("Scan timeout reached, marking as done",
 				zap.String("scan_id", scan.ID),
 				zap.Duration("age", time.Since(scan.CreatedAt)),
