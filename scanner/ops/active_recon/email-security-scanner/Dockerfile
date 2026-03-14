@@ -14,7 +14,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/email-security-scanner ./cmd/active_recon/email-security-scanner
 
 # Runtime stage
-FROM alpine:3.21
+FROM alpine:latest
 
 WORKDIR /app
 
