@@ -18,7 +18,7 @@ WORKDIR /app
 
 # Create data directory for MMDB volume mount
 # Mount the DBIP ISP/Country database at runtime: -v /path/to/dbip-isp-country.mmdb:/app/data/dbip-isp-country.mmdb
-RUN mkdir -p ./data && chown appuser:appgroup ./data
+RUN mkdir -p ./data ./cloud-data && chown appuser:appgroup ./data ./cloud-data
 
 COPY --from=builder /app/bin/discovery-enrichment /app/discovery-enrichment
 
