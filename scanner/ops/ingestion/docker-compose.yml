@@ -5,15 +5,22 @@ services:
     image: ghcr.io/mojtabatajik/nightwatch-ingestion:${IMAGE_TAG:-dev}
     container_name: nw-ingestion
     restart: unless-stopped
+    read_only: true
+    stop_grace_period: 30s
     env_file:
       - /opt/vulwall/config/general.env
       - /opt/vulwall/config/redis.env
       - /opt/vulwall/config/mongo.env
       - /opt/vulwall/config/honeycomb.env
     environment:
-      - IP_ENRICHMENT_DB_PATH=/root/data/dbip-isp-country.mmdb
+      - IP_ENRICHMENT_DB_PATH=/app/data/dbip-isp-country.mmdb
     volumes:
-      - /opt/vulwall/dbip-isp-country.mmdb:/root/data/dbip-isp-country.mmdb:ro
+      - /opt/vulwall/dbip-isp-country.mmdb:/app/data/dbip-isp-country.mmdb:ro
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
     networks:
       - core-network
     healthcheck:

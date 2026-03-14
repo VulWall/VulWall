@@ -5,11 +5,18 @@ services:
     image: ghcr.io/mojtabatajik/nightwatch-domain-discovery:${IMAGE_TAG:-dev}
     container_name: nw-domain-discovery
     restart: unless-stopped
+    read_only: true
+    stop_grace_period: 30s
     env_file:
       - /opt/vulwall/config/general.env
       - /opt/vulwall/config/redis.env
       - /opt/vulwall/config/shodan.env
       - /opt/vulwall/config/honeycomb.env
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
     networks:
       - core-network
     healthcheck:
