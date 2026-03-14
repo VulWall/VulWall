@@ -10,14 +10,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// computeStats computes scan statistics by comparing current scan results with the previous completed scan
-// Uses set-difference to calculate new/resolved discoveries and findings (Option B - industry standard)
-func (m *ScanMonitor) computeStats(ctx context.Context, scanID string) (*shared.ScanStats, error) {
+// computeStats computes scan statistics by comparing current scan results with the previous completed scan.
+// Returns the stats and the list of finding IDs that were resolved (present in previous scan but absent in current).
+// The resolved finding IDs are used by markDone to bulk-update their status in MongoDB.
+func (m *ScanMonitor) computeStats(ctx context.Context, scanID string) (*shared.ScanStats, []string, error) {
 	// 1. Fetch current scan to get org_id and created_at
 	var currentScan shared.Scan
 	err := m.db.Collection(shared.CollectionScans).FindOne(ctx, bson.M{"_id": scanID}).Decode(&currentScan)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch current scan: %w", err)
+		return nil, nil, fmt.Errorf("failed to fetch current scan: %w", err)
 	}
 
 	m.logger.Debug("Computing stats for scan",
@@ -28,13 +29,13 @@ func (m *ScanMonitor) computeStats(ctx context.Context, scanID string) (*shared.
 	// 2. Get current scan's discovery IDs
 	currentDiscoveryIDs, err := m.getDiscoveryIDsForScan(ctx, currentScan.OrgID, scanID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current discovery IDs: %w", err)
+		return nil, nil, fmt.Errorf("failed to get current discovery IDs: %w", err)
 	}
 
 	// 3. Get current scan's finding IDs
 	currentFindingIDs, err := m.getFindingIDsForScan(ctx, currentScan.OrgID, scanID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current finding IDs: %w", err)
+		return nil, nil, fmt.Errorf("failed to get current finding IDs: %w", err)
 	}
 
 	// 4. Find previous completed scan for this organization
@@ -66,7 +67,7 @@ func (m *ScanMonitor) computeStats(ctx context.Context, scanID string) (*shared.
 		stats.ResolvedDiscoveries = 0
 		stats.ResolvedFindings = 0
 
-		return stats, nil
+		return stats, nil, nil
 	}
 
 	m.logger.Debug("Found previous scan for comparison",
@@ -77,19 +78,23 @@ func (m *ScanMonitor) computeStats(ctx context.Context, scanID string) (*shared.
 	// 5. Get previous scan's discovery and finding IDs
 	previousDiscoveryIDs, err := m.getDiscoveryIDsForScan(ctx, currentScan.OrgID, previousScan.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get previous discovery IDs: %w", err)
+		return nil, nil, fmt.Errorf("failed to get previous discovery IDs: %w", err)
 	}
 
 	previousFindingIDs, err := m.getFindingIDsForScan(ctx, currentScan.OrgID, previousScan.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get previous finding IDs: %w", err)
+		return nil, nil, fmt.Errorf("failed to get previous finding IDs: %w", err)
 	}
 
 	// 6. Compute set differences using maps for efficiency
+	// For discoveries: only need counts (no status update needed)
 	stats.NewDiscoveries = setDifference(currentDiscoveryIDs, previousDiscoveryIDs)
 	stats.ResolvedDiscoveries = setDifference(previousDiscoveryIDs, currentDiscoveryIDs)
+
+	// For findings: need both counts and IDs so markDone can update their status in MongoDB
+	resolvedFindingIDs := setDifferenceIDs(previousFindingIDs, currentFindingIDs)
 	stats.NewFindings = setDifference(currentFindingIDs, previousFindingIDs)
-	stats.ResolvedFindings = setDifference(previousFindingIDs, currentFindingIDs)
+	stats.ResolvedFindings = len(resolvedFindingIDs)
 
 	m.logger.Info("Computed scan statistics",
 		zap.String("scan_id", scanID),
@@ -101,7 +106,7 @@ func (m *ScanMonitor) computeStats(ctx context.Context, scanID string) (*shared.
 		zap.Int("resolved_findings", stats.ResolvedFindings),
 	)
 
-	return stats, nil
+	return stats, resolvedFindingIDs, nil
 }
 
 // getDiscoveryIDsForScan retrieves all discovery IDs that contain the given scan ID in their scan_ids array
@@ -180,4 +185,22 @@ func setDifference(setA, setB []string) int {
 	}
 
 	return count
+}
+
+// setDifferenceIDs returns the actual elements in set A that are not in set B (A - B)
+// Used when the caller needs the IDs themselves, not just a count (e.g., to mark findings as resolved)
+func setDifferenceIDs(setA, setB []string) []string {
+	setBMap := make(map[string]bool, len(setB))
+	for _, item := range setB {
+		setBMap[item] = true
+	}
+
+	var diff []string
+	for _, item := range setA {
+		if !setBMap[item] {
+			diff = append(diff, item)
+		}
+	}
+
+	return diff
 }

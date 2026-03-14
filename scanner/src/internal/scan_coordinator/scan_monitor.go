@@ -223,10 +223,10 @@ func (m *ScanMonitor) hasPendingForScan(ctx context.Context, stream, group, scan
 	return false
 }
 
-// markDone marks a scan as done and notifies the Dashboard webhook
+// markDone marks a scan as done, resolves disappeared findings, and notifies the Dashboard webhook
 func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
 	// Compute scan statistics before marking as done
-	stats, err := m.computeStats(ctx, scanID)
+	stats, resolvedFindingIDs, err := m.computeStats(ctx, scanID)
 	if err != nil {
 		m.logger.Error("Failed to compute scan statistics",
 			zap.String("scan_id", scanID),
@@ -234,6 +234,7 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
 		)
 		// Continue with marking scan as done even if stats computation fails
 		stats = &shared.ScanStats{} // Use empty stats as fallback
+		resolvedFindingIDs = nil
 	}
 
 	now := time.Now()
@@ -271,9 +272,65 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
 			zap.Time("completed_at", now),
 		)
 
+		// Mark disappeared findings as resolved (best-effort, non-blocking for scan completion)
+		m.resolveDisappearedFindings(ctx, scanID, resolvedFindingIDs)
+
 		// Notify Dashboard asynchronously (non-blocking, best-effort)
 		go m.webhook.NotifyScanComplete(scanID)
 	}
 
 	return nil
+}
+
+// resolveDisappearedFindings bulk-updates findings that were present in the previous scan
+// but absent in the current scan, marking them as resolved. This is best-effort: errors
+// are logged but do not fail the scan completion.
+func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scanID string, resolvedFindingIDs []string) {
+	if len(resolvedFindingIDs) == 0 {
+		return
+	}
+
+	ctx, span := m.tracer.Start(ctx, "resolve_disappeared_findings",
+		trace.WithAttributes(
+			attribute.String("scan.id", scanID),
+			attribute.Int("findings.resolved_count", len(resolvedFindingIDs)),
+		),
+	)
+	defer span.End()
+
+	now := time.Now()
+	result, err := m.db.Collection(shared.CollectionFindings).UpdateMany(ctx,
+		bson.M{"_id": bson.M{"$in": resolvedFindingIDs}},
+		bson.M{"$set": bson.M{
+			"status":              shared.FindingStatusResolved,
+			"resolved_at":        now,
+			"resolved_by_scan_id": scanID,
+		}},
+	)
+
+	if err != nil {
+		m.logger.Error("Failed to mark findings as resolved",
+			zap.String("scan_id", scanID),
+			zap.Int("count", len(resolvedFindingIDs)),
+			zap.Error(err),
+		)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to resolve findings")
+		return
+	}
+
+	m.logger.Info("Marked findings as resolved",
+		zap.String("scan_id", scanID),
+		zap.Int("expected", len(resolvedFindingIDs)),
+		zap.Int64("updated", result.ModifiedCount),
+	)
+
+	span.AddEvent("findings_resolved",
+		trace.WithAttributes(
+			attribute.String("scan.id", scanID),
+			attribute.Int("findings.expected", len(resolvedFindingIDs)),
+			attribute.Int64("findings.updated", result.ModifiedCount),
+		),
+	)
+	span.SetStatus(codes.Ok, "")
 }
