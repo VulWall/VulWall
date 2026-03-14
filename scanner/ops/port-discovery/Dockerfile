@@ -1,27 +1,20 @@
 FROM golang:1.25-alpine AS builder
-
 WORKDIR /app
 
-# Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
-# Copy source code
 COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" \
+    -o /app/bin/port-discovery ./cmd/discoveries/port-discovery
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o port-discovery ./cmd/discoveries/port-discovery
-
-# Final stage
-FROM alpine:latest
-
-# Install ca-certificates for HTTPS requests
-RUN apk add --no-cache ca-certificates
-
-WORKDIR /root/
-
-# Copy the binary from builder
-COPY --from=builder /app/port-discovery .
-
-# Run the binary
-CMD ["./port-discovery"]
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates && \
+    addgroup -g 1001 appgroup && \
+    adduser -D -u 1001 -G appgroup appuser
+WORKDIR /app
+COPY --from=builder /app/bin/port-discovery /app/port-discovery
+USER appuser
+ENTRYPOINT ["/app/port-discovery"]
