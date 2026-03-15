@@ -17,16 +17,18 @@ import (
 )
 
 type Consumer struct {
-	redis   *redis.Client
-	service *Service
-	logger  *zap.Logger
+	redis    *redis.Client
+	service  *Service
+	logger   *zap.Logger
+	activity *shared.ScanActivityTracker
 }
 
-func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Consumer {
+func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker) *Consumer {
 	return &Consumer{
-		redis:   redisClient,
-		service: NewService(db, redisClient, logger),
-		logger:  logger,
+		redis:    redisClient,
+		service:  NewService(db, redisClient, logger),
+		logger:   logger,
+		activity: activity,
 	}
 }
 
@@ -149,6 +151,11 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	// Process the finding
 	if err := c.service.ProcessFinding(ctx, finding); err != nil {
 		return fmt.Errorf("failed to process finding: %w", err)
+	}
+
+	// Signal scan activity for idle detection (throttled internally)
+	if finding.ScanID != nil {
+		c.activity.TouchActivity(ctx, *finding.ScanID)
 	}
 
 	c.logger.Info("Successfully processed domain finding",

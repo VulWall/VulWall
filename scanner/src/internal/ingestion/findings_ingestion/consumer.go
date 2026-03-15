@@ -18,18 +18,20 @@ import (
 
 // Consumer consumes security findings from Redis and persists them to MongoDB
 type Consumer struct {
-	redis   *redis.Client
-	service *Service
-	logger  *zap.Logger
+	redis    *redis.Client
+	service  *Service
+	logger   *zap.Logger
+	activity *shared.ScanActivityTracker
 }
 
 // NewConsumer creates a new findings ingestion consumer
-func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Consumer {
+func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker) *Consumer {
 	service := NewService(db, redisClient, logger)
 	return &Consumer{
-		redis:   redisClient,
-		service: service,
-		logger:  logger,
+		redis:    redisClient,
+		service:  service,
+		logger:   logger,
+		activity: activity,
 	}
 }
 
@@ -167,5 +169,14 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	}
 
 	// Process the finding
-	return c.service.ProcessFinding(ctx, finding)
+	if err := c.service.ProcessFinding(ctx, finding); err != nil {
+		return err
+	}
+
+	// Signal scan activity for idle detection (throttled internally)
+	if finding.ScanID != nil {
+		c.activity.TouchActivity(ctx, *finding.ScanID)
+	}
+
+	return nil
 }

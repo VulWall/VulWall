@@ -17,18 +17,20 @@ import (
 
 // Consumer consumes enrichment findings from Redis stream
 type Consumer struct {
-	redis   *redis.Client
-	service *Service
-	logger  *zap.Logger
+	redis    *redis.Client
+	service  *Service
+	logger   *zap.Logger
+	activity *shared.ScanActivityTracker
 }
 
 // NewConsumer creates a new enrichment ingestion consumer
-func NewConsumer(redis *redis.Client, db *mongo.Database, logger *zap.Logger) *Consumer {
+func NewConsumer(redis *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker) *Consumer {
 	service := NewService(db, redis, logger)
 	return &Consumer{
-		redis:   redis,
-		service: service,
-		logger:  logger,
+		redis:    redis,
+		service:  service,
+		logger:   logger,
+		activity: activity,
 	}
 }
 
@@ -127,5 +129,14 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	}
 
 	// Process the enrichment
-	return c.service.ProcessEnrichment(ctx, enrichment)
+	if err := c.service.ProcessEnrichment(ctx, enrichment); err != nil {
+		return err
+	}
+
+	// Signal scan activity for idle detection (throttled internally)
+	if enrichment.ScanID != nil {
+		c.activity.TouchActivity(ctx, *enrichment.ScanID)
+	}
+
+	return nil
 }
