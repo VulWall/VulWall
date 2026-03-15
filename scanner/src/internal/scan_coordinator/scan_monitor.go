@@ -162,10 +162,20 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 		{shared.StreamSecurityFindings, "findings_ingestion_service"},
 	}
 
+	var pendingGroups []string
 	for _, cg := range consumerGroups {
 		if m.hasPendingForScan(ctx, cg.stream, cg.group, scanID) {
-			return false // Still has pending messages for this scan
+			pendingGroups = append(pendingGroups, cg.group+" ("+cg.stream+")")
 		}
+	}
+
+	if len(pendingGroups) > 0 {
+		m.logger.Debug("Scan has pending consumer groups",
+			zap.String("scan_id", scanID),
+			zap.Int("pending_count", len(pendingGroups)),
+			zap.Strings("pending_groups", pendingGroups),
+		)
+		return false
 	}
 
 	return true // All consumer groups have 0 pending for this scan
