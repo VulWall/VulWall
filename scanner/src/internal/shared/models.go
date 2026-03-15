@@ -234,10 +234,11 @@ type Scan struct {
 	Status      string     `json:"status" bson:"status"`                                 // "pending", "running", "completed", "failed"
 	Type        string     `json:"type" bson:"type"`                                     // "scheduled", "requested"
 	TriggeredBy string     `json:"triggered_by,omitempty" bson:"triggered_by,omitempty"` // User ID or "system"
-	StartedAt   *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty"`
-	CompletedAt *time.Time `json:"completed_at,omitempty" bson:"completed_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at" bson:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at" bson:"updated_at"`
+	StartedAt      *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty" bson:"completed_at,omitempty"`
+	LastActivityAt *time.Time `json:"last_activity_at,omitempty" bson:"last_activity_at,omitempty"` // Updated by ingestion services on each batch
+	CreatedAt      time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at" bson:"updated_at"`
 
 	// Assets that were targeted for scanning (input)
 	TargetedAssets []AssetTarget `json:"targeted_assets,omitempty" bson:"targeted_assets,omitempty"`

@@ -93,39 +93,66 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 	}
 
 	for _, scan := range scans {
-		// Check timeout (1 hour since creation)
-		if time.Since(scan.CreatedAt) > 60*time.Minute {
-			m.logger.Info("Scan timeout reached, marking as done",
+		scanAge := time.Since(scan.CreatedAt)
+
+		// 1. Safety timeout (3 hours) — absolute upper bound for stuck scans
+		if scanAge > ScanSafetyTimeout {
+			m.logger.Warn("Scan safety timeout reached, marking as done",
 				zap.String("scan_id", scan.ID),
-				zap.Duration("age", time.Since(scan.CreatedAt)),
+				zap.Duration("age", scanAge),
 			)
 			span.AddEvent("scan_completed",
 				trace.WithAttributes(
 					attribute.String("scan.id", scan.ID),
 					attribute.String("org.id", scan.OrgID),
-					attribute.String("completion_reason", "timeout"),
-					attribute.String("scan.duration", time.Since(scan.CreatedAt).String()),
+					attribute.String("completion_reason", "safety_timeout"),
+					attribute.String("scan.duration", scanAge.String()),
 				),
 			)
 			m.markDone(ctx, scan.ID, true)
 			continue
 		}
 
-		// Check if all consumer groups have processed this scan
+		// 2. Check if all consumer groups have processed this scan (fastest path)
 		if m.isComplete(ctx, scan.ID) {
 			m.logger.Info("Scan complete, all consumers finished",
 				zap.String("scan_id", scan.ID),
-				zap.Duration("duration", time.Since(scan.CreatedAt)),
+				zap.Duration("duration", scanAge),
 			)
 			span.AddEvent("scan_completed",
 				trace.WithAttributes(
 					attribute.String("scan.id", scan.ID),
 					attribute.String("org.id", scan.OrgID),
 					attribute.String("completion_reason", "all_consumers_finished"),
-					attribute.String("scan.duration", time.Since(scan.CreatedAt).String()),
+					attribute.String("scan.duration", scanAge.String()),
 				),
 			)
 			m.markDone(ctx, scan.ID, false)
+			continue
+		}
+
+		// 3. Idle detection — no new activity for 15 min (ingestion has settled)
+		if scanAge > ScanMinRuntime && scan.LastActivityAt != nil {
+			idleDuration := time.Since(*scan.LastActivityAt)
+			if idleDuration > ScanIdleTimeout {
+				m.logger.Info("Scan idle timeout reached, ingestion has settled",
+					zap.String("scan_id", scan.ID),
+					zap.Duration("age", scanAge),
+					zap.Duration("idle_for", idleDuration),
+					zap.Time("last_activity", *scan.LastActivityAt),
+				)
+				span.AddEvent("scan_completed",
+					trace.WithAttributes(
+						attribute.String("scan.id", scan.ID),
+						attribute.String("org.id", scan.OrgID),
+						attribute.String("completion_reason", "idle_timeout"),
+						attribute.String("scan.duration", scanAge.String()),
+						attribute.String("idle_duration", idleDuration.String()),
+					),
+				)
+				m.markDone(ctx, scan.ID, false) // Safe to resolve — ingestion settled
+				continue
+			}
 		}
 	}
 

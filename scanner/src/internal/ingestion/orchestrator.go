@@ -7,11 +7,12 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/ingestion/audit_ingestion"
-	"github.com/vulwall/scanners/internal/ingestion/kb_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/domain_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/enrichment_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/findings_ingestion"
+	"github.com/vulwall/scanners/internal/ingestion/kb_ingestion"
 	"github.com/vulwall/scanners/internal/ingestion/port_ingestion"
+	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )
@@ -36,6 +37,11 @@ func NewOrchestrator(redisClient *redis.Client, db *mongo.Database, logger *zap.
 func (o *Orchestrator) Start(ctx context.Context) error {
 	o.logger.Info("Starting ingestion orchestrator")
 
+	// Shared activity tracker for scan idle detection.
+	// All scan-scoped ingestion consumers share a single tracker instance
+	// so throttle state is global (one write per scan per interval, not per consumer).
+	activity := shared.NewScanActivityTracker(o.db, o.logger)
+
 	// Create wait group to manage goroutines
 	var wg sync.WaitGroup
 	errChan := make(chan error, 6) // Buffer for 6 consumers
@@ -46,7 +52,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting domain ingestion consumer")
 
-		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.logger)
+		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.logger, activity)
 		if err := domainConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Domain ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("domain ingestion: %w", err)
@@ -59,7 +65,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting port ingestion consumer")
 
-		portConsumer := port_ingestion.NewConsumer(o.redis, o.db, o.logger)
+		portConsumer := port_ingestion.NewConsumer(o.redis, o.db, o.logger, activity)
 		if err := portConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Port ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("port ingestion: %w", err)
@@ -72,7 +78,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting findings ingestion consumer")
 
-		findingsConsumer := findings_ingestion.NewConsumer(o.redis, o.db, o.logger)
+		findingsConsumer := findings_ingestion.NewConsumer(o.redis, o.db, o.logger, activity)
 		if err := findingsConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Findings ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("findings ingestion: %w", err)
@@ -85,7 +91,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting enrichment ingestion consumer")
 
-		enrichmentConsumer := enrichment_ingestion.NewConsumer(o.redis, o.db, o.logger)
+		enrichmentConsumer := enrichment_ingestion.NewConsumer(o.redis, o.db, o.logger, activity)
 		if err := enrichmentConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Enrichment ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("enrichment ingestion: %w", err)
