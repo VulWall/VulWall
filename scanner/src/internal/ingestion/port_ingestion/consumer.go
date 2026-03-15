@@ -38,6 +38,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupPortIngestion, c.logger)
 
 	c.logger.Info("Starting port ingestion consumer",
 		zap.String("stream", shared.StreamIPDiscoveryResults),

@@ -46,6 +46,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamKBGenerationResults, GroupKBIngestion); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamKBGenerationResults, GroupKBIngestion, c.logger)
 
 	// Generate unique consumer name for this worker
 	consumerName := "kb-ingestion-worker-" + uuid.New().String()

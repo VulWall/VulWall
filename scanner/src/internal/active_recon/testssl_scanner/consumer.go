@@ -48,6 +48,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupTestSSLScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDomainScanTriggers, GroupTestSSLScanner, c.logger)
 
 	// Generate unique consumer name for this worker
 	consumerName := "testssl-domain-" + uuid.New().String()

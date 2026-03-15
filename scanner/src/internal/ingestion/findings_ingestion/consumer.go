@@ -43,6 +43,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamSecurityFindings, GroupFindingsIngestion); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamSecurityFindings, GroupFindingsIngestion, c.logger)
 
 	// Generate unique consumer name for this worker
 	consumerName := "findings-worker-" + uuid.New().String()

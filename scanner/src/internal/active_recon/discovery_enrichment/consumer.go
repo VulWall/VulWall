@@ -43,6 +43,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDiscoveryEnrichmentQueue, GroupDiscoveryEnrichment); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDiscoveryEnrichmentQueue, GroupDiscoveryEnrichment, c.logger)
 
 	return c.consumeEnrichmentJobs(ctx)
 }

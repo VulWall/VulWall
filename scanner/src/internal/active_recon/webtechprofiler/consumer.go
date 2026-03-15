@@ -43,11 +43,13 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupWebTechProfiler); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDomainScanTriggers, GroupWebTechProfiler, c.logger)
 
 	// Create consumer group for IP discovery results (start from beginning — result stream needs guaranteed delivery)
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupWebTechProfiler); err != nil {
 		return fmt.Errorf("failed to create IP consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupWebTechProfiler, c.logger)
 
 	// Generate unique consumer names
 	domainConsumerName := fmt.Sprintf("webtechprofiler-domain-%s", uuid.New().String())

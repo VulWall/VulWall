@@ -39,6 +39,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupHTTPHeaderScanner); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDomainScanTriggers, GroupHTTPHeaderScanner, c.logger)
 
 	// Generate unique consumer name
 	consumerName := fmt.Sprintf("http-header-scanner-%s", uuid.New().String())

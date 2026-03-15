@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/shared"
+	"go.uber.org/zap"
 )
 
 func NewClient(cfg *config.Config) (*redis.Client, error) {
@@ -102,4 +103,29 @@ func PublishDeadLetter(ctx context.Context, client *redis.Client, sourceStream, 
 		return fmt.Errorf("failed to publish to dead-letter stream: %w", xaddErr)
 	}
 	return nil
+}
+
+// CleanupStaleConsumers removes consumers from a group that have been idle for
+// over 1 hour. These are left behind by crashed or redeployed replicas.
+// Active consumers have near-zero idle time and are never affected.
+// Best-effort: errors are logged but don't prevent service startup.
+func CleanupStaleConsumers(ctx context.Context, client *redis.Client, stream, group string, logger *zap.Logger) {
+	consumers, err := client.XInfoConsumers(ctx, stream, group).Result()
+	if err != nil {
+		logger.Debug("Could not list consumers for cleanup", zap.String("stream", stream), zap.String("group", group), zap.Error(err))
+		return
+	}
+
+	staleThreshold := time.Hour
+	for _, consumer := range consumers {
+		if consumer.Idle > staleThreshold {
+			client.XGroupDelConsumer(ctx, stream, group, consumer.Name)
+			logger.Info("Removed stale consumer",
+				zap.String("stream", stream),
+				zap.String("group", group),
+				zap.String("consumer", consumer.Name),
+				zap.Duration("idle", consumer.Idle),
+			)
+		}
+	}
 }
