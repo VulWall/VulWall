@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
@@ -40,60 +39,14 @@ func (c *Consumer) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
-	// Generate unique consumer name
-	consumerName := fmt.Sprintf("http-header-scanner-%s", uuid.New().String())
-
-	c.logger.Info("Consumer name generated",
-		zap.String("consumer", consumerName),
-	)
-
-	return c.processMessages(ctx, consumerName)
-}
-
-// processMessages processes messages from domain_scan_triggers stream
-func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
-	c.logger.Info("Starting domain scan triggers consumer",
-		zap.String("stream", shared.StreamDomainScanTriggers),
-		zap.String("group", GroupHTTPHeaderScanner),
-		zap.String("consumer", consumerName),
-	)
-
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Consumer shutting down")
-			return ctx.Err()
-		default:
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupHTTPHeaderScanner,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
-				Count:    ConsumerBatchSize,
-				Block:    0,
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					continue
-				}
-				c.logger.Error("Failed to read from domain scan triggers stream", zap.Error(err))
-				continue
-			}
-
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to handle message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-
-					c.redis.XAck(ctx, shared.StreamDomainScanTriggers, GroupHTTPHeaderScanner, message.ID)
-				}
-			}
-		}
-	}
+	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+		Stream:         shared.StreamDomainScanTriggers,
+		Group:          GroupHTTPHeaderScanner,
+		ConsumerPrefix: "http-header-scanner",
+		BatchSize:      ConsumerBatchSize,
+		Handler:        c.handleMessage,
+		Logger:         c.logger,
+	})
 }
 
 // handleMessage handles a single message from domain_scan_triggers

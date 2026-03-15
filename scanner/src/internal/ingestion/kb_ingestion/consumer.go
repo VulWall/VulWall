@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
@@ -47,17 +45,14 @@ func (c *Consumer) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
-	// Generate unique consumer name for this worker
-	consumerName := "kb-ingestion-worker-" + uuid.New().String()
-
-	c.logger.Info("Consumer group created",
-		zap.String("group", GroupKBIngestion),
-		zap.String("consumer", consumerName),
-		zap.String("stream", shared.StreamKBGenerationResults),
-	)
-
-	// Start processing messages
-	return c.processMessages(ctx, consumerName)
+	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+		Stream:         shared.StreamKBGenerationResults,
+		Group:          GroupKBIngestion,
+		ConsumerPrefix: "kb-ingestion-worker",
+		BatchSize:      shared.IngestionBatchSize,
+		Handler:        c.handleMessageWithDeadLetter,
+		Logger:         c.logger,
+	})
 }
 
 // permanentError wraps errors that should not be retried (e.g., invalid message data).
@@ -66,75 +61,35 @@ type permanentError struct{ err error }
 func (e *permanentError) Error() string { return e.err.Error() }
 func (e *permanentError) Unwrap() error { return e.err }
 
-// processMessages is the main message processing loop
-func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Context cancelled, shutting down KB ingestion consumer")
-			return ctx.Err()
-		default:
-			// Read messages from stream
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupKBIngestion,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamKBGenerationResults, ">"},
-				Count:    shared.IngestionBatchSize,
-				Block:    5 * time.Second,
-			}).Result()
+// handleMessageWithDeadLetter wraps handleMessage with dead-letter logic.
+// Permanent errors are sent to the dead-letter stream. All errors are logged
+// but nil is returned so ConsumeStream handles the ACK.
+func (c *Consumer) handleMessageWithDeadLetter(ctx context.Context, message redis.XMessage) error {
+	if err := c.handleMessage(ctx, message); err != nil {
+		var permErr *permanentError
+		if errors.As(err, &permErr) {
+			c.logger.Error("Permanently invalid message, acknowledging to prevent retry loop",
+				zap.String("message_id", message.ID),
+				zap.Error(err),
+			)
 
-			if err != nil {
-				if err == redis.Nil {
-					continue
-				}
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				c.logger.Error("Failed to read from stream", zap.Error(err))
-				time.Sleep(5 * time.Second)
-				continue
+			data, _ := message.Values["data"].(string)
+			if dlErr := redisx.PublishDeadLetter(ctx, c.redis, shared.StreamKBGenerationResults, GroupKBIngestion, message.ID, data, err); dlErr != nil {
+				c.logger.Warn("Failed to publish to dead-letter stream",
+					zap.String("message_id", message.ID),
+					zap.Error(dlErr),
+				)
 			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleMessage(ctx, message); err != nil {
-						var permErr *permanentError
-						if errors.As(err, &permErr) {
-							c.logger.Error("Permanently invalid message, acknowledging to prevent retry loop",
-								zap.String("message_id", message.ID),
-								zap.Error(err),
-							)
-
-							data, _ := message.Values["data"].(string)
-							if dlErr := redisx.PublishDeadLetter(ctx, c.redis, shared.StreamKBGenerationResults, GroupKBIngestion, message.ID, data, err); dlErr != nil {
-								c.logger.Warn("Failed to publish to dead-letter stream",
-									zap.String("message_id", message.ID),
-									zap.Error(dlErr),
-								)
-							}
-
-							_ = c.redis.XAck(ctx, shared.StreamKBGenerationResults, GroupKBIngestion, message.ID).Err()
-						} else {
-							c.logger.Error("Failed to process message, leaving unacknowledged for retry",
-								zap.String("message_id", message.ID),
-								zap.Error(err),
-							)
-						}
-						continue
-					}
-
-					// Only acknowledge on success
-					if err := c.redis.XAck(ctx, shared.StreamKBGenerationResults, GroupKBIngestion, message.ID).Err(); err != nil {
-						c.logger.Warn("Failed to acknowledge message — will be redelivered",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-				}
-			}
+			return nil
 		}
+
+		c.logger.Error("Failed to process message",
+			zap.String("message_id", message.ID),
+			zap.Error(err),
+		)
 	}
+
+	return nil
 }
 
 // handleMessage processes a single KB generation result message

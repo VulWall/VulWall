@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -44,60 +42,14 @@ func (c *Consumer) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
-	return c.consumeEnrichmentJobs(ctx)
-}
-
-// consumeEnrichmentJobs consumes from discovery_enrichment_queue stream
-func (c *Consumer) consumeEnrichmentJobs(ctx context.Context) error {
-	consumerName := "discovery-enrichment-" + uuid.New().String()
-
-	c.logger.Info("Started enrichment jobs consumer",
-		zap.String("consumer", consumerName),
-		zap.String("stream", shared.StreamDiscoveryEnrichmentQueue),
-	)
-
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Enrichment consumer context cancelled, shutting down")
-			return ctx.Err()
-		default:
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupDiscoveryEnrichment,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamDiscoveryEnrichmentQueue, ">"},
-				Count:    ConsumerBatchSize,
-				Block:    5 * time.Second,
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					continue
-				}
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				c.logger.Error("Failed to read from enrichment queue", zap.Error(err))
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleEnrichmentJob(ctx, message); err != nil {
-						c.logger.Error("Failed to process enrichment job",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-
-					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDiscoveryEnrichmentQueue, GroupDiscoveryEnrichment, message.ID)
-				}
-			}
-		}
-	}
+	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+		Stream:         shared.StreamDiscoveryEnrichmentQueue,
+		Group:          GroupDiscoveryEnrichment,
+		ConsumerPrefix: "discovery-enrichment",
+		BatchSize:      ConsumerBatchSize,
+		Handler:        c.handleEnrichmentJob,
+		Logger:         c.logger,
+	})
 }
 
 // handleEnrichmentJob processes a single enrichment job message

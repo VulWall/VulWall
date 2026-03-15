@@ -4,11 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
-	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -48,149 +45,32 @@ func (c *Consumer) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create IP consumer group: %w", err)
 	}
 
-	// Generate unique consumer names for this worker
-	domainConsumerName := "nuclei-domain-" + uuid.New().String()
-	ipConsumerName := "nuclei-ip-" + uuid.New().String()
+	errChan := make(chan error, 2)
 
-	c.logger.Info("Consumer groups created",
-		zap.String("domain_consumer", domainConsumerName),
-		zap.String("ip_consumer", ipConsumerName),
-	)
-
-	// Create wait group to manage both goroutines
-	var wg sync.WaitGroup
-	errChan := make(chan error, 2) // Buffer for 2 consumers
-
-	// Start domain discovery results consumer
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		c.logger.Info("Starting domain discovery consumer")
-		if err := c.processDomainMessages(ctx, domainConsumerName); err != nil && err != context.Canceled {
-			errChan <- fmt.Errorf("domain consumer: %w", err)
-		}
+		errChan <- redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+			Stream:         shared.StreamDomainScanTriggers,
+			Group:          GroupNucleiScanner,
+			ConsumerPrefix: "nuclei-domain",
+			BatchSize:      ConsumerBatchSize,
+			Handler:        c.handleDomainMessage,
+			Logger:         c.logger,
+		})
 	}()
 
-	// Start IP discovery results consumer
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		c.logger.Info("Starting IP discovery consumer")
-		if err := c.processIPMessages(ctx, ipConsumerName); err != nil && err != context.Canceled {
-			errChan <- fmt.Errorf("IP consumer: %w", err)
-		}
+		errChan <- redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+			Stream:         shared.StreamPortScanTriggers,
+			Group:          GroupNucleiScanner,
+			ConsumerPrefix: "nuclei-ip",
+			BatchSize:      ConsumerBatchSize,
+			Handler:        c.handleIPMessage,
+			Logger:         c.logger,
+		})
 	}()
 
-	// Wait for either all goroutines to finish or an error to occur
-	go func() {
-		wg.Wait()
-		close(errChan)
-	}()
-
-	// Return the first error that occurs
-	for err := range errChan {
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// processDomainMessages processes messages from domain_discovery_results stream
-func (c *Consumer) processDomainMessages(ctx context.Context, consumerName string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Domain consumer context cancelled, shutting down")
-			return ctx.Err()
-		default:
-			// Read messages from domain discovery results stream
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupNucleiScanner,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
-				Count:    ConsumerBatchSize,
-				Block:    5 * time.Second,
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					// No messages available
-					continue
-				}
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				c.logger.Error("Failed to read from domain stream", zap.Error(err))
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleDomainMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to process domain message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-
-					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDomainScanTriggers, GroupNucleiScanner, message.ID)
-				}
-			}
-		}
-	}
-}
-
-// processIPMessages processes messages from ip_discovery_results stream
-func (c *Consumer) processIPMessages(ctx context.Context, consumerName string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("IP consumer context cancelled, shutting down")
-			return ctx.Err()
-		default:
-			// Read messages from IP discovery results stream
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupNucleiScanner,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamPortScanTriggers, ">"},
-				Count:    ConsumerBatchSize,
-				Block:    5 * time.Second,
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					// No messages available
-					continue
-				}
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				c.logger.Error("Failed to read from IP stream", zap.Error(err))
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleIPMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to process IP message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-
-					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamPortScanTriggers, GroupNucleiScanner, message.ID)
-				}
-			}
-		}
-	}
+	// Return the first non-cancellation error, or wait for both to finish
+	return <-errChan
 }
 
 // handleDomainMessage processes a single domain discovery finding message
