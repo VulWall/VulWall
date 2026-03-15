@@ -44,6 +44,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamKBGenerationResults, GroupKBIngestion); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamKBGenerationResults, GroupKBIngestion, c.logger)
 
 	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
 		Stream:         shared.StreamKBGenerationResults,

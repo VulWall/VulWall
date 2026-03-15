@@ -90,6 +90,7 @@ func Run(cfg ServiceConfig) {
 	if err := redisx.CreateConsumerGroup(ctx, redisClient, cfg.StreamName, cfg.ConsumerGroup); err != nil {
 		logger.Log.Fatal("Failed to create consumer group", zap.Error(err))
 	}
+	redisx.CleanupStaleConsumers(ctx, redisClient, cfg.StreamName, cfg.ConsumerGroup, logger.Log)
 
 	// Create consumer using the factory function
 	consumer := cfg.Factory(appCfg, redisClient, db, logger.Log)
@@ -190,6 +191,7 @@ func RunSimple(cfg SimpleServiceConfig) {
 				zap.Error(err),
 			)
 		}
+		redisx.CleanupStaleConsumers(ctx, redisClient, stream.StreamName, stream.ConsumerGroup, logger.Log)
 		logger.Log.Info("Consumer group ready",
 			zap.String("stream", stream.StreamName),
 			zap.String("group", stream.ConsumerGroup),
