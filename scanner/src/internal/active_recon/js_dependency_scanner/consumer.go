@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -39,65 +38,16 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupJSDependencyScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDomainScanTriggers, GroupJSDependencyScanner, c.logger)
 
-	// Generate unique consumer name
-	consumerName := fmt.Sprintf("js-dependency-scanner-%s", uuid.New().String())
-
-	c.logger.Info("Consumer name generated",
-		zap.String("consumer", consumerName),
-	)
-
-	// Start domain discovery consumer
-	return c.processDomainMessages(ctx, consumerName)
-}
-
-// processDomainMessages processes messages from domain_scan_triggers stream
-func (c *Consumer) processDomainMessages(ctx context.Context, consumerName string) error {
-	c.logger.Info("Starting domain scan triggers consumer",
-		zap.String("stream", shared.StreamDomainScanTriggers),
-		zap.String("group", GroupJSDependencyScanner),
-		zap.String("consumer", consumerName),
-	)
-
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Consumer shutting down")
-			return ctx.Err()
-		default:
-			// Read messages from stream
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupJSDependencyScanner,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
-				Count:    ConsumerBatchSize,
-				Block:    0, // Block indefinitely
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					continue
-				}
-				c.logger.Error("Failed to read from domain scan triggers stream", zap.Error(err))
-				continue
-			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleDomainMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to handle domain message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-
-					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDomainScanTriggers, GroupJSDependencyScanner, message.ID)
-				}
-			}
-		}
-	}
+	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+		Stream:         shared.StreamDomainScanTriggers,
+		Group:          GroupJSDependencyScanner,
+		ConsumerPrefix: "js-dependency-scanner",
+		BatchSize:      ConsumerBatchSize,
+		Handler:        c.handleDomainMessage,
+		Logger:         c.logger,
+	})
 }
 
 // handleDomainMessage handles a single message from domain_scan_triggers

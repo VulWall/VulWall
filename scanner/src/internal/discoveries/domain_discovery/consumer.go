@@ -3,11 +3,9 @@ package domain_discovery
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/google/uuid"
+	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
@@ -29,61 +27,16 @@ func NewConsumer(redisClient *redis.Client, shodanAPIKey string, logger *zap.Log
 
 // Start begins consuming jobs from the Redis stream
 func (c *Consumer) Start(ctx context.Context) error {
-	consumerName := "worker-" + uuid.New().String()
-	c.logger.Info("Starting Shodan discovery consumer", zap.String("consumer", consumerName))
+	c.logger.Info("Starting Shodan discovery consumer")
 
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Shutting down Shodan discovery consumer")
-			return ctx.Err()
-		default:
-			if err := c.processMessages(ctx, consumerName); err != nil {
-				c.logger.Error("Error processing messages", zap.Error(err))
-				time.Sleep(5 * time.Second)
-			}
-		}
-	}
-}
-
-func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
-	streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-		Group:    GroupShodanSubdomainService,
-		Consumer: consumerName,
-		Streams:  []string{shared.StreamDomainDiscoveryQueue, ">"},
-		Count:    ConsumerBatchSize,
-		Block:    5 * time.Second,
-	}).Result()
-
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			// No messages available
-			return nil
-		}
-		return err
-	}
-
-	for _, stream := range streams {
-		for _, message := range stream.Messages {
-			if err := c.processMessage(ctx, message); err != nil {
-				c.logger.Error("Failed to process message",
-					zap.String("message_id", message.ID),
-					zap.Error(err),
-				)
-				continue
-			}
-
-			// Acknowledge the message
-			if err := c.redis.XAck(ctx, shared.StreamDomainDiscoveryQueue, GroupShodanSubdomainService, message.ID).Err(); err != nil {
-				c.logger.Error("Failed to acknowledge message",
-					zap.String("message_id", message.ID),
-					zap.Error(err),
-				)
-			}
-		}
-	}
-
-	return nil
+	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+		Stream:         shared.StreamDomainDiscoveryQueue,
+		Group:          GroupShodanSubdomainService,
+		ConsumerPrefix: "worker",
+		BatchSize:      ConsumerBatchSize,
+		Handler:        c.processMessage,
+		Logger:         c.logger,
+	})
 }
 
 func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) error {

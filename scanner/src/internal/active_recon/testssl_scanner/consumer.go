@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/google/uuid"
+	"github.com/vulwall/scanners/internal/core/config"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -16,18 +15,25 @@ import (
 
 // Consumer consumes domain scan triggers for TLS/SSL analysis
 type Consumer struct {
-	redis   *redis.Client
-	service *Service
-	logger  *zap.Logger
+	redis       *redis.Client
+	service     *Service
+	logger      *zap.Logger
+	concurrency int
 }
 
 // NewConsumer creates a new testssl scanner consumer
 func NewConsumer(redisClient *redis.Client, logger *zap.Logger) *Consumer {
+	concurrency := config.GetEnvInt(config.EnvTestSSLConcurrency, DefaultConcurrency)
+	if concurrency < 1 {
+		concurrency = DefaultConcurrency
+	}
+
 	service := NewService(redisClient, logger)
 	return &Consumer{
-		redis:   redisClient,
-		service: service,
-		logger:  logger,
+		redis:       redisClient,
+		service:     service,
+		logger:      logger,
+		concurrency: concurrency,
 	}
 }
 
@@ -39,64 +45,17 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupTestSSLScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDomainScanTriggers, GroupTestSSLScanner, c.logger)
 
-	// Generate unique consumer name for this worker
-	consumerName := "testssl-domain-" + uuid.New().String()
-
-	c.logger.Info("Consumer group created",
-		zap.String("consumer", consumerName),
-	)
-
-	// Process domain scan triggers (testssl only runs on domain/subdomain targets)
-	return c.processDomainMessages(ctx, consumerName)
-}
-
-// processDomainMessages processes messages from domain_discovery_results stream
-func (c *Consumer) processDomainMessages(ctx context.Context, consumerName string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Domain consumer context cancelled, shutting down")
-			return ctx.Err()
-		default:
-			// Read messages from domain discovery results stream
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupTestSSLScanner,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
-				Count:    ConsumerBatchSize,
-				Block:    5 * time.Second,
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					// No messages available
-					continue
-				}
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				c.logger.Error("Failed to read from domain stream", zap.Error(err))
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleDomainMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to process domain message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-
-					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDomainScanTriggers, GroupTestSSLScanner, message.ID)
-				}
-			}
-		}
-	}
+	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+		Stream:         shared.StreamDomainScanTriggers,
+		Group:          GroupTestSSLScanner,
+		ConsumerPrefix: "testssl-domain",
+		BatchSize:      int64(c.concurrency),
+		Concurrency:    c.concurrency,
+		Handler:        c.handleDomainMessage,
+		Logger:         c.logger,
+	})
 }
 
 // handleDomainMessage processes a single domain discovery finding message

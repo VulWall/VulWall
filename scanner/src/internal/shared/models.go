@@ -147,8 +147,10 @@ type SecurityFinding struct {
 	Title        string                 `json:"title" bson:"title"`                           // Short title
 	Description  string                 `json:"description" bson:"description"`               // Detailed description
 	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"` // Scanner-specific data
-	Status       string                 `json:"status" bson:"status"`                         // open, resolved
-	Timestamp    time.Time              `json:"timestamp" bson:"timestamp"`                   // When finding was discovered
+	Status           string                 `json:"status" bson:"status"`                                                   // open, resolved
+	Timestamp        time.Time              `json:"timestamp" bson:"timestamp"`                                             // When finding was discovered
+	ResolvedAt       *time.Time             `json:"resolved_at,omitempty" bson:"resolved_at,omitempty"`                     // When finding was resolved (nil if open)
+	ResolvedByScanID string                 `json:"resolved_by_scan_id,omitempty" bson:"resolved_by_scan_id,omitempty"`     // Scan that resolved this finding
 }
 
 // ScanTarget represents a target to be scanned by active recon scanners
@@ -232,10 +234,11 @@ type Scan struct {
 	Status      string     `json:"status" bson:"status"`                                 // "pending", "running", "completed", "failed"
 	Type        string     `json:"type" bson:"type"`                                     // "scheduled", "requested"
 	TriggeredBy string     `json:"triggered_by,omitempty" bson:"triggered_by,omitempty"` // User ID or "system"
-	StartedAt   *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty"`
-	CompletedAt *time.Time `json:"completed_at,omitempty" bson:"completed_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at" bson:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at" bson:"updated_at"`
+	StartedAt      *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty" bson:"completed_at,omitempty"`
+	LastActivityAt *time.Time `json:"last_activity_at,omitempty" bson:"last_activity_at,omitempty"` // Updated by ingestion services on each batch
+	CreatedAt      time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at" bson:"updated_at"`
 
 	// Assets that were targeted for scanning (input)
 	TargetedAssets []AssetTarget `json:"targeted_assets,omitempty" bson:"targeted_assets,omitempty"`

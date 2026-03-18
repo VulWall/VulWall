@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -17,18 +15,20 @@ import (
 
 // Consumer consumes enrichment findings from Redis stream
 type Consumer struct {
-	redis   *redis.Client
-	service *Service
-	logger  *zap.Logger
+	redis    *redis.Client
+	service  *Service
+	logger   *zap.Logger
+	activity *shared.ScanActivityTracker
 }
 
 // NewConsumer creates a new enrichment ingestion consumer
-func NewConsumer(redis *redis.Client, db *mongo.Database, logger *zap.Logger) *Consumer {
+func NewConsumer(redis *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker) *Consumer {
 	service := NewService(db, redis, logger)
 	return &Consumer{
-		redis:   redis,
-		service: service,
-		logger:  logger,
+		redis:    redis,
+		service:  service,
+		logger:   logger,
+		activity: activity,
 	}
 }
 
@@ -40,65 +40,16 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDiscoveryEnrichmentResults, GroupEnrichmentIngestion); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDiscoveryEnrichmentResults, GroupEnrichmentIngestion, c.logger)
 
-	// Generate unique consumer name
-	consumerName := "enrichment-ingestion-" + uuid.New().String()
-
-	c.logger.Info("Consumer group created",
-		zap.String("consumer", consumerName),
-		zap.String("stream", shared.StreamDiscoveryEnrichmentResults),
-	)
-
-	// Start processing messages
-	return c.processMessages(ctx, consumerName)
-}
-
-// processMessages processes messages from the enrichment stream
-func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Consumer context cancelled, shutting down")
-			return ctx.Err()
-		default:
-			// Read messages from enrichment stream (using "0" to get pending + new messages)
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupEnrichmentIngestion,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamDiscoveryEnrichmentResults, ">"},
-				Count:    shared.IngestionBatchSize,
-				Block:    5 * time.Second,
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					// No messages available
-					continue
-				}
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				c.logger.Error("Failed to read from stream", zap.Error(err))
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to process message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-
-					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDiscoveryEnrichmentResults, GroupEnrichmentIngestion, message.ID)
-				}
-			}
-		}
-	}
+	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+		Stream:         shared.StreamDiscoveryEnrichmentResults,
+		Group:          GroupEnrichmentIngestion,
+		ConsumerPrefix: "enrichment-ingestion",
+		BatchSize:      shared.IngestionBatchSize,
+		Handler:        c.handleMessage,
+		Logger:         c.logger,
+	})
 }
 
 // handleMessage processes a single enrichment message
@@ -127,5 +78,14 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	}
 
 	// Process the enrichment
-	return c.service.ProcessEnrichment(ctx, enrichment)
+	if err := c.service.ProcessEnrichment(ctx, enrichment); err != nil {
+		return err
+	}
+
+	// Signal scan activity for idle detection (throttled internally)
+	if enrichment.ScanID != nil {
+		c.activity.TouchActivity(ctx, *enrichment.ScanID)
+	}
+
+	return nil
 }

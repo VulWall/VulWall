@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/google/uuid"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
@@ -43,144 +41,39 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupWebTechProfiler); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDomainScanTriggers, GroupWebTechProfiler, c.logger)
 
 	// Create consumer group for IP discovery results (start from beginning — result stream needs guaranteed delivery)
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupWebTechProfiler); err != nil {
 		return fmt.Errorf("failed to create IP consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupWebTechProfiler, c.logger)
 
-	// Generate unique consumer names
-	domainConsumerName := fmt.Sprintf("webtechprofiler-domain-%s", uuid.New().String())
-	ipConsumerName := fmt.Sprintf("webtechprofiler-ip-%s", uuid.New().String())
+	errChan := make(chan error, 2)
 
-	c.logger.Info("Consumer names generated",
-		zap.String("domain_consumer", domainConsumerName),
-		zap.String("ip_consumer", ipConsumerName),
-	)
-
-	// Start both consumers concurrently
-	var wg sync.WaitGroup
-
-	// Start domain discovery consumer
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		if err := c.processDomainMessages(ctx, domainConsumerName); err != nil && err != context.Canceled {
-			c.logger.Error("Domain consumer error", zap.Error(err))
-		}
+		errChan <- redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+			Stream:         shared.StreamDomainScanTriggers,
+			Group:          GroupWebTechProfiler,
+			ConsumerPrefix: "webtechprofiler-domain",
+			BatchSize:      ConsumerBatchSize,
+			Handler:        c.handleDomainMessage,
+			Logger:         c.logger,
+		})
 	}()
 
-	// Start IP discovery consumer
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		if err := c.processIPMessages(ctx, ipConsumerName); err != nil && err != context.Canceled {
-			c.logger.Error("IP consumer error", zap.Error(err))
-		}
+		errChan <- redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+			Stream:         shared.StreamIPDiscoveryResults,
+			Group:          GroupWebTechProfiler,
+			ConsumerPrefix: "webtechprofiler-ip",
+			BatchSize:      ConsumerBatchSize,
+			Handler:        c.handleIPMessage,
+			Logger:         c.logger,
+		})
 	}()
 
-	c.logger.Info("Both consumers started, waiting for messages...")
-	wg.Wait()
-
-	return nil
-}
-
-// processDomainMessages processes messages from domain_discovery_results stream
-func (c *Consumer) processDomainMessages(ctx context.Context, consumerName string) error {
-	c.logger.Info("Starting domain discovery consumer",
-		zap.String("stream", shared.StreamDomainScanTriggers),
-		zap.String("group", GroupWebTechProfiler),
-		zap.String("consumer", consumerName),
-	)
-
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Domain consumer shutting down")
-			return ctx.Err()
-		default:
-			// Read messages from stream
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupWebTechProfiler,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamDomainScanTriggers, ">"},
-				Count:    ConsumerBatchSize,
-				Block:    0, // Block indefinitely
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					continue
-				}
-				c.logger.Error("Failed to read from domain stream", zap.Error(err))
-				continue
-			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleDomainMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to handle domain message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-
-					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamDomainScanTriggers, GroupWebTechProfiler, message.ID)
-				}
-			}
-		}
-	}
-}
-
-// processIPMessages processes messages from ip_discovery_results stream
-func (c *Consumer) processIPMessages(ctx context.Context, consumerName string) error {
-	c.logger.Info("Starting IP discovery consumer",
-		zap.String("stream", shared.StreamIPDiscoveryResults),
-		zap.String("group", GroupWebTechProfiler),
-		zap.String("consumer", consumerName),
-	)
-
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("IP consumer shutting down")
-			return ctx.Err()
-		default:
-			// Read messages from stream
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupWebTechProfiler,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamIPDiscoveryResults, ">"},
-				Count:    ConsumerBatchSize,
-				Block:    0, // Block indefinitely
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					continue
-				}
-				c.logger.Error("Failed to read from IP stream", zap.Error(err))
-				continue
-			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleIPMessage(ctx, message); err != nil {
-						c.logger.Error("Failed to handle IP message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-
-					// Acknowledge message
-					c.redis.XAck(ctx, shared.StreamIPDiscoveryResults, GroupWebTechProfiler, message.ID)
-				}
-			}
-		}
-	}
+	return <-errChan
 }
 
 // handleDomainMessage handles a single message from domain_discovery_results

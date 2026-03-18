@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
@@ -18,18 +16,20 @@ import (
 
 // Consumer consumes security findings from Redis and persists them to MongoDB
 type Consumer struct {
-	redis   *redis.Client
-	service *Service
-	logger  *zap.Logger
+	redis    *redis.Client
+	service  *Service
+	logger   *zap.Logger
+	activity *shared.ScanActivityTracker
 }
 
 // NewConsumer creates a new findings ingestion consumer
-func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Consumer {
+func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker) *Consumer {
 	service := NewService(db, redisClient, logger)
 	return &Consumer{
-		redis:   redisClient,
-		service: service,
-		logger:  logger,
+		redis:    redisClient,
+		service:  service,
+		logger:   logger,
+		activity: activity,
 	}
 }
 
@@ -41,21 +41,17 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamSecurityFindings, GroupFindingsIngestion); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamSecurityFindings, GroupFindingsIngestion, c.logger)
 
-	// Generate unique consumer name for this worker
-	consumerName := "findings-worker-" + uuid.New().String()
-
-	c.logger.Info("Consumer group created",
-		zap.String("group", GroupFindingsIngestion),
-		zap.String("consumer", consumerName),
-		zap.String("stream", shared.StreamSecurityFindings),
-	)
-
-	// Start processing messages
-	return c.processMessages(ctx, consumerName)
+	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+		Stream:         shared.StreamSecurityFindings,
+		Group:          GroupFindingsIngestion,
+		ConsumerPrefix: "findings-worker",
+		BatchSize:      shared.IngestionBatchSize,
+		Handler:        c.handleMessageWithDeadLetter,
+		Logger:         c.logger,
+	})
 }
-
-const redisReadBlockTimeout = 5 * time.Second
 
 // permanentError wraps errors that should not be retried (e.g., invalid message data).
 type permanentError struct{ err error }
@@ -63,80 +59,35 @@ type permanentError struct{ err error }
 func (e *permanentError) Error() string { return e.err.Error() }
 func (e *permanentError) Unwrap() error { return e.err }
 
-// processMessages is the main message processing loop
-func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Context cancelled, shutting down consumer")
-			return ctx.Err()
-		default:
-			// Read messages from stream (using "0" to get pending + new messages)
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupFindingsIngestion,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamSecurityFindings, ">"},
-				Count:    shared.IngestionBatchSize,
-				Block:    redisReadBlockTimeout,
-			}).Result()
+// handleMessageWithDeadLetter wraps handleMessage with dead-letter logic.
+// Permanent errors are sent to the dead-letter stream. All errors are logged
+// but nil is returned so ConsumeStream handles the ACK.
+func (c *Consumer) handleMessageWithDeadLetter(ctx context.Context, message redis.XMessage) error {
+	if err := c.handleMessage(ctx, message); err != nil {
+		var permErr *permanentError
+		if errors.As(err, &permErr) {
+			c.logger.Error("Permanently invalid message, acknowledging to prevent retry loop",
+				zap.String("message_id", message.ID),
+				zap.Error(err),
+			)
 
-			if err != nil {
-				if err == redis.Nil {
-					// No messages available
-					continue
-				}
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				c.logger.Error("Failed to read from stream", zap.Error(err))
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(redisReadBlockTimeout):
-				}
-				continue
+			data, _ := message.Values["data"].(string)
+			if dlErr := redisx.PublishDeadLetter(ctx, c.redis, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID, data, err); dlErr != nil {
+				c.logger.Warn("Failed to publish to dead-letter stream",
+					zap.String("message_id", message.ID),
+					zap.Error(dlErr),
+				)
 			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleMessage(ctx, message); err != nil {
-						var permErr *permanentError
-						if errors.As(err, &permErr) {
-							c.logger.Error("Permanently invalid message, acknowledging to prevent retry loop",
-								zap.String("message_id", message.ID),
-								zap.Error(err),
-							)
-
-							data, _ := message.Values["data"].(string)
-							if dlErr := redisx.PublishDeadLetter(ctx, c.redis, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID, data, err); dlErr != nil {
-								c.logger.Warn("Failed to publish to dead-letter stream",
-									zap.String("message_id", message.ID),
-									zap.Error(dlErr),
-								)
-							}
-
-							_ = c.redis.XAck(ctx, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID).Err()
-						} else {
-							c.logger.Error("Failed to process message, leaving unacknowledged for retry",
-								zap.String("message_id", message.ID),
-								zap.Error(err),
-							)
-						}
-						continue
-					}
-
-					// Only acknowledge on success
-					if err := c.redis.XAck(ctx, shared.StreamSecurityFindings, GroupFindingsIngestion, message.ID).Err(); err != nil {
-						c.logger.Warn("Failed to acknowledge message — will be redelivered",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-				}
-			}
+			return nil
 		}
+
+		c.logger.Error("Failed to process message",
+			zap.String("message_id", message.ID),
+			zap.Error(err),
+		)
 	}
+
+	return nil
 }
 
 // handleMessage processes a single security finding message
@@ -167,5 +118,14 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	}
 
 	// Process the finding
-	return c.service.ProcessFinding(ctx, finding)
+	if err := c.service.ProcessFinding(ctx, finding); err != nil {
+		return err
+	}
+
+	// Signal scan activity for idle detection (throttled internally)
+	if finding.ScanID != nil {
+		c.activity.TouchActivity(ctx, *finding.ScanID)
+	}
+
+	return nil
 }

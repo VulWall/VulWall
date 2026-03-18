@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/redisx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
@@ -17,33 +15,41 @@ import (
 )
 
 type Consumer struct {
-	redis   *redis.Client
-	service *Service
-	logger  *zap.Logger
+	redis    *redis.Client
+	service  *Service
+	logger   *zap.Logger
+	activity *shared.ScanActivityTracker
 }
 
-func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Consumer {
+func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker) *Consumer {
 	return &Consumer{
-		redis:   redisClient,
-		service: NewService(db, redisClient, logger),
-		logger:  logger,
+		redis:    redisClient,
+		service:  NewService(db, redisClient, logger),
+		logger:   logger,
+		activity: activity,
 	}
 }
 
 func (c *Consumer) Start(ctx context.Context) error {
 	// Create consumer group if it doesn't exist
-	err := c.redis.XGroupCreateMkStream(ctx, shared.StreamIPDiscoveryResults, GroupPortIngestion, "0").Err()
-	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
+	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupPortIngestion); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
+	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupPortIngestion, c.logger)
 
 	c.logger.Info("Starting port ingestion consumer",
 		zap.String("stream", shared.StreamIPDiscoveryResults),
 		zap.String("group", GroupPortIngestion),
 	)
 
-	// Start message processing
-	return c.processMessages(ctx, uuid.New().String())
+	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
+		Stream:         shared.StreamIPDiscoveryResults,
+		Group:          GroupPortIngestion,
+		ConsumerPrefix: "port-ingestion",
+		BatchSize:      shared.IngestionBatchSize,
+		Handler:        c.handleMessageWithDeadLetter,
+		Logger:         c.logger,
+	})
 }
 
 // permanentError wraps errors that should not be retried (e.g., invalid message data).
@@ -52,76 +58,35 @@ type permanentError struct{ err error }
 func (e *permanentError) Error() string { return e.err.Error() }
 func (e *permanentError) Unwrap() error { return e.err }
 
-func (c *Consumer) processMessages(ctx context.Context, consumerName string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("Port ingestion consumer context cancelled, shutting down")
-			return ctx.Err()
-		default:
-			// Read messages from stream (using "0" to get pending + new messages)
-			streams, err := c.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    GroupPortIngestion,
-				Consumer: consumerName,
-				Streams:  []string{shared.StreamIPDiscoveryResults, ">"},
-				Count:    shared.IngestionBatchSize,
-				Block:    5 * time.Second,
-			}).Result()
+// handleMessageWithDeadLetter wraps handleMessage with dead-letter logic.
+// Permanent errors are sent to the dead-letter stream. All errors are logged
+// but nil is returned so ConsumeStream handles the ACK.
+func (c *Consumer) handleMessageWithDeadLetter(ctx context.Context, message redis.XMessage) error {
+	if err := c.handleMessage(ctx, message); err != nil {
+		var permErr *permanentError
+		if errors.As(err, &permErr) {
+			c.logger.Error("Permanently invalid message, acknowledging to prevent retry loop",
+				zap.String("message_id", message.ID),
+				zap.Error(err),
+			)
 
-			if err != nil {
-				if err == redis.Nil {
-					// No messages available, continue
-					continue
-				}
-				c.logger.Error("Failed to read from stream", zap.Error(err))
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(2 * time.Second):
-				}
-				continue
+			data, _ := message.Values["data"].(string)
+			if dlErr := redisx.PublishDeadLetter(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupPortIngestion, message.ID, data, err); dlErr != nil {
+				c.logger.Warn("Failed to publish to dead-letter stream",
+					zap.String("message_id", message.ID),
+					zap.Error(dlErr),
+				)
 			}
-
-			// Process each message
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if err := c.handleMessage(ctx, message); err != nil {
-						var permErr *permanentError
-						if errors.As(err, &permErr) {
-							c.logger.Error("Permanently invalid message, acknowledging to prevent retry loop",
-								zap.String("message_id", message.ID),
-								zap.Error(err),
-							)
-
-							data, _ := message.Values["data"].(string)
-							if dlErr := redisx.PublishDeadLetter(ctx, c.redis, shared.StreamIPDiscoveryResults, GroupPortIngestion, message.ID, data, err); dlErr != nil {
-								c.logger.Warn("Failed to publish to dead-letter stream",
-									zap.String("message_id", message.ID),
-									zap.Error(dlErr),
-								)
-							}
-
-							_ = c.redis.XAck(ctx, shared.StreamIPDiscoveryResults, GroupPortIngestion, message.ID).Err()
-						} else {
-							c.logger.Error("Failed to process message, leaving unacknowledged for retry",
-								zap.String("message_id", message.ID),
-								zap.Error(err),
-							)
-						}
-						continue
-					}
-
-					// Acknowledge message
-					if err := c.redis.XAck(ctx, shared.StreamIPDiscoveryResults, GroupPortIngestion, message.ID).Err(); err != nil {
-						c.logger.Error("Failed to acknowledge message",
-							zap.String("message_id", message.ID),
-							zap.Error(err),
-						)
-					}
-				}
-			}
+			return nil
 		}
+
+		c.logger.Error("Failed to process message",
+			zap.String("message_id", message.ID),
+			zap.Error(err),
+		)
 	}
+
+	return nil
 }
 
 func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) error {
@@ -150,6 +115,11 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	// Process the finding
 	if err := c.service.ProcessFinding(ctx, finding); err != nil {
 		return fmt.Errorf("failed to process finding: %w", err)
+	}
+
+	// Signal scan activity for idle detection (throttled internally)
+	if finding.ScanID != nil {
+		c.activity.TouchActivity(ctx, *finding.ScanID)
 	}
 
 	c.logger.Info("Successfully processed port finding",

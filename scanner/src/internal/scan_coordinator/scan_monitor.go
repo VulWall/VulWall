@@ -93,39 +93,66 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 	}
 
 	for _, scan := range scans {
-		// Check timeout (30 minutes since creation)
-		if time.Since(scan.CreatedAt) > 30*time.Minute {
-			m.logger.Info("Scan timeout reached, marking as done",
+		scanAge := time.Since(scan.CreatedAt)
+
+		// 1. Safety timeout (3 hours) — absolute upper bound for stuck scans
+		if scanAge > ScanSafetyTimeout {
+			m.logger.Warn("Scan safety timeout reached, marking as done",
 				zap.String("scan_id", scan.ID),
-				zap.Duration("age", time.Since(scan.CreatedAt)),
+				zap.Duration("age", scanAge),
 			)
 			span.AddEvent("scan_completed",
 				trace.WithAttributes(
 					attribute.String("scan.id", scan.ID),
 					attribute.String("org.id", scan.OrgID),
-					attribute.String("completion_reason", "timeout"),
-					attribute.String("scan.duration", time.Since(scan.CreatedAt).String()),
+					attribute.String("completion_reason", "safety_timeout"),
+					attribute.String("scan.duration", scanAge.String()),
 				),
 			)
-			m.markDone(ctx, scan.ID)
+			m.markDone(ctx, scan.ID, true)
 			continue
 		}
 
-		// Check if all consumer groups have processed this scan
+		// 2. Check if all consumer groups have processed this scan (fastest path)
 		if m.isComplete(ctx, scan.ID) {
 			m.logger.Info("Scan complete, all consumers finished",
 				zap.String("scan_id", scan.ID),
-				zap.Duration("duration", time.Since(scan.CreatedAt)),
+				zap.Duration("duration", scanAge),
 			)
 			span.AddEvent("scan_completed",
 				trace.WithAttributes(
 					attribute.String("scan.id", scan.ID),
 					attribute.String("org.id", scan.OrgID),
 					attribute.String("completion_reason", "all_consumers_finished"),
-					attribute.String("scan.duration", time.Since(scan.CreatedAt).String()),
+					attribute.String("scan.duration", scanAge.String()),
 				),
 			)
-			m.markDone(ctx, scan.ID)
+			m.markDone(ctx, scan.ID, false)
+			continue
+		}
+
+		// 3. Idle detection — no new activity for 15 min (ingestion has settled)
+		if scanAge > ScanMinRuntime && scan.LastActivityAt != nil {
+			idleDuration := time.Since(*scan.LastActivityAt)
+			if idleDuration > ScanIdleTimeout {
+				m.logger.Info("Scan idle timeout reached, ingestion has settled",
+					zap.String("scan_id", scan.ID),
+					zap.Duration("age", scanAge),
+					zap.Duration("idle_for", idleDuration),
+					zap.Time("last_activity", *scan.LastActivityAt),
+				)
+				span.AddEvent("scan_completed",
+					trace.WithAttributes(
+						attribute.String("scan.id", scan.ID),
+						attribute.String("org.id", scan.OrgID),
+						attribute.String("completion_reason", "idle_timeout"),
+						attribute.String("scan.duration", scanAge.String()),
+						attribute.String("idle_duration", idleDuration.String()),
+					),
+				)
+				m.markDone(ctx, scan.ID, false) // Safe to resolve — ingestion settled
+				continue
+			}
 		}
 	}
 
@@ -162,10 +189,20 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 		{shared.StreamSecurityFindings, "findings_ingestion_service"},
 	}
 
+	var pendingGroups []string
 	for _, cg := range consumerGroups {
 		if m.hasPendingForScan(ctx, cg.stream, cg.group, scanID) {
-			return false // Still has pending messages for this scan
+			pendingGroups = append(pendingGroups, cg.group+" ("+cg.stream+")")
 		}
+	}
+
+	if len(pendingGroups) > 0 {
+		m.logger.Debug("Scan has pending consumer groups",
+			zap.String("scan_id", scanID),
+			zap.Int("pending_count", len(pendingGroups)),
+			zap.Strings("pending_groups", pendingGroups),
+		)
+		return false
 	}
 
 	return true // All consumer groups have 0 pending for this scan
@@ -223,10 +260,11 @@ func (m *ScanMonitor) hasPendingForScan(ctx context.Context, stream, group, scan
 	return false
 }
 
-// markDone marks a scan as done and notifies the Dashboard webhook
-func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
+// markDone marks a scan as done, resolves disappeared findings, and notifies the Dashboard webhook.
+// When timedOut is true, finding resolution is skipped because ingestion may be incomplete.
+func (m *ScanMonitor) markDone(ctx context.Context, scanID string, timedOut bool) error {
 	// Compute scan statistics before marking as done
-	stats, err := m.computeStats(ctx, scanID)
+	stats, resolvedFindingIDs, err := m.computeStats(ctx, scanID)
 	if err != nil {
 		m.logger.Error("Failed to compute scan statistics",
 			zap.String("scan_id", scanID),
@@ -234,6 +272,7 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
 		)
 		// Continue with marking scan as done even if stats computation fails
 		stats = &shared.ScanStats{} // Use empty stats as fallback
+		resolvedFindingIDs = nil
 	}
 
 	now := time.Now()
@@ -271,9 +310,72 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string) error {
 			zap.Time("completed_at", now),
 		)
 
+		// Mark disappeared findings as resolved (skip on timeout — ingestion may be incomplete)
+		if timedOut {
+			m.logger.Warn("Skipping finding resolution for timed-out scan",
+				zap.String("scan_id", scanID),
+				zap.Int("would_resolve", len(resolvedFindingIDs)),
+			)
+		} else {
+			m.resolveDisappearedFindings(ctx, scanID, resolvedFindingIDs)
+		}
+
 		// Notify Dashboard asynchronously (non-blocking, best-effort)
 		go m.webhook.NotifyScanComplete(scanID)
 	}
 
 	return nil
+}
+
+// resolveDisappearedFindings bulk-updates findings that were present in the previous scan
+// but absent in the current scan, marking them as resolved. This is best-effort: errors
+// are logged but do not fail the scan completion.
+func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scanID string, resolvedFindingIDs []string) {
+	if len(resolvedFindingIDs) == 0 {
+		return
+	}
+
+	ctx, span := m.tracer.Start(ctx, "resolve_disappeared_findings",
+		trace.WithAttributes(
+			attribute.String("scan.id", scanID),
+			attribute.Int("findings.resolved_count", len(resolvedFindingIDs)),
+		),
+	)
+	defer span.End()
+
+	now := time.Now()
+	result, err := m.db.Collection(shared.CollectionFindings).UpdateMany(ctx,
+		bson.M{"_id": bson.M{"$in": resolvedFindingIDs}},
+		bson.M{"$set": bson.M{
+			"status":              shared.FindingStatusResolved,
+			"resolved_at":        now,
+			"resolved_by_scan_id": scanID,
+		}},
+	)
+
+	if err != nil {
+		m.logger.Error("Failed to mark findings as resolved",
+			zap.String("scan_id", scanID),
+			zap.Int("count", len(resolvedFindingIDs)),
+			zap.Error(err),
+		)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to resolve findings")
+		return
+	}
+
+	m.logger.Info("Marked findings as resolved",
+		zap.String("scan_id", scanID),
+		zap.Int("expected", len(resolvedFindingIDs)),
+		zap.Int64("updated", result.ModifiedCount),
+	)
+
+	span.AddEvent("findings_resolved",
+		trace.WithAttributes(
+			attribute.String("scan.id", scanID),
+			attribute.Int("findings.expected", len(resolvedFindingIDs)),
+			attribute.Int64("findings.updated", result.ModifiedCount),
+		),
+	)
+	span.SetStatus(codes.Ok, "")
 }

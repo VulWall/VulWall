@@ -70,6 +70,8 @@ const (
 	EnvNucleiIncludeTags = "NUCLEI_INCLUDE_TAGS"
 	// EnvNucleiExcludeTags is the comma-separated list of Nuclei template tags to exclude (empty = no filter)
 	EnvNucleiExcludeTags = "NUCLEI_EXCLUDE_TAGS"
+	// EnvTestSSLConcurrency is the number of concurrent testssl.sh workers (default: 5)
+	EnvTestSSLConcurrency = "TESTSSL_CONCURRENCY"
 	// EnvIPEnrichmentDBPath is the path to MaxMind GeoIP MMDB file
 	EnvIPEnrichmentDBPath = "IP_ENRICHMENT_DB_PATH"
 	// EnvWAFRulesPath is the path to WAF detection rules JSON file

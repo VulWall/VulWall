@@ -5,7 +5,7 @@ const (
 	// Listens to domain_scan_triggers for TLS/SSL analysis
 	GroupTestSSLScanner = "testssl_scanner_service"
 
-	// ConsumerBatchSize is the number of messages to read at a time
-	// Keep low (1) because TestSSL scans are slow
-	ConsumerBatchSize = 1
+	// DefaultConcurrency is the number of concurrent testssl.sh worker goroutines.
+	// Each worker processes one domain at a time. Override via TESTSSL_CONCURRENCY env var.
+	DefaultConcurrency = 5
 )
