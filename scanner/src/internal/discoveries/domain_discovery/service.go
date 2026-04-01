@@ -18,6 +18,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	dnsRetryAttempts = 3
+	dnsRetryDelay    = 200 * time.Millisecond
+)
+
 type Service struct {
 	redis        *redis.Client
 	logger       *zap.Logger
@@ -271,21 +276,46 @@ func contains(s, substr string) bool {
 		(s[len(s)-len(substr)-1:] == "."+substr || s[:len(substr)+1] == substr+"."))
 }
 
-// resolveIP resolves a domain name to its IP address using DNS
+// resolveIP resolves a domain name to its IPv4 address using DNS.
+// Retries up to dnsRetryAttempts times with dnsRetryDelay between attempts
+// to handle transient DNS failures.
 func (s *Service) resolveIP(ctx context.Context, domain string) (string, error) {
 	resolver := &net.Resolver{}
-	ips, err := resolver.LookupIP(ctx, "ip4", domain)
-	if err != nil {
-		s.logger.Debug("Failed to resolve IP for domain",
+	var lastErr error
+
+	for attempt := 1; attempt <= dnsRetryAttempts; attempt++ {
+		ips, err := resolver.LookupIP(ctx, "ip4", domain)
+		if err == nil && len(ips) > 0 {
+			if attempt > 1 {
+				s.logger.Info("DNS resolution succeeded after retry",
+					zap.String("domain", domain),
+					zap.Int("attempt", attempt),
+				)
+			}
+			return ips[0].String(), nil
+		}
+
+		if err != nil {
+			lastErr = err
+		} else {
+			lastErr = fmt.Errorf("no IP addresses found for domain: %s", domain)
+		}
+
+		s.logger.Debug("DNS resolution attempt failed",
 			zap.String("domain", domain),
-			zap.Error(err),
+			zap.Int("attempt", attempt),
+			zap.Int("max_attempts", dnsRetryAttempts),
+			zap.Error(lastErr),
 		)
-		return "", err
+
+		if attempt < dnsRetryAttempts {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(dnsRetryDelay):
+			}
+		}
 	}
 
-	if len(ips) == 0 {
-		return "", fmt.Errorf("no IP addresses found for domain: %s", domain)
-	}
-
-	return ips[0].String(), nil
+	return "", lastErr
 }
