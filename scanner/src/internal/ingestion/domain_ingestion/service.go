@@ -481,10 +481,16 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 	}
 
 	// Update last_seen and add scan_id to array
+	setFields := bson.M{
+		"last_seen": timestamp,
+	}
+	// If parent_id is missing, set it now. This repairs IP docs created by port ingestion
+	// before domain ingestion ran (race condition). See VulWall.NightWatch#130.
+	if existingIPDiscovery.ParentID == nil {
+		setFields["parent_id"] = parentDiscoveryID
+	}
 	update := bson.M{
-		"$set": bson.M{
-			"last_seen": timestamp,
-		},
+		"$set": setFields,
 	}
 	// Add scan_id to array if present
 	if finding.ScanID != nil {

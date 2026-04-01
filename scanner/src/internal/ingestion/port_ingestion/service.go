@@ -154,8 +154,10 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 			Source:        finding.Source,
 			Status:         finding.Status,
 			OwnershipStatus: shared.OwnershipStatusVerified,  // Default to verified
-			DiscoveredAt:   timestamp,                       // When asset was discovered
-			ParentID:       finding.ParentID,                // From IPDiscoveryJob.ParentID
+			DiscoveredAt:   timestamp,  // When asset was discovered
+			// ParentID not set here — finding.ParentID is the IP doc's own ID (used for
+			// port→IP linkage), not the domain/subdomain parent. Domain ingestion owns
+			// that relationship via upsertIPDiscovery. See VulWall.NightWatch#130.
 			IP:             &finding.IP,
 			FirstSeen:      timestamp,
 			LastSeen:       timestamp,
