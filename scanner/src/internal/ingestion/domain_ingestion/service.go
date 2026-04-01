@@ -259,6 +259,25 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 		return "", err
 	}
 
+	// Repair missing parent_id. If the direct asset scan ran before Shodan subdomain
+	// discovery, the doc was created with parent_id nil. Set it now so the subdomain
+	// is correctly nested under its parent domain. See VulWall.NightWatch#133.
+	if existingDiscovery.ParentID == nil && finding.ParentID != nil {
+		collection := s.db.Collection(shared.CollectionDiscoveries)
+		update := bson.M{"$set": bson.M{"parent_id": finding.ParentID}}
+		if _, err := collection.UpdateOne(ctx, bson.M{"_id": existingDiscovery.ID}, update); err != nil {
+			s.logger.Error("Failed to repair parent_id on subdomain",
+				zap.String("discovery_id", existingDiscovery.ID),
+				zap.Error(err),
+			)
+			return "", err
+		}
+		s.logger.Info("Repaired missing parent_id on subdomain",
+			zap.String("discovery_id", existingDiscovery.ID),
+			zap.String("host", finding.Host),
+		)
+	}
+
 	// Discovery exists - update resolution history only if IP resolved
 	if finding.IP != nil && *finding.IP != "" {
 		if err := s.updateResolutionHistory(ctx, &existingDiscovery, finding, *finding.IP, timestamp); err != nil {
