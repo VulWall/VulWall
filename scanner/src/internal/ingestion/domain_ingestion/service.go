@@ -63,16 +63,10 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 		return nil
 	}
 
-	// Validate IP is present for domain discoveries
-	if finding.IP == nil || *finding.IP == "" {
-		s.logger.Warn("Skipping finding: missing IP",
-			zap.String("trace_id", finding.TraceID),
-			zap.String("host", finding.Host),
-		)
-		return nil
-	}
-
 	// Process the discovery (asset_type is now in the finding)
+	// Note: IP may be nil if DNS resolution failed transiently. The domain/subdomain
+	// document is still written so subdomains have a valid parent. IP-specific steps
+	// (port scanning, IP enrichment) are skipped and will run on the next successful scan.
 	if err := s.processDiscovery(ctx, finding, finding.AssetType); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -96,56 +90,65 @@ func (s *Service) processDiscovery(ctx context.Context, finding shared.Discovery
 		return err
 	}
 
-	// 2. Upsert IP discovery (separate record with org_id)
-	// isNewIP: true if IP was just created
-	// isNewScanForIP: true if this scan_id hasn't processed this IP yet (triggers re-scan)
-	ipDiscoveryID, isNewIP, isNewScanForIP, err := s.upsertIPDiscovery(ctx, finding, discoveryID, now)
-	if err != nil {
-		return err
-	}
-
-	// 3. Trigger port discovery if this is a new IP OR a new scan for this IP
-	// This ensures IPs are re-scanned on each scheduled scan to detect new ports
-	if isNewIP || isNewScanForIP {
-		if err := s.publishIPDiscoveryJob(ctx, finding, ipDiscoveryID); err != nil {
-			s.logger.Error("Failed to publish IP discovery job",
-				zap.String("trace_id", finding.TraceID),
-				zap.String("ip", *finding.IP),
-				zap.Error(err),
-			)
-			// Don't fail if trigger fails
-		} else {
-			s.logger.Info("Triggered IP discovery job",
-				zap.String("trace_id", finding.TraceID),
-				zap.String("ip", *finding.IP),
-				zap.String("ip_discovery_id", ipDiscoveryID),
-				zap.Bool("is_new_ip", isNewIP),
-				zap.Bool("is_new_scan", isNewScanForIP),
-			)
+	// Steps 2-5 require a resolved IP. If DNS failed, skip them — they will run
+	// on the next scan when the domain resolves successfully.
+	if finding.IP != nil && *finding.IP != "" {
+		// 2. Upsert IP discovery (separate record with org_id)
+		// isNewIP: true if IP was just created
+		// isNewScanForIP: true if this scan_id hasn't processed this IP yet (triggers re-scan)
+		ipDiscoveryID, isNewIP, isNewScanForIP, err := s.upsertIPDiscovery(ctx, finding, discoveryID, now)
+		if err != nil {
+			return err
 		}
-	}
 
-	// 4. Publish enrichment job for domain/subdomain
-	if err := s.publishEnrichmentJob(ctx, finding, discoveryID, assetType); err != nil {
-		s.logger.Error("Failed to publish enrichment job for domain/subdomain",
-			zap.String("trace_id", finding.TraceID),
-			zap.String("asset_type", assetType),
-			zap.String("host", finding.Host),
-			zap.Error(err),
-		)
-		// Don't fail if enrichment trigger fails
-	}
+		// 3. Trigger port discovery if this is a new IP OR a new scan for this IP
+		// This ensures IPs are re-scanned on each scheduled scan to detect new ports
+		if isNewIP || isNewScanForIP {
+			if err := s.publishIPDiscoveryJob(ctx, finding, ipDiscoveryID); err != nil {
+				s.logger.Error("Failed to publish IP discovery job",
+					zap.String("trace_id", finding.TraceID),
+					zap.String("ip", *finding.IP),
+					zap.Error(err),
+				)
+				// Don't fail if trigger fails
+			} else {
+				s.logger.Info("Triggered IP discovery job",
+					zap.String("trace_id", finding.TraceID),
+					zap.String("ip", *finding.IP),
+					zap.String("ip_discovery_id", ipDiscoveryID),
+					zap.Bool("is_new_ip", isNewIP),
+					zap.Bool("is_new_scan", isNewScanForIP),
+				)
+			}
+		}
 
-	// 5. Publish enrichment job for IP (only for new IPs or new scans to avoid duplicates within same scan)
-	if isNewIP || isNewScanForIP {
-		if err := s.publishEnrichmentJob(ctx, finding, ipDiscoveryID, shared.AssetTypeIP); err != nil {
-			s.logger.Error("Failed to publish enrichment job for IP",
+		// 4. Publish enrichment job for domain/subdomain (requires IP for geo/WAF enrichment)
+		if err := s.publishEnrichmentJob(ctx, finding, discoveryID, assetType); err != nil {
+			s.logger.Error("Failed to publish enrichment job for domain/subdomain",
 				zap.String("trace_id", finding.TraceID),
-				zap.String("ip", *finding.IP),
+				zap.String("asset_type", assetType),
+				zap.String("host", finding.Host),
 				zap.Error(err),
 			)
 			// Don't fail if enrichment trigger fails
 		}
+
+		// 5. Publish enrichment job for IP (only for new IPs or new scans to avoid duplicates within same scan)
+		if isNewIP || isNewScanForIP {
+			if err := s.publishEnrichmentJob(ctx, finding, ipDiscoveryID, shared.AssetTypeIP); err != nil {
+				s.logger.Error("Failed to publish enrichment job for IP",
+					zap.String("trace_id", finding.TraceID),
+					zap.String("ip", *finding.IP),
+					zap.Error(err),
+				)
+				// Don't fail if enrichment trigger fails
+			}
+		}
+	} else {
+		s.logger.Warn("Skipping IP/port/enrichment steps: DNS resolution failed for host",
+			zap.String("trace_id", finding.TraceID),
+			zap.String("host", finding.Host),
+		)
 	}
 
 	// 6. Publish scan trigger for active recon scanners (domain/subdomain only)
@@ -191,25 +194,29 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 		}
 
 		newDiscovery := shared.Discovery{
-			ID:             finding.DiscoveryID,                // Use provided deterministic ID (org-scoped)
-			OrgID:          finding.OrgID,                      // Organization GUID
-			ScanIDs:        scanIDs,                            // Array of scan identifiers
-			AssetType:      assetType,
-			Source:        finding.Source,
-			Status:         finding.Status,
-			OwnershipStatus: shared.OwnershipStatusVerified,     // Default to verified
-			DiscoveredAt:   timestamp,                          // When asset was discovered
-			ParentID:       finding.ParentID,
-			FirstSeen:      timestamp,
-			LastSeen:       timestamp,
-			Metadata:       finding.Metadata,
-			ResolutionHistory: []shared.ResolutionHistoryEntry{
+			ID:              finding.DiscoveryID,            // Use provided deterministic ID (org-scoped)
+			OrgID:           finding.OrgID,                  // Organization GUID
+			ScanIDs:         scanIDs,                        // Array of scan identifiers
+			AssetType:       assetType,
+			Source:          finding.Source,
+			Status:          finding.Status,
+			OwnershipStatus: shared.OwnershipStatusVerified, // Default to verified
+			DiscoveredAt:    timestamp,                      // When asset was discovered
+			ParentID:        finding.ParentID,
+			FirstSeen:       timestamp,
+			LastSeen:        timestamp,
+			Metadata:        finding.Metadata,
+		}
+
+		// Only populate resolution history if DNS resolved successfully
+		if finding.IP != nil && *finding.IP != "" {
+			newDiscovery.ResolutionHistory = []shared.ResolutionHistoryEntry{
 				{
 					IP:        *finding.IP,
 					FirstSeen: timestamp,
 					LastSeen:  nil, // Currently active
 				},
-			},
+			}
 		}
 
 		// Set domain or subdomain field
@@ -231,11 +238,15 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 			return "", err
 		}
 
+		ipStr := ""
+		if finding.IP != nil {
+			ipStr = *finding.IP
+		}
 		s.logger.Info("Created new discovery",
 			zap.String("discovery_id", finding.DiscoveryID),
 			zap.String("asset_type", assetType),
 			zap.String("host", finding.Host),
-			zap.String("ip", *finding.IP),
+			zap.String("ip", ipStr),
 		)
 		return finding.DiscoveryID, nil
 	}
@@ -248,9 +259,11 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 		return "", err
 	}
 
-	// Discovery exists - update resolution history
-	if err := s.updateResolutionHistory(ctx, &existingDiscovery, finding, *finding.IP, timestamp); err != nil {
-		return "", err
+	// Discovery exists - update resolution history only if IP resolved
+	if finding.IP != nil && *finding.IP != "" {
+		if err := s.updateResolutionHistory(ctx, &existingDiscovery, finding, *finding.IP, timestamp); err != nil {
+			return "", err
+		}
 	}
 
 	return existingDiscovery.ID, nil
