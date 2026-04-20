@@ -94,7 +94,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 
 	// Log why Shodan failed (only when err != nil or hostInfo == nil — not on hostname mismatch)
 	if err != nil {
-		s.logger.Debug("Shodan lookup failed, falling back to TCP scan",
+		s.logger.Warn("Shodan lookup failed, falling back to TCP scan",
 			zap.String("ip", job.IP),
 			zap.Error(err),
 		)
@@ -168,18 +168,18 @@ func (s *Service) publishShodanFindings(ctx context.Context, job shared.IPDiscov
 		}
 
 		// Build metadata with Shodan-specific info
-		metadata := make(map[string]interface{})
+		metadata := make(map[string]any)
 		metadata["hostname_match"] = true
 		metadata["hostname_count"] = hostnameCount
 		if portData.HTTP != nil {
-			metadata["http"] = map[string]interface{}{
+			metadata["http"] = map[string]any{
 				"server": portData.HTTP.Server,
 				"title":  portData.HTTP.Title,
 				"status": portData.HTTP.StatusCode,
 			}
 		}
 		if portData.SSL != nil {
-			sslMetadata := map[string]interface{}{
+			sslMetadata := map[string]any{
 				"versions": portData.SSL.Versions,
 			}
 			if portData.SSL.Cert != nil {

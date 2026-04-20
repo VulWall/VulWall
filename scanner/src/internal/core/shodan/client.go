@@ -188,6 +188,9 @@ func (c *Client) doRequest(ctx context.Context, url string) ([]byte, error, bool
 	case http.StatusUnauthorized:
 		return nil, fmt.Errorf("unauthorized: invalid Shodan API key"), false
 
+	case http.StatusPaymentRequired:
+		return nil, fmt.Errorf("shodan quota exhausted: out of query credits"), false
+
 	case http.StatusTooManyRequests:
 		// 429 - rate limit exceeded, retry
 		return nil, fmt.Errorf("rate limit exceeded"), true
