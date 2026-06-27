@@ -27,8 +27,6 @@ const (
 	// API Keys
 	// ===========================================
 
-	// EnvShodanAPIKey is the Shodan API key for domain discovery
-	EnvShodanAPIKey = "SHODAN_API_KEY"
 	// EnvAnthropicAPIKey is the Anthropic API key for knowledge base generation
 	EnvAnthropicAPIKey = "ANTHROPIC_API_KEY"
 	// EnvAnthropicModel is the Anthropic model to use (default: claude-sonnet-4-5-20250514)

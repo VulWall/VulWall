@@ -2,12 +2,12 @@ package port_discovery
 
 import (
 	"context"
+	"net"
 	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/redisx"
-	"github.com/vulwall/scanners/internal/core/shodan"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/discoveries/port_discovery/services"
 	"github.com/vulwall/scanners/internal/shared"
@@ -16,30 +16,46 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"golang.org/x/net/publicsuffix"
 )
 
 type Service struct {
-	redis        *redis.Client
-	logger       *zap.Logger
-	shodanClient *shodan.Client
-	tcpScanner   *services.Scanner
-	tracer       trace.Tracer
+	redis      *redis.Client
+	logger     *zap.Logger
+	tcpScanner *services.Scanner
+	tracer     trace.Tracer
 }
 
-func NewService(redisClient *redis.Client, shodanAPIKey string, logger *zap.Logger) *Service {
+func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
-		redis:        redisClient,
-		logger:       logger,
-		shodanClient: shodan.NewClient(shodanAPIKey, logger),
-		tcpScanner:   services.NewScanner(),
-		tracer:       otel.Tracer("port-discovery"),
+		redis:      redisClient,
+		logger:     logger,
+		tcpScanner: services.NewScanner(),
+		tracer:     otel.Tracer("port-discovery"),
 	}
 }
 
-// ProcessJob processes an IP discovery job
-// Primary: Shodan Host API for richer port/service data
-// Fallback: TCP scanner when Shodan fails (404, rate limit, timeout)
+// cdnPTRSuffixes is a list of known CDN/shared-edge PTR suffixes.
+// ponytail: PTR heuristic; misses CDN IPs with generic or no PTR.
+// Upgrade path: wire internal/active_recon/discovery_enrichment/cloud.Detector for CIDR-accurate detection.
+var cdnPTRSuffixes = []string{
+	"cloudfront.net",
+	"cloudflare.com",
+	"cloudflare.net",
+	"akamai.net",
+	"akamaihd.net",
+	"akamaized.net",
+	"akamaiedge.net",
+	"akamaitechnologies.com",
+	"edgekey.net",
+	"fastly.net",
+	"incapdns.net",
+	"azureedge.net",
+	"googleusercontent.com",
+}
+
+// ProcessJob processes an IP discovery job using the TCP scanner for all IPs.
+// Domain-resolved IPs are first checked against known CDN/shared-edge PTR suffixes
+// and skipped to avoid attributing shared infrastructure ports to the wrong customer.
 func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) error {
 	ctx, span := s.tracer.Start(ctx, "scan_ports",
 		trace.WithAttributes(
@@ -56,74 +72,22 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 		zap.String("ip", job.IP),
 	)
 
-	// Try Shodan first
-	hostInfo, err := s.shodanClient.GetHostInfo(ctx, job.IP)
-	if err == nil && hostInfo != nil {
-		hostnameCount := len(hostInfo.Hostnames)
-
-		// Shodan succeeded — verify hostnames match target domain before trusting findings.
-		// CDNs (CloudFront, Cloudflare, etc.) use shared IPs, so Shodan may return TLS certs
-		// and service data belonging to a completely different domain on the same IP.
-		if s.shodanHostnamesMatchTarget(job, hostInfo.Hostnames) {
-			span.SetAttributes(
-				attribute.String("source", "shodan"),
-				attribute.Bool("scan.success", true),
-			)
-			span.SetStatus(codes.Ok, "")
-			return s.publishShodanFindings(ctx, job, hostInfo, hostnameCount)
-		}
-
-		// Hostnames don't match — likely shared CDN infrastructure.
-		// Skip entirely to avoid publishing junk data from other tenants' IPs.
-		s.logger.Info("Skipping port discovery — hostnames do not match target domain (shared CDN IP)",
+	// For domain-resolved IPs: skip CDN/shared-edge infrastructure via PTR lookup.
+	// Direct-IP assets (TargetDomain == "") scan unconditionally.
+	if job.TargetDomain != "" && s.isCDNByPTR(ctx, job.IP) {
+		s.logger.Info("Skipping port scan — IP is CDN infrastructure (PTR match)",
 			zap.String("trace_id", job.TraceID),
-			zap.String("org_id", job.OrgID),
 			zap.String("ip", job.IP),
 			zap.String("target_domain", job.TargetDomain),
-			zap.Strings("shodan_hostnames", hostInfo.Hostnames),
 		)
 		span.SetAttributes(
-			attribute.String("skip_reason", "hostname_mismatch"),
-			attribute.String("shodan.target_domain", job.TargetDomain),
-			attribute.StringSlice("shodan.hostnames", hostInfo.Hostnames),
+			attribute.String("skip_reason", "cdn_ptr_match"),
 			attribute.Bool("scan.success", true),
 		)
 		span.SetStatus(codes.Ok, "")
 		return nil
 	}
 
-	// Log why Shodan failed (only when err != nil or hostInfo == nil — not on hostname mismatch)
-	if err != nil {
-		s.logger.Warn("Shodan lookup failed, falling back to TCP scan",
-			zap.String("ip", job.IP),
-			zap.Error(err),
-		)
-		span.SetAttributes(attribute.String("shodan.error", err.Error()))
-	} else if hostInfo == nil {
-		s.logger.Debug("IP not found in Shodan, falling back to TCP scan",
-			zap.String("ip", job.IP),
-		)
-		span.SetAttributes(attribute.String("shodan.error", "not_found"))
-	}
-
-	// If this IP came from a domain resolution, skip TCP fallback — we can't verify
-	// ownership without Shodan hostnames, so scanning may attribute shared CDN ports
-	// to the wrong customer. TCP fallback is only safe for direct IP assets.
-	if job.TargetDomain != "" {
-		s.logger.Info("Skipping TCP fallback — Shodan unavailable and cannot verify ownership for domain-resolved IP",
-			zap.String("trace_id", job.TraceID),
-			zap.String("ip", job.IP),
-			zap.String("target_domain", job.TargetDomain),
-		)
-		span.SetAttributes(
-			attribute.String("skip_reason", "no_shodan_domain_resolved"),
-			attribute.Bool("scan.success", true),
-		)
-		span.SetStatus(codes.Ok, "")
-		return nil
-	}
-
-	// Fallback to TCP scanner — direct IP asset, no domain ownership check needed
 	span.SetAttributes(
 		attribute.String("source", "port_discovery"),
 		attribute.Bool("scan.success", true),
@@ -132,111 +96,35 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.IPDiscoveryJob) err
 	return s.processTCPScan(ctx, job)
 }
 
-// publishShodanFindings publishes port findings from Shodan Host API response
-func (s *Service) publishShodanFindings(ctx context.Context, job shared.IPDiscoveryJob, hostInfo *shodan.HostInfo, hostnameCount int) error {
-	s.logger.Info("Publishing Shodan port findings",
-		zap.String("trace_id", job.TraceID),
-		zap.String("ip", job.IP),
-		zap.Int("ports_found", len(hostInfo.Data)),
-	)
+// isCDNByPTR performs a reverse DNS (PTR) lookup and returns true if any PTR record
+// matches a known CDN suffix. Returns false on lookup failure (err-open: safe to scan).
+// Uses a 3s timeout to avoid stalling the serial worker on slow resolvers.
+func (s *Service) isCDNByPTR(ctx context.Context, ip string) bool {
+	ptrCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 
-	now := time.Now()
-
-	// Publish each port from Shodan data
-	for _, portData := range hostInfo.Data {
-		protocol := portData.Transport
-		if protocol == "" {
-			protocol = shared.ProtocolTCP
-		}
-
-		// Generate deterministic ID for this port (org-scoped)
-		portID := shared.GeneratePortID(job.OrgID, job.IP, portData.Port, protocol)
-
-		// Extract service information
-		var serviceName, product, version, banner *string
-		if portData.Product != "" {
-			product = &portData.Product
-			serviceName = &portData.Product // Use product as service name if available
-		}
-		if portData.Version != "" {
-			version = &portData.Version
-		}
-		if portData.Banner != "" {
-			// Truncate banner to prevent storage bloat (max 2KB)
-			truncated := truncateBanner(portData.Banner, 2048)
-			banner = &truncated
-		}
-
-		// Build metadata with Shodan-specific info
-		metadata := make(map[string]any)
-		metadata["hostname_match"] = true
-		metadata["hostname_count"] = hostnameCount
-		if portData.HTTP != nil {
-			metadata["http"] = map[string]any{
-				"server": portData.HTTP.Server,
-				"title":  portData.HTTP.Title,
-				"status": portData.HTTP.StatusCode,
-			}
-		}
-		if portData.SSL != nil {
-			sslMetadata := map[string]any{
-				"versions": portData.SSL.Versions,
-			}
-			if portData.SSL.Cert != nil {
-				sslMetadata["cert_expired"] = portData.SSL.Cert.Expired
-				sslMetadata["cert_expires"] = portData.SSL.Cert.Expires
-			}
-			metadata["ssl"] = sslMetadata
-		}
-
-		finding := shared.IPDiscoveryFinding{
-			DiscoveryID: portID,
-			AssetType:   shared.AssetTypePort,
-			TraceID:     job.TraceID,
-			ScanID:      job.ScanID,
-			OrgID:       job.OrgID,
-			Source:      "shodan",
-			ParentID:    job.ParentID,
-			IP:          job.IP,
-			Port:        portData.Port,
-			Protocol:    protocol,
-			Status:      shared.AssetStatusActive,
-			Banner:      banner,
-			ServiceName: serviceName,
-			Product:     product,
-			Version:     version,
-			Metadata:    metadata,
-			Timestamp:   now,
-		}
-
-		if err := s.publishFinding(ctx, finding); err != nil {
-			s.logger.Error("Failed to publish Shodan port finding",
-				zap.String("trace_id", job.TraceID),
-				zap.String("ip", job.IP),
-				zap.Int("port", portData.Port),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		s.logger.Debug("Published Shodan port finding",
-			zap.String("trace_id", job.TraceID),
-			zap.String("ip", job.IP),
-			zap.Int("port", portData.Port),
-			zap.String("product", portData.Product),
-		)
+	resolver := &net.Resolver{}
+	ptrs, err := resolver.LookupAddr(ptrCtx, ip)
+	if err != nil || len(ptrs) == 0 {
+		return false
 	}
-
-	s.logger.Info("Shodan port discovery completed",
-		zap.String("trace_id", job.TraceID),
-		zap.String("ip", job.IP),
-		zap.Int("ports_published", len(hostInfo.Data)),
-	)
-
-	return nil
+	for _, ptr := range ptrs {
+		ptr = strings.ToLower(strings.TrimSuffix(ptr, "."))
+		for _, suffix := range cdnPTRSuffixes {
+			if strings.HasSuffix(ptr, suffix) {
+				s.logger.Debug("CDN PTR match",
+					zap.String("ip", ip),
+					zap.String("ptr", ptr),
+					zap.String("suffix", suffix),
+				)
+				return true
+			}
+		}
+	}
+	return false
 }
 
-// processTCPScan performs TCP port scanning as fallback when Shodan is unavailable.
+// processTCPScan performs TCP port scanning for the given IP.
 func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob) error {
 	// Determine which ports to scan
 	portsToScan := CommonPorts
@@ -323,58 +211,4 @@ func (s *Service) publishFinding(ctx context.Context, finding shared.IPDiscovery
 	}
 
 	return nil
-}
-
-// shodanHostnamesMatchTarget checks whether any Shodan hostname shares the same
-// eTLD+1 (effective top-level domain + 1) as the target domain. This prevents
-// false attribution of Shodan findings when an IP is shared across unrelated
-// domains (common with CDNs like CloudFront and Cloudflare).
-//
-// Returns true (safe to use Shodan data) when:
-//   - TargetDomain is empty (job didn't originate from domain discovery)
-//   - Shodan returned no hostnames (can't determine ownership — assume safe)
-//   - Any Shodan hostname shares the same eTLD+1 as the target domain
-func (s *Service) shodanHostnamesMatchTarget(job shared.IPDiscoveryJob, shodanHostnames []string) bool {
-	// No target domain available — can't filter, allow Shodan findings
-	if job.TargetDomain == "" {
-		return true
-	}
-
-	// Shodan returned no hostnames — likely shared CDN infrastructure with no reverse DNS.
-	// Deny when we have a target domain (domain-discovered IP) to avoid false attribution.
-	// Allow when no target domain (direct IP asset added by user).
-	if len(shodanHostnames) == 0 {
-		return job.TargetDomain == ""
-	}
-
-	targetETLD1 := etldPlusOne(job.TargetDomain)
-
-	for _, hostname := range shodanHostnames {
-		if etldPlusOne(hostname) == targetETLD1 {
-			return true
-		}
-	}
-
-	return false
-}
-
-// etldPlusOne extracts the eTLD+1 (registered domain) from a hostname.
-// Examples: "app.acme.com" -> "acme.com", "sub.example.co.uk" -> "example.co.uk"
-// Falls back to the lowercased input if extraction fails.
-func etldPlusOne(hostname string) string {
-	hostname = strings.ToLower(strings.TrimSuffix(hostname, "."))
-	registered, err := publicsuffix.EffectiveTLDPlusOne(hostname)
-	if err != nil {
-		// Fallback: return the hostname itself (handles bare TLDs, IPs, etc.)
-		return hostname
-	}
-	return registered
-}
-
-// truncateBanner truncates banner to specified max length
-func truncateBanner(banner string, maxLen int) string {
-	if len(banner) <= maxLen {
-		return banner
-	}
-	return banner[:maxLen]
 }

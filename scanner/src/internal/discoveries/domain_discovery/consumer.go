@@ -17,17 +17,21 @@ type Consumer struct {
 	logger  *zap.Logger
 }
 
-func NewConsumer(redisClient *redis.Client, shodanAPIKey string, logger *zap.Logger) *Consumer {
+func NewConsumer(redisClient *redis.Client, logger *zap.Logger) (*Consumer, error) {
+	service, err := NewService(redisClient, logger)
+	if err != nil {
+		return nil, err
+	}
 	return &Consumer{
 		redis:   redisClient,
-		service: NewService(redisClient, shodanAPIKey, logger),
+		service: service,
 		logger:  logger,
-	}
+	}, nil
 }
 
 // Start begins consuming jobs from the Redis stream
 func (c *Consumer) Start(ctx context.Context) error {
-	c.logger.Info("Starting Shodan discovery consumer")
+	c.logger.Info("Starting subfinder discovery consumer")
 
 	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
 		Stream:         shared.StreamDomainDiscoveryQueue,
@@ -65,7 +69,7 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 		return nil
 	}
 
-	c.logger.Info("Processing discovery job with Shodan",
+	c.logger.Info("Processing discovery job with subfinder",
 		zap.String("trace_id", job.TraceID),
 		zap.String("org_id", job.OrgID),
 		zap.String("host", job.Host),
