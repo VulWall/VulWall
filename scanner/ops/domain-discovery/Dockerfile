@@ -16,5 +16,8 @@ RUN apk add --no-cache ca-certificates && \
     adduser -D -u 1001 -G appgroup appuser
 WORKDIR /app
 COPY --from=builder /app/bin/domain-discovery /app/domain-discovery
+# subfinder's runner.NewRunner writes a default provider-config under $HOME/.config/subfinder.
+# The container runs as nonroot and /home/appuser may not be writable.
+ENV HOME=/tmp
 USER appuser
 ENTRYPOINT ["/app/domain-discovery"]

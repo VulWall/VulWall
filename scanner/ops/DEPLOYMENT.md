@@ -34,7 +34,6 @@ All services read configuration from `/opt/vulwall/config/` directory.
 │   ├── general.env       # ENVIRONMENT=production
 │   ├── redis.env         # REDIS_URI=redis://...
 │   ├── mongo.env         # MONGO_URI=mongodb+srv://...
-│   ├── shodan.env        # SHODAN_API_KEY=... (domain-discovery only)
 │   └── honeycomb.env     # HONEYCOMB_API_KEY=... (optional, for tracing)
 └── dbip-isp-country.mmdb # IP geolocation database (ingestion, discovery-enrichment)
 ```
@@ -57,12 +56,6 @@ REDIS_URI=redis://user:password@host:port/db
 
 ```bash
 MONGO_URI=mongodb+srv://user:password@cluster.mongodb.net/vulwall
-```
-
-#### shodan.env (domain-discovery only)
-
-```bash
-SHODAN_API_KEY=your-shodan-api-key
 ```
 
 #### honeycomb.env (optional)
@@ -94,7 +87,6 @@ After running the setup script, create the env files:
 nano /opt/vulwall/config/general.env
 nano /opt/vulwall/config/redis.env
 nano /opt/vulwall/config/mongo.env
-nano /opt/vulwall/config/shodan.env
 nano /opt/vulwall/config/honeycomb.env
 ```
 

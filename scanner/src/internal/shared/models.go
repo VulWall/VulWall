@@ -6,7 +6,7 @@ import "time"
 // Each vertical slice owns its own models in its respective package.
 
 // DiscoveryJob represents a job to discover attack surface assets
-// This is the shared job format consumed by all discovery providers (Shodan, Nmap, Masscan, etc.)
+// This is the shared job format consumed by all discovery providers (subfinder, Nmap, Masscan, etc.)
 type DiscoveryJob struct {
 	TraceID      string                 `json:"trace_id" bson:"trace_id"`
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"` // W3C TraceContext headers for span linking (not stored in DB)
@@ -29,7 +29,7 @@ type DiscoveryFinding struct {
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"` // W3C TraceContext headers for span linking (not stored in DB)
 	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
 	OrgID        string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
-	Source       string                 `json:"source" bson:"source"`                       // Source name: "shodan", "nmap", "masscan", etc.
+	Source       string                 `json:"source" bson:"source"`                       // Source name: "subfinder", "nmap", "masscan", etc.
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host         string                 `json:"host" bson:"host"`
 	IP           *string                `json:"ip,omitempty" bson:"ip,omitempty"` // IP address (if resolved)
@@ -49,7 +49,7 @@ type IPDiscoveryJob struct {
 	OrgID        string                 `json:"org_id" bson:"org_id"`                             // Required: organization GUID
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`   // Parent IP discovery ID
 	IP           string                 `json:"ip" bson:"ip"`                                     // Target IP address
-	TargetDomain string                 `json:"target_domain,omitempty" bson:"target_domain,omitempty"` // Domain that resolved to this IP (for Shodan hostname validation)
+	TargetDomain string                 `json:"target_domain,omitempty" bson:"target_domain,omitempty"` // Domain that resolved to this IP (for CDN ownership checks)
 	PortRange    *string                `json:"port_range,omitempty" bson:"port_range,omitempty"` // Optional: "1-1000" or "80,443,22"
 	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 	Created      time.Time              `json:"created" bson:"created"`
@@ -64,7 +64,7 @@ type IPDiscoveryFinding struct {
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`               // W3C TraceContext headers for span linking (not stored in DB)
 	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"`     // Optional: scan identifier for linking to UI scans
 	OrgID        string                 `json:"org_id" bson:"org_id"`                           // Required: organization GUID
-	Source       string                 `json:"source" bson:"source"`                           // Source name: "shodan", "port_discovery", etc.
+	Source       string                 `json:"source" bson:"source"`                           // Source name: "port_discovery", "nmap", etc.
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"` // Parent IP discovery ID
 	IP           string                 `json:"ip" bson:"ip"`
 	Port         int                    `json:"port" bson:"port"`

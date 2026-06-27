@@ -10,8 +10,11 @@ services:
     env_file:
       - /opt/vulwall/config/general.env
       - /opt/vulwall/config/redis.env
-      - /opt/vulwall/config/shodan.env
       - /opt/vulwall/config/honeycomb.env
+    # subfinder (runner.NewRunner) writes a default provider config under $HOME/.config/subfinder.
+    # The container is read_only, so HOME=/tmp (set in Dockerfile) must back onto a writable tmpfs.
+    tmpfs:
+      - /tmp
     deploy:
       resources:
         limits:

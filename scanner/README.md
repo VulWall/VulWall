@@ -11,7 +11,7 @@ Security asset discovery and vulnerability scanning platform built with Go micro
 
 SCAN COORDINATOR (automated scheduling)
     │
-    ├─→ domain_discovery_queue ─→ Domain Discovery (Shodan)
+    ├─→ domain_discovery_queue ─→ Domain Discovery (subfinder)
     │                                    │
     │                                    ↓
     │                             domain_discovery_results
@@ -48,7 +48,7 @@ DISCOVERY ENRICHMENT (WAF + IP Geolocation)
 | Service | Purpose | Input Stream | Output Stream |
 |---------|---------|--------------|---------------|
 | **scan-coordinator** | Automated scan scheduling | - | domain/ip queues |
-| **domain-discovery** | Subdomain discovery (Shodan) | domain_discovery_queue | domain_discovery_results |
+| **domain-discovery** | Subdomain discovery (subfinder) | domain_discovery_queue | domain_discovery_results |
 | **port-discovery** | TCP port scanning | ip_discovery_queue | ip_discovery_results |
 | **ingestion** | MongoDB persistence (5 slices) | multiple | multiple |
 | **nuclei-scanner** | Vulnerability scanning | domain/port_scan_triggers | security_findings |
@@ -65,7 +65,6 @@ DISCOVERY ENRICHMENT (WAF + IP Geolocation)
 - Docker & Docker Compose
 - Cloud Redis (Redis Cloud, etc.)
 - Cloud MongoDB (Atlas, etc.)
-- Shodan API key
 
 ### Run Locally
 
@@ -108,7 +107,6 @@ Environment variables (`.env`):
 ```bash
 REDIS_URI=redis://user:pass@host:port/db
 MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/db
-SHODAN_API_KEY=your-key
 ENVIRONMENT=production
 ```
 
@@ -118,7 +116,7 @@ ENVIRONMENT=production
 src/                         # Go source code
 ├── cmd/
 │   ├── discoveries/
-│   │   ├── domain-discovery/    # Shodan subdomain discovery
+│   │   ├── domain-discovery/    # subfinder subdomain discovery
 │   │   └── port-discovery/      # TCP port scanner
 │   ├── active_recon/
 │   │   ├── nuclei-scanner/      # Nuclei vulnerability scanner

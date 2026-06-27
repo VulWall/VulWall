@@ -42,7 +42,7 @@ VulWall.NightWatch/
     │   │   └── knowledge-base-engine/
     │   └── ingestion/
     ├── internal/
-    │   ├── core/            # bootstrap, config, logger, mongox, redisx, telemetry, shodan
+    │   ├── core/            # bootstrap, config, logger, mongox, redisx, telemetry, subfinderx
     │   ├── shared/          # models.go, constants.go (cross-service)
     │   ├── scan_coordinator/
     │   ├── discoveries/     # domain_discovery, port_discovery
@@ -188,7 +188,6 @@ Environment variables (`.env`):
 | `REDIS_URI` | Cloud Redis connection string |
 | `MONGO_URI` | MongoDB Atlas connection string |
 | `MONGO_DB` | Database name (default: vulwall) |
-| `SHODAN_API_KEY` | Shodan API key for discovery |
 | `ANTHROPIC_API_KEY` | Anthropic API key for KB generation |
 | `ANTHROPIC_MODEL` | Anthropic model (default: claude-sonnet-4-5-20250514) |
 | `ENVIRONMENT` | development / production |

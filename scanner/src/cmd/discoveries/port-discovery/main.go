@@ -16,12 +16,7 @@ func main() {
 			{StreamName: shared.StreamIPDiscoveryQueue, ConsumerGroup: port_discovery.GroupPortDiscovery},
 		},
 		Factory: func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (bootstrap.ConsumerStarter, error) {
-			// Get Shodan API key from config (used as primary source, TCP fallback if unavailable)
-			shodanAPIKey := config.GetEnv(config.EnvShodanAPIKey, "")
-			if shodanAPIKey == "" {
-				logger.Warn("SHODAN_API_KEY not configured, port discovery will use TCP scanner only")
-			}
-			return port_discovery.NewConsumer(redisClient, shodanAPIKey, logger), nil
+			return port_discovery.NewConsumer(redisClient, logger), nil
 		},
 	})
 }
