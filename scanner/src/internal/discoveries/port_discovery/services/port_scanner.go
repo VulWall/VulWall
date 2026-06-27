@@ -80,14 +80,17 @@ func (s *Scanner) ScanPort(ctx context.Context, ip string, port int) PortResult 
 	return result
 }
 
+const maxConcurrentDials = 20
+
 // ScanPorts scans multiple ports concurrently on the target IP
 func (s *Scanner) ScanPorts(ctx context.Context, ip string, ports []int) []PortResult {
 	results := make([]PortResult, 0, len(ports))
 	resultsChan := make(chan PortResult, len(ports))
+	sem := make(chan struct{}, maxConcurrentDials)
 
 	var wg sync.WaitGroup
 
-	// Scan each port concurrently
+	// Scan each port concurrently, capped at maxConcurrentDials
 	for _, port := range ports {
 		wg.Add(1)
 		go func(p int) {
@@ -100,6 +103,9 @@ func (s *Scanner) ScanPorts(ctx context.Context, ip string, ports []int) []PortR
 				return
 			default:
 			}
+
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
 			result := s.ScanPort(ctx, ip, p)
 			resultsChan <- result
