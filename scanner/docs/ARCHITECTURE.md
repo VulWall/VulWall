@@ -21,9 +21,9 @@ VulWall NightWatch is a **vertically-sliced Go monorepo** for security scanning.
 ```
 DOMAIN DISCOVERY FLOW:
 1. Job → domain_discovery_queue (with org_id)
-   └─→ Domain Discovery Service (Shodan)
+   └─→ Domain Discovery Service (subfinder)
        ├─→ Finds subdomains, resolves IPs
-       └─→ Publishes to domain_discovery_results (source="shodan")
+       └─→ Publishes to domain_discovery_results (source="subfinder")
 
 2. Domain Ingestion Consumer
    └─→ Persists to discoveries collection (with org_id):
@@ -36,7 +36,7 @@ DOMAIN DISCOVERY FLOW:
 
 PORT DISCOVERY FLOW:
 1. Job → ip_discovery_queue (with org_id)
-   └─→ Port Discovery Service (Shodan + TCP fallback)
+   └─→ Port Discovery Service (TCP scanner; CDN IPs skipped via PTR check)
        └─→ Publishes to ip_discovery_results
 
 2. Port Ingestion Consumer
@@ -117,7 +117,7 @@ Discovery services use a **parallel consumer group pattern** where multiple inde
 
 ```
 Input: domain_discovery_queue
-    ├─→ Consumer Group: shodan_subdomain_service  → Shodan Discovery
+    ├─→ Consumer Group: shodan_subdomain_service  → subfinder Discovery (group name retained for Redis compatibility)
     ├─→ Consumer Group: nmap_discovery_service     → Nmap (future)
     └─→ Consumer Group: masscan_discovery_service  → Masscan (future)
         ↓

@@ -8,7 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/vulwall/scanners/internal/core/redisx"
-	"github.com/vulwall/scanners/internal/core/shodan"
+	"github.com/vulwall/scanners/internal/core/subfinderx"
 	"github.com/vulwall/scanners/internal/core/telemetry"
 	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel"
@@ -24,22 +24,26 @@ const (
 )
 
 type Service struct {
-	redis        *redis.Client
-	logger       *zap.Logger
-	shodanClient *shodan.Client
-	tracer       trace.Tracer
+	redis           *redis.Client
+	logger          *zap.Logger
+	subfinderClient *subfinderx.Client
+	tracer          trace.Tracer
 }
 
-func NewService(redisClient *redis.Client, shodanAPIKey string, logger *zap.Logger) *Service {
-	return &Service{
-		redis:        redisClient,
-		logger:       logger,
-		shodanClient: shodan.NewClient(shodanAPIKey, logger),
-		tracer:       otel.Tracer("domain-discovery"),
+func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error) {
+	subfinderClient, err := subfinderx.NewClient(logger)
+	if err != nil {
+		return nil, err
 	}
+	return &Service{
+		redis:           redisClient,
+		logger:          logger,
+		subfinderClient: subfinderClient,
+		tracer:          otel.Tracer("domain-discovery"),
+	}, nil
 }
 
-// ProcessJob processes a discovery job using Shodan
+// ProcessJob processes a discovery job using subfinder
 func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error {
 	ctx, span := s.tracer.Start(ctx, "discover_domain",
 		trace.WithAttributes(
@@ -50,7 +54,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	)
 	defer span.End()
 
-	s.logger.Info("Processing discovery job with Shodan",
+	s.logger.Info("Processing discovery job with subfinder",
 		zap.String("trace_id", job.TraceID),
 		zap.String("org_id", job.OrgID),
 		zap.String("host", job.Host),
@@ -100,7 +104,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		TraceID:     job.TraceID,
 		ScanID:      job.ScanID,  // Pass through scan_id
 		OrgID:       job.OrgID,
-		Source:     "shodan",
+		Source:      "subfinder",
 		ParentID:    job.ParentID,
 		Host:        job.Host,
 		IP:          resolvedIP,
@@ -113,25 +117,23 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		return err
 	}
 
-	// Trigger Shodan subdomain discovery for root domains (no parent, no port)
+	// Run subdomain discovery inline — keeps the message unACKed until enumeration finishes,
+	// ensuring at-least-once delivery and safe serial use of the shared subfinder runner.
 	if job.ParentID == nil && job.Port == nil && s.isDomain(job.Host) {
-		go func() {
-			// Pass ctx to maintain trace context in goroutine
-			if err := s.discoverSubdomains(ctx, job.TraceID, job.ScanID, job.OrgID, job.Host); err != nil {
-				s.logger.Error("Shodan subdomain discovery failed",
-					zap.String("host", job.Host),
-					zap.Error(err),
-				)
-			}
-		}()
+		if err := s.discoverSubdomains(ctx, job.TraceID, job.ScanID, job.OrgID, job.Host); err != nil {
+			s.logger.Error("subfinder subdomain discovery failed",
+				zap.String("host", job.Host),
+				zap.Error(err),
+			)
+		}
 	}
 
 	return nil
 }
 
-// discoverSubdomains uses Shodan to discover and publish subdomain findings
+// discoverSubdomains uses subfinder to discover and publish subdomain findings
 func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID *string, orgID, domain string) error {
-	ctx, span := s.tracer.Start(ctx, "shodan_subdomain_discovery",
+	ctx, span := s.tracer.Start(ctx, "subfinder_subdomain_discovery",
 		trace.WithAttributes(
 			attribute.String("org.id", orgID),
 			attribute.String("trace.id", traceID),
@@ -140,14 +142,14 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 	)
 	defer span.End()
 
-	s.logger.Info("Starting Shodan subdomain discovery",
+	s.logger.Info("Starting subfinder subdomain discovery",
 		zap.String("trace_id", traceID),
 		zap.String("org_id", orgID),
 		zap.String("domain", domain),
 	)
 
-	// Discover subdomains using Shodan
-	subdomains, err := s.shodanClient.DiscoverSubdomains(ctx, domain)
+	// Discover subdomains using subfinder
+	subdomains, err := s.subfinderClient.DiscoverSubdomains(ctx, domain)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -211,7 +213,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 			TraceID:     traceID,
 			ScanID:      scanID,  // Pass through scan_id
 			OrgID:       orgID,
-			Source:     "shodan",
+			Source:      "subfinder",
 			ParentID:    &parentDomainID,
 			Host:        fullSubdomain,
 			IP:          resolvedIP,

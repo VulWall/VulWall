@@ -43,7 +43,7 @@ type IPDiscoveryJob struct {
     OrgID        string                 `json:"org_id"`            // REQUIRED
     ParentID     *string                `json:"parent_id,omitempty"`
     IP           string                 `json:"ip"`
-    TargetDomain string                 `json:"target_domain,omitempty"` // Domain that resolved to this IP (for Shodan hostname validation)
+    TargetDomain string                 `json:"target_domain,omitempty"` // Domain that resolved to this IP (for CDN ownership checks)
     PortRange    *string                `json:"port_range,omitempty"`
     Metadata     map[string]interface{} `json:"metadata,omitempty"`
     Created      time.Time              `json:"created"`
@@ -59,7 +59,7 @@ type DiscoveryFinding struct {
     TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`
     ScanID       *string                `json:"scan_id,omitempty"`
     OrgID        string                 `json:"org_id"`       // REQUIRED
-    Source       string                 `json:"source"`       // REQUIRED: "shodan", etc.
+    Source       string                 `json:"source"`       // REQUIRED: "subfinder", etc.
     ParentID     *string                `json:"parent_id,omitempty"`
     Host         string                 `json:"host"`
     IP           *string                `json:"ip,omitempty"`
@@ -283,7 +283,7 @@ type ScanStats struct {
   org_id: "org-456",
   scan_ids: ["scan-abc-456", "scan-xyz-789"],
   asset_type: "domain",
-  source: "shodan",
+  source: "subfinder",
   status: "active",
   ownership_status: "verified",
   domain: "example.com",

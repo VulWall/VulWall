@@ -259,7 +259,7 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 		return "", err
 	}
 
-	// Repair missing parent_id. If the direct asset scan ran before Shodan subdomain
+	// Repair missing parent_id. If the direct asset scan ran before subdomain
 	// discovery, the doc was created with parent_id nil. Set it now so the subdomain
 	// is correctly nested under its parent domain. See VulWall.NightWatch#133.
 	if existingDiscovery.ParentID == nil && finding.ParentID != nil {
@@ -545,7 +545,7 @@ func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.Disc
 		OrgID:        finding.OrgID,
 		ParentID:     &ipDiscoveryID,
 		IP:           *finding.IP,
-		TargetDomain: finding.Host, // Domain that resolved to this IP (for Shodan hostname validation)
+		TargetDomain: finding.Host, // Domain that resolved to this IP (for CDN ownership checks)
 		Metadata: map[string]interface{}{
 			"source":          "domain_discovery",
 			"ip_discovery_id": ipDiscoveryID,
