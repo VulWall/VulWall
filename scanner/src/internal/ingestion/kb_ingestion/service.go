@@ -88,7 +88,9 @@ func (s *Service) upsertKBEntry(ctx context.Context, result shared.KBGenerationR
 			"_id":        docID,
 			"published":  false,
 			"created_at": now,
-			"version":    1,
+		},
+		"$inc": bson.M{
+			"version": 1,
 		},
 	}
 
