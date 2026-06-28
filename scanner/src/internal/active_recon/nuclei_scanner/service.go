@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 	"github.com/vulwall/scanners/internal/core/audit"
@@ -86,6 +87,24 @@ func (s *Service) updateTemplates(ctx context.Context) {
 	ctx, span := s.tracer.Start(ctx, "update_templates")
 	defer span.End()
 
+	// Only one replica updates the shared templates volume per tick; others skip.
+	host, hostErr := os.Hostname() // lock owner — for debugging and ownership-checked release
+	if hostErr != nil || host == "" {
+		host = uuid.NewString() // ensure a unique, non-empty owner value
+	}
+	acquired, err := redisx.TryAcquireLock(ctx, s.redis, TemplateUpdateLockKey, host, TemplateUpdateLockTTL)
+	if err != nil {
+		// redis unreachable -> skip update (no coordination possible; scans are down too).
+		// Templates on the shared volume stay usable.
+		s.logger.Warn("Could not acquire template-update lock, skipping", zap.Error(err))
+		return
+	}
+	if !acquired {
+		s.logger.Info("Another replica is updating templates, skipping")
+		return
+	}
+	defer redisx.ReleaseLock(ctx, s.redis, TemplateUpdateLockKey, host)
+
 	s.logger.Info("Checking for Nuclei template updates...")
 
 	// Get version before update
@@ -124,6 +143,10 @@ func (s *Service) updateTemplates(ctx context.Context) {
 
 // getTemplateVersion returns current Nuclei template version
 func (s *Service) getTemplateVersion(ctx context.Context) string {
+	// Bound this probe so a hung `nuclei -tv` can't push the lock-held time past
+	// TemplateUpdateLockTTL (keeps the TTL-vs-update-timeout invariant true).
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, "nuclei", "-tv")
 	output, err := cmd.CombinedOutput()
 	if err != nil {

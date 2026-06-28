@@ -129,3 +129,27 @@ func CleanupStaleConsumers(ctx context.Context, client *redis.Client, stream, gr
 		}
 	}
 }
+
+// TryAcquireLock attempts a distributed lock via SET NX with TTL.
+// Returns true if acquired. ttl is a crash safety net — pick ttl > the
+// guarded operation's max duration so ReleaseLock never frees a lock we no longer own.
+func TryAcquireLock(ctx context.Context, client *redis.Client, key, value string, ttl time.Duration) (bool, error) {
+	return client.SetNX(ctx, key, value, ttl).Result()
+}
+
+// releaseLockScript deletes the key only if its value still matches the caller's,
+// so a replica can never free a lock another replica now owns (TTL-expiry race).
+var releaseLockScript = redis.NewScript(`
+if redis.call("get", KEYS[1]) == ARGV[1] then
+	return redis.call("del", KEYS[1])
+end
+return 0`)
+
+// ReleaseLock frees a lock acquired with TryAcquireLock, but only if value still
+// matches (ownership check). Best-effort. Uses a fresh short context so a cancelled
+// parent (graceful shutdown) doesn't skip release and leave the lock held until TTL.
+func ReleaseLock(ctx context.Context, client *redis.Client, key, value string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	_ = releaseLockScript.Run(ctx, client, []string{key}, value).Err()
+}
