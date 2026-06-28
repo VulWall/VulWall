@@ -2,7 +2,9 @@ package kb_ingestion
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vulwall/scanners/internal/shared"
@@ -45,6 +47,18 @@ func (s *Service) ProcessEntry(ctx context.Context, result shared.KBGenerationRe
 
 	if result.FindingType == "" {
 		s.logger.Warn("Skipping KB result without finding_type")
+		return nil
+	}
+
+	if injected, marker := containsInjectionPayload(result.Entry); injected {
+		s.logger.Error("KB entry rejected: prompt injection detected in generated content",
+			zap.String("finding_type", result.FindingType),
+			zap.String("marker", marker),
+		)
+		span.SetAttributes(attribute.Bool("scan.success", false))
+		span.SetStatus(codes.Error, "prompt injection detected")
+		// Return nil (not error) so the message is acked and not retried — a retry
+		// would produce the same poisoned output. The entry is simply dropped.
 		return nil
 	}
 
@@ -114,6 +128,37 @@ func (s *Service) upsertKBEntry(ctx context.Context, result shared.KBGenerationR
 	}
 
 	return nil
+}
+
+// injectionMarkers are lowercase substrings that reliably indicate a prompt
+// injection payload survived Claude's instruction-level guards. The list is
+// intentionally narrow — only strings that cannot plausibly appear in a
+// legitimate security KB entry.
+var injectionMarkers = []string{
+	"ignore previous instructions",
+	"ignore all previous instructions",
+	"forget previous instructions",
+	"disregard previous instructions",
+	"you are now",
+	"new instructions:",
+	"system prompt:",
+}
+
+// containsInjectionPayload scans all string values in the generated entry for
+// known injection markers. Returns true and the matched marker if found.
+// Serialises the entire entry to JSON so nested fields are covered in one pass.
+func containsInjectionPayload(entry map[string]interface{}) (bool, string) {
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return false, ""
+	}
+	lower := strings.ToLower(string(raw))
+	for _, marker := range injectionMarkers {
+		if strings.Contains(lower, marker) {
+			return true, marker
+		}
+	}
+	return false, ""
 }
 
 // extractSection safely extracts a section from the entry map
