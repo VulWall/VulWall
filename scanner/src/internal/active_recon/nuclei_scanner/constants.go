@@ -1,9 +1,21 @@
 package nuclei_scanner
 
+import "time"
+
 const (
 	// Consumer group for Nuclei scanner service
 	// Listens to both domain_discovery_results and ip_discovery_results
 	GroupNucleiScanner = "nuclei_scanner_service"
+
+	// TemplateUpdateLockKey is the Redis key for the distributed lock that ensures
+	// only one replica runs nuclei -update-templates per tick (all replicas share
+	// the same templates volume).
+	TemplateUpdateLockKey = "nuclei:template-update-lock"
+
+	// TemplateUpdateLockTTL bounds how long the lock is held. Must exceed the 5m
+	// update timeout in updateTemplates so the holder never has its lock expire
+	// mid-update (which would let ReleaseLock free a lock it no longer owns).
+	TemplateUpdateLockTTL = 10 * time.Minute
 
 	// ConsumerBatchSize is the number of messages to read at a time
 	// Keep low (1) because Nuclei scans are slow
