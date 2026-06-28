@@ -79,6 +79,10 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	// Publish each finding to Redis
 	for _, testSSLFinding := range findings {
 		finding := s.convertToSecurityFinding(testSSLFinding, target)
+		// Skip findings downgraded to info by severity overrides (e.g. LUCKY13, SWEET32, CRIME_TLS)
+		if strings.EqualFold(finding.Severity, shared.SeverityInfo) {
+			continue
+		}
 		finding.TraceContext = telemetry.InjectTraceContext(ctx)
 		if err := s.publishFinding(ctx, finding); err != nil {
 			s.logger.Error("Failed to publish finding",
