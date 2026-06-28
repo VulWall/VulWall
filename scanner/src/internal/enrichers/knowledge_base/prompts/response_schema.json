@@ -17,7 +17,7 @@
         },
         "impact": {
           "type": "string",
-          "description": "Business impact explanation: revenue, reputation, compliance, customer trust implications"
+          "description": "Business impact explanation: revenue, reputation, compliance, customer trust implications. Must be industry-neutral — no e-commerce assumptions (no 'purchases', 'checkout', 'orders') unless the finding is exclusively payment-related."
         },
         "urgency": {
           "type": "string",
