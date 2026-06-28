@@ -33,7 +33,6 @@ VulWall.NightWatch/
     │   ├── active_recon/
     │   │   ├── nuclei-scanner/
     │   │   ├── testssl-scanner/
-    │   │   ├── webtechprofiler/
     │   │   ├── js-dependency-scanner/
     │   │   ├── http-header-scanner/
     │   │   ├── email-security-scanner/
@@ -46,7 +45,7 @@ VulWall.NightWatch/
     │   ├── shared/          # models.go, constants.go (cross-service)
     │   ├── scan_coordinator/
     │   ├── discoveries/     # domain_discovery, port_discovery
-    │   ├── active_recon/    # nuclei, testssl, webtechprofiler, js_dep, http_header, email_security, discovery_enrichment
+    │   ├── active_recon/    # nuclei, testssl, js_dep, http_header, email_security, discovery_enrichment
     │   ├── enrichers/       # knowledge_base (Anthropic Claude KB engine)
     │   └── ingestion/       # orchestrator + 6 slices (domain, port, findings, enrichment, kb, audit)
     ├── go.mod
@@ -57,7 +56,7 @@ VulWall.NightWatch/
 
 | Document | Purpose |
 |----------|---------|
-| **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** | All 17 services, Redis streams, consumer groups, scan monitor coverage — **the ground truth** |
+| **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** | All 16 services, Redis streams, consumer groups, scan monitor coverage — **the ground truth** |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Communication flows, design patterns, model ownership rules |
 | **[docs/DATABASE.md](docs/DATABASE.md)** | Go models, MongoDB schemas, query examples |
 | **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** | OpenTelemetry tracing patterns, Honeycomb queries |

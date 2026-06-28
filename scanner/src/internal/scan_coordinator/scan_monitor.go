@@ -170,7 +170,6 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 		// domain_scan_triggers consumers (active recon scanners on domains/subdomains)
 		{shared.StreamDomainScanTriggers, "nuclei_scanner_service"},
 		{shared.StreamDomainScanTriggers, "testssl_scanner_service"},
-		{shared.StreamDomainScanTriggers, "webtechprofiler_service"},
 		{shared.StreamDomainScanTriggers, "js_dependency_scanner_service"},
 		{shared.StreamDomainScanTriggers, "http_header_scanner_service"},
 		{shared.StreamDomainScanTriggers, "email_security_scanner_service"},
@@ -181,9 +180,8 @@ func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
 		// domain_discovery_results consumers (ingestion)
 		{shared.StreamDomainDiscoveryResults, "domain_ingestion_service"},
 
-		// ip_discovery_results consumers (ingestion + webtechprofiler)
+		// ip_discovery_results consumers (ingestion)
 		{shared.StreamIPDiscoveryResults, "port_ingestion_service"},
-		{shared.StreamIPDiscoveryResults, "webtechprofiler_service"},
 
 		// security_findings consumers (findings ingestion to MongoDB)
 		{shared.StreamSecurityFindings, "findings_ingestion_service"},

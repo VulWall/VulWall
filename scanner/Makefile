@@ -17,8 +17,6 @@ build: ## Build all services
 	@cd $(SRC_DIR) && go build -o bin/nuclei-scanner ./cmd/active_recon/nuclei-scanner
 	@echo "Building testssl-scanner..."
 	@cd $(SRC_DIR) && go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
-	@echo "Building webtechprofiler..."
-	@cd $(SRC_DIR) && go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
 	@echo "Building discovery-enrichment..."
 	@cd $(SRC_DIR) && go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
 	@echo "Building js-dependency-scanner..."
@@ -46,9 +44,6 @@ build-nuclei-scanner: ## Build nuclei-scanner service
 
 build-testssl-scanner: ## Build testssl-scanner service
 	@cd $(SRC_DIR) && go build -o bin/testssl-scanner ./cmd/active_recon/testssl-scanner
-
-build-webtechprofiler: ## Build webtechprofiler service
-	@cd $(SRC_DIR) && go build -o bin/webtechprofiler ./cmd/active_recon/webtechprofiler
 
 build-discovery-enrichment: ## Build discovery-enrichment service
 	@cd $(SRC_DIR) && go build -o bin/discovery-enrichment ./cmd/active_recon/discovery-enrichment
@@ -82,9 +77,6 @@ run-nuclei-scanner: ## Run nuclei-scanner service locally
 
 run-testssl-scanner: ## Run testssl-scanner service locally
 	@cd $(SRC_DIR) && go run ./cmd/active_recon/testssl-scanner/main.go
-
-run-webtechprofiler: ## Run webtechprofiler service locally
-	@cd $(SRC_DIR) && go run ./cmd/active_recon/webtechprofiler/main.go
 
 run-discovery-enrichment: ## Run discovery-enrichment service locally
 	@cd $(SRC_DIR) && go run ./cmd/active_recon/discovery-enrichment/main.go
@@ -144,9 +136,6 @@ docker-scale-nuclei-scanner: ## Scale nuclei-scanner workers (usage: make docker
 
 docker-scale-testssl-scanner: ## Scale testssl-scanner workers (usage: make docker-scale-testssl-scanner N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale testssl-scanner=$(N)
-
-docker-scale-webtechprofiler: ## Scale webtechprofiler workers (usage: make docker-scale-webtechprofiler N=3)
-	@docker-compose -f ops/docker-compose.yml up -d --scale webtechprofiler=$(N)
 
 docker-scale-discovery-enrichment: ## Scale discovery-enrichment workers (usage: make docker-scale-discovery-enrichment N=3)
 	@docker-compose -f ops/docker-compose.yml up -d --scale discovery-enrichment=$(N)
@@ -223,13 +212,6 @@ prod-deploy-testssl: ## Deploy testssl-scanner service (usage: make prod-deploy-
 		ops/scripts/deploy-service.sh testssl-scanner; \
 	fi
 
-prod-deploy-webtechprofiler: ## Deploy webtechprofiler service (usage: make prod-deploy-webtechprofiler [PROJECT=name] [CONFIG=prd])
-	@if [ -n "$(PROJECT)" ]; then \
-		ops/scripts/deploy-service.sh webtechprofiler $(PROJECT) $(CONFIG); \
-	else \
-		ops/scripts/deploy-service.sh webtechprofiler; \
-	fi
-
 prod-deploy-discovery-enrichment: ## Deploy discovery-enrichment service (usage: make prod-deploy-discovery-enrichment [PROJECT=name] [CONFIG=prd])
 	@if [ -n "$(PROJECT)" ]; then \
 		ops/scripts/deploy-service.sh discovery-enrichment $(PROJECT) $(CONFIG); \
@@ -279,7 +261,7 @@ prod-stop-service: ## Stop a specific service (usage: make prod-stop-service SER
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "Error: SERVICE parameter is required"; \
 		echo "Usage: make prod-stop-service SERVICE=<service-name>"; \
-		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, testssl-scanner, webtechprofiler, discovery-enrichment, js-dependency-scanner, http-header-scanner, email-security-scanner"; \
+		echo "Available services: scan-coordinator, domain-discovery, ingestion, port-discovery, nuclei-scanner, testssl-scanner, discovery-enrichment, js-dependency-scanner, http-header-scanner, email-security-scanner"; \
 		exit 1; \
 	fi
 	@ops/scripts/stop-service.sh $(SERVICE)
