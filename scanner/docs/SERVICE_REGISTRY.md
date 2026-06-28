@@ -11,23 +11,22 @@
 | 2 | **port-discovery** | `port_discovery_service` | `ip_discovery_queue` | `ip_discovery_results` | RunSimple (Streams) | No |
 | 3 | **nuclei-scanner** | `nuclei_scanner_service` | `domain_scan_triggers` + `port_scan_triggers` | `security_findings` | RunSimple (manual) | No |
 | 4 | **testssl-scanner** | `testssl_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
-| 5 | **webtechprofiler** | `webtechprofiler_service` | `domain_scan_triggers` + `ip_discovery_results` | `security_findings` | RunSimple (manual) | No |
-| 6 | **js-dependency-scanner** | `js_dependency_scanner_service` | `domain_scan_triggers` | `security_findings` | Run | No |
-| 7 | **http-header-scanner** | `http_header_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
-| 8 | **email-security-scanner** | `email_security_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
-| 9 | **discovery-enrichment** | `discovery_enrichment_service` | `discovery_enrichment_queue` | `discovery_enrichment_results` | RunSimple (manual) | No |
-| 10 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | RunSimple (Streams) | No |
-| 11 | **domain-ingestion** | `domain_ingestion_service` | `domain_discovery_results` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` | Orchestrator | Yes |
-| 12 | **port-ingestion** | `port_ingestion_service` | `ip_discovery_results` | `discovery_enrichment_queue`, `port_scan_triggers` | Orchestrator | Yes |
-| 13 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | `kb_generation_queue` | Orchestrator | Yes |
-| 14 | **enrichment-ingestion** | `enrichment_ingestion_service` | `discovery_enrichment_results` | MongoDB `discoveries` | Orchestrator | Yes |
-| 15 | **kb-ingestion** | `kb_ingestion_service` | `kb_generation_results` | MongoDB `knowledge_base` | Orchestrator | Yes |
-| 16 | **audit-ingestion** | `audit_ingestion_service` | `system_audit_logs` | MongoDB `audit_logs` | Orchestrator | Yes |
-| 17 | **scan-coordinator** | _(scheduler, not consumer)_ | — | `domain_discovery_queue`, `ip_discovery_queue` | Manual | Yes (read) |
+| 5 | **js-dependency-scanner** | `js_dependency_scanner_service` | `domain_scan_triggers` | `security_findings` | Run | No |
+| 6 | **http-header-scanner** | `http_header_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
+| 7 | **email-security-scanner** | `email_security_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
+| 8 | **discovery-enrichment** | `discovery_enrichment_service` | `discovery_enrichment_queue` | `discovery_enrichment_results` | RunSimple (manual) | No |
+| 9 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | RunSimple (Streams) | No |
+| 10 | **domain-ingestion** | `domain_ingestion_service` | `domain_discovery_results` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` | Orchestrator | Yes |
+| 11 | **port-ingestion** | `port_ingestion_service` | `ip_discovery_results` | `discovery_enrichment_queue`, `port_scan_triggers` | Orchestrator | Yes |
+| 12 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | `kb_generation_queue` | Orchestrator | Yes |
+| 13 | **enrichment-ingestion** | `enrichment_ingestion_service` | `discovery_enrichment_results` | MongoDB `discoveries` | Orchestrator | Yes |
+| 14 | **kb-ingestion** | `kb_ingestion_service` | `kb_generation_results` | MongoDB `knowledge_base` | Orchestrator | Yes |
+| 15 | **audit-ingestion** | `audit_ingestion_service` | `system_audit_logs` | MongoDB `audit_logs` | Orchestrator | Yes |
+| 16 | **scan-coordinator** | _(scheduler, not consumer)_ | — | `domain_discovery_queue`, `ip_discovery_queue` | Manual | Yes (read) |
 
 **Notes:**
-- Ingestion services (#11–16) run as concurrent slices inside a single ingestion orchestrator process
-- Scan coordinator (#17) uses cron scheduling, not consumer groups
+- Ingestion services (#10–15) run as concurrent slices inside a single ingestion orchestrator process
+- Scan coordinator (#16) uses cron scheduling, not consumer groups
 
 ---
 
@@ -38,10 +37,10 @@
 | `domain_discovery_queue` | `StreamDomainDiscoveryQueue` | job | scan-coordinator | domain-discovery | `0` |
 | `domain_discovery_results` | `StreamDomainDiscoveryResults` | result | domain-discovery | domain-ingestion | `0` |
 | `ip_discovery_queue` | `StreamIPDiscoveryQueue` | job | scan-coordinator, domain-ingestion | port-discovery | `0` |
-| `ip_discovery_results` | `StreamIPDiscoveryResults` | result | port-discovery | port-ingestion, webtechprofiler | `0` |
-| `domain_scan_triggers` | `StreamDomainScanTriggers` | trigger | domain-ingestion | nuclei, testssl, webtechprofiler, js-dep, http-header, email-security | `$` |
+| `ip_discovery_results` | `StreamIPDiscoveryResults` | result | port-discovery | port-ingestion | `0` |
+| `domain_scan_triggers` | `StreamDomainScanTriggers` | trigger | domain-ingestion | nuclei, testssl, js-dep, http-header, email-security | `$` |
 | `port_scan_triggers` | `StreamPortScanTriggers` | trigger | port-ingestion | nuclei | `$` |
-| `security_findings` | `StreamSecurityFindings` | result | nuclei, testssl, webtechprofiler, js-dep, http-header, email-security | findings-ingestion | `0` |
+| `security_findings` | `StreamSecurityFindings` | result | nuclei, testssl, js-dep, http-header, email-security | findings-ingestion | `0` |
 | `discovery_enrichment_queue` | `StreamDiscoveryEnrichmentQueue` | job | domain-ingestion, port-ingestion | discovery-enrichment | `0` |
 | `discovery_enrichment_results` | `StreamDiscoveryEnrichmentResults` | result | discovery-enrichment | enrichment-ingestion | `0` |
 | `kb_generation_queue` | `StreamKBGenerationQueue` | job | findings-ingestion | knowledge-base-engine | `0` |
@@ -64,7 +63,6 @@ The scan monitor tracks these consumer groups to determine when a scan is comple
 |--------|---------------|---------|
 | `domain_scan_triggers` | `nuclei_scanner_service` | nuclei-scanner |
 | `domain_scan_triggers` | `testssl_scanner_service` | testssl-scanner |
-| `domain_scan_triggers` | `webtechprofiler_service` | webtechprofiler |
 | `domain_scan_triggers` | `js_dependency_scanner_service` | js-dependency-scanner |
 | `domain_scan_triggers` | `http_header_scanner_service` | http-header-scanner |
 | `domain_scan_triggers` | `email_security_scanner_service` | email-security-scanner |
@@ -72,7 +70,6 @@ The scan monitor tracks these consumer groups to determine when a scan is comple
 
 | `domain_discovery_results` | `domain_ingestion_service` | domain-ingestion |
 | `ip_discovery_results` | `port_ingestion_service` | port-ingestion |
-| `ip_discovery_results` | `webtechprofiler_service` | webtechprofiler |
 | `security_findings` | `findings_ingestion_service` | findings-ingestion |
 
 **When adding a new active recon scanner:** You MUST add its consumer group to this list or scans will complete before the new scanner finishes processing.
@@ -109,7 +106,6 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 | `CreateConsumerGroupFromLatest` | `$` (latest) | Ephemeral triggers — only process new messages | Active recon scanners on trigger streams |
 
 **Dual-strategy consumers:**
-- **webtechprofiler**: `$` on `domain_scan_triggers` (ephemeral) + `0` on `ip_discovery_results` (guaranteed)
 - **nuclei-scanner**: `$` on both `domain_scan_triggers` and `port_scan_triggers`
 - **testssl-scanner**: `$` on `domain_scan_triggers` only
 
@@ -141,7 +137,6 @@ Each service defines its consumer group constant in its own `constants.go`:
 | port-discovery | `src/internal/discoveries/port_discovery/constants.go` | `GroupPortDiscovery` |
 | nuclei-scanner | `src/internal/active_recon/nuclei_scanner/constants.go` | `GroupNucleiScanner` |
 | testssl-scanner | `src/internal/active_recon/testssl_scanner/constants.go` | `GroupTestSSLScanner` |
-| webtechprofiler | `src/internal/active_recon/webtechprofiler/constants.go` | `GroupWebTechProfiler` |
 | js-dependency-scanner | `src/internal/active_recon/js_dependency_scanner/constants.go` | `GroupJSDependencyScanner` |
 | http-header-scanner | `src/internal/active_recon/http_header_scanner/constants.go` | `GroupHTTPHeaderScanner` |
 | email-security-scanner | `src/internal/active_recon/email_security_scanner/constants.go` | `GroupEmailSecurityScanner` |

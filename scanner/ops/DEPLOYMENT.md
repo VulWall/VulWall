@@ -18,7 +18,6 @@ make --version           # GNU Make
 | ingestion | 1 |
 | nuclei-scanner | 5 |
 | testssl-scanner | 5 |
-| webtechprofiler | 1 |
 | js-dependency-scanner | 1 |
 | discovery-enrichment | 1 |
 

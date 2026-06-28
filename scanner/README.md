@@ -36,7 +36,6 @@ SCAN COORDINATOR (automated scheduling)
 ACTIVE RECON SCANNERS (consume from scan triggers)
     ├─→ Nuclei Scanner ─→ security_findings ─→ Findings Ingestion
     ├─→ TestSSL Scanner ─→ security_findings ─→ Findings Ingestion
-    ├─→ WebTechProfiler ─→ security_findings ─→ Findings Ingestion
     └─→ JS Dependency Scanner ─→ security_findings ─→ Findings Ingestion
 
 DISCOVERY ENRICHMENT (WAF + IP Geolocation)
@@ -53,7 +52,6 @@ DISCOVERY ENRICHMENT (WAF + IP Geolocation)
 | **ingestion** | MongoDB persistence (5 slices) | multiple | multiple |
 | **nuclei-scanner** | Vulnerability scanning | domain/port_scan_triggers | security_findings |
 | **testssl-scanner** | TLS/SSL analysis | domain_scan_triggers | security_findings |
-| **webtechprofiler** | Web technology detection | domain_scan_triggers | security_findings |
 | **js-dependency-scanner** | JS library vulnerabilities | domain_scan_triggers | security_findings |
 | **discovery-enrichment** | WAF + IP geolocation | discovery_enrichment_queue | discovery_enrichment_results |
 
@@ -121,7 +119,6 @@ src/                         # Go source code
 │   ├── active_recon/
 │   │   ├── nuclei-scanner/      # Nuclei vulnerability scanner
 │   │   ├── testssl-scanner/     # TLS/SSL scanner
-│   │   ├── webtechprofiler/     # Web tech detection
 │   │   ├── js-dependency-scanner/  # JS vulnerability scanner
 │   │   └── discovery-enrichment/   # WAF + geolocation
 │   ├── ingestion/               # MongoDB persistence orchestrator

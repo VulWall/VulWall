@@ -153,14 +153,14 @@ Consumer creates groups on both `domain_scan_triggers` and `port_scan_triggers`.
 ### 5. Consumer group start position
 
 - **Trigger streams** (`domain_scan_triggers`, `port_scan_triggers`): use `CreateConsumerGroupFromLatest` (from `$`) — only process new discoveries
-- **Result streams** (`ip_discovery_results` for webtechprofiler): use `CreateConsumerGroup` (from `0`) — guaranteed delivery
+- **Result streams** (e.g. `ip_discovery_results`): use `CreateConsumerGroup` (from `0`) — guaranteed delivery
 
 ### 6. Implementation checklist
 
 - [ ] Scanner interface in `scanner/` package
 - [ ] Service orchestration under 200 lines
 - [ ] Convert results to `shared.SecurityFinding`
-- [ ] Set `Source` to a consistent lowercase name (existing: "nuclei", "testssl", "jsscanner", "http-headers", "webtechprofiler")
+- [ ] Set `Source` to a consistent lowercase name (existing: "nuclei", "testssl", "jsscanner", "http-headers")
 - [ ] Publish to `shared.StreamSecurityFindings`
 - [ ] Inject TraceContext before publishing
 - [ ] Extract TraceContext after consuming
@@ -288,7 +288,7 @@ func main() {
 
 Services listed as "RunSimple (manual)" in SERVICE_REGISTRY.md use this mode. The service creates its own consumer groups inside `consumer.go`'s `Start()` method. Use when:
 - Service consumes from multiple streams (nuclei)
-- Different start positions per stream (webtechprofiler: `$` on triggers, `0` on results)
+- Different start positions per stream (`$` on triggers, `0` on results)
 
 ```go
 func main() {
