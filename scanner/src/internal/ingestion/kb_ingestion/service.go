@@ -67,7 +67,6 @@ func (s *Service) ProcessEntry(ctx context.Context, result shared.KBGenerationRe
 }
 
 // upsertKBEntry writes a KB entry to the knowledge_base collection
-// Uses $setOnInsert so the first write creates the entry and subsequent writes for the same finding_type are no-ops
 func (s *Service) upsertKBEntry(ctx context.Context, result shared.KBGenerationResult) error {
 	collection := s.db.Collection(shared.CollectionKnowledgeBase)
 
@@ -75,18 +74,21 @@ func (s *Service) upsertKBEntry(ctx context.Context, result shared.KBGenerationR
 
 	filter := bson.M{"_id": docID}
 
+	now := time.Now()
 	update := bson.M{
-		"$setOnInsert": bson.M{
-			"_id":          docID,
+		"$set": bson.M{
 			"finding_type": result.FindingType,
 			"business":     extractSection(result.Entry, "business"),
 			"technical":    extractSection(result.Entry, "technical"),
 			"metadata":     extractSection(result.Entry, "metadata"),
 			"model":        result.Model,
-			"published":    false,
-			"created_at":   time.Now(),
-			"version":      1,
-			"updated_at":   nil,
+			"updated_at":   now,
+		},
+		"$setOnInsert": bson.M{
+			"_id":        docID,
+			"published":  false,
+			"created_at": now,
+			"version":    1,
 		},
 	}
 
@@ -103,8 +105,9 @@ func (s *Service) upsertKBEntry(ctx context.Context, result shared.KBGenerationR
 			zap.String("doc_id", docID),
 		)
 	} else {
-		s.logger.Debug("KB entry already exists, skipping",
+		s.logger.Info("Updated existing KB entry",
 			zap.String("finding_type", result.FindingType),
+			zap.String("model", result.Model),
 		)
 	}
 
