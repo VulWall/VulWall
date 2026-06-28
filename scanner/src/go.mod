@@ -10,7 +10,6 @@ require (
 	github.com/miekg/dns v1.1.72
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/projectdiscovery/subfinder/v2 v2.14.0
-	github.com/projectdiscovery/wappalyzergo v0.2.53
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/yl2chen/cidranger v1.0.2
