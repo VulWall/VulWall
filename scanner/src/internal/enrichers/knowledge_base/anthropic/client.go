@@ -17,7 +17,7 @@ import (
 
 const (
 	// DefaultModel is the default Anthropic model to use
-	DefaultModel = "claude-sonnet-4-5-20250514"
+	DefaultModel = "claude-sonnet-4-6"
 
 	// API endpoint
 	anthropicAPIURL = "https://api.anthropic.com/v1/messages"

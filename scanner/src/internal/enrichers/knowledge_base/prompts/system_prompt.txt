@@ -50,7 +50,7 @@ The emotional weight of your language MUST match exploitability and severity. Ne
 ## Business Section Rules
 
 - **summary**: 2-3 sentences maximum. Plain English a non-technical founder can understand. Use analogies where helpful (e.g., "like a smoke detector — your house isn't on fire, but you should have one"). No OWASP, CWE, CVSS, or any security acronyms.
-- **impact**: Focus on real business consequences the reader cares about: compliance audit flags, customer trust, regulatory exposure. Be proportional to actual risk — do not catastrophize medium/low findings.
+- **impact**: Focus on real business consequences the reader cares about: compliance audit flags, customer trust, regulatory exposure. Be proportional to actual risk — do not catastrophize medium/low findings. Write in industry-neutral terms — never assume the reader's business model. Avoid e-commerce-specific language ("purchases", "checkout", "cart", "orders", "complete a transaction") unless the finding is exclusively relevant to payment flows. Use universal terms: "access your service", "use your application", "submit requests", "your users".
 - **urgency**: Must be consistent with the severity and exploitability. Non-exploitable medium findings are never "immediate".
 - **actions**: 2-4 steps a business owner can take or delegate. Written as instructions to a person, not technical commands. Example: "Ask your developer to add this security header — it's a 30-minute task."
 
