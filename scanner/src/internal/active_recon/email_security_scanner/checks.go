@@ -216,7 +216,7 @@ func checkDKIM(ctx context.Context, resolver *net.Resolver, domain string) []Ema
 	return []EmailCheckResult{
 		{
 			FindingType: "missing-dkim",
-			Severity:    shared.SeverityInfo,
+			Severity:    shared.SeverityLow,
 			Title:       "No DKIM Record Found",
 			Description: "No DKIM (DomainKeys Identified Mail) record was found at common selectors (" + strings.Join(dkimSelectors, ", ") + ") for this domain. DKIM cryptographically signs outgoing emails, allowing recipients to verify the message was not altered in transit. Note: DKIM selectors are domain-specific, so a record may exist at a custom selector not checked here.",
 			References:  []string{"https://datatracker.ietf.org/doc/html/rfc6376"},
