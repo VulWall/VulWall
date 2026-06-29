@@ -235,6 +235,23 @@ func (s *Service) buildFindingDocument(finding shared.SecurityFinding) (bson.M, 
 
 	// Add metadata if present
 	if len(finding.Metadata) > 0 {
+		// Normalize scanner-specific asset fields to canonical matched_at
+		if _, ok := finding.Metadata["matched_at"]; !ok {
+			for _, key := range []string{"target", "page_url", "url"} {
+				if val, exists := finding.Metadata[key]; exists {
+					finding.Metadata["matched_at"] = val
+					delete(finding.Metadata, key)
+					break
+				}
+			}
+		}
+		// Normalize plural references to singular reference (Nuclei convention)
+		if _, ok := finding.Metadata["reference"]; !ok {
+			if val, exists := finding.Metadata["references"]; exists {
+				finding.Metadata["reference"] = val
+				delete(finding.Metadata, "references")
+			}
+		}
 		doc["metadata"] = finding.Metadata
 	}
 
