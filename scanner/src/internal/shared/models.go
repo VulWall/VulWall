@@ -215,6 +215,7 @@ type Organization struct {
 	Industry             string               `json:"industry" bson:"industry"`
 	Website              string               `json:"website" bson:"website"`
 	CertVisible          bool                 `json:"cert_visible" bson:"cert_visible"`
+	IsClaimed            bool                 `json:"is_claimed" bson:"is_claimed"` // false = unclaimed (legacy) org; excluded from recurring cron scans (absent = legacy claimed org)
 	CreatedAt            time.Time            `json:"created_at" bson:"created_at"`
 	UpdatedAt            time.Time            `json:"updated_at" bson:"updated_at"`
 	SubscriptionSettings SubscriptionSettings `json:"subscription_settings" bson:"subscription_settings"`
