@@ -17,47 +17,70 @@ func TestOrgGuardExists(t *testing.T) {
 
 	const orgID = "org-123"
 
+	// rewindBetweenTTLs is older than the short positive TTL but younger than
+	// the long negative TTL, so it proves the split: a positive entry goes
+	// stale (re-lookup) while a negative entry of the same age stays fresh.
+	const rewindBetweenTTLs = OrgPositiveCacheTTL + 15*time.Second // 45s: >30s, <5m
+
 	tests := []struct {
-		name          string
-		orgID         string
-		lookupResult  bool // value the injected lookup returns
-		calls         int  // number of back-to-back Exists invocations
-		expireAfter1  bool // force the cached entry to look stale after the 1st call
-		wantResult    bool
+		name           string
+		orgID          string
+		lookupResult   bool          // value the injected lookup returns
+		calls          int           // number of back-to-back Exists invocations
+		rewindAfter1   time.Duration // if >0, age the cached entry by this after the 1st call
+		wantResult     bool
 		wantLookupHits int
 	}{
 		{
-			name:          "empty org id short-circuits without lookup",
-			orgID:         "",
-			lookupResult:  true,
-			calls:         1,
-			wantResult:    false,
+			name:           "empty org id short-circuits without lookup",
+			orgID:          "",
+			lookupResult:   true,
+			calls:          1,
+			wantResult:     false,
 			wantLookupHits: 0,
 		},
 		{
-			name:          "positive result is cached across calls",
-			orgID:         orgID,
-			lookupResult:  true,
-			calls:         3,
-			wantResult:    true,
+			name:           "positive result is cached across calls",
+			orgID:          orgID,
+			lookupResult:   true,
+			calls:          3,
+			wantResult:     true,
 			wantLookupHits: 1,
 		},
 		{
-			name:          "negative result is cached across calls",
-			orgID:         orgID,
-			lookupResult:  false,
-			calls:         3,
-			wantResult:    false,
+			name:           "negative result is cached across calls",
+			orgID:          orgID,
+			lookupResult:   false,
+			calls:          3,
+			wantResult:     false,
 			wantLookupHits: 1,
 		},
 		{
-			name:          "expired entry triggers a fresh lookup",
-			orgID:         orgID,
-			lookupResult:  true,
-			calls:         2,
-			expireAfter1:  true,
-			wantResult:    true,
+			name:           "expired entry triggers a fresh lookup",
+			orgID:          orgID,
+			lookupResult:   true,
+			calls:          2,
+			rewindAfter1:   2 * OrgCacheTTL,
+			wantResult:     true,
 			wantLookupHits: 2,
+		},
+		{
+			name:           "positive entry expires after short TTL",
+			orgID:          orgID,
+			lookupResult:   true,
+			calls:          2,
+			rewindAfter1:   rewindBetweenTTLs, // older than positive TTL -> re-lookup
+			wantResult:     true,
+			wantLookupHits: 2,
+		},
+		{
+			name:           "negative entry survives past short TTL",
+			orgID:          orgID,
+			lookupResult:   false,
+			calls:          2,
+			rewindAfter1:   rewindBetweenTTLs, // younger than negative TTL -> cached
+			wantResult:     false,
+			wantLookupHits: 1,
 		},
 	}
 
@@ -81,12 +104,12 @@ func TestOrgGuardExists(t *testing.T) {
 			for i := 0; i < tc.calls; i++ {
 				got = g.Exists(ctx, tc.orgID)
 
-				if tc.expireAfter1 && i == 0 {
-					// Rewind the cached timestamp past the TTL so the next call
-					// treats the entry as stale and re-runs the lookup.
+				if tc.rewindAfter1 > 0 && i == 0 {
+					// Age the cached timestamp so the next call re-evaluates
+					// freshness against the entry's TTL.
 					g.mu.Lock()
 					entry := g.cache[tc.orgID]
-					entry.checkedAt = time.Now().Add(-2 * OrgCacheTTL)
+					entry.checkedAt = time.Now().Add(-tc.rewindAfter1)
 					g.cache[tc.orgID] = entry
 					g.mu.Unlock()
 				}
