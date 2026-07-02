@@ -23,19 +23,21 @@ import (
 
 // Service handles persistence of security findings to MongoDB
 type Service struct {
-	db     *mongo.Database
-	redis  *redis.Client
-	logger *zap.Logger
-	tracer trace.Tracer
+	db       *mongo.Database
+	redis    *redis.Client
+	logger   *zap.Logger
+	tracer   trace.Tracer
+	orgGuard *shared.OrgGuard
 }
 
 // NewService creates a new findings ingestion service
-func NewService(db *mongo.Database, redisClient *redis.Client, logger *zap.Logger) *Service {
+func NewService(db *mongo.Database, redisClient *redis.Client, logger *zap.Logger, orgGuard *shared.OrgGuard) *Service {
 	return &Service{
-		db:     db,
-		redis:  redisClient,
-		logger: logger,
-		tracer: otel.Tracer("findings-ingestion"),
+		db:       db,
+		redis:    redisClient,
+		logger:   logger,
+		tracer:   otel.Tracer("findings-ingestion"),
+		orgGuard: orgGuard,
 	}
 }
 
@@ -59,6 +61,19 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 
 	if finding.OrgID == "" {
 		s.logger.Warn("Skipping finding without org_id")
+		return nil
+	}
+
+	// Drop results for orgs that no longer exist. An org can be deleted mid-scan
+	// (Admin/Dashboard cascade delete) while its pipeline is still in flight;
+	// without this guard, ingestion would recreate orphan findings. Soft-skip
+	// (return nil) — an orphan during delete is expected, not a poison message,
+	// so dead-lettering it would only flood the dead-letter stream.
+	if !s.orgGuard.Exists(ctx, finding.OrgID) {
+		s.logger.Info("Skipping finding: organization no longer exists",
+			zap.String("org_id", finding.OrgID),
+			zap.String("finding_type", finding.FindingType),
+		)
 		return nil
 	}
 

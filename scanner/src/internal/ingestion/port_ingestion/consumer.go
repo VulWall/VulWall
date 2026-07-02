@@ -21,10 +21,10 @@ type Consumer struct {
 	activity *shared.ScanActivityTracker
 }
 
-func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker) *Consumer {
+func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker, orgGuard *shared.OrgGuard) *Consumer {
 	return &Consumer{
 		redis:    redisClient,
-		service:  NewService(db, redisClient, logger),
+		service:  NewService(db, redisClient, logger, orgGuard),
 		logger:   logger,
 		activity: activity,
 	}

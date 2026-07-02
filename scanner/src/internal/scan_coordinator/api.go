@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 
@@ -104,6 +105,10 @@ func (a *APIServer) handleTriggerScan(w http.ResponseWriter, r *http.Request) {
 		TriggeredBy: req.TriggeredBy,
 	})
 	if err != nil {
+		if errors.Is(err, ErrOrgNotFound) {
+			a.writeJSON(w, http.StatusNotFound, errorResponse{Error: "organization not found"})
+			return
+		}
 		a.logger.Error("Failed to trigger scan",
 			zap.String("org_id", req.OrgID),
 			zap.Error(err),

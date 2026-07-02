@@ -42,6 +42,12 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 	// so throttle state is global (one write per scan per interval, not per consumer).
 	activity := shared.NewScanActivityTracker(o.db, o.logger)
 
+	// Shared org-existence guard. An org can be deleted mid-scan (Admin/Dashboard
+	// cascade delete) while its pipeline is still in flight; the guard lets each
+	// write path drop results for orgs that no longer exist instead of recreating
+	// orphan documents. A single shared instance keeps the negative cache global.
+	orgGuard := shared.NewOrgGuard(o.db, o.logger)
+
 	// Create wait group to manage goroutines
 	var wg sync.WaitGroup
 	errChan := make(chan error, 6) // Buffer for 6 consumers
@@ -52,7 +58,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting domain ingestion consumer")
 
-		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.logger, activity)
+		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.logger, activity, orgGuard)
 		if err := domainConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Domain ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("domain ingestion: %w", err)
@@ -65,7 +71,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting port ingestion consumer")
 
-		portConsumer := port_ingestion.NewConsumer(o.redis, o.db, o.logger, activity)
+		portConsumer := port_ingestion.NewConsumer(o.redis, o.db, o.logger, activity, orgGuard)
 		if err := portConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Port ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("port ingestion: %w", err)
@@ -78,7 +84,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting findings ingestion consumer")
 
-		findingsConsumer := findings_ingestion.NewConsumer(o.redis, o.db, o.logger, activity)
+		findingsConsumer := findings_ingestion.NewConsumer(o.redis, o.db, o.logger, activity, orgGuard)
 		if err := findingsConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Findings ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("findings ingestion: %w", err)
