@@ -10,16 +10,32 @@ import (
 	"go.uber.org/zap"
 )
 
-// OrgCacheTTL controls how long an org-existence result is cached before it is
-// re-checked against MongoDB. Both positive and negative results are cached;
-// the negative cache matters most, since a deleted org whose scan is still in
-// flight would otherwise trigger a MongoDB lookup for every orphan result.
+// OrgCacheTTL controls how long a NEGATIVE org-existence result (org does not
+// exist) is cached before it is re-checked against MongoDB. It is long because
+// a deleted org whose scan is still in flight would otherwise trigger a MongoDB
+// lookup for every orphan result in the drain.
 const OrgCacheTTL = 5 * time.Minute
+
+// OrgPositiveCacheTTL controls how long a POSITIVE result (org exists) is
+// cached. It is deliberately short: an org can be deleted mid-scan, and a long
+// positive TTL would keep writing orphan results until it expired — defeating
+// the guard. A per-org FindOne on _id is an indexed point lookup, so a short
+// TTL still collapses bursts while tightening the orphan window to ~30s.
+const OrgPositiveCacheTTL = 30 * time.Second
 
 // orgCacheEntry is a single cached org-existence result.
 type orgCacheEntry struct {
 	exists    bool
 	checkedAt time.Time
+}
+
+// ttl returns how long this entry stays fresh: short for positive results
+// (catch mid-scan deletes fast), long for negatives (avoid orphan-drain churn).
+func (e orgCacheEntry) ttl() time.Duration {
+	if e.exists {
+		return OrgPositiveCacheTTL
+	}
+	return OrgCacheTTL
 }
 
 // OrgGuard answers "does this organization still exist?" with an in-memory,
@@ -64,8 +80,10 @@ func NewOrgGuard(db *mongo.Database, logger *zap.Logger) *OrgGuard {
 	}
 }
 
-// Exists reports whether the organization still exists. Results (both positive
-// and negative) are cached for OrgCacheTTL. An empty orgID is always false.
+// Exists reports whether the organization still exists. Positive results are
+// cached for OrgPositiveCacheTTL (short, so a mid-scan delete is caught
+// quickly); negative results are cached for OrgCacheTTL (long, to avoid
+// hammering MongoDB during an orphan drain). An empty orgID is always false.
 func (g *OrgGuard) Exists(ctx context.Context, orgID string) bool {
 	if orgID == "" {
 		return false
@@ -74,7 +92,7 @@ func (g *OrgGuard) Exists(ctx context.Context, orgID string) bool {
 	now := time.Now()
 
 	g.mu.Lock()
-	if entry, ok := g.cache[orgID]; ok && now.Sub(entry.checkedAt) < OrgCacheTTL {
+	if entry, ok := g.cache[orgID]; ok && now.Sub(entry.checkedAt) < entry.ttl() {
 		g.mu.Unlock()
 		return entry.exists
 	}
