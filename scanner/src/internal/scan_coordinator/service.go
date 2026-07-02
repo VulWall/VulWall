@@ -2,6 +2,7 @@ package scan_coordinator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -20,6 +21,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+// ErrOrgNotFound indicates a scan was requested for an organization that no
+// longer exists — e.g., deleted between a cron enqueue and execution, or a bad
+// API caller. Callers should surface this as a 404, not a 500.
+var ErrOrgNotFound = errors.New("organization not found")
 
 // Service handles scan coordination logic
 type Service struct {
@@ -61,6 +67,23 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 		zap.String("type", req.Type),
 		zap.String("triggered_by", req.TriggeredBy),
 	)
+
+	// Verify the org still exists before creating a scan record or publishing
+	// jobs. A stale cron entry or a bad API caller could otherwise create an
+	// orphan scan for a deleted org. See NightWatch #167.
+	exists, err := s.orgExists(ctx, req.OrgID)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return "", fmt.Errorf("failed to verify organization: %w", err)
+	}
+	if !exists {
+		span.SetStatus(codes.Error, ErrOrgNotFound.Error())
+		s.logger.Warn("Skipping scan trigger: organization not found",
+			zap.String("org_id", req.OrgID),
+		)
+		return "", ErrOrgNotFound
+	}
 
 	// Get all assets for this organization first (needed for targeted_assets)
 	assets, err := s.getOrgAssets(ctx, req.OrgID)
@@ -155,6 +178,20 @@ func (s *Service) createScan(ctx context.Context, scan shared.Scan) error {
 	coll := s.db.Collection(shared.CollectionScans)
 	_, err := coll.InsertOne(ctx, scan)
 	return err
+}
+
+// orgExists reports whether an organization document exists for orgID.
+// Mirrors the org-collection access pattern used by the scheduler.
+func (s *Service) orgExists(ctx context.Context, orgID string) (bool, error) {
+	coll := s.db.Collection(shared.CollectionOrganizations)
+	err := coll.FindOne(ctx, bson.M{"_id": orgID}).Err()
+	if err == mongo.ErrNoDocuments {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // getOrgAssets retrieves all enabled user-added assets for an organization

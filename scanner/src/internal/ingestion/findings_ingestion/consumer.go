@@ -23,8 +23,8 @@ type Consumer struct {
 }
 
 // NewConsumer creates a new findings ingestion consumer
-func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker) *Consumer {
-	service := NewService(db, redisClient, logger)
+func NewConsumer(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger, activity *shared.ScanActivityTracker, orgGuard *shared.OrgGuard) *Consumer {
+	service := NewService(db, redisClient, logger, orgGuard)
 	return &Consumer{
 		redis:    redisClient,
 		service:  service,
