@@ -184,7 +184,7 @@ func (s *Service) createScan(ctx context.Context, scan shared.Scan) error {
 // Mirrors the org-collection access pattern used by the scheduler.
 func (s *Service) orgExists(ctx context.Context, orgID string) (bool, error) {
 	coll := s.db.Collection(shared.CollectionOrganizations)
-	err := coll.FindOne(ctx, bson.M{"_id": orgID}).Err()
+	err := coll.FindOne(ctx, shared.OrgIDFilter(orgID)).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}

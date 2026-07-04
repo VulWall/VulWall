@@ -5,8 +5,54 @@ import (
 	"testing"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.uber.org/zap"
 )
+
+// TestOrgIDFilter locks the ObjectID conversion: organizations._id is an
+// ObjectID, so a hex org id must produce an ObjectID filter (a bare string never
+// matches and silently reads as "org not found" — the scan-trigger 404 bug).
+// Non-hex ids fall back to a string match.
+func TestOrgIDFilter(t *testing.T) {
+	t.Parallel()
+
+	const hexID = "507f191e810c19729de860ea"
+
+	oid, err := primitive.ObjectIDFromHex(hexID)
+	if err != nil {
+		t.Fatalf("test setup: %v", err)
+	}
+
+	if got := OrgIDFilter(hexID)["_id"]; got != oid {
+		t.Errorf("OrgIDFilter(%q)[_id] = %v (%T), want ObjectID %v", hexID, got, got, oid)
+	}
+
+	const notHex = "org-123"
+	if got := OrgIDFilter(notHex)["_id"]; got != notHex {
+		t.Errorf("OrgIDFilter(%q)[_id] = %v (%T), want string %q", notHex, got, got, notHex)
+	}
+
+	// 24 chars but not hex: must fall back to a string filter, not error or
+	// wrongly convert. This is the boundary most likely to regress if the
+	// hex check is ever "optimized" to a bare length check.
+	const nonHex24 = "zzzzzzzzzzzzzzzzzzzzzzzz"
+	if got := OrgIDFilter(nonHex24)["_id"]; got != nonHex24 {
+		t.Errorf("OrgIDFilter(%q)[_id] = %v (%T), want string fallback", nonHex24, got, got)
+	}
+
+	// Uppercase hex decodes to the same ObjectID as lowercase (hex is
+	// case-insensitive) — pin it so a refactor can't silently break it.
+	upperOID, err := primitive.ObjectIDFromHex("507F191E810C19729DE860EA")
+	if err != nil {
+		t.Fatalf("test setup: %v", err)
+	}
+	if upperOID != oid {
+		t.Errorf("uppercase hex decoded to %v, want %v", upperOID, oid)
+	}
+	if got := OrgIDFilter("507F191E810C19729DE860EA")["_id"]; got != oid {
+		t.Errorf("OrgIDFilter(uppercase)[_id] = %v (%T), want ObjectID %v", got, got, oid)
+	}
+}
 
 // TestOrgGuardExists verifies the cache logic of OrgGuard without a MongoDB
 // dependency by injecting a counting lookup func via the unexported seam. It
