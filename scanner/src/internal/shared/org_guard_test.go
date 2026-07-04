@@ -31,6 +31,27 @@ func TestOrgIDFilter(t *testing.T) {
 	if got := OrgIDFilter(notHex)["_id"]; got != notHex {
 		t.Errorf("OrgIDFilter(%q)[_id] = %v (%T), want string %q", notHex, got, got, notHex)
 	}
+
+	// 24 chars but not hex: must fall back to a string filter, not error or
+	// wrongly convert. This is the boundary most likely to regress if the
+	// hex check is ever "optimized" to a bare length check.
+	const nonHex24 = "zzzzzzzzzzzzzzzzzzzzzzzz"
+	if got := OrgIDFilter(nonHex24)["_id"]; got != nonHex24 {
+		t.Errorf("OrgIDFilter(%q)[_id] = %v (%T), want string fallback", nonHex24, got, got)
+	}
+
+	// Uppercase hex decodes to the same ObjectID as lowercase (hex is
+	// case-insensitive) — pin it so a refactor can't silently break it.
+	upperOID, err := primitive.ObjectIDFromHex("507F191E810C19729DE860EA")
+	if err != nil {
+		t.Fatalf("test setup: %v", err)
+	}
+	if upperOID != oid {
+		t.Errorf("uppercase hex decoded to %v, want %v", upperOID, oid)
+	}
+	if got := OrgIDFilter("507F191E810C19729DE860EA")["_id"]; got != oid {
+		t.Errorf("OrgIDFilter(uppercase)[_id] = %v (%T), want ObjectID %v", got, got, oid)
+	}
 }
 
 // TestOrgGuardExists verifies the cache logic of OrgGuard without a MongoDB
