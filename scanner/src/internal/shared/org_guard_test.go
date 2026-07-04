@@ -5,8 +5,33 @@ import (
 	"testing"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.uber.org/zap"
 )
+
+// TestOrgIDFilter locks the ObjectID conversion: organizations._id is an
+// ObjectID, so a hex org id must produce an ObjectID filter (a bare string never
+// matches and silently reads as "org not found" — the scan-trigger 404 bug).
+// Non-hex ids fall back to a string match.
+func TestOrgIDFilter(t *testing.T) {
+	t.Parallel()
+
+	const hexID = "507f191e810c19729de860ea"
+
+	oid, err := primitive.ObjectIDFromHex(hexID)
+	if err != nil {
+		t.Fatalf("test setup: %v", err)
+	}
+
+	if got := OrgIDFilter(hexID)["_id"]; got != oid {
+		t.Errorf("OrgIDFilter(%q)[_id] = %v (%T), want ObjectID %v", hexID, got, got, oid)
+	}
+
+	const notHex = "org-123"
+	if got := OrgIDFilter(notHex)["_id"]; got != notHex {
+		t.Errorf("OrgIDFilter(%q)[_id] = %v (%T), want string %q", notHex, got, got, notHex)
+	}
+}
 
 // TestOrgGuardExists verifies the cache logic of OrgGuard without a MongoDB
 // dependency by injecting a counting lookup func via the unexported seam. It

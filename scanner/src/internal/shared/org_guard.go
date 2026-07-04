@@ -6,9 +6,25 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 )
+
+// OrgIDFilter builds a MongoDB `_id` filter for an organization from its id
+// string. The organizations collection keys on an ObjectID `_id`, so a bare
+// string filter (`{_id: "69cd..."}`) matches nothing — the driver compares BSON
+// types and string != ObjectID. Reads decode the ObjectID into the string `ID`
+// field fine, which is why the scheduler (which loads orgs, not looks them up by
+// id) worked while every by-id existence check silently returned "not found".
+// Valid 24-char hex ids are converted to an ObjectID; anything else falls back
+// to a string match so a non-hex legacy id still resolves.
+func OrgIDFilter(orgID string) bson.M {
+	if oid, err := primitive.ObjectIDFromHex(orgID); err == nil {
+		return bson.M{"_id": oid}
+	}
+	return bson.M{"_id": orgID}
+}
 
 // OrgCacheTTL controls how long a NEGATIVE org-existence result (org does not
 // exist) is cached before it is re-checked against MongoDB. It is long because
@@ -65,7 +81,7 @@ func NewOrgGuard(db *mongo.Database, logger *zap.Logger) *OrgGuard {
 		cache:  make(map[string]orgCacheEntry),
 		lookup: func(ctx context.Context, orgID string) bool {
 			err := db.Collection(CollectionOrganizations).
-				FindOne(ctx, bson.M{"_id": orgID}).Err()
+				FindOne(ctx, OrgIDFilter(orgID)).Err()
 			if err != nil && err != mongo.ErrNoDocuments {
 				// Real error (not "no such org"). Log it and fail open (treat
 				// the org as present) so a transient DB blip does not silently
