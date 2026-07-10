@@ -2,7 +2,6 @@ package scan_coordinator
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -18,11 +17,11 @@ import (
 
 // ScanMonitor monitors scan completion and marks scans as done
 type ScanMonitor struct {
-	redis    *redis.Client
-	db       *mongo.Database
-	logger   *zap.Logger
-	webhook  *WebhookNotifier
-	tracer   trace.Tracer
+	redis   *redis.Client
+	db      *mongo.Database
+	logger  *zap.Logger
+	webhook *WebhookNotifier
+	tracer  trace.Tracer
 }
 
 // NewScanMonitor creates a new scan monitor
@@ -36,7 +35,7 @@ func NewScanMonitor(redisClient *redis.Client, db *mongo.Database, webhook *Webh
 	}
 }
 
-// Start begins monitoring scans every 15 minutes
+// Start begins monitoring scans every ScanMonitorInterval (5 minutes)
 func (m *ScanMonitor) Start(ctx context.Context) {
 	ticker := time.NewTicker(ScanMonitorInterval)
 	defer ticker.Stop()
@@ -92,68 +91,54 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 		m.logger.Info("Monitoring scans", zap.Int("active_scans", len(scans)))
 	}
 
+	now := time.Now()
 	for _, scan := range scans {
-		scanAge := time.Since(scan.CreatedAt)
+		scanAge := now.Sub(scan.CreatedAt)
 
-		// 1. Safety timeout (3 hours) — absolute upper bound for stuck scans
-		if scanAge > ScanSafetyTimeout {
-			m.logger.Warn("Scan safety timeout reached, marking as done",
-				zap.String("scan_id", scan.ID),
-				zap.Duration("age", scanAge),
-			)
-			span.AddEvent("scan_completed",
-				trace.WithAttributes(
-					attribute.String("scan.id", scan.ID),
-					attribute.String("org.id", scan.OrgID),
-					attribute.String("completion_reason", "safety_timeout"),
-					attribute.String("scan.duration", scanAge.String()),
-				),
-			)
-			m.markDone(ctx, scan.ID, true)
-			continue
-		}
-
-		// 2. Check if all consumer groups have processed this scan (fastest path)
-		if m.isComplete(ctx, scan.ID) {
-			m.logger.Info("Scan complete, all consumers finished",
-				zap.String("scan_id", scan.ID),
-				zap.Duration("duration", scanAge),
-			)
-			span.AddEvent("scan_completed",
-				trace.WithAttributes(
-					attribute.String("scan.id", scan.ID),
-					attribute.String("org.id", scan.OrgID),
-					attribute.String("completion_reason", "all_consumers_finished"),
-					attribute.String("scan.duration", scanAge.String()),
-				),
-			)
-			m.markDone(ctx, scan.ID, false)
-			continue
-		}
-
-		// 3. Idle detection — no new activity for 15 min (ingestion has settled)
-		if scanAge > ScanMinRuntime && scan.LastActivityAt != nil {
-			idleDuration := time.Since(*scan.LastActivityAt)
-			if idleDuration > ScanIdleTimeout {
-				m.logger.Info("Scan idle timeout reached, ingestion has settled",
+		// The quiescence barrier is the only completion path that needs a (relatively
+		// expensive) Redis round-trip. Compute it lazily — only when the cheap age /
+		// activity guards could actually let it complete the scan — so the safety and
+		// idle-timeout paths never pay for it.
+		quiescent := false
+		if quiescenceGuardsMet(scanAge, scan.LastActivityAt, now) {
+			q, err := m.pipelineQuiescent(ctx)
+			if err != nil {
+				m.logger.Warn("Pipeline quiescence check failed; deferring to idle/safety timeout",
 					zap.String("scan_id", scan.ID),
-					zap.Duration("age", scanAge),
-					zap.Duration("idle_for", idleDuration),
-					zap.Time("last_activity", *scan.LastActivityAt),
+					zap.Error(err),
 				)
-				span.AddEvent("scan_completed",
-					trace.WithAttributes(
-						attribute.String("scan.id", scan.ID),
-						attribute.String("org.id", scan.OrgID),
-						attribute.String("completion_reason", "idle_timeout"),
-						attribute.String("scan.duration", scanAge.String()),
-						attribute.String("idle_duration", idleDuration.String()),
-					),
-				)
-				m.markDone(ctx, scan.ID, false) // Safe to resolve — ingestion settled
-				continue
+			} else {
+				quiescent = q
 			}
 		}
+
+		complete, reason, timedOut := decideCompletion(scanAge, scan.LastActivityAt, quiescent, now)
+		if !complete {
+			continue
+		}
+
+		logFields := []zap.Field{
+			zap.String("scan_id", scan.ID),
+			zap.String("completion_reason", reason),
+			zap.Duration("duration", scanAge),
+		}
+		if scan.LastActivityAt != nil {
+			logFields = append(logFields, zap.Duration("idle_for", now.Sub(*scan.LastActivityAt)))
+		}
+		if timedOut {
+			m.logger.Warn("Scan safety timeout reached, marking as done", logFields...)
+		} else {
+			m.logger.Info("Scan complete, marking as done", logFields...)
+		}
+		span.AddEvent("scan_completed",
+			trace.WithAttributes(
+				attribute.String("scan.id", scan.ID),
+				attribute.String("org.id", scan.OrgID),
+				attribute.String("completion_reason", reason),
+				attribute.String("scan.duration", scanAge.String()),
+			),
+		)
+		m.markDone(ctx, scan.ID, timedOut)
 	}
 
 	span.SetStatus(codes.Ok, "")
@@ -161,101 +146,139 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 	return nil
 }
 
-// isComplete checks if all consumer groups have 0 pending messages for this scan
-func (m *ScanMonitor) isComplete(ctx context.Context, scanID string) bool {
-	consumerGroups := []struct {
-		stream string
-		group  string
-	}{
-		// domain_scan_triggers consumers (active recon scanners on domains/subdomains)
-		{shared.StreamDomainScanTriggers, "nuclei_scanner_service"},
-		{shared.StreamDomainScanTriggers, "testssl_scanner_service"},
-		{shared.StreamDomainScanTriggers, "js_dependency_scanner_service"},
-		{shared.StreamDomainScanTriggers, "http_header_scanner_service"},
-		{shared.StreamDomainScanTriggers, "email_security_scanner_service"},
-
-		// port_scan_triggers consumers (active recon scanners on ports)
-		{shared.StreamPortScanTriggers, "nuclei_scanner_service"},
-
-		// domain_discovery_results consumers (ingestion)
-		{shared.StreamDomainDiscoveryResults, "domain_ingestion_service"},
-
-		// ip_discovery_results consumers (ingestion)
-		{shared.StreamIPDiscoveryResults, "port_ingestion_service"},
-
-		// security_findings consumers (findings ingestion to MongoDB)
-		{shared.StreamSecurityFindings, "findings_ingestion_service"},
+// decideCompletion is the pure completion decision for a single scan, factored out so the
+// full truth table can be unit-tested without Redis or MongoDB. Paths, in precedence order:
+//
+//  1. safety_timeout   — scanAge > ScanSafetyTimeout (3h). Force-complete; timedOut=true so
+//     finding resolution is skipped (ingestion may still be incomplete).
+//  2. pipeline_quiescent — the scan has run past ScanMinRuntime, ingestion has produced work
+//     and been quiet for ScanSettleGrace, AND every finding-producing stream/group has drained
+//     (no pending AND no undelivered entries). This replaces the old XPending-only fast path,
+//     which was blind to unread trigger messages and marked scans done ~30s in.
+//  3. idle_timeout     — a backstop for a stuck or never-created group where quiescence can
+//     never be satisfied: no ingestion activity for ScanIdleTimeout after ScanMinRuntime.
+//
+// A scan that never produced any activity (LastActivityAt == nil) is intentionally closed only
+// by the safety timeout — we never want to complete a scan that has shown no sign of work.
+func decideCompletion(scanAge time.Duration, lastActivityAt *time.Time, quiescent bool, now time.Time) (complete bool, reason string, timedOut bool) {
+	if scanAge > ScanSafetyTimeout {
+		return true, "safety_timeout", true
 	}
 
-	var pendingGroups []string
-	for _, cg := range consumerGroups {
-		if m.hasPendingForScan(ctx, cg.stream, cg.group, scanID) {
-			pendingGroups = append(pendingGroups, cg.group+" ("+cg.stream+")")
-		}
+	if quiescent && quiescenceGuardsMet(scanAge, lastActivityAt, now) {
+		return true, "pipeline_quiescent", false
 	}
 
-	if len(pendingGroups) > 0 {
-		m.logger.Debug("Scan has pending consumer groups",
-			zap.String("scan_id", scanID),
-			zap.Int("pending_count", len(pendingGroups)),
-			zap.Strings("pending_groups", pendingGroups),
-		)
-		return false
+	if scanAge > ScanMinRuntime && lastActivityAt != nil && now.Sub(*lastActivityAt) > ScanIdleTimeout {
+		return true, "idle_timeout", false
 	}
 
-	return true // All consumer groups have 0 pending for this scan
+	return false, "", false
 }
 
-// hasPendingForScan checks if a consumer group has pending messages for this scan_id
-func (m *ScanMonitor) hasPendingForScan(ctx context.Context, stream, group, scanID string) bool {
-	// Get pending count for this consumer group
-	pending, err := m.redis.XPending(ctx, stream, group).Result()
-	if err != nil || pending.Count == 0 {
-		return false
+// quiescenceGuardsMet reports whether a scan is old enough and has been quiet long enough that
+// a "pipeline drained" reading can be trusted to mean "done" rather than "hasn't started yet."
+// ScanSettleGrace is larger than the ingestion activity-write throttle so a scan that is merely
+// between throttled activity writes is not mistaken for settled.
+func quiescenceGuardsMet(scanAge time.Duration, lastActivityAt *time.Time, now time.Time) bool {
+	return scanAge > ScanMinRuntime &&
+		lastActivityAt != nil &&
+		now.Sub(*lastActivityAt) > ScanSettleGrace
+}
+
+// pipelineQuiescent reports whether every group in scanPipelineGroups() has fully drained its
+// stream: nothing pending (read-but-unacked) AND nothing undelivered (last-delivered id == the
+// stream's last-generated id).
+//
+// The undelivered check is the fix. The old XPending-only oracle saw only read-but-unacked
+// messages, so triggers sitting unread while a single-threaded scanner (nuclei) worked its
+// backlog were invisible — which marked scans "done" ~30s in. The check is stream-wide, not
+// scan-scoped, so a concurrent scan can only delay completion, never cause a false one.
+func (m *ScanMonitor) pipelineQuiescent(ctx context.Context) (bool, error) {
+	groupsByStream := make(map[string][]string)
+	for _, sg := range scanPipelineGroups() {
+		groupsByStream[sg.Stream] = append(groupsByStream[sg.Stream], sg.Group)
 	}
 
-	// Get detailed pending info (check up to 100 pending messages)
-	pendingExt, err := m.redis.XPendingExt(ctx, &redis.XPendingExtArgs{
-		Stream: stream,
-		Group:  group,
-		Start:  "-",
-		End:    "+",
-		Count:  100,
-	}).Result()
-
-	if err != nil || len(pendingExt) == 0 {
-		return false
-	}
-
-	// Check if any pending message has this scan_id
-	for _, msg := range pendingExt {
-		messages, err := m.redis.XRange(ctx, stream, msg.ID, msg.ID).Result()
-		if err != nil || len(messages) == 0 {
-			continue
+	for stream, requiredGroups := range groupsByStream {
+		lastGenerated, err := m.streamLastGeneratedID(ctx, stream)
+		if err != nil {
+			return false, err
 		}
 
-		data, ok := messages[0].Values["data"].(string)
-		if !ok {
-			continue
+		present, err := m.streamGroups(ctx, stream)
+		if err != nil {
+			return false, err
 		}
 
-		var finding map[string]interface{}
-		if err := json.Unmarshal([]byte(data), &finding); err != nil {
-			continue
-		}
+		for _, name := range requiredGroups {
+			group, ok := present[name]
+			if !ok {
+				// The group has not been created yet (scanner not started). If the stream
+				// already has entries, there may be undelivered work for it → not quiescent.
+				// If the stream is empty/absent, there is nothing to process → fine.
+				if !isEmptyStreamID(lastGenerated) {
+					return false, nil
+				}
+				continue
+			}
 
-		// Check if this finding has the scan_id
-		if scanIDVal, ok := finding["scan_id"]; ok && scanIDVal == scanID {
-			m.logger.Debug("Found pending message for scan",
-				zap.String("scan_id", scanID),
-				zap.String("stream", stream),
-				zap.String("group", group),
-			)
-			return true // Found pending message for this scan
+			if !groupQuiescent(group.Pending, group.LastDeliveredID, lastGenerated) {
+				return false, nil
+			}
 		}
 	}
 
-	return false
+	return true, nil
+}
+
+// groupQuiescent reports whether a single consumer group has drained a stream: nothing pending
+// (read-but-unacked) and nothing undelivered (its last-delivered id equals the stream's
+// last-generated id). Equality — not ordering — is used deliberately: Redis stream IDs are not
+// zero-padded, so lexicographic comparison is unsafe.
+func groupQuiescent(pending int64, lastDeliveredID, lastGeneratedID string) bool {
+	return pending == 0 && lastDeliveredID == lastGeneratedID
+}
+
+// streamLastGeneratedID returns the stream's last-generated entry id, or the empty-stream id
+// ("0-0") if the stream does not exist yet.
+func (m *ScanMonitor) streamLastGeneratedID(ctx context.Context, stream string) (string, error) {
+	info, err := m.redis.XInfoStream(ctx, stream).Result()
+	if err != nil {
+		if isNoSuchKeyErr(err) {
+			return "0-0", nil
+		}
+		return "", err
+	}
+	return info.LastGeneratedID, nil
+}
+
+// streamGroups returns the consumer groups on a stream keyed by name. A missing stream yields an
+// empty map (no groups), not an error.
+func (m *ScanMonitor) streamGroups(ctx context.Context, stream string) (map[string]redis.XInfoGroup, error) {
+	groups, err := m.redis.XInfoGroups(ctx, stream).Result()
+	if err != nil {
+		if isNoSuchKeyErr(err) {
+			return map[string]redis.XInfoGroup{}, nil
+		}
+		return nil, err
+	}
+	byName := make(map[string]redis.XInfoGroup, len(groups))
+	for _, g := range groups {
+		byName[g.Name] = g
+	}
+	return byName, nil
+}
+
+// isEmptyStreamID reports whether a stream id represents an empty/absent stream.
+func isEmptyStreamID(id string) bool {
+	return id == "" || id == "0-0"
+}
+
+// isNoSuchKeyErr reports whether a Redis error is the "no such key" error returned by XINFO
+// commands against a stream that does not exist. Mirrors the check in stream_cleanup.go.
+func isNoSuchKeyErr(err error) bool {
+	return err != nil && err.Error() == "ERR no such key"
 }
 
 // markDone marks a scan as done, resolves disappeared findings, and notifies the Dashboard webhook.
@@ -276,15 +299,15 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string, timedOut bool
 	now := time.Now()
 	update := bson.M{
 		"$set": bson.M{
-			"status":                      shared.StatusDone,
-			"completed_at":                now,
-			"updated_at":                  now,
-			"stats.total_discoveries":     stats.TotalDiscoveries,
-			"stats.new_discoveries":       stats.NewDiscoveries,
-			"stats.resolved_discoveries":  stats.ResolvedDiscoveries,
-			"stats.total_findings":        stats.TotalFindings,
-			"stats.new_findings":          stats.NewFindings,
-			"stats.resolved_findings":     stats.ResolvedFindings,
+			"status":                     shared.StatusDone,
+			"completed_at":               now,
+			"updated_at":                 now,
+			"stats.total_discoveries":    stats.TotalDiscoveries,
+			"stats.new_discoveries":      stats.NewDiscoveries,
+			"stats.resolved_discoveries": stats.ResolvedDiscoveries,
+			"stats.total_findings":       stats.TotalFindings,
+			"stats.new_findings":         stats.NewFindings,
+			"stats.resolved_findings":    stats.ResolvedFindings,
 		},
 	}
 
@@ -308,13 +331,22 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string, timedOut bool
 			zap.Time("completed_at", now),
 		)
 
-		// Mark disappeared findings as resolved (skip on timeout — ingestion may be incomplete)
-		if timedOut {
+		// Mark disappeared findings as resolved. Skip on timeout (ingestion may be
+		// incomplete) and skip when the scan discovered nothing — a scan with zero
+		// discoveries has produced no evidence and must never mass-resolve the prior
+		// scan's real findings (belt-and-suspenders against a premature completion).
+		switch {
+		case timedOut:
 			m.logger.Warn("Skipping finding resolution for timed-out scan",
 				zap.String("scan_id", scanID),
 				zap.Int("would_resolve", len(resolvedFindingIDs)),
 			)
-		} else {
+		case stats.TotalDiscoveries == 0:
+			m.logger.Warn("Skipping finding resolution for scan with zero discoveries",
+				zap.String("scan_id", scanID),
+				zap.Int("would_resolve", len(resolvedFindingIDs)),
+			)
+		default:
 			m.resolveDisappearedFindings(ctx, scanID, resolvedFindingIDs)
 		}
 
@@ -346,7 +378,7 @@ func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scanID str
 		bson.M{"_id": bson.M{"$in": resolvedFindingIDs}},
 		bson.M{"$set": bson.M{
 			"status":              shared.FindingStatusResolved,
-			"resolved_at":        now,
+			"resolved_at":         now,
 			"resolved_by_scan_id": scanID,
 		}},
 	)

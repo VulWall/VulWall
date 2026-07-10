@@ -19,6 +19,12 @@ const (
 	// Prevents premature completion of scans that haven't had time to produce results.
 	ScanMinRuntime = 10 * time.Minute
 
+	// ScanSettleGrace is how long ingestion activity must have been quiet before a
+	// "pipeline drained" reading is trusted to mean the scan is done. It is larger than
+	// the ingestion activity-write throttle (ActivityUpdateInterval, 30s) so a scan that
+	// is merely between throttled activity writes is not misread as settled.
+	ScanSettleGrace = 90 * time.Second
+
 	// RefreshCron defines how often the scheduler reloads organizations from MongoDB.
 	// Standard 5-field cron: every hour at minute 0.
 	RefreshCron = "0 * * * *"
