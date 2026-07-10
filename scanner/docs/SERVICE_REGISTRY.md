@@ -55,9 +55,9 @@
 
 ## Scan Monitor Coverage
 
-**Source:** `src/internal/scan_coordinator/scan_monitor.go:105-131` — `isComplete()`
+**Source:** `src/internal/scan_coordinator/pipeline.go` — `scanPipelineGroups()` (consumed by `pipelineQuiescent()` in `scan_monitor.go`)
 
-The scan monitor tracks these consumer groups to determine when a scan is complete. A scan is marked "done" when ALL of these have 0 pending messages for the scan_id:
+The scan monitor tracks these consumer groups to determine when a scan is complete. A scan is completed via the **pipeline-quiescence** path when it has run past `ScanMinRuntime`, ingestion has been quiet for `ScanSettleGrace`, and EVERY group below has drained the stream — meaning **0 pending (read-but-unacked) messages AND no undelivered entries** (the group's last-delivered id has reached the stream's last-generated id). The undelivered-entries check is what catches trigger messages still sitting unread on a stream while a single-threaded scanner (nuclei) works through its backlog; an `XPending`-only check was blind to those and marked scans "done" ~30s in. Backstops: `idle_timeout` (no activity for `ScanIdleTimeout` after `ScanMinRuntime`) and `safety_timeout` (3h absolute).
 
 | Stream | Consumer Group | Service |
 |--------|---------------|---------|
@@ -67,12 +67,13 @@ The scan monitor tracks these consumer groups to determine when a scan is comple
 | `domain_scan_triggers` | `http_header_scanner_service` | http-header-scanner |
 | `domain_scan_triggers` | `email_security_scanner_service` | email-security-scanner |
 | `port_scan_triggers` | `nuclei_scanner_service` | nuclei-scanner |
-
 | `domain_discovery_results` | `domain_ingestion_service` | domain-ingestion |
 | `ip_discovery_results` | `port_ingestion_service` | port-ingestion |
 | `security_findings` | `findings_ingestion_service` | findings-ingestion |
 
-**When adding a new active recon scanner:** You MUST add its consumer group to this list or scans will complete before the new scanner finishes processing.
+**When adding a new active recon scanner:** You MUST add its consumer group to `scanPipelineGroups()` in `pipeline.go` (guarded by `TestScanPipelineGroups`) or scans will complete before the new scanner finishes processing.
+
+**Deliberately excluded:** the `discovery_enrichment_*` and `kb_generation_*` streams are terminal branches (enrichment writes only discovery metadata; KB writes only the `knowledge_base` collection) and produce no findings or triggers. They must NOT be added here — gating completion on the slow, cross-org, Anthropic-backed KB queue would let one org's backlog stall every other org's scans.
 
 ---
 
