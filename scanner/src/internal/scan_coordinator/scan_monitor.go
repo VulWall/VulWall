@@ -198,45 +198,51 @@ func quiescenceGuardsMet(scanAge time.Duration, lastActivityAt *time.Time, now t
 // stream: nothing pending (read-but-unacked) AND nothing undelivered (last-delivered id == the
 // stream's last-generated id).
 //
-// The undelivered check is the fix. The old XPending-only oracle saw only read-but-unacked
-// messages, so triggers sitting unread while a single-threaded scanner (nuclei) worked its
-// backlog were invisible — which marked scans "done" ~30s in. The check is stream-wide, not
-// scan-scoped, so a concurrent scan can only delay completion, never cause a false one.
+// The undelivered check catches triggers sitting unread while a single-threaded scanner
+// (nuclei) works its backlog; an XPending-only check marked scans "done" ~30s in. The check is
+// stream-wide, not scan-scoped, so a concurrent scan can only delay completion, never cause a
+// false one.
 func (m *ScanMonitor) pipelineQuiescent(ctx context.Context) (bool, error) {
-	groupsByStream := make(map[string][]string)
-	for _, sg := range scanPipelineGroups() {
-		groupsByStream[sg.Stream] = append(groupsByStream[sg.Stream], sg.Group)
-	}
+	return pipelineQuiescent(ctx, redisStreamInfo{m.redis}, scanPipelineGroups())
+}
 
-	for stream, requiredGroups := range groupsByStream {
-		lastGenerated, err := m.streamLastGeneratedID(ctx, stream)
+// streamInfo reads the state of a stream and its consumer groups.
+type streamInfo interface {
+	// lastGeneratedID returns the stream's last-generated id, "0-0" for a missing stream.
+	lastGeneratedID(ctx context.Context, stream string) (string, error)
+	// groups returns the stream's consumer groups by name, empty for a missing stream.
+	groups(ctx context.Context, stream string) (map[string]redis.XInfoGroup, error)
+}
+
+// pipelineQuiescent checks the groups one at a time, in the given order, and reads each
+// stream again for each group. With the upstream-first order of scanPipelineGroups(), a stage
+// that ACKs its last job between two reads has already published its results, and the later
+// read of the downstream stream sees them.
+func pipelineQuiescent(ctx context.Context, info streamInfo, groups []StreamGroup) (bool, error) {
+	for _, sg := range groups {
+		lastGenerated, err := info.lastGeneratedID(ctx, sg.Stream)
+		if err != nil {
+			return false, err
+		}
+		present, err := info.groups(ctx, sg.Stream)
 		if err != nil {
 			return false, err
 		}
 
-		present, err := m.streamGroups(ctx, stream)
-		if err != nil {
-			return false, err
-		}
-
-		for _, name := range requiredGroups {
-			group, ok := present[name]
-			if !ok {
-				// The group has not been created yet (scanner not started). If the stream
-				// already has entries, there may be undelivered work for it → not quiescent.
-				// If the stream is empty/absent, there is nothing to process → fine.
-				if !isEmptyStreamID(lastGenerated) {
-					return false, nil
-				}
-				continue
-			}
-
-			if !groupQuiescent(group.Pending, group.LastDeliveredID, lastGenerated) {
+		group, ok := present[sg.Group]
+		if !ok {
+			// The group has not been created yet (scanner not started). If the stream
+			// already has entries, there may be undelivered work for it → not quiescent.
+			// If the stream is empty/absent, there is nothing to process → fine.
+			if !isEmptyStreamID(lastGenerated) {
 				return false, nil
 			}
+			continue
+		}
+		if !groupQuiescent(group.Pending, group.LastDeliveredID, lastGenerated) {
+			return false, nil
 		}
 	}
-
 	return true, nil
 }
 
@@ -248,10 +254,12 @@ func groupQuiescent(pending int64, lastDeliveredID, lastGeneratedID string) bool
 	return pending == 0 && lastDeliveredID == lastGeneratedID
 }
 
-// streamLastGeneratedID returns the stream's last-generated entry id, or the empty-stream id
+type redisStreamInfo struct{ rdb *redis.Client }
+
+// lastGeneratedID returns the stream's last-generated entry id, or the empty-stream id
 // ("0-0") if the stream does not exist yet.
-func (m *ScanMonitor) streamLastGeneratedID(ctx context.Context, stream string) (string, error) {
-	info, err := m.redis.XInfoStream(ctx, stream).Result()
+func (r redisStreamInfo) lastGeneratedID(ctx context.Context, stream string) (string, error) {
+	info, err := r.rdb.XInfoStream(ctx, stream).Result()
 	if err != nil {
 		if isNoSuchKeyErr(err) {
 			return "0-0", nil
@@ -261,10 +269,10 @@ func (m *ScanMonitor) streamLastGeneratedID(ctx context.Context, stream string) 
 	return info.LastGeneratedID, nil
 }
 
-// streamGroups returns the consumer groups on a stream keyed by name. A missing stream yields an
+// groups returns the consumer groups on a stream keyed by name. A missing stream yields an
 // empty map (no groups), not an error.
-func (m *ScanMonitor) streamGroups(ctx context.Context, stream string) (map[string]redis.XInfoGroup, error) {
-	groups, err := m.redis.XInfoGroups(ctx, stream).Result()
+func (r redisStreamInfo) groups(ctx context.Context, stream string) (map[string]redis.XInfoGroup, error) {
+	groups, err := r.rdb.XInfoGroups(ctx, stream).Result()
 	if err != nil {
 		if isNoSuchKeyErr(err) {
 			return map[string]redis.XInfoGroup{}, nil

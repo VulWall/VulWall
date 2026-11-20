@@ -78,7 +78,7 @@ container health check; the scanner opens no port).
 
 1. Define consumer group in `[service]/constants.go`
 2. Use stream constants from `src/internal/shared/constants.go`
-3. **Update scan monitor** — add the (stream, group) pair to `scanPipelineGroups()` in `src/internal/scan_coordinator/pipeline.go` (guarded by `TestScanPipelineGroups`)
+3. **Update scan monitor** — add the (stream, group) pair to `scanPipelineGroups()` in `src/internal/scan_coordinator/pipeline.go`, after the stages that feed it (guarded by `TestScanPipelineGroups`); only the enrichment and KB streams stay out
 4. **Update stream cleanup** — add new result streams to `streamsToClean()` in `src/internal/scan_coordinator/stream_cleanup.go`
 5. **Update SERVICE_REGISTRY.md** — add to all relevant tables
 6. Inject TraceContext before publishing, extract after consuming
