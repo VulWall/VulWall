@@ -120,12 +120,11 @@ function initTimelineChart(chartData, range) {
             maxBarThickness: 48
         };
     });
-    shapeForScanCount(datasets, (range0.labels ?? []).length);
 
     const gridColor = cssVar('--vw-gray-200', 'rgba(0,0,0,0.06)');
     const tickColor = cssVar('--vw-gray-500', '#94a3b8');
 
-    return new Chart(canvas, {
+    const chart = new Chart(canvas, {
         type: 'line',
         data: { labels: range0.labels ?? [], datasets },
         options: {
@@ -159,6 +158,7 @@ function initTimelineChart(chartData, range) {
             scales: {
                 x: {
                     stacked: true,
+                    offset: false,
                     grid: { display: false },
                     ticks: { color: tickColor, font: { size: 11 }, maxRotation: 0, autoSkipPadding: 16 }
                 },
@@ -175,6 +175,9 @@ function initTimelineChart(chartData, range) {
             }
         }
     });
+    shapeForScanCount(chart);
+    chart.update();
+    return chart;
 }
 
 // ── 30d / 90d / 6m toggle ───────────────────────────────────────
@@ -203,17 +206,20 @@ function updateChart(chart, range) {
     SEVERITIES.forEach((sev, i) => {
         chart.data.datasets[i].data = range[sev.key] ?? [];
     });
-    shapeForScanCount(chart.data.datasets, chart.data.labels.length);
+    shapeForScanCount(chart);
     chart.update();
 }
 
 // A stacked area needs two scans: with one, its bands have no width and the chart looks
-// empty. A single scan is drawn as one stacked bar instead.
-function shapeForScanCount(datasets, scanCount) {
-    datasets.forEach((ds) => {
-        ds.type = scanCount === 1 ? 'bar' : 'line';
-        ds.backgroundColor = scanCount === 1 ? ds.borderColor : hexToRgba(ds.borderColor, 0.82);
+// empty. A single scan is drawn as one stacked bar instead, centred on the x axis (offset);
+// the area keeps its edges on the first and last scan.
+function shapeForScanCount(chart) {
+    const single = chart.data.labels.length === 1;
+    chart.data.datasets.forEach((ds) => {
+        ds.type = single ? 'bar' : 'line';
+        ds.backgroundColor = single ? ds.borderColor : hexToRgba(ds.borderColor, 0.82);
     });
+    chart.options.scales.x.offset = single;
 }
 
 // Expand a #RRGGBB color to rgba() with the given alpha. Non-hex inputs pass through.

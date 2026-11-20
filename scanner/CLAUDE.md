@@ -93,7 +93,7 @@ container health check; the scanner opens no port).
 - Ingestion service: **ONLY writer of scan data in MongoDB** — single source of truth (the coordinator writes only `scans`)
 - All jobs require `org_id` — consumers MUST validate and skip if missing
 - All findings require `source` — ingestion MUST validate and skip if missing
-- Every scanner ends each target with a coverage message (`shared.TargetCoverage`): `ok` + the keys of every finding it reported, or `error` when the check did not complete. A scan resolves a finding only on that evidence (see ARCHITECTURE.md, scan completion and finding resolution); a new scanner without it never resolves its findings
+- Every scanner ends each target with a coverage message (`shared.TargetCoverage`): `ok` + the keys of every finding it reported, or `error` when the check did not complete. A scan resolves a finding only on that evidence (see ARCHITECTURE.md, scan completion and finding resolution); a new scanner without it never resolves its findings. One deliberate exception: a nuclei `<name>:<port>` run on a CDN edge port publishes findings and no coverage (see ARCHITECTURE.md, nuclei targets)
 - Components get Redis/Mongo/logger from `main.go`; return errors from `Start()` — never `os.Exit` or `logger.Fatal` inside a component
 - Trigger streams use `CreateConsumerGroupFromLatest` (from `$`) — ephemeral
 - Result/job streams use `CreateConsumerGroup` (from `0`) — guaranteed delivery
