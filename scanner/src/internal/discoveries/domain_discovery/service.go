@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/subfinderx"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
@@ -28,6 +30,7 @@ type Service struct {
 	logger          *zap.Logger
 	subfinderClient *subfinderx.Client
 	tracer          trace.Tracer
+	dnsWorkers      int // concurrent subdomain lookups (DNS_RESOLVE_CONCURRENCY)
 }
 
 func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error) {
@@ -35,11 +38,17 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error)
 	if err != nil {
 		return nil, err
 	}
+	dnsWorkers := config.GetEnvInt(config.EnvDNSResolveConcurrency, defaultDNSResolveConcurrency)
+	if dnsWorkers < 1 {
+		dnsWorkers = defaultDNSResolveConcurrency
+	}
+	logger.Info("Domain discovery configured", zap.Int("dns_resolve_concurrency", dnsWorkers))
 	return &Service{
 		redis:           redisClient,
 		logger:          logger,
 		subfinderClient: subfinderClient,
 		tracer:          otel.Tracer("domain-discovery"),
+		dnsWorkers:      dnsWorkers,
 	}, nil
 }
 
@@ -124,6 +133,10 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	// ensuring at-least-once delivery and safe serial use of the shared subfinder runner.
 	if job.ParentID == nil && job.Port == nil && s.isDomain(job.Host) {
 		if err := s.discoverSubdomains(ctx, job.TraceID, job.ScanID, job.OrgID, job.Host); err != nil {
+			// Cut off by shutdown: return the error so the job is not ACKed as complete.
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			s.logger.Error("subfinder subdomain discovery failed",
 				zap.String("host", job.Host),
 				zap.Error(err),
@@ -174,80 +187,64 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 	// Generate parent domain ID (org-scoped)
 	parentDomainID := shared.GenerateDomainID(orgID, domain)
 
-	// Publish each discovered subdomain
+	// Build the full names, skipping empty strings, wildcards and duplicates.
+	seen := make(map[string]bool, len(subdomains))
+	names := make([]string, 0, len(subdomains))
 	for _, subdomainName := range subdomains {
-		// Skip empty strings and wildcards
 		if subdomainName == "" || subdomainName == "*" {
 			continue
 		}
-
-		// Build the full subdomain
 		fullSubdomain := subdomainName
 		if !contains(subdomainName, domain) {
 			fullSubdomain = subdomainName + "." + domain
 		}
-
-		// Resolve the subdomain. Drop it when it does not resolve (passive
-		// sources return many stale names, and an unresolved name could later
-		// be pointed at an internal address) or when any answer is private.
-		ips, err := s.resolveIPs(ctx, fullSubdomain)
-		if err != nil {
-			s.logger.Debug("Skipping subdomain: DNS resolution failed",
-				zap.String("trace_id", traceID),
-				zap.String("subdomain", fullSubdomain),
-				zap.Error(err),
-			)
-			continue
+		if !seen[fullSubdomain] {
+			seen[fullSubdomain] = true
+			names = append(names, fullSubdomain)
 		}
-		ip, checkErr := selectPublicIP(ips)
-		if checkErr != nil {
-			s.logger.Warn("Skipping subdomain: resolves to private IP",
-				zap.String("trace_id", traceID),
-				zap.String("org_id", orgID),
-				zap.String("subdomain", fullSubdomain),
-				zap.Error(checkErr),
-			)
-			continue
-		}
-		resolvedIP := &ip
-		s.logger.Debug("Resolved subdomain to IP",
-			zap.String("subdomain", fullSubdomain),
-			zap.String("ip", ip),
-		)
+	}
 
-		// Generate deterministic ID for subdomain (org-scoped)
-		subdomainID := shared.GenerateSubdomainID(orgID, fullSubdomain)
-
-		// Publish subdomain finding
+	// Resolve in parallel and publish each name as soon as it resolves. Names that do not
+	// resolve are dropped (passive sources return many stale names, and an unresolved name
+	// could later be pointed at an internal address), and so are names with a private answer.
+	var published, publishFailed atomic.Int64
+	log := s.logger.With(zap.String("trace_id", traceID), zap.String("org_id", orgID))
+	err = resolvePublic(ctx, names, s.dnsWorkers, s.resolveIPs, func(host, ip string) {
 		if err := s.publishFinding(ctx, shared.DiscoveryFinding{
-			DiscoveryID: subdomainID,
+			DiscoveryID: shared.GenerateSubdomainID(orgID, host),
 			AssetType:   shared.AssetTypeSubdomain,
 			TraceID:     traceID,
-			ScanID:      scanID,  // Pass through scan_id
+			ScanID:      scanID,
 			OrgID:       orgID,
 			Source:      "subfinder",
 			ParentID:    &parentDomainID,
-			Host:        fullSubdomain,
-			IP:          resolvedIP,
-			Port:        nil,
-			Protocol:    nil,
+			Host:        host,
+			IP:          &ip,
 			Status:      shared.AssetStatusActive,
-			Metadata:    nil, // Keep field for future extensibility
 			Timestamp:   now,
 		}); err != nil {
+			publishFailed.Add(1)
 			s.logger.Error("Failed to publish subdomain finding",
-				zap.String("subdomain", fullSubdomain),
+				zap.String("subdomain", host),
 				zap.Error(err),
 			)
-			continue
+			return
 		}
+		published.Add(1)
+		s.logger.Info("Published subdomain finding", zap.String("subdomain", host))
+	}, log)
 
-		s.logger.Info("Published subdomain finding",
-			zap.String("subdomain", fullSubdomain),
-		)
-	}
-
-	return nil
+	log.Info("Subdomain resolution finished",
+		zap.String("domain", domain),
+		zap.Int("names", len(names)),
+		zap.Int64("published", published.Load()),
+		zap.Int64("publish_failed", publishFailed.Load()),
+		zap.Int("dns_resolve_concurrency", s.dnsWorkers),
+		zap.Duration("duration", time.Since(now)),
+		zap.Bool("cancelled", err != nil),
+	)
+	span.SetAttributes(attribute.Int64("subdomain.published", published.Load()))
+	return err
 }
 
 // publishFinding publishes a discovery finding to the domain discovery results stream

@@ -158,6 +158,7 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
 | `TESTSSL_CONCURRENCY` | Concurrent testssl.sh scans (default 5) |
+| `DNS_RESOLVE_CONCURRENCY` | Concurrent subdomain DNS lookups in domain discovery (default 50); each name is published as soon as it resolves |
 | `IP_ENRICHMENT_DB_PATH` | Country MMDB (DB-IP Country Lite; default `./data/dbip-country-lite.mmdb`) |
 | `IP_ASN_DB_PATH` | Optional ASN MMDB (DB-IP ASN Lite; default `./data/dbip-asn-lite.mmdb`) |
 | `ALLOW_PRIVATE_TARGETS` | `true` disables the private/reserved IP guard (SSRF dialer, discovery, port scanner, testssl `--ip` check, nuclei `-lna`, AXFR nameserver dial). Default `false`; enable only to scan internal networks on purpose |
