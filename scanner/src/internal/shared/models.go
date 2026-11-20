@@ -214,7 +214,6 @@ type Organization struct {
 	CompanyName          string               `json:"company_name" bson:"company_name"`
 	Industry             string               `json:"industry" bson:"industry"`
 	Website              string               `json:"website" bson:"website"`
-	CertVisible          bool                 `json:"cert_visible" bson:"cert_visible"`
 	CreatedAt            time.Time            `json:"created_at" bson:"created_at"`
 	UpdatedAt            time.Time            `json:"updated_at" bson:"updated_at"`
 	SubscriptionSettings SubscriptionSettings `json:"subscription_settings" bson:"subscription_settings"`

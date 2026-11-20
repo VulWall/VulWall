@@ -216,7 +216,6 @@ type Organization struct {
     CompanyName          string               `bson:"company_name"`
     Industry             string               `bson:"industry"`
     Website              string               `bson:"website"`
-    CertVisible          bool                 `bson:"cert_visible"`
     CreatedAt            time.Time            `bson:"created_at"`
     UpdatedAt            time.Time            `bson:"updated_at"`
     SubscriptionSettings SubscriptionSettings `bson:"subscription_settings"`
@@ -416,7 +415,6 @@ type ScanStats struct {
   company_name: "Example Corp",
   industry: "Technology",
   website: "https://example.com",
-  cert_visible: true,
   created_at: ISODate("..."),
   updated_at: ISODate("..."),
   subscription_settings: {
