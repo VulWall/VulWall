@@ -50,7 +50,7 @@ const tourSteps = [
         position: 'top',
         title: 'Fix Now',
         icon: 'fa-wrench',
-        description: 'Quick access to your most critical vulnerabilities with AI-powered remediation guidance.'
+        description: 'Your most critical vulnerabilities and how to fix them. Add an Anthropic API key and AI writes more detailed guidance.'
     },
     {
         id: 'timeline',
@@ -184,8 +184,8 @@ class OnboardingTour {
             <div class="tour-welcome-content">
                 <ul class="tour-welcome-features">
                     <li><i class="fas fa-check"></i> Monitor your domains and IPs</li>
-                    <li><i class="fas fa-check"></i> Get real-time vulnerability alerts</li>
-                    <li><i class="fas fa-check"></i> AI-powered remediation steps</li>
+                    <li><i class="fas fa-check"></i> Scans on the schedule you choose</li>
+                    <li><i class="fas fa-check"></i> Fix guidance, with optional AI help</li>
                     <li><i class="fas fa-check"></i> Generate security reports</li>
                 </ul>
                 <div class="tour-welcome-actions">
