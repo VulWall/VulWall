@@ -76,3 +76,41 @@ func TestCoverageUpdateMergesRunsAndErrorWins(t *testing.T) {
 		t.Fatalf("status = %q after an error run, want error to stick", rec.Status)
 	}
 }
+
+// TestCoverageUpdateStoresDollarValuesLiterally: target, error and titles come from the
+// scanned site; a value that starts with "$" must be stored as written, not evaluated.
+func TestCoverageUpdateStoresDollarValuesLiterally(t *testing.T) {
+	db := testMongo(t)
+	ctx := context.Background()
+	coll := db.Collection(shared.CollectionScanCoverage)
+	filter := bson.M{"scan_id": "s1", "source": "nuclei", "discovery_id": "d1"}
+	key := shared.FindingKey{FindingType: "$status", Title: "$$ROOT"}
+	cov := shared.ScanCoverage{Source: "nuclei", DiscoveryID: "d1", Target: "$scan_id", Status: shared.CoverageOK, Reported: []shared.FindingKey{key}}
+	for i := 0; i < 2; i++ {
+		if _, err := coll.UpdateOne(ctx, filter, coverageUpdate("$org_id", cov, time.Now()), options.Update().SetUpsert(true)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	errCov := cov
+	errCov.Status, errCov.Error, errCov.Reported = shared.CoverageError, "$target", nil
+	if _, err := coll.UpdateOne(ctx, filter, coverageUpdate("$org_id", errCov, time.Now())); err != nil {
+		t.Fatal(err)
+	}
+
+	var rec struct {
+		OrgID    string              `bson:"org_id"`
+		Target   string              `bson:"target"`
+		Error    string              `bson:"error"`
+		Status   string              `bson:"status"`
+		Reported []shared.FindingKey `bson:"reported"`
+	}
+	if err := coll.FindOne(ctx, filter).Decode(&rec); err != nil {
+		t.Fatal(err)
+	}
+	if rec.OrgID != "$org_id" || rec.Target != "$scan_id" || rec.Error != "$target" || rec.Status != shared.CoverageError {
+		t.Fatalf("record = %+v, want the values as written", rec)
+	}
+	if len(rec.Reported) != 1 || rec.Reported[0] != key {
+		t.Fatalf("reported = %+v, want [%+v]", rec.Reported, key)
+	}
+}
