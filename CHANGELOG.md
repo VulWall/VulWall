@@ -26,12 +26,69 @@ First open-source, self-hosted release.
   in the compose file.
 - CI (build, vet, test), multi-arch image releases (amd64, arm64) and
   Dependabot.
+- A Change password form in Settings. Changing the password signs out every
+  other session.
+- Country flags (flag-icons 7.6.0, MIT) and logos for AWS, Azure, Google
+  Cloud, Fastly, Cloudflare, DigitalOcean, Akamai and Oracle (simple-icons
+  11.15.0, CC0) ship with the web app, so the Discoveries page needs no
+  external host. Unknown providers keep the generic icon. In dark theme the
+  logos sit on a light chip so dark brand marks stay visible.
 
 ### Changed
 
 - The AI knowledge base is optional: without `ANTHROPIC_API_KEY` the scanner
   skips it.
 - Default database name is `vulwall`.
+- The web UI is published on `127.0.0.1` only. To reach it from other
+  machines, use a reverse proxy; see "Exposing VulWall" in the README.
+- The web image cross-compiles for arm64 instead of running the .NET SDK
+  under emulation.
+- Base images, compose images and GitHub Actions are pinned by digest or
+  commit SHA. retire.js and its dependencies are pinned in
+  `scanner/docker/retire/package-lock.json` and installed with `npm ci`.
+- `MongoDB.Driver` 3.14.1.
+
+### Security
+
+- First-run setup needs a token. The web container prints the setup link
+  once at startup (`docker compose logs web`); without the token, `/setup`
+  returns 404. `SETUP_TOKEN` sets a fixed token for unattended installs.
+- Password attempts on login and shared reports are counted before the
+  password check, so parallel requests can no longer get past the limit.
+  Login also has an account-wide limit of 20 attempts per 15 minutes, and
+  concurrent BCrypt checks are capped at one per CPU core.
+- The keys that sign login cookies are stored on a web-only volume
+  (`web-keys`), not in the MongoDB database the scanner shares. Everyone is
+  logged out once after the upgrade.
+- Logging out ends the session everywhere: the auth cookie carries a
+  security stamp that logout and password changes rotate.
+- Reference links in the technical report accept only `http` and `https`
+  URLs, as the finding page already did.
+- The shared report's Print button works under the Content Security Policy.
+- The Jaeger UI is published on `127.0.0.1` only.
+- The DNS zone-transfer (AXFR) check uses the same public-IP guard as the
+  other scanners, so a target's nameserver records cannot make the scanner
+  connect to private addresses unless `ALLOW_PRIVATE_TARGETS=true`.
+- `MongoDB.Driver` 3.14.1 pulls fixed Snappier and SharpCompress versions
+  (GHSA-pggp-6c3x-2xmx, GHSA-6c8g-7p36-r338).
+
+### Fixed
+
+- A scan that was running when the scanner restarted no longer marks
+  findings as resolved. At startup the scanner closes it as `failed` with
+  `status_reason: "interrupted_by_restart"`; the Scans page shows
+  "Interrupted by restart", and the next scan compares against the last
+  complete scan.
+- A stream message that makes a scanner component panic is logged with a
+  stack trace and skipped instead of crashing the scanner. Work cut off by
+  shutdown is no longer acknowledged as done.
+- A scan that cannot start during scanner shutdown is closed as `failed`
+  right away instead of staying `running`.
+- A failed AI executive summary is retried after 5 and 30 minutes (3
+  attempts in total). Scans that finished before `ANTHROPIC_API_KEY` was set
+  get a summary once it is set, if they are less than 7 days old.
+- The "Scan now" button no longer queues a second scan while an older one is still
+  waiting for the scanner.
 
 ### Removed
 
