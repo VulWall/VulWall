@@ -307,6 +307,13 @@ func (s *Service) process(ctx context.Context, target ScanTarget, coverage bool)
 	reported := make([]shared.FindingKey, 0, len(findings))
 	for _, nucleiOutput := range findings {
 		finding := s.convertToSecurityFinding(nucleiOutput, target)
+		if !coverage {
+			// A run that is no evidence for its discovery: mark its findings so that no
+			// coverage record of the discovery can resolve them.
+			if u, err := url.Parse(target.Target); err == nil {
+				finding.Metadata[shared.FindingMetaScanHost] = u.Hostname()
+			}
+		}
 		if err := s.publishFinding(ctx, finding); err != nil {
 			return fmt.Errorf("publish nuclei finding %s: %w", nucleiOutput.TemplateID, err)
 		}

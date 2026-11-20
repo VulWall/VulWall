@@ -359,7 +359,11 @@ A `<name>:<port>` run reports no coverage because the name is the first name of 
 resolved to the address, which can differ between scans: an `ok` from name B would resolve a
 finding that name A reported on the same port. Any other address keeps the IP scan on every
 port, 80 and 443 included: by bare IP a server can show a default virtual host that its names
-do not. The port discovery is stored in every case; only the nuclei trigger changes (nuclei is
+do not. The findings of a `<name>:<port>` run carry `metadata.scan_host` (the name), and the
+resolution rule never resolves such a finding as `not_reproduced` (`notReproduced()` in
+`finding_resolution.go`): a coverage record of the port can only come from a run by IP (for
+example after the address leaves the CDN ranges), which did not check the name. Such a finding
+is resolved by hand, or as `host_no_longer_found` when the port is closed in 3 scans. The port discovery is stored in every case; only the nuclei trigger changes (nuclei is
 the only consumer of `port_scan_triggers`). The PTR check in `port_discovery` (CDN PTR
 suffixes, domain-resolved IPs only) is unchanged; it misses Cloudflare, whose edge addresses
 have no PTR record.

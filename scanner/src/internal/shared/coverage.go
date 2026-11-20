@@ -147,3 +147,8 @@ func Reachable(ctx context.Context, addrs ...string) error {
 	}
 	return errors.Join(errs...)
 }
+
+// FindingMetaScanHost is the findings.metadata key that names the host of a nuclei
+// <name>:<port> run on a CDN edge port. Finding resolution never resolves such a finding as
+// not_reproduced: that run reports no coverage (see nuclei_scanner.ProcessCDNPort).
+const FindingMetaScanHost = "scan_host"

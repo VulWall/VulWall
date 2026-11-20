@@ -83,5 +83,8 @@ func TestProcessCDNPortPublishesFindingsWithoutCoverage(t *testing.T) {
 		if f.Coverage != nil || f.DiscoveryID != "p1" {
 			t.Fatalf("message = %+v, want a finding of discovery p1", f)
 		}
+		if f.Metadata[shared.FindingMetaScanHost] != "127.0.0.1" {
+			t.Fatalf("metadata = %v, want %s = the scanned name", f.Metadata, shared.FindingMetaScanHost)
+		}
 	}
 }

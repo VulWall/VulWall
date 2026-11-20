@@ -100,6 +100,24 @@ func TestDecideResolutions(t *testing.T) {
 	}
 }
 
+// A finding from a nuclei <name>:<port> run on a CDN edge port stays open when an ok coverage
+// of the port (from a run by IP) arrives without its key: that run did not check the name.
+func TestDecideResolutionsNameRunFindingNotResolvedByPortCoverage(t *testing.T) {
+	t.Parallel()
+	port := &discoveryRef{ID: "port-1", AssetType: shared.AssetTypePort, IP: portIP, Observed: true}
+	cov := &coverageRef{ScanID: thisScan, Source: "nuclei", DiscoveryID: "port-1", Status: shared.CoverageOK}
+
+	byName := findingRef{ID: "f1", DiscoveryID: "port-1", Source: "nuclei", FindingType: "cve-1", Title: "CVE-1"}
+	byName.Metadata.ScanHost = "shop.example.com"
+	if got := outcome(decideResolutions(evidence(byName, port, cov))); got != "open" {
+		t.Fatalf("name-run finding: outcome = %s, want open", got)
+	}
+	byIP := findingRef{ID: "f2", DiscoveryID: "port-1", Source: "nuclei", FindingType: "cve-1", Title: "CVE-1"}
+	if got := outcome(decideResolutions(evidence(byIP, port, cov))); got != ResolutionNotReproduced {
+		t.Fatalf("ip-run finding: outcome = %s, want %s", got, ResolutionNotReproduced)
+	}
+}
+
 func TestDecideResolutionsPortNotObservedStaysOpen(t *testing.T) {
 	t.Parallel()
 	f := findingRef{ID: "f1", DiscoveryID: "port-1", Source: "nuclei", FindingType: "cve-1", Title: "CVE-1"}
