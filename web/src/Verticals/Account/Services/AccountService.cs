@@ -49,7 +49,13 @@ public class AccountService(
     // The cookie handler checks the stamp on every request; cache it briefly so that is not a
     // database read per request. Rotation clears it, so this process sees a change at once.
     private static readonly TimeSpan StampCacheTtl = TimeSpan.FromSeconds(30);
-    private static (string? Stamp, DateTime Until)? _stampCache;
+    private sealed record StampCacheEntry(string? Stamp, DateTime Until);
+
+    private static readonly Lock StampLock = new();
+    private static StampCacheEntry? _stampCache;
+    // Bumped on every rotation, so a refill that read the database before a rotation does not
+    // write the old stamp back.
+    private static long _stampVersion;
 
     public async Task<bool> AdminExistsAsync()
     {
@@ -133,12 +139,21 @@ public class AccountService(
     /// </summary>
     public async Task<string?> GetSecurityStampAsync()
     {
-        if (_stampCache is { } cached && cached.Until > DateTime.UtcNow)
-            return cached.Stamp;
+        long version;
+        lock (StampLock)
+        {
+            if (_stampCache is { } cached && cached.Until > DateTime.UtcNow)
+                return cached.Stamp;
+            version = _stampVersion;
+        }
 
         var user = await usersRepository.GetByIdAsync(User.AdminId);
         var stamp = user == null ? null : user.SecurityStamp ?? string.Empty;
-        _stampCache = (stamp, DateTime.UtcNow + StampCacheTtl);
+        lock (StampLock)
+        {
+            if (version == _stampVersion)
+                _stampCache = new StampCacheEntry(stamp, DateTime.UtcNow + StampCacheTtl);
+        }
         return stamp;
     }
 
@@ -149,7 +164,7 @@ public class AccountService(
         await usersRepository.FindOneAndUpdateAsync(
             Builders<User>.Filter.Eq(u => u.Id, User.AdminId),
             Builders<User>.Update.Set(u => u.SecurityStamp, stamp));
-        _stampCache = null;
+        InvalidateStampCache();
         return stamp;
     }
 
@@ -173,7 +188,7 @@ public class AccountService(
                 .Set(u => u.PasswordHash, HashPassword(newPassword))
                 .Set(u => u.SecurityStamp, stamp),
             new FindOneAndUpdateOptions<User> { ReturnDocument = ReturnDocument.After });
-        _stampCache = null;
+        InvalidateStampCache();
         logger.LogInformation("Changed the admin password");
         return (ChangePasswordResult.Changed, updated);
     }
@@ -185,12 +200,21 @@ public class AccountService(
         return current != null && current == (cookieStamp ?? string.Empty);
     }
 
+    private static void InvalidateStampCache()
+    {
+        lock (StampLock)
+        {
+            _stampVersion++;
+            _stampCache = null;
+        }
+    }
+
     private static string NewSecurityStamp() => Guid.NewGuid().ToString("N");
 
     /// <summary>Test hook: the cached values outlive a test's throwaway database.</summary>
     internal static void ResetCacheForTests()
     {
         _adminExists = false;
-        _stampCache = null;
+        InvalidateStampCache();
     }
 }
