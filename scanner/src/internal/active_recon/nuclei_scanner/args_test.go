@@ -31,12 +31,12 @@ func TestNucleiArgsRateLimit(t *testing.T) {
 		want  string
 		ok    bool
 	}{
-		{"unset", "", "50", true},
-		{"set", "30", "30", true},
-		{"spaces", " 30 ", "30", true},
-		{"zero", "0", "50", false},
-		{"negative", "-5", "50", false},
-		{"not a number", "abc", "50", false},
+		{"unset", "", "30", true},
+		{"set", "50", "50", true},
+		{"spaces", " 50 ", "50", true},
+		{"zero", "0", "30", false},
+		{"negative", "-5", "30", false},
+		{"not a number", "abc", "30", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

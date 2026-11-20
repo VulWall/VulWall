@@ -31,8 +31,9 @@ const (
 	// DefaultRateLimit is nuclei's request rate per process (-rl, requests per second).
 	// nuclei's own default of 150 saturates a home or office uplink: dials time out,
 	// nuclei drops the target as "unresponsive permanently" and its matches are lost.
-	// Override with NUCLEI_RATE_LIMIT.
-	DefaultRateLimit = 50
+	// At 50, nuclei still dropped two of four CDN-fronted hostnames in an e2e scan from a home
+	// connection; at 30 the same runs completed. Override with NUCLEI_RATE_LIMIT.
+	DefaultRateLimit = 30
 
 	// DefaultTemplateUpdateCron is the default cron schedule for template updates
 	// Default: 2:00 AM UTC daily ("0 2 * * *")

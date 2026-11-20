@@ -72,7 +72,7 @@ First open-source, self-hosted release, under the MIT License.
   or they close when the port stays closed for 3 scans. A CDN edge address
   added as an IP asset gets no nuclei scan (its port scan still runs); the
   Discoveries page marks such an address as a CDN edge.
-- `NUCLEI_RATE_LIMIT` (default 50) sets the requests per second of each
+- `NUCLEI_RATE_LIMIT` (default 30) sets the requests per second of each
   nuclei process. At nuclei's own 150, a home or office connection times out
   and nuclei drops the target.
 - nuclei's out-of-band (OAST) checks are off by default. With

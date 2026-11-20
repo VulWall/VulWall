@@ -115,7 +115,7 @@ comments.
 | `SECURE_COOKIES` | `false` | Set to `true` when VulWall is served over HTTPS |
 | `TRUSTED_PROXIES` | empty | IPs/CIDRs of reverse proxies whose `X-Forwarded-*` headers are trusted |
 | `NUCLEI_WORKERS` | `2` | Concurrent nuclei processes |
-| `NUCLEI_RATE_LIMIT` | `50` | Requests per second for each nuclei process |
+| `NUCLEI_RATE_LIMIT` | `30` | Requests per second for each nuclei process |
 | `NUCLEI_INTERACTSH` | `off` | `on` runs nuclei's out-of-band (OAST) checks. Vulnerable targets then call back to ProjectDiscovery's public interactsh servers unless you set your own |
 | `NUCLEI_INTERACTSH_SERVER` | empty | https URL of your own interactsh server |
 | `NUCLEI_INTERACTSH_TOKEN` | empty | Auth token of that server |
