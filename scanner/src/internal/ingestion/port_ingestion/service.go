@@ -117,8 +117,17 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 			return err
 		}
 
-		// 4. Publish scan trigger for active recon scanners (port only)
-		if err := s.publishPortScanTrigger(ctx, finding, portDiscoveryID); err != nil {
+		// 4. Publish scan trigger for active recon scanners (port only), unless a port scan
+		// of this address would only repeat or miss what the hostname scan checks.
+		if reason := portTriggerSkipReason(finding); reason != "" {
+			s.logger.Info("Port scan trigger skipped",
+				zap.String("trace_id", finding.TraceID),
+				zap.String("ip", finding.IP),
+				zap.Int("port", finding.Port),
+				zap.String("reason", reason),
+			)
+			span.SetAttributes(attribute.String("trigger.skip_reason", reason))
+		} else if err := s.publishPortScanTrigger(ctx, finding, portDiscoveryID); err != nil {
 			s.logger.Error("Failed to publish port scan trigger",
 				zap.String("trace_id", finding.TraceID),
 				zap.String("ip", finding.IP),
@@ -551,6 +560,26 @@ func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.IPDis
 	)
 
 	return nil
+}
+
+// portTriggerSkipReason returns why an open port gets no port_scan_triggers message (nuclei is
+// its only consumer), or "" to publish it. The port discovery itself is stored either way.
+//   - the IP is a shared CDN edge (shared.CDNProvider): it answers only requests that name a
+//     site, so nuclei by IP drops it as unresponsive after minutes, on every port. The sites
+//     behind it are scanned by hostname (domain_scan_triggers).
+//   - port 80 or 443 of an IP that a domain or subdomain of this scan resolved to
+//     (TargetDomain): nuclei scans that name on 80 and 443 already. Other ports of the IP
+//     (an admin panel on 8443) are still scanned.
+//
+// No trigger means no nuclei coverage for the port, so its earlier nuclei findings stay open.
+func portTriggerSkipReason(finding shared.IPDiscoveryFinding) string {
+	if provider := shared.CDNProvider(finding.IP); provider != "" {
+		return "cdn_edge:" + provider
+	}
+	if finding.TargetDomain != "" && (finding.Port == 80 || finding.Port == 443) {
+		return "hostname_scanned:" + finding.TargetDomain
+	}
+	return ""
 }
 
 // publishPortScanTrigger publishes a scan trigger for active recon scanners

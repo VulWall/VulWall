@@ -157,19 +157,20 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 		}
 
 		finding := shared.IPDiscoveryFinding{
-			DiscoveryID: portID,
-			AssetType:   shared.AssetTypePort,
-			TraceID:     job.TraceID,
-			ScanID:      job.ScanID,
-			OrgID:       job.OrgID,
-			ParentID:    job.ParentID,
-			Source:      "port_discovery",
-			IP:          job.IP,
-			Port:        portResult.Port,
-			Protocol:    shared.ProtocolTCP,
-			Status:      shared.AssetStatusActive,
-			Banner:      banner,
-			Timestamp:   now,
+			DiscoveryID:  portID,
+			AssetType:    shared.AssetTypePort,
+			TraceID:      job.TraceID,
+			ScanID:       job.ScanID,
+			OrgID:        job.OrgID,
+			ParentID:     job.ParentID,
+			Source:       "port_discovery",
+			IP:           job.IP,
+			TargetDomain: job.TargetDomain,
+			Port:         portResult.Port,
+			Protocol:     shared.ProtocolTCP,
+			Status:       shared.AssetStatusActive,
+			Banner:       banner,
+			Timestamp:    now,
 		}
 
 		if err := s.publishFinding(ctx, finding); err != nil {
