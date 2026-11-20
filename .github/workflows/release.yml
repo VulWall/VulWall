@@ -46,3 +46,37 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  release:
+    name: GitHub Release
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Build release assets
+        run: scripts/release-assets.sh "$GITHUB_REF_NAME" dist
+      - name: Validate the release compose file
+        working-directory: dist
+        run: |
+          docker compose -f docker-compose.yml config -q
+          docker compose -f docker-compose.yml --profile tracing config -q
+          sha256sum -c SHA256SUMS
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=
+          case "$TAG" in *-*) prerelease=yes ;; esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Re-run of this workflow: replace the assets of the existing release.
+            gh release upload "$TAG" --clobber \
+              dist/docker-compose.yml dist/env.example dist/SHA256SUMS
+          else
+            gh release create "$TAG" ${prerelease:+--prerelease} --verify-tag \
+              --title "VulWall $TAG" \
+              --notes "See [CHANGELOG.md](https://github.com/VulWall/VulWall/blob/$TAG/CHANGELOG.md). Install or upgrade: \`curl -fsSL https://vulwall.com/install.sh | sh\`" \
+              dist/docker-compose.yml dist/env.example dist/SHA256SUMS
+          fi

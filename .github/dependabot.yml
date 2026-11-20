@@ -40,3 +40,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    groups:
+      site-dependencies:
+        patterns: ["*"]

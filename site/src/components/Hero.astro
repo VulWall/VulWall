@@ -1,0 +1,130 @@
+---
+// Replaces Starlight's Hero on the splash (home) page. Title and tagline come from the
+// page's `hero` frontmatter.
+import InstallCommand from './InstallCommand.astro';
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline } = data.hero || {};
+---
+
+<section class="hero not-content">
+	<p class="eyebrow">
+		<span class="dot" aria-hidden="true"></span>
+		Open source &middot; Self-hosted &middot; AGPL-3.0
+	</p>
+	<h1 id="_top" data-page-title set:html={title} />
+	{tagline && <p class="tagline" set:html={tagline} />}
+	<InstallCommand />
+	<p class="note">
+		Needs Docker with Compose v2. You can <a href="/install.sh">read the script</a> first, or{' '}
+		<a href="/docs/getting-started/manual-install/">install from the repository</a>.
+	</p>
+	<div class="actions">
+		<a class="btn btn-light" href="/docs/getting-started/install/">
+			Get started <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+		</a>
+		<a class="btn btn-outline" href="https://github.com/VulWall/VulWall">
+			<i class="fa-brands fa-github" aria-hidden="true"></i> Star on GitHub
+		</a>
+	</div>
+</section>
+
+<style>
+	.hero {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 1.25rem;
+		padding: clamp(2rem, 6vw, 4rem) clamp(1.25rem, 5vw, 3.5rem);
+		border-radius: var(--radius-xl);
+		background: var(--vw-hero);
+		color: #fbfbfd;
+	}
+	.eyebrow {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0;
+		padding: 0.3rem 0.8rem;
+		border: 1px solid rgba(255, 255, 255, 0.25);
+		border-radius: var(--radius-pill);
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	.dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--vw-orange);
+	}
+	/* #_top: beat the global page-title colour in brand.css */
+	h1#_top {
+		margin: 0;
+		max-width: 20ch;
+		font-family: var(--font-display);
+		font-size: clamp(2.25rem, 1.5rem + 3.5vw, 3.75rem);
+		font-weight: 600;
+		line-height: 1.1;
+		letter-spacing: -0.01em;
+		color: #ffffff;
+	}
+	.tagline {
+		margin: 0;
+		max-width: 60ch;
+		font-size: var(--sl-text-lg);
+		line-height: 1.6;
+		color: rgba(251, 251, 253, 0.88);
+	}
+	.hero :global(.install) {
+		width: min(100%, 36rem);
+	}
+	.note {
+		margin: 0;
+		font-size: var(--sl-text-sm);
+		color: rgba(251, 251, 253, 0.75);
+	}
+	.note a {
+		color: #ffffff;
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		margin-top: 0.5rem;
+	}
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.7rem 1.25rem;
+		border-radius: var(--radius-md);
+		font-weight: 600;
+		text-decoration: none;
+		transition:
+			transform 0.2s ease,
+			box-shadow 0.2s ease,
+			background 0.2s ease;
+	}
+	.btn:hover {
+		transform: translateY(-1px);
+	}
+	.btn:active {
+		transform: translateY(0);
+	}
+	.btn-light {
+		background: #ffffff;
+		color: #212c5e;
+	}
+	.btn-light:hover {
+		box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+	}
+	.btn-outline {
+		border: 1px solid rgba(255, 255, 255, 0.4);
+		color: #ffffff;
+	}
+	.btn-outline:hover {
+		background: rgba(255, 255, 255, 0.1);
+	}
+</style>

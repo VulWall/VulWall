@@ -44,6 +44,17 @@ In a test scan of one domain with the default settings, the stack used up to
 `NUCLEI_WORKERS` use more.
 
 ```bash
+curl -fsSL https://vulwall.com/install.sh | sh
+```
+
+The script installs the latest release into `~/vulwall`, verifies the
+downloaded files, starts the stack and prints the first-run setup link. Run it
+again to upgrade. See the [documentation](https://vulwall.com/docs) for
+options.
+
+Or install from a clone of this repository:
+
+```bash
 git clone https://github.com/VulWall/VulWall.git && cd VulWall
 cp .env.example .env        # optional: set ANTHROPIC_API_KEY
 docker compose up -d
