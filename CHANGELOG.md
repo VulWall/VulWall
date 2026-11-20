@@ -79,6 +79,9 @@ First open-source, self-hosted release.
   `status_reason: "interrupted_by_restart"`; the Scans page shows
   "Interrupted by restart", and the next scan compares against the last
   complete scan.
+- After a restart, the scanner drops the unfinished stream work of the
+  previous process. Before, that work stayed pending forever, and every later
+  scan could finish only by the 15-minute idle timeout.
 - A stream message that makes a scanner component panic is logged with a
   stack trace and skipped instead of crashing the scanner. Work cut off by
   shutdown is no longer acknowledged as done.
