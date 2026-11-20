@@ -164,7 +164,7 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry delivered < 30 min ago). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
 | `SCAN_MIN_RUNTIME` | Minimum scan age before a scan can complete, Go duration (default `10m`). Same as above |
 | `DNS_RESOLVE_CONCURRENCY` | Concurrent subdomain DNS lookups in domain discovery (default 50); each name is published as soon as it resolves |
-| `DNS_RECHECK_RESOLVERS` | Public resolvers (comma list, default `1.1.1.1,8.8.8.8`) asked directly when the local resolver says a root domain does not exist; `off` disables the check (the root then counts as a resolver failure) |
+| `DNS_RECHECK_RESOLVERS` | Public resolvers (comma list, default `1.1.1.1,8.8.8.8`) asked directly when the local resolver says a root domain, a known subdomain, or an email record (SPF, DMARC, MX, NS) does not exist; `off` disables the check (the root then counts as a resolver failure, known subdomains are never confirmed gone, and the local email answer is final) |
 | `IP_ENRICHMENT_DB_PATH` | Country MMDB (DB-IP Country Lite; default `./data/dbip-country-lite.mmdb`) |
 | `IP_ASN_DB_PATH` | Optional ASN MMDB (DB-IP ASN Lite; default `./data/dbip-asn-lite.mmdb`) |
 | `ALLOW_PRIVATE_TARGETS` | `true` disables the private/reserved IP guard (SSRF dialer, discovery, port scanner, testssl `--ip` check, nuclei `-lna`, AXFR nameserver dial). Default `false`; enable only to scan internal networks on purpose |

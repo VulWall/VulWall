@@ -81,7 +81,9 @@ Missing data never closes a finding:
   open.
 - **Host no longer found.** The host was confirmed gone in 3 scans in a row: for a domain or
   subdomain, your DNS and two public resolvers (1.1.1.1 and 8.8.8.8) all say it has no address;
-  for a port, the port scan of its IP finished without finding the port open.
+  for a port, the port scan of its IP finished, found other ports open, and did not find this
+  one. Ports on an IP address that your domains no longer point to are not scanned again, so
+  their findings stay open.
 
 Everything else stays open: findings on a host this scan did not find, on a disabled asset, or
 on a host a scan could not fully check. A scan that a timeout closed resolves nothing. Each scan

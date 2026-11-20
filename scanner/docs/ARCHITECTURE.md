@@ -179,9 +179,9 @@ its input, so the scan cannot drain before the evidence lands. `findings_ingesti
 | Source | `status` | Means |
 |--------|----------|-------|
 | a scanner (`nuclei`, `testssl`, `jsscanner`, `http-headers`, `email-security`) | `ok` + `reported` | The check ran to completion on that discovery; `reported` lists the `(finding_type, title)` of every finding it reported |
-| a scanner | `error` | The check did not complete: a tool error; a nuclei or testssl target that no longer accepts a TCP connection after the run (`shared.Reachable`: nuclei reports "no findings" also for a target that went down or banned the scanner mid-run); an http/https probe that neither answered nor refused (timeout, TLS failure, 403/429/5xx; a 404 or 410 is a definite answer, `shared.ErrGone`); a JS file that did not download (other than 404/410); a retire.js failure; a transient SPF/DMARC/NS/MX lookup error; an AXFR attempt that timed out; or a host that did not resolve in this scan |
+| a scanner | `error` | The check did not complete: a tool error; a nuclei or testssl target that no longer accepts a TCP connection after the run (`shared.Reachable`: nuclei reports "no findings" also for a target that went down or banned the scanner mid-run); an http/https probe that neither answered nor refused (timeout, TLS failure, 403/429/5xx; a 404 or 410 is a definite answer, `shared.ErrGone`); a JS file that did not download (other than 404/410); a retire.js failure; a transient SPF/DMARC/NS/MX lookup error; an AXFR attempt that timed out; a "no record" answer (SPF, DMARC, MX, NS) that the public resolvers did not confirm; a 403, 429 or 5xx answer or a failed CORS or HTTPS-redirect request in the header check; or a host that did not resolve in this scan |
 | `domain_discovery` | `absent` | A domain or subdomain that an earlier scan saw has no address: the local resolver and every public resolver (`DNS_RECHECK_RESOLVERS`) say NXDOMAIN or NODATA |
-| `port_discovery` | `ok` | The port scan of that IP completed (discovery id = the IP's) |
+| `port_discovery` | `ok` | The port scan of that IP completed and found at least one port open (discovery id = the IP's). A scan with no open port is no evidence: a block looks the same |
 
 A scanner that cannot publish a finding returns the error instead of reporting `ok`, so the
 trigger is retried (`redisx.ConsumeStream`, 3 attempts, then the `dead_letter` stream); a dead
@@ -199,7 +199,9 @@ is resolved by the first later scan that has the evidence). A candidate is resol
 - `host_no_longer_found`: its host was confirmed gone in each of the last 3 scans that closed
   `pipeline_quiescent`, this one included: a domain or subdomain with a `domain_discovery`
   `absent` record in each, or a port whose IP has a `port_discovery` `ok` record in each while
-  the port was not open (not in `scan_ids`) in any. IP discoveries are never gone this way.
+  the port was not open (not in `scan_ids`) in any. IP discoveries are never gone this way, and
+  neither are the ports of an IP that no name resolves to any more (it gets no port scan): their
+  findings stay open.
 
 Everything else stays open: a missing or `error` coverage record, a host not seen this scan
 (a subdomain lost to NXDOMAIN or subfinder variance, a filtered port), a disabled asset (not
