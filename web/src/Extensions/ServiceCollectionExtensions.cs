@@ -97,6 +97,10 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAntiforgeryConfiguration(this IServiceCollection services)
     {
+        // The app itself only listens on HTTP; with SECURE_COOKIES=true TLS is terminated by a
+        // proxy on the standard port, so plain-HTTP requests are redirected to 443.
+        services.AddHttpsRedirection(options => options.HttpsPort = 443);
+
         services.AddAntiforgery(options =>
         {
             options.SuppressXFrameOptionsHeader = false;
