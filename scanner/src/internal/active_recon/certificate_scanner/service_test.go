@@ -15,6 +15,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
@@ -277,26 +278,29 @@ func TestProcessTargetIncomplete(t *testing.T) {
 		}
 	}()
 
-	expiredAddr := ""
+	// expired serves an expired certificate, which the check must not get to read.
+	expired := func(t *testing.T) string {
+		addr, _ := tlsServer(t, selfSigned(t, testNow.Add(-time.Hour)))
+		return addr
+	}
 	for name, tc := range map[string]struct {
 		allowPrivate string
-		target       func() ScanTarget
+		target       func(t *testing.T) ScanTarget
 	}{
-		"connection refused": {"true", func() ScanTarget { return testTarget(closedAddr) }},
-		"not TLS":            {"true", func() ScanTarget { return testTarget(plain.Addr().String()) }},
+		"connection refused": {"true", func(*testing.T) ScanTarget { return testTarget(closedAddr) }},
+		"not TLS":            {"true", func(*testing.T) ScanTarget { return testTarget(plain.Addr().String()) }},
 		// The SSRF guard refuses loopback: even an expired certificate there is not read.
-		"guard refuses": {"false", func() ScanTarget { return testTarget(expiredAddr) }},
-		"unresolved": {"true", func() ScanTarget {
-			tg := testTarget(expiredAddr)
+		"guard refuses": {"false", func(t *testing.T) ScanTarget { return testTarget(expired(t)) }},
+		"unresolved": {"true", func(t *testing.T) ScanTarget {
+			tg := testTarget(expired(t))
 			tg.Unresolved = true
 			return tg
 		}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv(config.EnvAllowPrivateTargets, tc.allowPrivate)
-			expiredAddr, _ = tlsServer(t, selfSigned(t, testNow.Add(-time.Hour)))
 			rec := &recorder{}
-			if err := newTestService(rec, testNow).ProcessTarget(context.Background(), tc.target(), "www.example.com"); err != nil {
+			if err := newTestService(rec, testNow).ProcessTarget(context.Background(), tc.target(t), "www.example.com"); err != nil {
 				t.Fatalf("ProcessTarget = %v, want nil (a failed check is a result)", err)
 			}
 			findings, cov := rec.split(t)
@@ -335,6 +339,16 @@ func TestProcessTargetShutdown(t *testing.T) {
 	}
 	if len(rec.msgs) != 0 {
 		t.Errorf("published %d messages after shutdown, want none", len(rec.msgs))
+	}
+}
+
+func TestClip(t *testing.T) {
+	if got := clip("CN=short"); got != "CN=short" {
+		t.Errorf("clip(short) = %q", got)
+	}
+	got := clip("CN=" + strings.Repeat("é", 300))
+	if len(got) > maxNameLen+3 || !strings.HasSuffix(got, "...") || !utf8.ValidString(got) {
+		t.Errorf("clip(long) = %q (%d bytes), want at most %d valid bytes ending in ...", got, len(got), maxNameLen+3)
 	}
 }
 

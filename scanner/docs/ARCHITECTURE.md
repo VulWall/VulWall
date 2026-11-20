@@ -375,7 +375,9 @@ none.
 **certificate targets:** `certificate_scanner` reads the leaf certificate of a TLS handshake
 (Go `crypto/tls`, no external tool) through `shared.SSRFSafeDialContext`, with
 `InsecureSkipVerify` (the certificate is only read: an expired or self-signed one must still be
-read) and TLS 1.0 as the lowest version. It sends no request.
+read), TLS 1.0 as the lowest version and every cipher suite Go implements, RSA key exchange
+included, so an old server still gives up its certificate. It sends no request; the subject and
+issuer are cut to 200 bytes (the server chooses them, and the description reaches the KB prompt).
 
 | Trigger | Target | SNI |
 |---------|--------|-----|

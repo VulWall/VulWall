@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
@@ -156,6 +157,7 @@ func (s *Service) readLeaf(ctx context.Context, addr, serverName string) (*x509.
 		ServerName:         serverName,
 		InsecureSkipVerify: true,             //nolint:gosec // reading the certificate, not trusting the peer
 		MinVersion:         tls.VersionTLS10, // a legacy server still has a certificate to read
+		CipherSuites:       allCipherSuites,  // also RSA key exchange, which Go no longer offers by default
 	})
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return nil, fmt.Errorf("tls handshake with %s: %w", addr, err)
@@ -165,6 +167,34 @@ func (s *Service) readLeaf(ctx context.Context, addr, serverName string) (*x509.
 		return nil, errors.New("server sent no certificate")
 	}
 	return certs[0], nil
+}
+
+// allCipherSuites is every TLS 1.0-1.2 suite Go implements, insecure ones included: the
+// handshake only reads the certificate, so it must succeed with an old server too.
+var allCipherSuites = func() []uint16 {
+	var ids []uint16
+	for _, list := range [][]*tls.CipherSuite{tls.CipherSuites(), tls.InsecureCipherSuites()} {
+		for _, cs := range list {
+			ids = append(ids, cs.ID)
+		}
+	}
+	return ids
+}()
+
+// maxNameLen caps the subject and issuer in the description: the scanned server chooses
+// them, and the description also goes to the knowledge-base prompt.
+const maxNameLen = 200
+
+// clip returns s cut to maxNameLen bytes, on a rune boundary, with "..." when cut.
+func clip(s string) string {
+	if len(s) <= maxNameLen {
+		return s
+	}
+	cut := maxNameLen
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "..."
 }
 
 // evaluate returns the finding for cert, and false when it is valid for longer than the warn
@@ -191,7 +221,7 @@ func (s *Service) evaluate(cert *x509.Certificate, target ScanTarget) (shared.Se
 	}
 
 	description := fmt.Sprintf("The TLS certificate that %s serves %s.\n\nSubject: %s\nIssuer: %s",
-		target.Target, when, cert.Subject.String(), cert.Issuer.String())
+		target.Target, when, clip(cert.Subject.String()), clip(cert.Issuer.String()))
 	if left <= 0 {
 		description += "\n\nBrowsers and API clients refuse the connection with a certificate error."
 	} else {
@@ -216,8 +246,8 @@ func (s *Service) evaluate(cert *x509.Certificate, target ScanTarget) (shared.Se
 			"target":    target.Target,
 			"not_after": cert.NotAfter.UTC().Format(time.RFC3339),
 			"days_left": int(math.Floor(left.Hours() / 24)),
-			"subject":   cert.Subject.String(),
-			"issuer":    cert.Issuer.String(),
+			"subject":   clip(cert.Subject.String()),
+			"issuer":    clip(cert.Issuer.String()),
 		},
 		Status:    shared.FindingStatusOpen,
 		Timestamp: now,

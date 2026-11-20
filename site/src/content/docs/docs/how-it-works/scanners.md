@@ -42,7 +42,7 @@ hostnames behind it instead. The Discoveries page marks such an address as a CDN
 ### TLS
 
 [testssl.sh](https://testssl.sh) checks the HTTPS service (port 443) of each domain and
-subdomain for known TLS vulnerabilities, such as Heartbleed, ROBOT, POODLE and SWEET32.
+subdomain for known TLS vulnerabilities, such as Heartbleed, ROBOT, POODLE and FREAK.
 
 ### Certificate expiry
 
