@@ -68,6 +68,14 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	// Extract trace context from message to link spans across service boundaries
 	ctx = telemetry.ExtractTraceContext(ctx, finding.TraceContext)
 
+	if finding.Coverage != nil {
+		// Evidence about a target, not a finding: the scan monitor resolves on it.
+		if finding.OrgID == "" {
+			return redisx.Permanent(fmt.Errorf("coverage without org_id"))
+		}
+		return c.service.RecordCoverage(ctx, finding)
+	}
+
 	// Validate source field
 	if finding.Source == "" {
 		return redisx.Permanent(fmt.Errorf("missing required field: source"))

@@ -50,6 +50,9 @@ const (
 	CollectionScanResults   = "scan_results"
 	CollectionDiscoveries   = "discoveries" // Org-scoped asset registry (domains, subdomains, IPs, ports)
 	CollectionFindings      = "findings"    // Security findings from scanning tools
+	// CollectionScanCoverage holds the positive evidence a scan resolves findings on
+	// (ScanCoverage), one record per (scan_id, source, discovery_id). Written by ingestion.
+	CollectionScanCoverage = "scan_coverage"
 
 	// Redis Streams - Domain Discovery
 	StreamDomainDiscoveryQueue   = "domain_discovery_queue"   // Input stream for domain discovery jobs

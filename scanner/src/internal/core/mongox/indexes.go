@@ -20,6 +20,9 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logger) 
 	if err := ensureDiscoveriesIndexes(ctx, db, logger); err != nil {
 		return err
 	}
+	if err := ensureScanCoverageIndexes(ctx, db, logger); err != nil {
+		return err
+	}
 
 	logger.Info("All MongoDB indexes created successfully")
 	return nil
@@ -198,5 +201,48 @@ func ensureDiscoveriesIndexes(ctx context.Context, db *mongo.Database, logger *z
 	}
 
 	logger.Info("Created discoveries collection indexes")
+	return nil
+}
+
+// ScanCoverageRetention is how long scan_coverage records are kept (TTL on created_at). The
+// scan monitor reads the records of the closing scan, and for host_no_longer_found the
+// records since a host was last seen, so the retention bounds how far apart the confirming
+// scans may be.
+const ScanCoverageRetention = 90 * 24 * time.Hour
+
+func ensureScanCoverageIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logger) error {
+	indexes := []mongo.IndexModel{
+		// UNIQUE: one record per (scan, source, target); ingestion merges duplicates into it.
+		{
+			Keys: bson.D{
+				{Key: "scan_id", Value: 1},
+				{Key: "source", Value: 1},
+				{Key: "discovery_id", Value: 1},
+			},
+			Options: options.Index().SetName("idx_scan_source_discovery").SetUnique(true),
+		},
+		// Absence history of a target, for host_no_longer_found.
+		{
+			Keys: bson.D{
+				{Key: "org_id", Value: 1},
+				{Key: "discovery_id", Value: 1},
+				{Key: "source", Value: 1},
+				{Key: "created_at", Value: -1},
+			},
+			Options: options.Index().SetName("idx_org_discovery_source_time"),
+		},
+		{
+			Keys:    bson.D{{Key: "created_at", Value: 1}},
+			Options: options.Index().SetName("ttl_created_at").SetExpireAfterSeconds(int32(ScanCoverageRetention.Seconds())),
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if _, err := db.Collection(shared.CollectionScanCoverage).Indexes().CreateMany(ctx, indexes); err != nil {
+		logger.Error("Failed to create scan_coverage indexes", zap.Error(err))
+		return err
+	}
+	logger.Info("Created scan_coverage collection indexes")
 	return nil
 }
