@@ -71,9 +71,10 @@ how it is backed up and when it is deleted. See [Back up and restore](/docs/oper
   certificate transparency logs.
 - **Downloads:** nuclei templates (from GitHub), the DB-IP Lite geolocation databases and the
   published IP ranges of AWS, Azure, Google Cloud and Fastly.
-- **DNS rechecks:** when your local resolver says that a root domain does not exist, the scanner
-  asks 1.1.1.1 and 8.8.8.8 directly. Set `DNS_RECHECK_RESOLVERS=off` to turn this off, or set your
-  own resolvers. See [Configuration](/docs/configuration/#scanner).
+- **DNS rechecks:** if your local resolver says a name does not exist, the scanner asks 1.1.1.1
+  and 8.8.8.8 directly. It does this for root domains, for subdomains an earlier scan found, and
+  for the SPF, DMARC, MX and NS records of your domains. Set `DNS_RECHECK_RESOLVERS=off` to stop all
+  of these lookups, or set your own resolvers. See [Configuration](/docs/configuration/#scanner).
 - **AI, only if you set `ANTHROPIC_API_KEY`:** finding details go to Anthropic's API. See
   [what is sent](/docs/configuration/ai/#what-is-sent-to-anthropic).
 - **Traces, only if you turn on tracing:** to the OTLP backend you configure.
