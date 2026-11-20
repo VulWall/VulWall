@@ -159,7 +159,7 @@
                         <img src="~/img/VW_Logo.png" alt="VulWall" class="header-logo">
                         <span class="header-text">Shared Security Report</span>
                     </div>
-                    <button onclick="window.print()" class="btn btn-outline-primary btn-sm">
+                    <button type="button" id="printReportBtn" class="btn btn-outline-primary btn-sm">
                         <i class="fas fa-print me-2"></i>Print
                     </button>
                 </div>
@@ -188,5 +188,6 @@
     }
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js" asp-append-version="true"></script>
+    <script type="module" src="~/js/Reports/shared-report.js" asp-append-version="true"></script>
 </body>
 </html>
