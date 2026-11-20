@@ -1,90 +1,114 @@
-# VulWall Dashboard
+# VulWall Web
 
-Web application for security assessment management, vulnerability monitoring, and reporting. Built with ASP.NET Core MVC.
+The web app for a self-hosted VulWall install: add domains and IP addresses, start scans, and read
+findings, recommendations and reports. Built with ASP.NET Core MVC (.NET 10) on MongoDB.
+
+The scanner (`../scanner`) does the scanning. The two share one MongoDB database and nothing else:
+the web app queues scans by writing to the `scans` collection, and the scanner writes the results
+back.
 
 ## Features
 
-- **Asset Management** — Add domains/IPs, verify ownership, track asset status
-- **Scan Management** — View scan history, results, and findings overview
-- **Discovery Browser** — Explore discovered subdomains, ports, and services
-- **AI Recommendations** — AI-powered security recommendations for findings
-- **Reports** — Summary and Technical reports, with optional password-protected shared links (`SHARED_LINKS_ENABLED`)
-- **Settings** — Account management, preferences
+- **Assets**: add domains and IP addresses. They are enabled and scanned right away. Only scan
+  assets you own or are authorized to test.
+- **Scans**: scan history, live status and an on-demand "Scan now".
+- **Discoveries**: subdomains, IPs, open ports and services found by the scanner.
+- **Recommendations**: fix guidance per finding. With an Anthropic API key the scanner builds an
+  AI knowledge base; without one you get the scanner's own description and reference links.
+- **Reports**: summary and technical reports. With an Anthropic API key the summary report gets
+  an AI executive summary. Password-protected shared links are optional (`SHARED_LINKS_ENABLED`).
+- **Settings**: organization name, industry, website and logo.
 
-## Tech Stack
+## Quick start
 
-- **Backend**: .NET 10.0, C#, ASP.NET Core MVC
-- **Frontend**: Razor Views, Bootstrap 5, FontAwesome
-- **Database**: MongoDB
-- **Auth**: Auth0 (multi-tenant, org-scoped)
-- **AI**: Anthropic Claude (security recommendations)
+From the repository root, `docker compose up` starts MongoDB, the scanner and this app. Open
+<http://localhost:8080>. On the first visit you are sent to `/setup`, where you create the admin
+account (email and a password of at least 10 characters) and name your organization. After that,
+`/setup` is closed and you sign in at `/login`.
 
-## Project Structure
+## Run locally
 
-```
-VulWall.Dashboard/
-├── CLAUDE.md
-├── README.md
-├── VulWall.sln
-├── docs/                        # Setup guides and references
-│   ├── AUTH0_SETUP.md
-│   └── COMPONENTS.md
-├── ops/                         # Docker build
-│   └── dockerfile
-└── src/                         # Application source
-    ├── VulWall.Dashboard.csproj
-    ├── Program.cs
-    ├── Common/                  # Shared logic, views, services
-    ├── Data/                    # MongoDB entities and repositories
-    ├── Extensions/              # DI setup, configuration
-    ├── Middleware/               # Request pipeline middleware
-    └── Verticals/               # Vertical slice architecture
-        ├── Assets/
-        ├── Dashboard/
-        ├── Discoveries/
-        ├── Recommendations/
-        ├── Reports/
-        ├── Scans/
-        ├── Settings/
-        └── Webhooks/
-```
-
-## Quick Start
-
-### Prerequisites
-
-- .NET 10.0 SDK
-- MongoDB (Atlas or local)
-- Auth0 account (see [docs/AUTH0_SETUP.md](docs/AUTH0_SETUP.md))
-
-### Run Locally
+Requires the .NET 10 SDK and a MongoDB you can reach.
 
 ```bash
-dotnet run --project src/VulWall.Dashboard.csproj
+cd src
+MONGO_URI=mongodb://localhost:27017 MONGO_DB=vulwall dotnet run
 ```
 
-### Docker
+`src/Properties/launchSettings.example.json` is a starting point for IDE run profiles. Copy it to
+`launchSettings.json` (git-ignored) to use it.
+
+Tests start a throwaway MongoDB through EphemeralMongo, which downloads a `mongod` binary on the
+first run:
 
 ```bash
-docker build -f ops/dockerfile -t vulwall-dashboard .
-docker run -p 5000:8080 vulwall-dashboard
+dotnet test
 ```
+
+## Docker
+
+```bash
+docker build -t vulwall-web .        # run from web/
+docker run -p 8080:8080 -e MONGO_URI=mongodb://host.docker.internal:27017 vulwall-web
+```
+
+The image runs as the non-root `app` user, listens on port 8080 and has a healthcheck on `/health`.
 
 ## Configuration
 
-Environment variables:
+All settings are environment variables. None of them is a secret except `ANTHROPIC_API_KEY`.
 
-| Variable | Purpose |
-|----------|---------|
-| `AUTH0_DOMAIN` | Auth0 tenant domain |
-| `AUTH0_CLIENT_ID` | Auth0 application client ID |
-| `AUTH0_CLIENT_SECRET` | Auth0 application client secret |
-| `MONGO_URI` | MongoDB connection string (include DB name in path, e.g. `mongodb+srv://host/VulWall-Dev`) |
-| `SHARED_LINKS_ENABLED` | `true` enables password-protected shared report links. Default `false`: the share UI is hidden and `/shared-reports/*` returns 404 |
-| `TRUSTED_PROXIES` | Comma-separated IPs or CIDR ranges of reverse proxies whose `X-Forwarded-For`/`X-Forwarded-Proto` headers are trusted (e.g. `10.0.0.0/8`). Empty: only loopback is trusted |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
+| `MONGO_DB` | `vulwall` | Database name (shared with the scanner) |
+| `PORT` | `8080` | HTTP port |
+| `ANTHROPIC_API_KEY` | empty | Optional. Enables AI executive summaries on reports |
+| `DEFAULT_AI_MODEL` | `claude-sonnet-4-6` | Anthropic model for executive summaries |
+| `SECURE_COOKIES` | `false` | Set to `true` when the app is served over HTTPS. Turns on Secure cookies, HSTS and the HTTP to HTTPS redirect. Leave `false` for plain `http://localhost` |
+| `TRUSTED_PROXIES` | empty | Comma-separated IPs or CIDR ranges of reverse proxies whose `X-Forwarded-For`/`X-Forwarded-Proto` headers are trusted (for example `10.0.0.0/8`). Empty: only loopback is trusted |
+| `SHARED_LINKS_ENABLED` | `false` | `true` enables password-protected shared report links. When `false` the share UI is hidden and `/shared-reports/*` returns 404 |
+
+Behind a TLS-terminating reverse proxy, set `SECURE_COOKIES=true` and add the proxy to
+`TRUSTED_PROXIES` so the app sees the original scheme and client IP (login rate limiting is per IP).
+
+## How it works
+
+- **Sign-in**: one local admin, stored in the `users` collection with a BCrypt password hash.
+  Login is rate-limited per IP. Data-protection keys (cookie encryption) are kept in MongoDB, so
+  sessions survive restarts.
+- **Organization**: a self-hosted install has one organization. The app creates it at startup with
+  a random weekly scan schedule (`subscription_settings.scan_cron`), which the scanner reads.
+- **Scans**: "Scan now" and adding an asset insert a `scans` document with `status: "queued"`. The
+  scanner picks it up. A scan counts as in progress while it is `queued`, `pending` or `running`
+  (for at most 24 hours).
+- **Executive summaries**: a background job checks every 30 seconds for finished scans and writes
+  one AI summary per scan when `ANTHROPIC_API_KEY` is set. Without a key the report shows the
+  standard overview instead.
+- **Flags and provider logos**: put PNG files in `src/wwwroot/images/logos/countries/{code}.png`
+  (ISO 3166-1 alpha-2, lowercase) and `src/wwwroot/images/logos/cloud/{provider}.png` (for
+  example `aws.png`, `cloudflare.png`). Without them the discoveries list shows a generic icon.
+
+## Project structure
+
+```
+web/
+├── Dockerfile
+├── VulWall.sln
+├── docs/COMPONENTS.md           # UI component system and CSS variables
+├── src/                         # Application (dotnet run from here)
+│   ├── Program.cs
+│   ├── Common/                  # Shared services, views, utilities
+│   ├── Data/                    # MongoDB entities and repositories
+│   ├── Extensions/              # DI setup, pipeline, MongoDB configuration
+│   └── Verticals/               # Account, Assets, Dashboard, Discoveries,
+│                                # Recommendations, Reports, Scans, Settings
+└── tests/VulWall.Dashboard.Tests/
+```
 
 ## Documentation
 
-- **[CLAUDE.md](CLAUDE.md)** — Development conventions, architecture rules, component patterns
-- **[docs/AUTH0_SETUP.md](docs/AUTH0_SETUP.md)** — Auth0 multi-tenant configuration
-- **[docs/COMPONENTS.md](docs/COMPONENTS.md)** — UI component system and CSS variables
+- [CLAUDE.md](CLAUDE.md): development conventions and architecture rules
+- [docs/COMPONENTS.md](docs/COMPONENTS.md): UI component system and CSS variables
+
+Report bugs and ask questions at <https://github.com/VulWall/VulWall/issues>.
