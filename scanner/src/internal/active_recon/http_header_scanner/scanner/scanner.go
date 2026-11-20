@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -39,13 +40,13 @@ func NewScanner(logger *zap.Logger) *HTTPHeaderScanner {
 
 // Scan fetches HTTP headers from the target URL and checks them against security rules
 func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]HeaderCheckResult, error) {
-	headers, status, err := s.fetchHeaders(ctx, targetURL)
+	headers, status, body, err := s.fetchHeaders(ctx, targetURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch headers from %s: %w", targetURL, err)
 	}
-	// The checks still run on an error page, but its headers may be the WAF's or the proxy's,
-	// not the application's: the check is then incomplete (see blockedStatus).
-	incomplete := blockedStatus(targetURL, status)
+	// The checks still run on an error or challenge page, but its headers may be the WAF's or
+	// the proxy's, not the application's: the check is then incomplete.
+	incomplete := shared.BlockedResponse(targetURL, status, headers, body)
 
 	var results []HeaderCheckResult
 
@@ -123,15 +124,6 @@ func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]Heade
 	return results, errors.Join(incomplete, corsErr, redirectErr)
 }
 
-// blockedStatus returns an error for a status that may come from a block or an outage
-// rather than the application (403, 429, 5xx): a check of such a response is incomplete.
-func blockedStatus(url string, status int) error {
-	if status == http.StatusForbidden || status == http.StatusTooManyRequests || status >= 500 {
-		return fmt.Errorf("%s answered HTTP %d: the headers may not be the application's", url, status)
-	}
-	return nil
-}
-
 // checkCORS sends a request with a spoofed Origin header and checks if the server
 // reflects it or uses a wildcard — both indicate CORS misconfiguration.
 func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) ([]HeaderCheckResult, error) {
@@ -149,7 +141,7 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) ([]
 		return nil, fmt.Errorf("CORS check: %w", err)
 	}
 	defer resp.Body.Close()
-	blocked := blockedStatus(targetURL, resp.StatusCode)
+	blocked := shared.BlockedResponse(targetURL, resp.StatusCode, resp.Header, nil)
 
 	acao := resp.Header.Get("Access-Control-Allow-Origin")
 	if acao == "" {
@@ -300,7 +292,7 @@ func (s *HTTPHeaderScanner) checkHTTPSRedirect(ctx context.Context, targetURL st
 		return nil, fmt.Errorf("HTTPS redirect check: %w", err)
 	}
 	defer resp.Body.Close()
-	blocked := blockedStatus(targetURL, resp.StatusCode)
+	blocked := shared.BlockedResponse(targetURL, resp.StatusCode, resp.Header, nil)
 
 	// Check if response is a redirect to HTTPS
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
@@ -327,22 +319,27 @@ func (s *HTTPHeaderScanner) checkHTTPSRedirect(ctx context.Context, targetURL st
 	}, blocked
 }
 
-// fetchHeaders sends a GET request and returns the response headers and status
-func (s *HTTPHeaderScanner) fetchHeaders(ctx context.Context, targetURL string) (http.Header, int, error) {
+// fetchHeaders sends a GET request and returns the response headers, status and the start of
+// the body (enough for shared.BlockedResponse to recognize a WAF challenge page).
+func (s *HTTPHeaderScanner) fetchHeaders(ctx context.Context, targetURL string) (http.Header, int, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		return nil, 0, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("User-Agent", shared.DefaultUserAgent)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	defer resp.Body.Close()
 
-	return resp.Header, resp.StatusCode, nil
+	body, err := io.ReadAll(io.LimitReader(resp.Body, shared.BlockedBodyPrefix))
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("read body: %w", err)
+	}
+	return resp.Header, resp.StatusCode, body, nil
 }
 
 // getHeaderCaseInsensitive looks up a header by canonical name

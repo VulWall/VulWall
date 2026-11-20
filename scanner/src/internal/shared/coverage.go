@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"syscall"
 	"time"
@@ -93,19 +94,34 @@ func IsConnRefused(err error) bool {
 // (HTTP 404 or 410), not a failure to look.
 var ErrGone = errors.New("resource does not exist")
 
+// ErrNoAnswer marks a check over several probes in which no probe got an HTTP answer: every
+// connection was refused, so there was nothing to check.
+var ErrNoAnswer = errors.New("no protocol answered")
+
 // ProbeError returns what makes a check over several probes (http and https) incomplete:
-// the probe errors other than a refused connection or ErrGone, joined, or nil. A refused
-// probe is a definite answer (nothing listens), so it does not make the check incomplete; a
-// timeout, a TLS failure or another bad status (403, 429, 5xx: possibly a block) does,
-// because it hides what the probe would have found.
+// the probe errors other than a refused connection or ErrGone, joined; or ErrNoAnswer when
+// no probe got an answer (every one was refused); or nil. A refused probe is a definite
+// answer (nothing listens), so one refused protocol next to one that answered does not make
+// the check incomplete; a timeout, a TLS failure or a blocked response (403, 429, 5xx, a WAF
+// challenge: see BlockedResponse) does, because it hides what the probe would have found.
 func ProbeError(errs ...error) error {
 	var incomplete []error
+	answered := false
 	for _, err := range errs {
-		if err != nil && !IsConnRefused(err) && !errors.Is(err, ErrGone) {
+		switch {
+		case err == nil || errors.Is(err, ErrGone):
+			answered = true
+		case !IsConnRefused(err):
 			incomplete = append(incomplete, err)
 		}
 	}
-	return errors.Join(incomplete...)
+	if len(incomplete) > 0 {
+		return errors.Join(incomplete...)
+	}
+	if !answered {
+		return fmt.Errorf("%w: every connection was refused", ErrNoAnswer)
+	}
+	return nil
 }
 
 // reachTimeout bounds one connection attempt of Reachable.

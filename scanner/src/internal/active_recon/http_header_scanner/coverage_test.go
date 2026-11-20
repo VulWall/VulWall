@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -27,6 +29,9 @@ func (f fakeScanner) Scan(_ context.Context, url string) ([]scanner.HeaderCheckR
 	r := f[proto]
 	return r.checks, r.err
 }
+
+// refused is a dial error for a port where nothing listens.
+var refused = &net.OpError{Op: "dial", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
 
 var hsts = scanner.HeaderCheckResult{HeaderName: "Strict-Transport-Security", FindingType: "missing-hsts", Title: "Missing HSTS", Severity: "medium"}
 
@@ -73,6 +78,8 @@ func TestProcessDiscoveryCoverage(t *testing.T) {
 		"both answered":     {fakeScanner{"http": {checks: []scanner.HeaderCheckResult{hsts}}, "https": {}}, shared.CoverageOK},
 		"https timed out":   {fakeScanner{"http": {}, "https": {err: context.DeadlineExceeded}}, shared.CoverageError},
 		"https TLS failure": {fakeScanner{"http": {}, "https": {err: errors.New("tls: handshake failure")}}, shared.CoverageError},
+		"https refused":     {fakeScanner{"http": {checks: []scanner.HeaderCheckResult{hsts}}, "https": {err: refused}}, shared.CoverageOK},
+		"both refused":      {fakeScanner{"http": {err: refused}, "https": {err: refused}}, shared.CoverageError},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rdb.Del(ctx, shared.StreamSecurityFindings)

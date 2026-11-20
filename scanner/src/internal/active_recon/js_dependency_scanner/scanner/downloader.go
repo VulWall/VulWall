@@ -198,6 +198,19 @@ func downloadFile(ctx context.Context, url, filePath string, httpClient *http.Cl
 		return statusError(resp)
 	}
 
+	// Copy content (limit to 10MB to prevent huge downloads)
+	limitedReader := io.LimitReader(resp.Body, 10*1024*1024)
+
+	// A WAF challenge page served in place of the script would read as a script without
+	// vulnerabilities: it is a failed download.
+	head, err := io.ReadAll(io.LimitReader(limitedReader, shared.BlockedBodyPrefix))
+	if err != nil {
+		return err
+	}
+	if err := shared.BlockedResponse(url, resp.StatusCode, resp.Header, head); err != nil {
+		return err
+	}
+
 	// Create file
 	out, err := os.Create(filePath)
 	if err != nil {
@@ -205,8 +218,9 @@ func downloadFile(ctx context.Context, url, filePath string, httpClient *http.Cl
 	}
 	defer out.Close()
 
-	// Copy content (limit to 10MB to prevent huge downloads)
-	limitedReader := io.LimitReader(resp.Body, 10*1024*1024)
+	if _, err := out.Write(head); err != nil {
+		return err
+	}
 	_, err = io.Copy(out, limitedReader)
 	return err
 }
