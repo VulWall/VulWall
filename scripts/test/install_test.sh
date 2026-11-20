@@ -450,8 +450,31 @@ sudo_env() {
     unset VULWALL_PORT
     dk compose ps
 }
-t "docker: sudo passes the Compose variables on" 0 sudo_env &&
-    expect "$work/log" "^sudo env SETUP_TOKEN=abc COMPOSE_PROJECT_NAME=p docker compose ps$"
+t "docker: sudo passes the Compose variables on, but never the setup token" 0 sudo_env &&
+    expect "$work/log" "^sudo env COMPOSE_PROJECT_NAME=p docker compose ps$" &&
+    expect_not "$work/log" "abc"
+
+token_from_env() {
+    dir=$work/case
+    (umask 022 && printf 'A=1\nSETUP_TOKEN=old\n' >.env)
+    SETUP_TOKEN=0123456789abcdef0123456789abcdef
+    export SETUP_TOKEN
+    ensure_setup_token
+    echo "token=$token"
+    echo "env=${SETUP_TOKEN-unset}"
+    ls -l .env | cut -c1-10
+}
+t "env: a setup token from the environment is written to .env" 0 token_from_env &&
+    expect "$work/out" "^token=0123456789abcdef0123456789abcdef$" &&
+    expect "$work/out" "^env=unset$" && expect "$work/out" "^-rw-------$" &&
+    expect "$work/case/.env" "^A=1$" &&
+    expect "$work/case/.env" "^SETUP_TOKEN=0123456789abcdef0123456789abcdef$" &&
+    expect_not "$work/case/.env" "^SETUP_TOKEN=old$"
+
+token_from_env_bad() { dir=$work/case; SETUP_TOKEN='a
+B=1'; ensure_setup_token; }
+t "env: a setup token with a newline is refused" 1 token_from_env_bad &&
+    expect "$work/out" "has characters other than"
 
 # --- Memory and disk ---------------------------------------------------------------------------
 

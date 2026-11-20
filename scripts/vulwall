@@ -66,8 +66,9 @@ docker_sudo=0
 dk() {
     if [ "$docker_sudo" = 1 ]; then
         # sudo resets the environment: pass on what Docker Compose reads from it.
-        sudo env ${SETUP_TOKEN+"SETUP_TOKEN=$SETUP_TOKEN"} \
-            ${VULWALL_PORT+"VULWALL_PORT=$VULWALL_PORT"} \
+        # Not SETUP_TOKEN: a secret on a command line is visible to every user
+        # (ps). Compose reads it from .env.
+        sudo env ${VULWALL_PORT+"VULWALL_PORT=$VULWALL_PORT"} \
             ${COMPOSE_PROJECT_NAME+"COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME"} \
             docker "$@"
     else
@@ -258,7 +259,9 @@ cmd_reset_admin() {
         mv .env.new .env
     ) || die "Could not write the setup token to $dir/.env."
     if [ -n "${SETUP_TOKEN:-}" ]; then
-        warn "SETUP_TOKEN is set in your environment and overrides .env. Unset it first."
+        # The new token is in .env; the old one must not override it here.
+        warn "SETUP_TOKEN is set in your environment. It overrides .env when you run docker compose yourself: unset it."
+        unset SETUP_TOKEN
     fi
     # "up" re-reads .env, "restart" would not.
     compose up -d web </dev/null
