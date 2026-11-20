@@ -317,7 +317,7 @@ t "wait: stops at once on a crash" 1 wait_crash && expect "$work/out" "The redis
 wait_ok() { crash_stubs; wait_healthy web 300; }
 t "wait: web healthy" 0 wait_ok
 
-wait_timeout() { crash_stubs; wait_healthy scanner 20; }
+wait_timeout() { crash_stubs; wait_healthy scanner 1; }
 t "wait: scanner not healthy in time" 1 wait_timeout && expect_not "$work/out" .
 
 scanner_warn() { crash_stubs; helper=vulwall; scanner_help; }

@@ -506,14 +506,13 @@ report_crash() { # service exit_code
 # Waits up to $2 seconds until service $1 is healthy. Stops with the log of a
 # service that keeps crashing. Fails on timeout.
 wait_healthy() {
-    waited=0
-    while [ "$waited" -lt "$2" ]; do
+    end=$(($(date +%s) + $2))
+    while [ "$(date +%s)" -lt "$end" ]; do
         if crashed_service; then
             report_crash "$crash_svc" "$crash_code"
         fi
         st=$(svc_state "$1" || true)
         [ "${st##* }" = healthy ] && return 0
-        waited=$((waited + 5))
         sleep 5
     done
     return 1
@@ -525,12 +524,11 @@ start_stack() {
     fi
     # The scanner and the web app wait for a healthy MongoDB, so a crashing
     # database makes "up" fail. Look for the cause for a short time.
-    waited=0
-    while [ "$waited" -lt 30 ]; do
+    end=$(($(date +%s) + 30))
+    while [ "$(date +%s)" -lt "$end" ]; do
         if crashed_service; then
             report_crash "$crash_svc" "$crash_code"
         fi
-        waited=$((waited + 5))
         sleep 5
     done
     die "docker compose up failed. See: cd $qdir && docker compose logs"
