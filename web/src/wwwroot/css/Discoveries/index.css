@@ -422,6 +422,21 @@
     font-weight: 600;
     color: var(--bs-body-color);
 }
+/* DB-IP Lite is CC BY 4.0: attribution must appear wherever its country/ISP data is shown. */
+.disc-attribution {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--vw-gray-500);
+    margin: 0 0 8px;
+}
+.disc-attribution a {
+    color: inherit;
+    text-decoration: underline;
+}
+.disc-attribution a:hover,
+.disc-attribution a:focus-visible {
+    color: var(--bs-link-hover-color);
+}
 
 /* ---------- Empty / no-results ---------- */
 .disc-empty {
