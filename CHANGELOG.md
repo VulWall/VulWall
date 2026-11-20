@@ -79,6 +79,12 @@ First open-source, self-hosted release, under the MIT License.
   `NUCLEI_INTERACTSH=on`, a vulnerable target calls back to ProjectDiscovery's
   public interactsh servers, or to your own with `NUCLEI_INTERACTSH_SERVER`
   and `NUCLEI_INTERACTSH_TOKEN`.
+- `.env` also sets which nuclei template tags run (`NUCLEI_INCLUDE_TAGS`,
+  `NUCLEI_EXCLUDE_TAGS`; the default skips `intrusive`, `dos` and `fuzz`) and
+  when the templates update (`NUCLEI_TEMPLATE_UPDATE_CRON`, daily at 02:00
+  UTC). `CLOUD_DETECTOR_ENABLED=false` stops the download of cloud provider
+  IP ranges, and `ANTHROPIC_MODEL` picks the model for both the remediation
+  guidance and the executive summaries.
 - A finding is resolved only on evidence: as `not_reproduced` when its host
   was found again and the scanner that reported it finished on that host
   without reporting it, or as `host_no_longer_found` when the host was

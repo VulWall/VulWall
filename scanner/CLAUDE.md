@@ -145,7 +145,7 @@ container health check; the scanner opens no port).
 
 ## Configuration
 
-Environment variables (the repo-root `.env.example` lists the ones users set):
+Environment variables (the repo-root `.env.example` lists the ones users set; `docker-compose.yml` passes those through and sets `REDIS_URI`/`MONGO_*` itself):
 
 | Variable | Purpose |
 |----------|---------|
@@ -153,27 +153,36 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `MONGO_URI` | MongoDB connection string (default `mongodb://localhost:27017`) |
 | `MONGO_DB` | Database name (default: `vulwall`) |
 | `ANTHROPIC_API_KEY` | Optional. Enables the KB engine; unset = KB stage skipped |
-| `ANTHROPIC_MODEL` | Anthropic model for the KB engine (default: `claude-sonnet-4-6`) |
-| `ENVIRONMENT` | `development` (console logs) / `production` (JSON logs; the image default) |
+| `ANTHROPIC_MODEL` | Anthropic model for the KB engine (default: `claude-sonnet-4-6`). Compose also passes it to the web app as `DEFAULT_AI_MODEL` |
 | `NUCLEI_WORKERS` | Concurrent nuclei processes across both trigger streams (default 2) |
 | `NUCLEI_RATE_LIMIT` | nuclei `-rl`, requests per second per process (default 30; not a positive integer = default, with a warning). nuclei's own 150 saturates a home/office uplink: it drops the target as "unresponsive permanently" and the run is coverage `error` |
 | `NUCLEI_INTERACTSH` | `on`/`true` runs nuclei's OAST checks via interactsh; anything else = `-ni` (default off: callbacks would go to ProjectDiscovery's public `oast.*` servers) |
 | `NUCLEI_INTERACTSH_SERVER` / `NUCLEI_INTERACTSH_TOKEN` | Self-hosted interactsh server (`-iserver`, https URL only; an invalid value keeps OAST off with a startup warning) and its token (`-itoken`; a secret, never logged) |
-| `NUCLEI_TEMPLATES_DIR` | nuclei templates directory (default `$HOME/nuclei-templates`; image: `/data/nuclei-templates`) |
-| `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
-| `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
+| `NUCLEI_TEMPLATE_UPDATE_CRON` | nuclei template update schedule, 5-field cron in the container's time zone, UTC because the image sets no `TZ` (default `0 2 * * *`). An invalid value logs an error and turns off the scheduled updates; the start-up update still runs |
+| `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default `DefaultIncludeTags`: cve,vuln,exposure,...). Unset = default; set but empty = no filter (`getTagEnv`). `docker-compose.yml` puts the default in for an empty `.env` value, so "no filter" needs a compose override; keep its copy of the defaults in sync with `constants.go` |
+| `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default `DefaultExcludeTags`: intrusive,dos,fuzz). Same empty handling as above. Removing these makes scans intrusive |
 | `TESTSSL_CONCURRENCY` | Concurrent testssl.sh scans (default 5) |
 | `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry idle < 30 min; a running handler's entry is refreshed every minute). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
 | `SCAN_MIN_RUNTIME` | Minimum scan age before a scan can complete, Go duration (default `10m`). Same as above |
 | `DNS_RESOLVE_CONCURRENCY` | Concurrent subdomain DNS lookups in domain discovery (default 50); each name is published as soon as it resolves |
 | `DNS_RECHECK_RESOLVERS` | Public resolvers (comma list, default `1.1.1.1,8.8.8.8`) asked directly when the local resolver says a root domain, a known subdomain, or an email record (SPF, DMARC, MX, NS) does not exist; `off` disables the check (the root then counts as a resolver failure, known subdomains are never confirmed gone, and the local email answer is final) |
-| `IP_ENRICHMENT_DB_PATH` | Country MMDB (DB-IP Country Lite; default `./data/dbip-country-lite.mmdb`) |
-| `IP_ASN_DB_PATH` | Optional ASN MMDB (DB-IP ASN Lite; default `./data/dbip-asn-lite.mmdb`) |
+| `GEO_DOWNLOAD` / `GEO_MAX_AGE_DAYS` | `docker/entrypoint.sh` downloads the DB-IP Lite databases when missing or older than `GEO_MAX_AGE_DAYS` (default `true` / `35`) |
+| `CLOUD_DETECTOR_ENABLED` | Cloud provider detection in discovery enrichment; downloads the AWS/Azure/GCP/Fastly IP range lists at start (default `true`) |
 | `ALLOW_PRIVATE_TARGETS` | `true` disables the private/reserved IP guard (SSRF dialer, discovery, port scanner, testssl `--ip` check, nuclei `-lna`, AXFR nameserver dial). Default `false`; enable only to scan internal networks on purpose |
 | `OTEL_ENABLED` | `true` turns on OTLP trace export (default `false`); see docs/OBSERVABILITY.md |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_SERVICE_NAME` | Standard OTLP settings |
+| `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | `buildSampler` names (`always_on`, `always_off`, `parentbased_always_on`, `probabilistic`, `parentbased_probabilistic`; anything else = `parentbased_always_on`) and the ratio (default `0.1`) |
 
-Image-only variables (`GEO_DATA_DIR`, `GEO_DOWNLOAD`, `CLOUD_DATA_DIR`, `WAF_RULES_PATH`) are set in `scanner/Dockerfile` and `docker/entrypoint.sh`.
+Image-internal variables. `scanner/Dockerfile` sets them for the image layout; they are deliberately not in `docker-compose.yml` or `.env.example`. The defaults in brackets apply to `go run` from `src/`:
+
+- `ENVIRONMENT`: `development` (console logs; default) or `production` (JSON logs; the image value). Also the `deployment.environment` trace attribute
+- `NUCLEI_TEMPLATES_DIR`: nuclei templates directory (`$HOME/nuclei-templates`; image `/data/nuclei-templates`, a volume)
+- `GEO_DATA_DIR` (`/data/geo`, read by `docker/entrypoint.sh`), `IP_ENRICHMENT_DB_PATH` (`./data/dbip-country-lite.mmdb`), `IP_ASN_DB_PATH` (`./data/dbip-asn-lite.mmdb`)
+- `CLOUD_DATA_DIR` (`./internal/active_recon/discovery_enrichment/cloud/data`), `WAF_RULES_PATH` (`./internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json`)
+- `VULWALL_VERSION`, `NUCLEI_VERSION`, `TESTSSL_VERSION`: build versions shown in the About dialog
+- `OTEL_BSP_SCHEDULED_DELAY_MILLIS`, `OTEL_BSP_MAX_QUEUE_SIZE`, `OTEL_BSP_MAX_EXPORT_BATCH_SIZE`, `OTEL_BSP_EXPORT_TIMEOUT_MILLIS`: batch span processor tuning (SDK defaults)
+
+Test-only: `SCAN_IDLE_TIMEOUT` and `SCAN_MIN_RUNTIME` (rows above) are not in `docker-compose.yml`; set them with a compose override.
 
 ## Dependencies
 
