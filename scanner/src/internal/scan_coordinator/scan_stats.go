@@ -36,14 +36,15 @@ func (m *ScanMonitor) computeStats(ctx context.Context, currentScan shared.Scan)
 	// 4. Find the previous completed scan for this organization, the baseline of the new/
 	// resolved counters. A scan closed before its pipeline drained saw an unknown part of the
 	// attack surface, so it is no baseline: what it missed would count as new. Scans closed
-	// before completion_reason existed have no field and match.
+	// before completion_reason existed have no field and match, except a scan the coordinator
+	// closed at once because it had no asset to scan (findings_reconciled false).
 	filter := bson.M{
 		"org_id":     currentScan.OrgID,
 		"status":     shared.StatusDone,
 		"created_at": bson.M{"$lt": currentScan.CreatedAt},
 		"$or": bson.A{
 			bson.M{"completion_reason": shared.ScanCompletionPipelineQuiescent},
-			bson.M{"completion_reason": bson.M{"$exists": false}},
+			bson.M{"completion_reason": bson.M{"$exists": false}, "findings_reconciled": bson.M{"$ne": false}},
 		},
 	}
 	opts := options.FindOne().SetSort(bson.D{{Key: "created_at", Value: -1}})
