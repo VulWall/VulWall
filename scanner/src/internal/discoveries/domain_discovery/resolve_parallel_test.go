@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,8 +17,8 @@ import (
 )
 
 // fakeDNS answers name-N with a public address, except: names ending in "-priv" get a private
-// answer mixed in, and names ending in "-nx" fail. It records the peak number of lookups in
-// flight.
+// answer mixed in, names ending in "-nx" do not exist (NXDOMAIN), and names ending in "-fail"
+// time out. It records the peak number of lookups in flight.
 type fakeDNS struct {
 	delay    time.Duration
 	inFlight atomic.Int64
@@ -39,8 +40,10 @@ func (f *fakeDNS) lookup(ctx context.Context, host string) ([]net.IP, error) {
 		return nil, ctx.Err()
 	}
 	switch {
-	case len(host) > 3 && host[len(host)-3:] == "-nx":
-		return nil, errors.New("no such host")
+	case strings.HasSuffix(host, "-nx"):
+		return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+	case strings.HasSuffix(host, "-fail"):
+		return nil, &net.DNSError{Err: "i/o timeout", Name: host, IsTimeout: true}
 	case len(host) > 5 && host[len(host)-5:] == "-priv":
 		return parseIPs("93.184.216.34", "10.0.0.1"), nil
 	}
@@ -83,7 +86,7 @@ func TestResolvePublic_AllNamesAndPrivateFiltering(t *testing.T) {
 	dns := &fakeDNS{delay: time.Millisecond}
 	var got collected
 
-	if err := resolvePublic(context.Background(), names, 16, dns.lookup, got.add, zap.NewNop()); err != nil {
+	if _, err := resolvePublic(context.Background(), names, 16, dns.lookup, got.add, zap.NewNop()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -97,7 +100,7 @@ func TestResolvePublic_AllowPrivateTargetsKeepsPrivateNames(t *testing.T) {
 	var got collected
 	names := []string{"a-priv", "b", "c-nx"}
 
-	if err := resolvePublic(context.Background(), names, 4, (&fakeDNS{}).lookup, got.add, zap.NewNop()); err != nil {
+	if _, err := resolvePublic(context.Background(), names, 4, (&fakeDNS{}).lookup, got.add, zap.NewNop()); err != nil {
 		t.Fatal(err)
 	}
 	if g := got.sorted(); fmt.Sprint(g) != "[a-priv b]" {
@@ -115,7 +118,7 @@ func TestResolvePublic_ConcurrencyBound(t *testing.T) {
 			dns := &fakeDNS{delay: 2 * time.Millisecond}
 			var got collected
 
-			if err := resolvePublic(context.Background(), names, workers, dns.lookup, got.add, zap.NewNop()); err != nil {
+			if _, err := resolvePublic(context.Background(), names, workers, dns.lookup, got.add, zap.NewNop()); err != nil {
 				t.Fatal(err)
 			}
 			peak := dns.peak.Load()
@@ -155,7 +158,7 @@ func TestResolvePublic_NoPublishAfterReturn(t *testing.T) {
 				}
 			}
 
-			err := resolvePublic(ctx, names, 20, (&fakeDNS{delay: time.Millisecond}).lookup, found, zap.NewNop())
+			_, err := resolvePublic(ctx, names, 20, (&fakeDNS{delay: time.Millisecond}).lookup, found, zap.NewNop())
 			returned.Store(true)
 			time.Sleep(20 * time.Millisecond) // give a stray worker the chance to publish late
 

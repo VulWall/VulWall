@@ -96,6 +96,52 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 	return nil
 }
 
+// scanDegradedWriteAttempts bounds the retries of RecordScanDegraded. The consumer ACKs a
+// message even when its handler fails, so a lost write would let the scan resolve findings
+// it did not see.
+const scanDegradedWriteAttempts = 3
+
+// RecordScanDegraded sets the scan's degraded_reason from a discovery signal, so the scan
+// monitor closes the scan without resolving findings. The scan monitor alone derives
+// findings_reconciled.
+func (s *Service) RecordScanDegraded(ctx context.Context, finding shared.DiscoveryFinding) error {
+	log := s.logger.With(
+		zap.String("trace_id", finding.TraceID),
+		zap.String("org_id", finding.OrgID),
+		zap.String("host", finding.Host),
+		zap.String("degraded_reason", finding.ScanDegradedReason),
+	)
+	if finding.ScanID == nil || *finding.ScanID == "" {
+		log.Warn("Scan degradation signal without scan_id; nothing to record")
+		return nil
+	}
+	log = log.With(zap.String("scan_id", *finding.ScanID))
+
+	filter := bson.M{"_id": *finding.ScanID, "org_id": finding.OrgID}
+	update := bson.M{"$set": bson.M{
+		"degraded_reason": finding.ScanDegradedReason,
+		"updated_at":      time.Now(),
+	}}
+	var err error
+	for attempt := 1; attempt <= scanDegradedWriteAttempts; attempt++ {
+		_, err = s.db.Collection(shared.CollectionScans).UpdateOne(ctx, filter, update)
+		if err == nil {
+			log.Warn("Scan marked degraded; it will not resolve findings")
+			return nil
+		}
+		log.Warn("Failed to record scan degradation; retrying",
+			zap.Int("attempt", attempt), zap.Error(err))
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * time.Second):
+		}
+	}
+	log.Error("Failed to record scan degradation; the scan may resolve findings it did not see",
+		zap.Error(err))
+	return err
+}
+
 // processDiscovery processes a domain/subdomain discovery and stores in discoveries collection
 func (s *Service) processDiscovery(ctx context.Context, finding shared.DiscoveryFinding, assetType string) error {
 	now := time.Now()

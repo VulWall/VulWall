@@ -2,8 +2,10 @@ package domain_discovery
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 )
@@ -11,6 +13,38 @@ import (
 // defaultDNSResolveConcurrency is the number of subdomain lookups that run at once when
 // DNS_RESOLVE_CONCURRENCY is not set.
 const defaultDNSResolveConcurrency = 50
+
+// A discovery whose lookups failed this much is degraded: its scan did not see the names it
+// could not resolve, so it must not resolve their findings. Some failures are normal noise
+// (passive sources return names with broken delegations), hence the floor on the name count.
+const (
+	dnsDegradedMinNames       = 50 // more than this many names, and
+	dnsDegradedFailurePercent = 20 // more than this percent of them failed
+)
+
+// dnsDegraded reports whether a domain discovery's DNS results are too incomplete to trust:
+// the root domain itself did not resolve, or more than dnsDegradedFailurePercent of more
+// than dnsDegradedMinNames subdomain lookups failed (isLookupFailure).
+func dnsDegraded(names, failures int, rootFailed bool) bool {
+	if rootFailed {
+		return true
+	}
+	return names > dnsDegradedMinNames && failures*100 > names*dnsDegradedFailurePercent
+}
+
+// isLookupFailure reports whether a lookup error means the resolver could not answer
+// (timeout, SERVFAIL, REFUSED, network error), as opposed to a clean answer that the name
+// does not exist or has no address. Only the former hides a name that may still be live.
+func isLookupFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+		return false
+	}
+	return true
+}
 
 // lookupFunc returns every A and AAAA answer for host.
 type lookupFunc func(ctx context.Context, host string) ([]net.IP, error)
@@ -22,15 +56,17 @@ type lookupFunc func(ctx context.Context, host string) ([]net.IP, error)
 // downstream stages busy while the rest of the names resolve.
 //
 // A name that does not resolve or has a private answer is skipped and logged; it does not
-// stop the others. resolvePublic returns only after every call to found has returned, so a
-// caller that ACKs its job after resolvePublic returns ACKs after the last publish. It
-// returns ctx.Err() when the context was cancelled: the result is then incomplete.
-func resolvePublic(ctx context.Context, names []string, workers int, lookup lookupFunc, found func(host, ip string), log *zap.Logger) error {
+// stop the others. resolvePublic returns the number of lookups that failed (isLookupFailure)
+// rather than finding the name absent. It returns only after every call to found has
+// returned, so a caller that ACKs its job after resolvePublic returns ACKs after the last
+// publish. It returns ctx.Err() when the context was cancelled: the result is then incomplete.
+func resolvePublic(ctx context.Context, names []string, workers int, lookup lookupFunc, found func(host, ip string), log *zap.Logger) (failures int, err error) {
 	if workers < 1 {
 		workers = 1
 	}
 
 	work := make(chan string)
+	var failed atomic.Int64
 	var wg sync.WaitGroup
 	for range min(workers, len(names)) {
 		wg.Add(1)
@@ -39,6 +75,9 @@ func resolvePublic(ctx context.Context, names []string, workers int, lookup look
 			for name := range work {
 				ips, err := lookup(ctx, name)
 				if err != nil {
+					if isLookupFailure(err) {
+						failed.Add(1)
+					}
 					log.Debug("Skipping subdomain: DNS resolution failed",
 						zap.String("subdomain", name), zap.Error(err))
 					continue
@@ -67,5 +106,5 @@ feed:
 
 	// Lookups cut off by cancellation were skipped as failures, so a cancelled run is
 	// incomplete even when every name was handed out.
-	return ctx.Err()
+	return int(failed.Load()), ctx.Err()
 }

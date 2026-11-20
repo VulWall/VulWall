@@ -38,6 +38,12 @@ type DiscoveryFinding struct {
 	Status       string                 `json:"status" bson:"status"` // active, inactive, unknown
 	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 	Timestamp    time.Time              `json:"timestamp" bson:"timestamp"`
+
+	// ScanDegradedReason marks a message that carries no asset: discovery could not see the
+	// whole attack surface for Host (e.g. ScanDegradedDNSFailures), so ingestion records it as
+	// the scan's degraded_reason and the scan does not reconcile findings. It is published
+	// before the discovery job is ACKed, so the scan cannot read as drained before it lands.
+	ScanDegradedReason string `json:"scan_degraded_reason,omitempty" bson:"-"`
 }
 
 // IPDiscoveryJob represents a job to discover open ports on an IP address
