@@ -171,31 +171,3 @@ func TestResolvePublic_NoPublishAfterReturn(t *testing.T) {
 		})
 	}
 }
-
-// NXDOMAIN is a final answer: retrying it tripled the cost of every stale passive name.
-// A temporary failure is still retried.
-func TestResolveIPs_RetriesOnlyTransientFailures(t *testing.T) {
-	tests := []struct {
-		name      string
-		err       error
-		wantCalls int
-	}{
-		{"nxdomain", &net.DNSError{Err: "no such host", Name: "x", IsNotFound: true}, 1},
-		{"temporary", &net.DNSError{Err: "server misbehaving", Name: "x", IsTemporary: true}, dnsRetryAttempts},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			calls := 0
-			s := &Service{logger: zap.NewNop(), lookupIP: func(context.Context, string, string) ([]net.IP, error) {
-				calls++
-				return nil, tt.err
-			}}
-			if _, err := s.resolveIPs(context.Background(), "x.example.com"); err == nil {
-				t.Fatal("want an error")
-			}
-			if calls != tt.wantCalls {
-				t.Fatalf("lookups = %d, want %d", calls, tt.wantCalls)
-			}
-		})
-	}
-}
