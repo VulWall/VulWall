@@ -2,7 +2,7 @@
   "name": "vulwall-scanner-retire",
   "private": true,
   "description": "retire.js for the scanner image, installed with npm ci from package-lock.json",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "dependencies": {
     "retire": "5.4.2"
   }
