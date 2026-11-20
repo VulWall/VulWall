@@ -183,6 +183,20 @@ func TestBuildFillsTheOverview(t *testing.T) {
 			fixFirst[f.FindingType] = true
 		}
 	}
+	// The web app caps the score at 30 with two critical finding types and at 49 with one, so
+	// fixing a critical in the latest scan is what makes the score rise.
+	criticalTypes := func(scanID string) int {
+		types := map[string]bool{}
+		for _, f := range ds.Findings {
+			if f.Severity == shared.SeverityCritical && slices.Contains(f.ScanIDs, scanID) {
+				types[f.FindingType] = true
+			}
+		}
+		return len(types)
+	}
+	if prev, cur := criticalTypes(ds.Scans[len(ds.Scans)-2].ID), criticalTypes(latestID); prev != 2 || cur != 1 {
+		t.Errorf("critical finding types: previous scan %d, latest %d; want 2 then 1", prev, cur)
+	}
 	if len(fixFirst) < 3 {
 		t.Errorf("latest scan has %d critical/high finding types, want 3: %v", len(fixFirst), fixFirst)
 	}

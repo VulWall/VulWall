@@ -158,6 +158,18 @@ func findings() []findingSpec {
 			"jenkins.acme-demo.test:443",
 			[]string{"cve", "cve2024", "lfi", "rce", "jenkins", "js", "kev", "vkev", "vuln"},
 			map[string]any{"verified": true, "max-request": 1, "vendor": "jenkins", "product": "jenkins"}, 0, 2),
+		// Fixed by the latest scan: the score climbs from the two-critical cap (30) to 49.
+		nuclei("staging.acme-demo.test", "CVE-2025-29927", "http/cves/2025/CVE-2025-29927.yaml", "http",
+			shared.SeverityCritical, "Next.js Middleware Bypass",
+			"Next.js contains a critical middleware bypass vulnerability affecting versions 11.1.4 through 15.2.2.\nAttackers may bypass middleware by sending a crafted x-middleware-subrequest header. This template\nrequires a baseline middleware redirect before accepting a bypass 200 response.",
+			"Upgrade to Next.js 14.2.25 or 15.2.3 or later. Block the x-middleware-subrequest header at the edge.",
+			[]string{
+				"https://zhero-web-sec.github.io/research-and-things/nextjs-and-the-corrupt-middleware",
+				"https://github.com/vercel/next.js/security/advisories/GHSA-f82v-jwr5-mffw",
+				"https://slcyber.io/assetnote-security-research-center/doing-the-due-diligence-analysing-the-next-js-middleware-bypass-cve-2025-29927/",
+			},
+			"https://staging.acme-demo.test/admin", []string{"cve", "cve2025", "nextjs", "middleware", "auth-bypass", "vkev", "vuln"},
+			map[string]any{"verified": true, "max-request": 5, "vendor": "zeit", "product": "next.js"}, 0, 4),
 		// expired-ssl is "low" in the template; the scanner re-rates it high (severity_overrides.go).
 		nuclei("staging.acme-demo.test", "expired-ssl", "ssl/expired-ssl.yaml", "ssl",
 			shared.SeverityHigh, "Expired SSL Certificate",
