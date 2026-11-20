@@ -89,7 +89,8 @@ On macOS, install [Docker Desktop](https://docs.docker.com/desktop/setup/install
 The web UI uses port 8080 on `127.0.0.1`. If another program already uses that port, the script
 picks the first free port from 8081 to 8099, saves it as `VULWALL_PORT` in `.env`, and tells you.
 It does this only if you have not set `VULWALL_PORT`. If you set `VULWALL_PORT` and that port is in
-use by another program, the script stops with an error.
+use by another program, the script stops with an error. If you set it for the script, as in
+`VULWALL_PORT=8090 sh`, and `.env` has no `VULWALL_PORT` yet, the script saves it in `.env`.
 
 ## Options
 

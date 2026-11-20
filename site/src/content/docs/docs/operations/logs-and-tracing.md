@@ -5,13 +5,13 @@ description: Read VulWall's logs and turn on OpenTelemetry tracing with Jaeger.
 
 ## Logs
 
-Each container logs to standard output. With the `vulwall` command:
+Each container logs to standard output. With the [`vulwall` command](/docs/getting-started/install/#the-vulwall-command):
 
 ```sh
-vulwall logs                      # everything
-vulwall logs scanner              # scan progress and scanner errors
-vulwall status                    # container status and health
-vulwall doctor                    # health, and whether the scanner can reach the internet
+~/vulwall/vulwall logs            # everything
+~/vulwall/vulwall logs scanner    # scan progress and scanner errors
+~/vulwall/vulwall status          # container status and health
+~/vulwall/vulwall doctor          # health, and whether the scanner can reach the internet
 ```
 
 Or with Docker Compose, from the install directory:
