@@ -215,7 +215,6 @@ type Organization struct {
 	Industry             string               `json:"industry" bson:"industry"`
 	Website              string               `json:"website" bson:"website"`
 	CertVisible          bool                 `json:"cert_visible" bson:"cert_visible"`
-	IsClaimed            bool                 `json:"is_claimed" bson:"is_claimed"` // false = unclaimed (legacy) org; excluded from recurring cron scans (absent = legacy claimed org)
 	CreatedAt            time.Time            `json:"created_at" bson:"created_at"`
 	UpdatedAt            time.Time            `json:"updated_at" bson:"updated_at"`
 	SubscriptionSettings SubscriptionSettings `json:"subscription_settings" bson:"subscription_settings"`
@@ -223,8 +222,7 @@ type Organization struct {
 
 // SubscriptionSettings contains subscription-specific settings for scanning
 type SubscriptionSettings struct {
-	ScanCron  string `json:"scan_cron" bson:"scan_cron"`   // Cron expression for scan schedule (e.g., "0 2 * * *" = daily at 2 AM)
-	MaxAssets int    `json:"max_assets" bson:"max_assets"` // Maximum number of assets allowed
+	ScanCron string `json:"scan_cron" bson:"scan_cron"` // Cron expression for scan schedule (e.g., "0 2 * * *" = daily at 2 AM)
 }
 
 // Scan represents a scan execution in the system

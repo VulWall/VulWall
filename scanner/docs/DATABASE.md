@@ -223,8 +223,7 @@ type Organization struct {
 }
 
 type SubscriptionSettings struct {
-    ScanCron  string `bson:"scan_cron"`  // 6-field cron (e.g., "0 0 2 * * *")
-    MaxAssets int    `bson:"max_assets"`
+    ScanCron string `bson:"scan_cron"` // 6-field cron (e.g., "0 0 2 * * *")
 }
 
 type Scan struct {
@@ -421,8 +420,7 @@ type ScanStats struct {
   created_at: ISODate("..."),
   updated_at: ISODate("..."),
   subscription_settings: {
-    scan_cron: "0 0 2 * * *",     // Daily at 2 AM (6-field: sec min hour day month weekday)
-    max_assets: 1000
+    scan_cron: "0 0 2 * * *"      // Daily at 2 AM (6-field: sec min hour day month weekday)
   }
 }
 ```

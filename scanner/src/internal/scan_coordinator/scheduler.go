@@ -247,11 +247,6 @@ func (sc *Scheduler) getActiveOrganizations(ctx context.Context) ([]shared.Organ
 			"$exists": true,
 			"$ne":     "",
 		},
-		// Exclude unclaimed orgs from recurring cron scans.
-		// Use $ne:false (NOT $eq:true) deliberately: legacy claimed orgs predate this
-		// field and have it absent — $ne:false matches missing fields, so they stay
-		// included. Only docs with is_claimed explicitly false are excluded.
-		"is_claimed": bson.M{"$ne": false},
 	}
 
 	cursor, err := coll.Find(ctx, filter)
