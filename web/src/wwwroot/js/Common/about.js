@@ -14,6 +14,10 @@ function init(dialog) {
     let copyText = '';
 
     dialog.addEventListener('show.bs.modal', async () => {
+        // Below the lg breakpoint the trigger lives in the sidebar offcanvas, which has its own
+        // focus trap. Close it first, or the two traps fight and focus stays behind the dialog.
+        const sidebar = document.getElementById('sidebarOffcanvas');
+        if (sidebar && window.bootstrap) window.bootstrap.Offcanvas.getInstance(sidebar)?.hide();
         try {
             const response = await fetch('/about/info', { headers: { Accept: 'application/json' } });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
