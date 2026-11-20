@@ -75,6 +75,10 @@ how it is backed up and when it is deleted. See [Back up and restore](/docs/oper
   and 8.8.8.8 directly. It does this for root domains, for subdomains an earlier scan found, and
   for the SPF, DMARC, MX and NS records of your domains. Set `DNS_RECHECK_RESOLVERS=off` to stop all
   of these lookups, or set your own resolvers. See [Configuration](/docs/configuration/#scanner).
+- **Out-of-band checks, only if you set `NUCLEI_INTERACTSH=on`:** nuclei then makes a vulnerable
+  target call back to an interactsh server. Unless you run your own (`NUCLEI_INTERACTSH_SERVER`),
+  that is one of ProjectDiscovery's public servers (`oast.*`), which then sees the callbacks and
+  so learns which of your sites is vulnerable. See [Configuration](/docs/configuration/#scanner).
 - **AI, only if you set `ANTHROPIC_API_KEY`:** finding details go to Anthropic's API. See
   [what is sent](/docs/configuration/ai/#what-is-sent-to-anthropic).
 - **Traces, only if you turn on tracing:** to the OTLP backend you configure.

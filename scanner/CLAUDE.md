@@ -157,6 +157,8 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `ENVIRONMENT` | `development` (console logs) / `production` (JSON logs; the image default) |
 | `NUCLEI_WORKERS` | Concurrent nuclei processes across both trigger streams (default 2) |
 | `NUCLEI_RATE_LIMIT` | nuclei `-rl`, requests per second per process (default 50; not a positive integer = default, with a warning). nuclei's own 150 saturates a home/office uplink: it drops the target as "unresponsive permanently" and the run is coverage `error` |
+| `NUCLEI_INTERACTSH` | `on`/`true` runs nuclei's OAST checks via interactsh; anything else = `-ni` (default off: callbacks would go to ProjectDiscovery's public `oast.*` servers) |
+| `NUCLEI_INTERACTSH_SERVER` / `NUCLEI_INTERACTSH_TOKEN` | Self-hosted interactsh server (`-iserver`, https URL only; an invalid value keeps OAST off with a startup warning) and its token (`-itoken`; a secret, never logged) |
 | `NUCLEI_TEMPLATES_DIR` | nuclei templates directory (default `$HOME/nuclei-templates`; image: `/data/nuclei-templates`) |
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |

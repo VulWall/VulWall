@@ -82,6 +82,11 @@ First open-source, self-hosted release, under the MIT License.
   nuclei process. At nuclei's own default of 150 a home or office
   connection timed out, nuclei dropped the target and the scan lost its
   findings.
+- nuclei's out-of-band (OAST) checks are off by default (`-ni`): with them
+  on, a vulnerable target calls back to ProjectDiscovery's public
+  interactsh servers. `NUCLEI_INTERACTSH=on` turns them on;
+  `NUCLEI_INTERACTSH_SERVER` (https URL) and `NUCLEI_INTERACTSH_TOKEN` use a
+  self-hosted server.
 - "Check for updates" in the About dialog says why a check failed: no
   published release yet, GitHub's rate limit (the answer is kept until the
   limit resets, at most an hour), or no connection to GitHub.

@@ -48,6 +48,9 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 			zap.Int("default", DefaultRateLimit),
 		)
 	}
+	if _, err := interactshArgs(); err != nil {
+		logger.Warn("Out-of-band (interactsh) checks stay off", zap.Error(err))
+	}
 	return &Service{
 		redis:      redisClient,
 		logger:     logger,
@@ -311,6 +314,8 @@ func nucleiArgs(target, severity string) []string {
 	}
 	rl, _ := rateLimit()
 	args = append(args, "-rl", strconv.Itoa(rl))
+	ia, _ := interactshArgs()
+	args = append(args, ia...)
 
 	// -lna (restrict-local-network-access) makes nuclei refuse connections to
 	// local/private networks at dial time, which also covers DNS rebinding
@@ -345,6 +350,33 @@ func rateLimit() (rl int, ok bool) {
 		return DefaultRateLimit, false
 	}
 	return n, true
+}
+
+// interactshArgs returns nuclei's interactsh (OAST) arguments. Off by default (-ni): with it
+// on, a vulnerable target calls back to an interactsh server, by default ProjectDiscovery's
+// public ones (oast.*), which so learn of the target. NUCLEI_INTERACTSH=on|true turns it on;
+// NUCLEI_INTERACTSH_SERVER (an https URL) and NUCLEI_INTERACTSH_TOKEN select a self-hosted
+// server. An invalid server keeps it off (err says why) rather than fall back to the public
+// servers. The error contains neither the token nor the server value.
+func interactshArgs() ([]string, error) {
+	switch strings.ToLower(strings.TrimSpace(config.GetEnv(config.EnvNucleiInteractsh, ""))) {
+	case "on", "true":
+	default:
+		return []string{"-ni"}, nil
+	}
+	var args []string
+	if server := strings.TrimSpace(config.GetEnv(config.EnvNucleiInteractshServer, "")); server != "" {
+		u, err := url.Parse(server)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+			// The value is not echoed: it may carry credentials.
+			return []string{"-ni"}, fmt.Errorf("%s must be an https URL without credentials", config.EnvNucleiInteractshServer)
+		}
+		args = append(args, "-iserver", server)
+	}
+	if token := strings.TrimSpace(config.GetEnv(config.EnvNucleiInteractshToken, "")); token != "" {
+		args = append(args, "-itoken", token)
+	}
+	return args, nil
 }
 
 // templatesDir is where nuclei templates are installed and read from.

@@ -116,6 +116,9 @@ comments.
 | `TRUSTED_PROXIES` | empty | IPs/CIDRs of reverse proxies whose `X-Forwarded-*` headers are trusted |
 | `NUCLEI_WORKERS` | `2` | Concurrent nuclei processes |
 | `NUCLEI_RATE_LIMIT` | `50` | Requests per second for each nuclei process |
+| `NUCLEI_INTERACTSH` | `off` | `on` runs nuclei's out-of-band (OAST) checks. Vulnerable targets then call back to ProjectDiscovery's public interactsh servers unless you set your own |
+| `NUCLEI_INTERACTSH_SERVER` | empty | https URL of your own interactsh server |
+| `NUCLEI_INTERACTSH_TOKEN` | empty | Auth token of that server |
 | `TESTSSL_CONCURRENCY` | `5` | Concurrent testssl.sh scans |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scanning private/internal IP ranges |
 | `GEO_DOWNLOAD` | `true` | Download DB-IP Lite databases on start |
