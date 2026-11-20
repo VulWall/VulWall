@@ -6,10 +6,20 @@ give it your domains and IP addresses. It finds your external attack surface
 shows the results in a web dashboard with plain-language explanations of what
 to fix.
 
-<!-- Screenshots: add images to docs/screenshots/ and link them here, e.g.
-![Dashboard](docs/screenshots/dashboard.png)
-![Findings](docs/screenshots/findings.png)
--->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/overview-dark.png">
+  <img src="docs/screenshots/overview-light.png" alt="VulWall overview page: security score 98 out of 100, an open-issues chart by severity, counts of critical and high issues, discovered hosts and monitored assets">
+</picture>
+
+| | |
+|---|---|
+| [![Recommendations: open issues grouped by severity, each with the affected hosts and a fix action](docs/screenshots/findings-light.png)](docs/screenshots/findings-light.png) | [![Discoveries: domains and subdomains with country flag, hosting provider, open ports and issue counts](docs/screenshots/discoveries-light.png)](docs/screenshots/discoveries-light.png) |
+| **Recommendations** ([dark](docs/screenshots/findings-dark.png)) | **Discoveries** ([dark](docs/screenshots/discoveries-dark.png)) |
+| [![Scans: the running scan with its stages, recent runs and a heatmap of scan activity by day](docs/screenshots/scans-light.png)](docs/screenshots/scans-light.png) | [![Summary report: company name, security score and open issues by severity](docs/screenshots/report-light.png)](docs/screenshots/report-light.png) |
+| **Scans** ([dark](docs/screenshots/scans-dark.png)) | **Summary report** ([dark](docs/screenshots/report-dark.png)) |
+
+The screenshots show a demo install that scanned the IANA test domains
+example.com and example.net.
 
 ## Features
 
