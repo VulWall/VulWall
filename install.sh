@@ -240,7 +240,10 @@ ensure_daemon() {
             *"permission denied"*) die "$(group_help)" ;;
         esac
     fi
-    die "Cannot reach the Docker daemon. Start Docker (for example: sudo systemctl start docker), or run the installer with VULWALL_INSTALL_DOCKER=1 to let it start Docker."
+    if [ "${VULWALL_INSTALL_DOCKER:-}" = 1 ] || ! has_systemd; then
+        die "Cannot reach the Docker daemon. Start Docker, then run the installer again."
+    fi
+    die "Cannot reach the Docker daemon. Start Docker (sudo systemctl start docker), or run the installer with VULWALL_INSTALL_DOCKER=1 to let it start Docker."
 }
 
 ensure_docker() {

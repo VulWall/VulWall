@@ -479,6 +479,27 @@ env_mode() {
 }
 t "env: appending keeps .env private" 0 env_mode && expect "$work/out" "^-rw-------$"
 
+# --- Helper link ----------------------------------------------------------------------------
+
+link_case() { # answer existing(-|file)
+    HOME=$work/case/home
+    mkdir -p "$HOME/.local/bin"
+    [ "$2" = - ] || : >"$HOME/.local/bin/vulwall"
+    PATH=$HOME/.local/bin:$CLEAN_PATH
+    dir=/srv/vulwall qdir="'/srv/vulwall'"
+    ask_yes() { log "ask: $1"; [ "$answer" = y ]; }
+    answer=$1
+    link_helper
+    echo "helper=$helper"
+    readlink "$HOME/.local/bin/vulwall" || true
+}
+t "link: yes links the helper into ~/.local/bin" 0 link_case y - &&
+    expect "$work/out" "^helper=vulwall$" && expect "$work/out" "^/srv/vulwall/vulwall$"
+t "link: no keeps the full path" 0 link_case n - &&
+    expect "$work/out" "^helper='/srv/vulwall'/vulwall$"
+t "link: an existing file is never replaced or asked about" 0 link_case y file &&
+    expect "$work/out" "^helper='/srv/vulwall'/vulwall$" && expect_not "$work/log" "ask"
+
 # --- vulwall helper -------------------------------------------------------------------------------
 
 # Install dir with a docker stub that logs its directory and arguments.
