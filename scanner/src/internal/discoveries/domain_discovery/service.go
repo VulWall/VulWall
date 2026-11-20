@@ -30,7 +30,10 @@ type Service struct {
 	logger          *zap.Logger
 	subfinderClient *subfinderx.Client
 	tracer          trace.Tracer
-	dnsWorkers      int // concurrent subdomain lookups (DNS_RESOLVE_CONCURRENCY)
+	dnsWorkers      int      // concurrent subdomain lookups (DNS_RESOLVE_CONCURRENCY)
+	recheckServers  []string // public resolvers for a root that "does not exist" (DNS_RECHECK_RESOLVERS); nil = off
+	// lookupIP replaces the system resolver in tests; nil = the system resolver.
+	lookupIP func(ctx context.Context, network, host string) ([]net.IP, error)
 }
 
 func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error) {
@@ -42,13 +45,18 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error)
 	if dnsWorkers < 1 {
 		dnsWorkers = defaultDNSResolveConcurrency
 	}
-	logger.Info("Domain discovery configured", zap.Int("dns_resolve_concurrency", dnsWorkers))
+	recheckServers := recheckResolversFromEnv()
+	logger.Info("Domain discovery configured",
+		zap.Int("dns_resolve_concurrency", dnsWorkers),
+		zap.Strings("dns_recheck_resolvers", recheckServers),
+	)
 	return &Service{
 		redis:           redisClient,
 		logger:          logger,
 		subfinderClient: subfinderClient,
 		tracer:          otel.Tracer("domain-discovery"),
 		dnsWorkers:      dnsWorkers,
+		recheckServers:  recheckServers,
 	}, nil
 }
 
@@ -73,20 +81,24 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 
 	// Resolve IP for domain (if applicable)
 	var resolvedIP *string
-	rootFailed := false
+	// rootReason is the degraded reason for the root lookup itself ("" = fine).
+	rootReason := ""
 	if s.isDomain(job.Host) {
 		// A root domain that does not resolve is still recorded (without an
 		// IP) so subdomain enumeration and parent links keep working.
-		ips, err := s.resolveIPs(ctx, job.Host)
+		ips, err := s.resolveIPs(ctx, job.Host, true)
 		if err != nil && ctx.Err() == nil {
-			// Any error counts, even "not found": a DNS server that refuses upstream
-			// can surface as NXDOMAIN (Docker's embedded DNS does), and an asset the
-			// user added is expected to resolve.
-			rootFailed = true
+			rootReason = shared.ScanDegradedDNSFailures
+			if !isLookupFailure(err) {
+				// "Not found" may be a fact or a resolver that refused upstream (Docker's
+				// embedded DNS reports that as NXDOMAIN). Public resolvers decide.
+				rootReason = rootNotFoundReason(ctx, job.Host, s.recheckServers)
+			}
 			s.logger.Warn("Root domain did not resolve",
 				zap.String("trace_id", job.TraceID),
 				zap.String("org_id", job.OrgID),
 				zap.String("host", job.Host),
+				zap.String("degraded_reason", rootReason),
 				zap.Error(err),
 			)
 		}
@@ -145,8 +157,10 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 
 	// Run subdomain discovery inline — keeps the message unACKed until enumeration finishes,
 	// ensuring at-least-once delivery and safe serial use of the shared subfinder runner.
+	// A domain that does not exist has no subdomains to enumerate.
 	names, failures := 0, 0
-	if job.ParentID == nil && job.Port == nil && s.isDomain(job.Host) {
+	enumFailed := false
+	if job.ParentID == nil && job.Port == nil && s.isDomain(job.Host) && rootReason != shared.ScanDegradedRootNXDOMAIN {
 		var err error
 		names, failures, err = s.discoverSubdomains(ctx, job.TraceID, job.ScanID, job.OrgID, job.Host)
 		if err != nil {
@@ -154,6 +168,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			enumFailed = true
 			s.logger.Error("subfinder subdomain discovery failed",
 				zap.String("host", job.Host),
 				zap.Error(err),
@@ -161,27 +176,33 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		}
 	}
 
-	if !dnsDegraded(names, failures, rootFailed) {
+	reason := degradedReason(rootReason, enumFailed, names, failures)
+	if reason == "" {
 		return nil
 	}
-	s.logger.Warn("DNS failures during domain discovery; the scan will not resolve findings",
+	s.logger.Warn("Domain discovery incomplete; the scan will leave this asset's findings open",
 		zap.String("trace_id", job.TraceID),
 		zap.String("org_id", job.OrgID),
+		zap.String("asset_id", job.AssetID),
 		zap.String("host", job.Host),
-		zap.Bool("root_failed", rootFailed),
+		zap.String("degraded_reason", reason),
 		zap.Int("names", names),
 		zap.Int("lookup_failures", failures),
 	)
 	// Published before the job is ACKed, so the scan cannot read as drained before
 	// ingestion has recorded it.
 	return s.publishFinding(ctx, shared.DiscoveryFinding{
-		TraceID:            job.TraceID,
-		ScanID:             job.ScanID,
-		OrgID:              job.OrgID,
-		Source:             "subfinder",
-		Host:               job.Host,
-		Timestamp:          time.Now(),
-		ScanDegradedReason: shared.ScanDegradedDNSFailures,
+		TraceID:   job.TraceID,
+		ScanID:    job.ScanID,
+		OrgID:     job.OrgID,
+		Source:    "subfinder",
+		Host:      job.Host,
+		Timestamp: time.Now(),
+		Degraded: &shared.DegradedAsset{
+			AssetID: job.AssetID,
+			Domain:  job.Host,
+			Reason:  reason,
+		},
 	})
 }
 
@@ -248,7 +269,11 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 	// could later be pointed at an internal address), and so are names with a private answer.
 	var published, publishFailed atomic.Int64
 	log := s.logger.With(zap.String("trace_id", traceID), zap.String("org_id", orgID))
-	failures, err := resolvePublic(ctx, names, s.dnsWorkers, s.resolveIPs, func(host, ip string) {
+	lookup := func(ctx context.Context, host string) ([]net.IP, error) {
+		// Passive sources return many stale names: a clean NXDOMAIN is final, not retried.
+		return s.resolveIPs(ctx, host, false)
+	}
+	failures, err := resolvePublic(ctx, names, s.dnsWorkers, lookup, func(host, ip string) {
 		if err := s.publishFinding(ctx, shared.DiscoveryFinding{
 			DiscoveryID: shared.GenerateSubdomainID(orgID, host),
 			AssetType:   shared.AssetTypeSubdomain,
@@ -347,13 +372,17 @@ func selectPublicIP(ips []net.IP) (string, error) {
 
 // resolveIPs resolves a domain name to all of its A and AAAA addresses.
 // Retries up to dnsRetryAttempts times with dnsRetryDelay between attempts
-// to handle transient DNS failures.
-func (s *Service) resolveIPs(ctx context.Context, domain string) ([]net.IP, error) {
-	resolver := &net.Resolver{}
+// to handle transient DNS failures (timeout, SERVFAIL, refused). A clean "not found"
+// is retried only when retryNotFound is set (the root domain).
+func (s *Service) resolveIPs(ctx context.Context, domain string, retryNotFound bool) ([]net.IP, error) {
+	lookupIP := s.lookupIP
+	if lookupIP == nil {
+		lookupIP = (&net.Resolver{}).LookupIP
+	}
 	var lastErr error
 
 	for attempt := 1; attempt <= dnsRetryAttempts; attempt++ {
-		ips, err := resolver.LookupIP(ctx, "ip", domain)
+		ips, err := lookupIP(ctx, "ip", domain)
 		if err == nil && len(ips) > 0 {
 			if attempt > 1 {
 				s.logger.Info("DNS resolution succeeded after retry",
@@ -378,6 +407,9 @@ func (s *Service) resolveIPs(ctx context.Context, domain string) ([]net.IP, erro
 			zap.Error(lastErr),
 		)
 
+		if !retryNotFound && !isLookupFailure(lastErr) {
+			break
+		}
 		if attempt < dnsRetryAttempts {
 			select {
 			case <-ctx.Done():

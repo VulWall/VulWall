@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"go.uber.org/zap"
 )
 
@@ -22,14 +23,25 @@ const (
 	dnsDegradedFailurePercent = 20 // more than this percent of them failed
 )
 
-// dnsDegraded reports whether a domain discovery's DNS results are too incomplete to trust:
-// the root domain itself did not resolve, or more than dnsDegradedFailurePercent of more
-// than dnsDegradedMinNames subdomain lookups failed (isLookupFailure).
-func dnsDegraded(names, failures int, rootFailed bool) bool {
-	if rootFailed {
-		return true
-	}
+// subdomainLookupsDegraded reports whether more than dnsDegradedFailurePercent of more than
+// dnsDegradedMinNames subdomain lookups failed (isLookupFailure).
+func subdomainLookupsDegraded(names, failures int) bool {
 	return names > dnsDegradedMinNames && failures*100 > names*dnsDegradedFailurePercent
+}
+
+// degradedReason picks the one reason a domain discovery reports for its root asset, or ""
+// when the discovery saw the whole attack surface. One reason per job keeps the signal
+// idempotent; the root's own problem comes first because it is what the user must fix.
+func degradedReason(rootReason string, enumFailed bool, names, failures int) string {
+	switch {
+	case rootReason != "":
+		return rootReason
+	case enumFailed:
+		return shared.ScanDegradedSubdomainEnumFailed
+	case subdomainLookupsDegraded(names, failures):
+		return shared.ScanDegradedDNSFailures
+	}
+	return ""
 }
 
 // isLookupFailure reports whether a lookup error means the resolver could not answer

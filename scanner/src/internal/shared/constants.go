@@ -26,11 +26,18 @@ const (
 	ScanCompletionIdleTimeout       = "idle_timeout"
 	ScanCompletionSafetyTimeout     = "safety_timeout"
 
-	// ScanDegradedDNSFailures is the scans.degraded_reason recorded when
-	// domain discovery could not resolve enough names (or the root domain)
-	// to trust the scan's view of the attack surface. A degraded scan does
-	// not reconcile findings.
+	// Reasons in scans.degraded_assets[].reason: domain discovery could not see
+	// the whole attack surface of one root domain asset. The scan still resolves
+	// findings of every other asset; the findings under a degraded root stay open.
+	//
+	// ScanDegradedDNSFailures: the resolver failed for the root domain, or for
+	// too many of its subdomains.
 	ScanDegradedDNSFailures = "dns_failures"
+	// ScanDegradedRootNXDOMAIN: the root domain does not exist (NXDOMAIN),
+	// confirmed by public resolvers.
+	ScanDegradedRootNXDOMAIN = "root_nxdomain"
+	// ScanDegradedSubdomainEnumFailed: subdomain enumeration (subfinder) failed.
+	ScanDegradedSubdomainEnumFailed = "subdomain_enumeration_failed"
 
 	// Scan Type
 	ScanTypeScheduled = "scheduled"

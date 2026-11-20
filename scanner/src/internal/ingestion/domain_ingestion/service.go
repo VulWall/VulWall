@@ -101,15 +101,16 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 // it did not see.
 const scanDegradedWriteAttempts = 3
 
-// RecordScanDegraded sets the scan's degraded_reason from a discovery signal, so the scan
-// monitor closes the scan without resolving findings. The scan monitor alone derives
-// findings_reconciled.
+// RecordScanDegraded adds the signal's asset to the scan's degraded_assets ($addToSet, so a
+// redelivered signal adds nothing), so the scan monitor leaves the findings under that root
+// domain open. The scan monitor alone derives findings_reconciled.
 func (s *Service) RecordScanDegraded(ctx context.Context, finding shared.DiscoveryFinding) error {
 	log := s.logger.With(
 		zap.String("trace_id", finding.TraceID),
 		zap.String("org_id", finding.OrgID),
 		zap.String("host", finding.Host),
-		zap.String("degraded_reason", finding.ScanDegradedReason),
+		zap.String("asset_id", finding.Degraded.AssetID),
+		zap.String("degraded_reason", finding.Degraded.Reason),
 	)
 	if finding.ScanID == nil || *finding.ScanID == "" {
 		log.Warn("Scan degradation signal without scan_id; nothing to record")
@@ -118,10 +119,10 @@ func (s *Service) RecordScanDegraded(ctx context.Context, finding shared.Discove
 	log = log.With(zap.String("scan_id", *finding.ScanID))
 
 	filter := bson.M{"_id": *finding.ScanID, "org_id": finding.OrgID}
-	update := bson.M{"$set": bson.M{
-		"degraded_reason": finding.ScanDegradedReason,
-		"updated_at":      time.Now(),
-	}}
+	update := bson.M{
+		"$addToSet": bson.M{"degraded_assets": *finding.Degraded},
+		"$set":      bson.M{"updated_at": time.Now()},
+	}
 	var err error
 	for attempt := 1; attempt <= scanDegradedWriteAttempts; attempt++ {
 		var res *mongo.UpdateResult
@@ -132,7 +133,7 @@ func (s *Service) RecordScanDegraded(ctx context.Context, finding shared.Discove
 			return nil
 		}
 		if err == nil {
-			log.Warn("Scan marked degraded; it will not resolve findings")
+			log.Warn("Asset marked degraded on the scan; its findings will stay open")
 			return nil
 		}
 		log.Warn("Failed to record scan degradation; retrying",
@@ -143,7 +144,7 @@ func (s *Service) RecordScanDegraded(ctx context.Context, finding shared.Discove
 		case <-time.After(time.Duration(attempt) * time.Second):
 		}
 	}
-	log.Error("Failed to record scan degradation; the scan may resolve findings it did not see",
+	log.Error("Failed to record asset degradation; the scan may resolve findings it did not see",
 		zap.Error(err))
 	return err
 }
