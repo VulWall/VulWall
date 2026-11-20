@@ -310,7 +310,6 @@ The orchestrator runs all consumer slices concurrently:
 | findings_ingestion | `security_findings` | `findings` | `kb_generation_queue` |
 | enrichment_ingestion | `discovery_enrichment_results` | `discoveries` | — |
 | kb_ingestion | `kb_generation_results` | `knowledge_base` | — |
-| audit_ingestion | `system_audit_logs` | `audit_logs` | — |
 
 ---
 

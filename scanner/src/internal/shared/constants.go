@@ -77,14 +77,8 @@ const (
 	StreamDomainScanTriggers = "domain_scan_triggers" // Triggers for active recon scanners on domains/subdomains (published by domain_ingestion)
 	StreamPortScanTriggers   = "port_scan_triggers"   // Triggers for active recon scanners on ports (published by port_ingestion)
 
-	// Redis Streams - System Audit Logs
-	StreamSystemAuditLogs = "system_audit_logs" // System-level audit events (template updates, service events, etc.)
-
 	// Redis Streams - Dead Letter
 	StreamDeadLetter = "dead_letter" // Messages that failed processing permanently (poison messages)
-
-	// MongoDB Collections - Audit
-	CollectionAuditLogs = "audit_logs" // Existing audit logs collection (shared with Dashboard)
 
 	// Asset Types (for Discovery.AssetType)
 	AssetTypeDomain    = "domain"

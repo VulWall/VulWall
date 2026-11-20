@@ -1,8 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VulWall.Dashboard.Attributes;
-using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Repositories;
@@ -53,7 +51,6 @@ public class ScansController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    [AuditLog(Category = AuditLogCategory.Scans, Action = "Triggered scan")]
     public async Task<IActionResult> TriggerScan()
     {
         var state = await scansService.GetScanNowStateAsync();

@@ -7,7 +7,6 @@
 
 @section Styles {
     <link rel="stylesheet" href="~/css/Common/badges.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/Common/audit-activity.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Dashboard/index.css" asp-append-version="true" />
 }
 
@@ -58,7 +57,7 @@
     <!-- FIX THESE FIRST -->
     <partial name="Partials/_FixNow" model="Model" />
 
-    <!-- BOTTOM: RECENT SCANS + ACTIVITY -->
+    <!-- RECENT SCANS -->
     <div class="overview-bottom-grid">
 
         <div class="recent-section" data-tour="recent-scans">
@@ -99,39 +98,6 @@
             }
         </div>
 
-        <div class="recent-section" data-tour="recent-activity">
-            <div class="recent-section-head">
-                <h2>Recent activity</h2>
-            </div>
-            @if (Model.RecentActivities.Any())
-            {
-                @foreach (var activity in Model.RecentActivities)
-                {
-                    var message = $"{activity.UserName} {activity.Action.ToLower()}";
-                    if (!string.IsNullOrEmpty(activity.AdditionalInfo))
-                    {
-                        message += $" {activity.AdditionalInfo}";
-                    }
-                    <div class="activity-list-row">
-                        <div class="activity-row-icon" style="color: @GetIconColor(activity.Action);">
-                            <i class="fas fa-@GetIconClass(activity.Action)"></i>
-                        </div>
-                        <div class="activity-row-main">
-                            <div class="activity-row-title">@message</div>
-                            <div class="activity-row-meta">@activity.TimeAgo</div>
-                        </div>
-                    </div>
-                }
-            }
-            else
-            {
-                <div class="recent-empty">
-                    <i class="fas fa-inbox d-block"></i>
-                    <p class="mb-0 small">No recent activity</p>
-                </div>
-            }
-        </div>
-
     </div>
 </div>
 
@@ -139,38 +105,4 @@
     <script id="chart-data" type="application/json">@Html.Raw(JsonSerializer.Serialize(Model.ChartData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))</script>
     <script src="~/lib/chart.js/chart.umd.js" asp-append-version="true"></script>
     <script type="module" src="~/js/Dashboard/index.js" asp-append-version="true"></script>
-}
-
-@functions {
-    private static string GetIconClass(string action)
-    {
-        var a = action.ToLower();
-        if (a.Contains("generated") || a.Contains("created")) return "file-alt";
-        if (a.Contains("shared")) return "link";
-        if (a.Contains("downloaded") || a.Contains("exported")) return "file-arrow-down";
-        if (a.Contains("revoked")) return "ban";
-        if (a.Contains("added")) return "plus";
-        if (a.Contains("verified")) return "check-circle";
-        if (a.Contains("deleted")) return "trash";
-        if (a.Contains("logged in")) return "sign-in-alt";
-        if (a.Contains("logged out")) return "sign-out-alt";
-        if (a.Contains("muted") || a.Contains("suppressed") || a.Contains("dismissed")) return "volume-xmark";
-        if (a.Contains("scan")) return "radar";
-        if (a.Contains("discovered") || a.Contains("subdomain")) return "sitemap";
-        if (a.Contains("updated")) return "edit";
-        return "circle";
-    }
-
-    private static string GetIconColor(string action)
-    {
-        var a = action.ToLower();
-        if (a.Contains("verified") || a.Contains("logged in") || a.Contains("shared") ||
-            a.Contains("added") || a.Contains("created") || a.Contains("generated"))
-            return "var(--vw-success)";
-        if (a.Contains("updated") || a.Contains("downloaded") || a.Contains("exported"))
-            return "var(--vw-warning)";
-        if (a.Contains("deleted") || a.Contains("revoked") || a.Contains("logged out"))
-            return "var(--vw-danger)";
-        return "var(--vw-primary)";
-    }
 }

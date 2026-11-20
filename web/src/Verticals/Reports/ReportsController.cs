@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
-using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Common.Services.Organization;
@@ -201,7 +200,6 @@ public class ReportsController(
     }
 
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Reports, Action = "Shared link created")]
     public async Task<IActionResult> CreateSharedLink([FromBody] CreateSharedLinkRequest request)
     {
         var featureAccess = await featureAccessService.GetFeatureAccessAsync();
@@ -231,8 +229,6 @@ public class ReportsController(
 
         var shareableUrl = $"{Request.Scheme}://{Request.Host}/shared-reports/{link.Token}";
 
-        HttpContext.Items["AuditLogAdditionalInfo"] = $"created shared link: {request.ReportName}";
-
         return Ok(new CreateSharedLinkResponse
         {
             Success = true,
@@ -243,7 +239,6 @@ public class ReportsController(
     }
 
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Reports, Action = "Shared link revoked")]
     public async Task<IActionResult> RevokeSharedLink([FromBody] string linkId)
     {
         var result = await sharedLinkService.RevokeSharedLinkAsync(linkId);
@@ -252,8 +247,6 @@ public class ReportsController(
         {
             return NotFound(new { success = false, error = "Link not found" });
         }
-
-        HttpContext.Items["AuditLogAdditionalInfo"] = $"revoked shared link: {linkId}";
 
         return Ok(new { success = true });
     }

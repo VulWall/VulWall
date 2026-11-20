@@ -10,7 +10,6 @@
 | `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries by finding_type (~84 entries) | Ingestion |
 | `organizations` | `CollectionOrganizations` | Org settings with subscription config | Dashboard |
 | `scans` | `CollectionScans` | Scan execution records | Scan coordinator |
-| `audit_logs` | `CollectionAuditLogs` | System audit events | Ingestion |
 
 ---
 

@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/VulWall/VulWall/scanner/src/internal/core/audit"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
@@ -29,20 +28,18 @@ import (
 
 // Service handles Nuclei vulnerability scanning
 type Service struct {
-	redis       *redis.Client
-	logger      *zap.Logger
-	tracer      trace.Tracer
-	auditLogger *audit.Logger
-	cron        *cron.Cron
+	redis  *redis.Client
+	logger *zap.Logger
+	tracer trace.Tracer
+	cron   *cron.Cron
 }
 
 // NewService creates a new Nuclei scanner service
 func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
-		redis:       redisClient,
-		logger:      logger,
-		tracer:      otel.Tracer("nuclei-scanner"),
-		auditLogger: audit.NewLogger(redisClient, logger, "nuclei-scanner"),
+		redis:  redisClient,
+		logger: logger,
+		tracer: otel.Tracer("nuclei-scanner"),
 	}
 }
 
@@ -84,7 +81,7 @@ func (s *Service) StartTemplateUpdater(ctx context.Context) {
 	}()
 }
 
-// updateTemplates runs nuclei -update-templates and publishes audit log
+// updateTemplates runs nuclei -update-templates and logs the result
 func (s *Service) updateTemplates(ctx context.Context) {
 	ctx, span := s.tracer.Start(ctx, "update_templates")
 	defer span.End()
@@ -125,21 +122,18 @@ func (s *Service) updateTemplates(ctx context.Context) {
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-	} else {
-		span.SetStatus(codes.Ok, "")
+		s.logger.Error("Nuclei template update failed",
+			zap.String("version_before", versionBefore),
+			zap.String("version_after", versionAfter),
+			zap.String("output", string(output)),
+			zap.Error(err),
+		)
+		return
 	}
-
-	// Log audit event using shared audit logger
-	s.auditLogger.LogOperation(ctx,
-		"TemplateUpdate",
-		"Nuclei templates updated",
-		"Nuclei template update failed",
-		err,
-		map[string]any{
-			"version_before": versionBefore,
-			"version_after":  versionAfter,
-			"output":         string(output),
-		},
+	span.SetStatus(codes.Ok, "")
+	s.logger.Info("Nuclei templates updated",
+		zap.String("version_before", versionBefore),
+		zap.String("version_after", versionAfter),
 	)
 }
 

@@ -69,14 +69,6 @@ const tourSteps = [
         description: 'View your latest scan activities and their results at a glance.'
     },
     {
-        id: 'recent-activity',
-        target: '[data-tour="recent-activity"]',
-        position: 'top',
-        title: 'Recent Activity',
-        icon: 'fa-history',
-        description: 'Your audit trail showing all recent actions like report generation, asset additions, and more.'
-    },
-    {
         id: 'theme-controls',
         target: '#themeToggle',
         position: 'left',

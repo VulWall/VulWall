@@ -133,3 +133,7 @@ First open-source, self-hosted release, under the MIT License.
   scan-completion webhook (`DASHBOARD_WEBHOOK_URL`, `DASHBOARD_WEBHOOK_SECRET`).
 - Honeycomb-specific tracing settings (`HONEYCOMB_API_KEY`).
 - Per-service scanner binaries, Dockerfiles and compose files.
+- The audit log: the `[AuditLog]` filter, the dashboard "Recent activity"
+  card, and the scanner's `system_audit_logs` stream and audit ingestion
+  slice. Nothing writes or reads the `audit_logs` collection any more; an
+  existing one is left in place and is safe to drop.

@@ -1,8 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VulWall.Dashboard.Attributes;
-using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Recommendations.Constants;
@@ -53,7 +51,6 @@ public class RecommendationsController(
     }
 
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Recommendations, Action = "Suppressed finding")]
     public async Task<IActionResult> SuppressFinding(SuppressFindingInput input, string? returnFindingId = null)
     {
         var featureAccess = await featureAccessService.GetFeatureAccessAsync();
@@ -105,7 +102,6 @@ public class RecommendationsController(
     // Intentionally NOT gated by CanSuppressFindings: a user must always be able to
     // remove existing suppressions and restore findings to the open list.
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Recommendations, Action = "Un-suppressed finding")]
     public async Task<IActionResult> UnsuppressFinding(UnsuppressFindingInput input, string? returnFindingId = null)
     {
         if (string.IsNullOrEmpty(input.SuppressionId))

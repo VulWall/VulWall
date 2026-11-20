@@ -7,7 +7,7 @@ namespace VulWall.Dashboard.Data.Base;
 
 /// <summary>
 /// Repository that automatically filters all queries by organization ID.
-/// Use this for tenant-specific data (Assets, Discoveries, Users, AuditLogs).
+/// Use this for tenant-specific data (Assets, Discoveries, Users).
 /// For global/shared data (CVEs, threat intel), use BaseMongoRepository directly.
 /// </summary>
 public abstract class OrgScopedRepository<TEntity, TId>(

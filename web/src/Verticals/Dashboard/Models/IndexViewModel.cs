@@ -43,9 +43,6 @@ public class IndexViewModel
 
     // Recent Scans
     public List<RecentScanViewModel> RecentScans { get; set; } = new();
-
-    // Recent Activities
-    public List<RecentActivityViewModel> RecentActivities { get; set; } = new();
 }
 
 public class VulnerabilityItemViewModel

@@ -24,12 +24,6 @@ public class OrganizationRepository(IMongoDatabase database)
 public class UsersRepository(IMongoDatabase database)
     : BaseMongoRepository<Entities.User.User, string>(database, "users");
 
-public class AuditLogRepository(
-    IMongoDatabase database,
-    IOrganizationContext orgContext,
-    ILogger<OrgScopedRepository<AuditLog, string>> logger)
-    : OrgScopedRepository<AuditLog, string>(database, "audit_logs", orgContext, logger);
-
 public class AssetsRepository(
     IMongoDatabase database,
     IOrganizationContext orgContext,

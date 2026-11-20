@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Discoveries.Services;
 
@@ -17,7 +16,6 @@ public class DiscoveriesController(
     }
 
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Discoveries, Action = "Updated discovery ownership")]
     public async Task<IActionResult> UpdateOwnershipStatus(string discoveryId, OwnershipStatus ownershipStatus)
     {
         var success = await discoveriesService.UpdateOwnershipStatusAsync(discoveryId, ownershipStatus);
