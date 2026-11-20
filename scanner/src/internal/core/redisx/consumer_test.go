@@ -59,16 +59,20 @@ func TestProcessMessageRecoversPanicLogsStackAndAcks(t *testing.T) {
 
 func TestProcessMessageLeavesCancelledWorkUnacked(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	core, logs := observer.New(zap.DebugLevel)
 	var acked []string
 	handler := func(ctx context.Context, _ redis.XMessage) error {
 		cancel() // shutdown arrives while the handler runs
 		return ctx.Err()
 	}
 
-	processMessage(ctx, handler, recordAck(&acked), zap.NewNop(), redis.XMessage{ID: "3-0"})
+	processMessage(ctx, handler, recordAck(&acked), zap.New(core), redis.XMessage{ID: "3-0"})
 
 	if len(acked) != 0 {
 		t.Fatalf("acked = %v, want none: the work was cut off by shutdown", acked)
+	}
+	if all := logs.All(); len(all) != 1 || all[0].Level != zap.InfoLevel {
+		t.Fatalf("logs = %v, want one Info entry: shutdown is not a failure", all)
 	}
 }
 

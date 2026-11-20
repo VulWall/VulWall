@@ -117,7 +117,7 @@ Discovery services use a **parallel consumer group pattern** where multiple inde
 
 ```
 Input: domain_discovery_queue
-    ├─→ Consumer Group: shodan_subdomain_service  → subfinder Discovery (group name retained for Redis compatibility)
+    ├─→ Consumer Group: domain_discovery_service  → subfinder discovery + DNS resolution
     ├─→ Consumer Group: nmap_discovery_service     → Nmap (future)
     └─→ Consumer Group: masscan_discovery_service  → Masscan (future)
         ↓

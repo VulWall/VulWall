@@ -17,15 +17,18 @@ import (
 func TestScanPipelineGroups(t *testing.T) {
 	t.Parallel()
 
+	// Upstream stages first: pipelineQuiescent depends on this order.
 	want := []StreamGroup{
+		{shared.StreamDomainDiscoveryQueue, "domain_discovery_service"},
+		{shared.StreamDomainDiscoveryResults, "domain_ingestion_service"},
+		{shared.StreamIPDiscoveryQueue, "port_discovery_service"},
+		{shared.StreamIPDiscoveryResults, "port_ingestion_service"},
 		{shared.StreamDomainScanTriggers, "nuclei_scanner_service"},
 		{shared.StreamDomainScanTriggers, "testssl_scanner_service"},
 		{shared.StreamDomainScanTriggers, "js_dependency_scanner_service"},
 		{shared.StreamDomainScanTriggers, "http_header_scanner_service"},
 		{shared.StreamDomainScanTriggers, "email_security_scanner_service"},
 		{shared.StreamPortScanTriggers, "nuclei_scanner_service"},
-		{shared.StreamDomainDiscoveryResults, "domain_ingestion_service"},
-		{shared.StreamIPDiscoveryResults, "port_ingestion_service"},
 		{shared.StreamSecurityFindings, "findings_ingestion_service"},
 	}
 
@@ -34,19 +37,10 @@ func TestScanPipelineGroups(t *testing.T) {
 	if len(got) != len(want) {
 		t.Fatalf("scanPipelineGroups() returned %d pairs, want %d", len(got), len(want))
 	}
-
-	wantSet := make(map[StreamGroup]bool, len(want))
-	for _, sg := range want {
-		wantSet[sg] = true
-	}
-	for _, sg := range got {
-		if !wantSet[sg] {
-			t.Errorf("unexpected pipeline pair %+v — update this test AND docs/SERVICE_REGISTRY.md", sg)
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("pair %d = %+v, want %+v — update this test AND docs/SERVICE_REGISTRY.md", i, got[i], want[i])
 		}
-		delete(wantSet, sg)
-	}
-	for sg := range wantSet {
-		t.Errorf("missing expected pipeline pair %+v", sg)
 	}
 
 	// Enrichment and KB streams are terminal and must be excluded.

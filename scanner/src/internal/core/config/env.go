@@ -84,6 +84,14 @@ const (
 	EnvCloudDetectorEnabled = "CLOUD_DETECTOR_ENABLED"
 	// EnvCloudDataDir is the directory containing cloud provider data files
 	EnvCloudDataDir = "CLOUD_DATA_DIR"
+	// EnvScanIdleTimeout overrides the scan monitor's idle timeout (Go duration, default 15m)
+	EnvScanIdleTimeout = "SCAN_IDLE_TIMEOUT"
+	// EnvScanMinRuntime overrides the minimum scan age before a scan can complete
+	// (Go duration, default 10m)
+	EnvScanMinRuntime = "SCAN_MIN_RUNTIME"
+	// EnvDNSResolveConcurrency is the number of concurrent subdomain DNS lookups in domain
+	// discovery (default: 50)
+	EnvDNSResolveConcurrency = "DNS_RESOLVE_CONCURRENCY"
 	// EnvAllowPrivateTargets disables the private/reserved IP guard for scan
 	// targets (true/false, default false). Only enable it for self-hosted
 	// installs that intentionally scan internal networks.

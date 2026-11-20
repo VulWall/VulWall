@@ -59,6 +59,15 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 
 	// Run testssl.sh scan (LOW severity and above - excludes INFO)
 	findings, err := s.runTestSSLScan(ctx, target.Target, "LOW")
+	if err != nil && ctx.Err() != nil {
+		// Shutdown cut the run off. This is expected: the message stays unACKed and the
+		// next start closes the scan as interrupted.
+		s.logger.Info("testssl.sh scan stopped by shutdown",
+			zap.String("target", target.Target),
+		)
+		span.SetAttributes(attribute.Bool("scan.success", false))
+		return err
+	}
 	if err != nil {
 		s.logger.Error("testssl.sh scan failed",
 			zap.String("target", target.Target),

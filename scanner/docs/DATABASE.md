@@ -436,9 +436,9 @@ read by the guards for older documents but is no longer written.
   does not resolve findings and is not used as the baseline of the next scan.
   Findings it already wrote stay as they are. Queued scans are not touched.
   Right after that, the scanner removes the previous process's consumers from
-  the scan-pipeline groups (`scanPipelineGroups()`) with their pending entries:
-  nothing would ever redeliver them, and they would keep the pipeline from
-  looking quiescent, so every later scan would end only by the idle timeout.
+  every group it consumes (`ownedGroups()`) with their pending entries:
+  nothing would ever redeliver them, and in the scan-pipeline groups they would
+  keep the pipeline from looking quiescent.
   This assumes one scanner process per database and Redis.
 - The scan monitor only writes `done` while the scan is still `pending` or
   `running`, so it never reopens a scan that was closed as `failed`.

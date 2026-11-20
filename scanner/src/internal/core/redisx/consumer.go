@@ -192,7 +192,7 @@ func processMessage(ctx context.Context, handler MessageHandler, ack func(contex
 			zap.String("stack", panicErr.stack),
 		)
 	case err != nil && ctx.Err() != nil:
-		logger.Warn("Message handler stopped by shutdown; leaving the message unACKed",
+		logger.Info("Message handler stopped by shutdown; leaving the message unACKed",
 			zap.String("message_id", message.ID),
 			zap.Error(err),
 		)

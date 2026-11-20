@@ -47,12 +47,10 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupNucleiScanner); err != nil {
 		return fmt.Errorf("failed to create domain consumer group: %w", err)
 	}
-	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDomainScanTriggers, GroupNucleiScanner, c.logger)
 
 	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamPortScanTriggers, GroupNucleiScanner); err != nil {
 		return fmt.Errorf("failed to create IP consumer group: %w", err)
 	}
-	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamPortScanTriggers, GroupNucleiScanner, c.logger)
 
 	// Install or update templates before reading any trigger. On first boot the
 	// templates directory is empty, and a scan without templates finds nothing.

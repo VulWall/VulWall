@@ -78,11 +78,12 @@ container health check; the scanner opens no port).
 
 1. Define consumer group in `[service]/constants.go`
 2. Use stream constants from `src/internal/shared/constants.go`
-3. **Update scan monitor** — add the (stream, group) pair to `scanPipelineGroups()` in `src/internal/scan_coordinator/pipeline.go` (guarded by `TestScanPipelineGroups`)
+3. **Update scan monitor** — add the (stream, group) pair to `scanPipelineGroups()` in `src/internal/scan_coordinator/pipeline.go`, after the stages that feed it (guarded by `TestScanPipelineGroups`); only the enrichment and KB streams stay out
 4. **Update stream cleanup** — add new result streams to `streamsToClean()` in `src/internal/scan_coordinator/stream_cleanup.go`
 5. **Update SERVICE_REGISTRY.md** — add to all relevant tables
 6. Inject TraceContext before publishing, extract after consuming
-7. **Register in `src/cmd/nightwatch/main.go`** — add the consumer to `consumers()` and its job-queue/trigger group to `createConsumerGroups()`; install any CLI tool (pinned, checksum-verified) in `scanner/Dockerfile`
+7. **Update startup cleanup** — add every (stream, group) the service consumes to `ownedGroups()` in `src/internal/scan_coordinator/pipeline.go` (guarded by `TestOwnedGroups`)
+8. **Register in `src/cmd/nightwatch/main.go`** — add the consumer to `consumers()` and its job-queue/trigger group to `createConsumerGroups()`; install any CLI tool (pinned, checksum-verified) in `scanner/Dockerfile`
 
 > **Why this matters:** Missing step 3 causes scans to complete before the new scanner finishes.
 
@@ -96,7 +97,7 @@ container health check; the scanner opens no port).
 - Trigger streams use `CreateConsumerGroupFromLatest` (from `$`) — ephemeral
 - Result/job streams use `CreateConsumerGroup` (from `0`) — guaranteed delivery
 - `redisx.ConsumeStream` ACKs after the handler returns, also on handler error and on a recovered panic (logged with stack). A handler that fails because shutdown cancelled its context is NOT ACKed
-- At startup `nightwatch` closes every `pending`/`running` scan as `failed` with `status_reason: "interrupted_by_restart"` (no finding resolution), then deletes the previous process's consumers (and their pending entries) from the `scanPipelineGroups()` groups (`ReleaseOrphanedPending`), before any component starts
+- At startup `nightwatch` closes every `pending`/`running` scan as `failed` with `status_reason: "interrupted_by_restart"` (no finding resolution), then deletes the previous process's consumers (and their pending entries) from every group the binary consumes (`ownedGroups()` in `pipeline.go`, `ReleaseOrphanedPending`), before any component starts. This assumes one scanner process per Redis
 
 ### Data Rules
 
@@ -158,6 +159,9 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
 | `TESTSSL_CONCURRENCY` | Concurrent testssl.sh scans (default 5) |
+| `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry delivered < 30 min ago). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
+| `SCAN_MIN_RUNTIME` | Minimum scan age before a scan can complete, Go duration (default `10m`). Same as above |
+| `DNS_RESOLVE_CONCURRENCY` | Concurrent subdomain DNS lookups in domain discovery (default 50); each name is published as soon as it resolves |
 | `IP_ENRICHMENT_DB_PATH` | Country MMDB (DB-IP Country Lite; default `./data/dbip-country-lite.mmdb`) |
 | `IP_ASN_DB_PATH` | Optional ASN MMDB (DB-IP ASN Lite; default `./data/dbip-asn-lite.mmdb`) |
 | `ALLOW_PRIVATE_TARGETS` | `true` disables the private/reserved IP guard (SSRF dialer, discovery, port scanner, testssl `--ip` check, nuclei `-lna`, AXFR nameserver dial). Default `false`; enable only to scan internal networks on purpose |

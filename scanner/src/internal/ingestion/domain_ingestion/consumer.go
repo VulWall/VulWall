@@ -35,7 +35,6 @@ func (c *Consumer) Start(ctx context.Context) error {
 	if err := redisx.CreateConsumerGroup(ctx, c.redis, shared.StreamDomainDiscoveryResults, GroupDomainIngestion); err != nil {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
-	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamDomainDiscoveryResults, GroupDomainIngestion, c.logger)
 
 	c.logger.Info("Starting domain ingestion consumer",
 		zap.String("stream", shared.StreamDomainDiscoveryResults),
