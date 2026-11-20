@@ -3,6 +3,8 @@ package nuclei_scanner
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -77,7 +79,9 @@ func TestRunNucleiScanKeepsMatchesOfIncompleteRun(t *testing.T) {
 
 // TestProcessDiscoveryPublishesMatchesOfIncompleteRun checks against a real Redis
 // (VULWALL_TEST_REDIS_URI) that an incomplete run publishes its matches, then coverage
-// "error", so the matches are recorded and nothing is resolved.
+// "error", so the matches are recorded and nothing is resolved. A run against a target that
+// blocks the scanner publishes only the coverage "error": its matches may come from the
+// block page.
 func TestProcessDiscoveryPublishesMatchesOfIncompleteRun(t *testing.T) {
 	uri := os.Getenv("VULWALL_TEST_REDIS_URI")
 	if uri == "" {
@@ -92,18 +96,27 @@ func TestProcessDiscoveryPublishesMatchesOfIncompleteRun(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv(config.EnvAllowPrivateTargets, "true")
 
+	waf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer waf.Close()
+	completed := "[INF] Scan completed in 1m. 2 matches found.\n"
+
 	for name, tc := range map[string]struct {
 		target, stderr, wantErr string
+		wantFindings            int
 	}{
 		// nuclei dropped the target mid-run and still reported "2 matches found".
-		"target dropped": {"127.0.0.1", cdnTimeoutLog(t, "127.0.0.1"), "unresponsive"},
+		"target dropped": {"127.0.0.1", cdnTimeoutLog(t, "127.0.0.1"), "unresponsive", 2},
 		// A finished run, but nothing answers on the target afterwards (port 1 refuses).
-		"unreachable after the run": {"http://127.0.0.1:1", "[INF] Scan completed in 1m. 2 matches found.\n", "not reachable after the run"},
+		"unreachable after the run": {"http://127.0.0.1:1", completed, "not reachable after the run", 2},
+		// A finished run, but the root answers 403 afterwards: a WAF met the templates.
+		"blocked by a WAF": {waf.URL, completed, "blocks the scanner", 0},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fakeNuclei(t, twoMatches, tc.stderr, 0)
 			rdb.Del(ctx, shared.StreamSecurityFindings)
-			s := &Service{redis: rdb, logger: zap.NewNop(), tracer: otel.Tracer("test")}
+			s := &Service{redis: rdb, logger: zap.NewNop(), tracer: otel.Tracer("test"), rootClient: newRootClient()}
 			scanID := "scan-1"
 			target := ScanTarget{Target: tc.target, DiscoveryID: "d1", OrgID: "org", ScanID: &scanID}
 
@@ -114,8 +127,8 @@ func TestProcessDiscoveryPublishesMatchesOfIncompleteRun(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(msgs) != 3 {
-				t.Fatalf("%d messages, want 2 findings and the coverage", len(msgs))
+			if len(msgs) != tc.wantFindings+1 {
+				t.Fatalf("%d messages, want %d findings and the coverage", len(msgs), tc.wantFindings)
 			}
 			var got []shared.SecurityFinding
 			for _, m := range msgs {
@@ -125,10 +138,15 @@ func TestProcessDiscoveryPublishesMatchesOfIncompleteRun(t *testing.T) {
 				}
 				got = append(got, f)
 			}
-			if got[0].Coverage != nil || got[1].Coverage != nil || got[0].FindingType != "tech-detect" {
-				t.Fatalf("first messages = %+v, want the two findings", got[:2])
+			for _, f := range got[:tc.wantFindings] {
+				if f.Coverage != nil {
+					t.Fatalf("first messages = %+v, want %d findings", got, tc.wantFindings)
+				}
 			}
-			cov := got[2].Coverage
+			if tc.wantFindings > 0 && got[0].FindingType != "tech-detect" {
+				t.Fatalf("first finding = %+v, want tech-detect", got[0])
+			}
+			cov := got[tc.wantFindings].Coverage
 			if cov == nil || cov.Status != shared.CoverageError || len(cov.Reported) != 0 || !strings.Contains(cov.Error, tc.wantErr) {
 				t.Fatalf("coverage = %+v, want error mentioning %q and nothing reported", cov, tc.wantErr)
 			}

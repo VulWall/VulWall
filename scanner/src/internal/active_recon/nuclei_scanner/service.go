@@ -227,14 +227,23 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 			err = fmt.Errorf("target not reachable after the run: %w", rerr)
 		} else if berr := rootBlocked(ctx, s.rootClient, target.Target); berr != nil {
 			// nuclei says nothing about a 403 or a WAF challenge on every request: its
-			// templates then met the block, not the application.
+			// templates then met the block, not the application. Its matches may come from
+			// the block or challenge page too, so none of them is published.
 			err = fmt.Errorf("target blocks the scanner: %w", berr)
+			if len(findings) > 0 {
+				s.logger.Warn("Nuclei matches dropped: target blocks the scanner",
+					zap.String("target", target.Target),
+					zap.Int("dropped_count", len(findings)),
+				)
+				findings = nil
+			}
 		}
 	}
 	if err != nil {
 		// A failed run is a result, not a handler error: it is recorded as coverage
-		// "error", so the scan resolves no nuclei finding on this target. The matches the
-		// run did report are still real and are published below.
+		// "error", so the scan resolves no nuclei finding on this target. The matches of an
+		// incomplete or failed run are still real and are published below (not those of a
+		// blocked run, dropped above).
 		s.logger.Error("Nuclei scan failed",
 			zap.String("target", target.Target),
 			zap.Int("findings_count", len(findings)),
