@@ -45,7 +45,7 @@ Set these environment variables for the `sh` that runs the script:
 | `VULWALL_VERSION` | latest release | Release to install, for example `0.1.0` |
 
 ```sh
-curl -fsSL https://vulwall.com/install.sh | VULWALL_DIR=/opt/vulwall VULWALL_VERSION=0.1.0 sh
+curl -fsSL https://vulwall.com/install.sh | VULWALL_DIR=$HOME/apps/vulwall VULWALL_VERSION=0.1.0 sh
 ```
 
 The compose file of a release pins the scanner and web images to that release. The

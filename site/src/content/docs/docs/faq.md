@@ -114,8 +114,8 @@ tool.
 ### Can VulWall replace a penetration test?
 
 No. A penetration test finds problems that automated scanners cannot, such as flaws in business
-logic. A pentest is a snapshot, though. VulWall checks your external attack surface every week
-between tests. The two work well together.
+logic. A pentest is a snapshot, though, and VulWall checks your external attack surface every week
+between tests. Use pentests for depth and VulWall in between.
 
 ### Can it replace a security person?
 

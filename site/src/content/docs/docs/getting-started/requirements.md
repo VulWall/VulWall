@@ -5,8 +5,9 @@ description: What a host needs to run VulWall.
 
 ## Software
 
-- **Docker** with the **Compose v2** plugin (`docker compose`, not `docker-compose`). Docker
-  Engine on Linux and Docker Desktop on macOS and Windows both work.
+- **Docker** with the **Compose v2** plugin (`docker compose`, not `docker-compose`): Docker
+  Engine on Linux, or Docker Desktop on macOS. The commands in these docs are for a Linux or
+  macOS shell.
 - For the [install script](/docs/getting-started/install/): a POSIX shell, `curl`, and
   `sha256sum` or `shasum`. Your user must be able to run `docker` without `sudo`.
 

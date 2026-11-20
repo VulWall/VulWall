@@ -35,5 +35,5 @@ The full list, with copyright notices, is in
 [NOTICE](https://github.com/VulWall/VulWall/blob/main/NOTICE).
 
 This website is built with Astro and Starlight (MIT) and uses the Inter, JetBrains Mono and
-Chakra Petch fonts (SIL Open Font License) and Font Awesome Free icons (icons CC BY 4.0, fonts
+Chakra Petch fonts (SIL Open Font License) and Font Awesome Free 6 icons (icons CC BY 4.0, fonts
 SIL OFL 1.1).

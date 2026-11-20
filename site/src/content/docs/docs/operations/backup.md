@@ -32,9 +32,3 @@ This replaces the current data:
 ```sh
 docker compose exec -T mongo mongorestore --drop --archive --gzip < vulwall-2026-01-31.archive.gz
 ```
-
-Then restart the stack so the scanner and the web app reload their state:
-
-```sh
-docker compose restart
-```
