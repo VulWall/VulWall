@@ -158,15 +158,15 @@ func (m *ScanMonitor) ipsUnderDomains(ctx context.Context, orgID string, domains
 	for i, d := range domains {
 		quoted[i] = regexp.QuoteMeta(d)
 	}
-	below := primitive.Regex{Pattern: `\.(?:` + strings.Join(quoted, "|") + `)$`, Options: "i"}
+	// The domain itself or a name below it, in any case (hostUnder compares lower-cased).
+	under := primitive.Regex{Pattern: `(?:^|\.)(?:` + strings.Join(quoted, "|") + `)$`, Options: "i"}
 	cursor, err := m.db.Collection(shared.CollectionDiscoveries).Find(ctx,
 		bson.M{
 			"org_id":     orgID,
 			"asset_type": bson.M{"$in": []string{shared.AssetTypeDomain, shared.AssetTypeSubdomain}},
 			"$or": bson.A{
-				bson.M{"domain": bson.M{"$in": domains}},
-				bson.M{"subdomain": bson.M{"$in": domains}},
-				bson.M{"subdomain": below},
+				bson.M{"domain": under},
+				bson.M{"subdomain": under},
 			},
 		},
 		options.Find().SetProjection(bson.M{"resolution_history.ip": 1}),
