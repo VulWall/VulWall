@@ -1,4 +1,7 @@
 version: 2
+# One grouped pull request per ecosystem and week. Major versions of the
+# runtime images (MongoDB, Redis, .NET) are ignored here: they change data
+# formats, licenses or the runtime and are upgraded deliberately.
 updates:
   - package-ecosystem: gomod
     directory: /scanner/src
@@ -15,31 +18,58 @@ updates:
     groups:
       nuget-dependencies:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: npm
     directory: /scanner/docker/retire
     schedule:
       interval: weekly
+    groups:
+      retire:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
 
   - package-ecosystem: docker
     directory: /scanner
     schedule:
       interval: weekly
+    groups:
+      scanner-images:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
     directory: /web
     schedule:
       interval: weekly
+    groups:
+      web-images:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker-compose
     directory: /
     schedule:
       interval: weekly
+    groups:
+      compose-images:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "mongo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /site
