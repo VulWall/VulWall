@@ -40,7 +40,7 @@
 {
     var errorMsg = errorCode switch
     {
-        "AlreadyQueued" => "A follow-up scan is already queued. It starts right after the current scan finishes.",
+        "AlreadyQueued" => "A follow-up scan is already queued and starts as soon as the scanner is free.",
         _               => "Something went wrong. Please try again."
     };
     <div class="alert alert-warning alert-dismissible fade show" role="alert">
