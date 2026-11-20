@@ -8,8 +8,6 @@ using VulWall.Dashboard.Common.Services.NightWatch.Models;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Services;
-using VulWall.Dashboard.Scans.Models;
-using VulWall.Dashboard.Scans.Services;
 
 namespace VulWall.Dashboard.Assets;
 
@@ -17,7 +15,6 @@ namespace VulWall.Dashboard.Assets;
 public class AssetsController(
     AssetsService assetsService,
     NightWatchService nightWatchService,
-    ScansService scansService,
     IOrganizationContext organizationContext) : Controller
 {
     public async Task<IActionResult> Index()
@@ -150,7 +147,7 @@ public class AssetsController(
         var alreadyRunningMessage =
             $"Asset {assetName} has been added. A scan is already running; the asset will be included in the next scan.";
 
-        if (await scansService.GetScanNowStateAsync() == ScanNowState.InProgress)
+        if (await assetsService.IsScanInProgressAsync())
         {
             TempData["Info"] = alreadyRunningMessage;
             return;

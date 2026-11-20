@@ -215,16 +215,23 @@ public class AssetsService(
         if (asset == null)
             return (false, null);
 
-        var inProgressCutoff = DateTime.UtcNow.AddHours(-24);
-        var scanInProgress = await scansRepository.ExistsAsync(
-            s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
-                 && s.CreatedAt >= inProgressCutoff);
-
-        if (scanInProgress)
+        if (await IsScanInProgressAsync())
             return (false, "A scan is currently running. Please wait for it to complete before removing assets.");
 
         await assetsRepository.DeleteAsync(id);
         return (true, null);
+    }
+
+    /// <summary>
+    /// True when the org has a pending or running scan. Bound to 24h so an orphaned scan
+    /// record does not block asset changes forever.
+    /// </summary>
+    public Task<bool> IsScanInProgressAsync()
+    {
+        var inProgressCutoff = DateTime.UtcNow.AddHours(-24);
+        return scansRepository.ExistsAsync(
+            s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
+                 && s.CreatedAt >= inProgressCutoff);
     }
 
     public async Task<AssetsStatistics> GetStatisticsAsync()
