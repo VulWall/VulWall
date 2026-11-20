@@ -8,18 +8,23 @@ to fix.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/overview-dark.png">
-  <img src="docs/screenshots/overview-light.png" alt="VulWall overview page: security score 98 out of 100, an open-issues chart by severity, counts of critical and high issues, discovered hosts and monitored assets">
+  <img src="docs/screenshots/overview-light.png" alt="VulWall overview page: security score 49 out of 100, open issues by severity falling over six weekly scans, counts of critical and high issues, and the three issues to fix first">
 </picture>
 
 | | |
 |---|---|
-| [![Recommendations: open issues grouped by severity, each with the affected hosts and a fix action](docs/screenshots/findings-light.png)](docs/screenshots/findings-light.png) | [![Discoveries: domains and subdomains with country flag, hosting provider, open ports and issue counts](docs/screenshots/discoveries-light.png)](docs/screenshots/discoveries-light.png) |
-| **Recommendations** ([dark](docs/screenshots/findings-dark.png)) | **Discoveries** ([dark](docs/screenshots/discoveries-dark.png)) |
-| [![Scans: the running scan with its stages, recent runs and a heatmap of scan activity by day](docs/screenshots/scans-light.png)](docs/screenshots/scans-light.png) | [![Summary report: company name, security score and open issues by severity](docs/screenshots/report-light.png)](docs/screenshots/report-light.png) |
+| [![Recommendations: open issues grouped by severity, each with its CVE, the affected host and a fix action](docs/screenshots/findings-light.png)](docs/screenshots/findings-light.png) | [![Issue detail: what the scanner found, how to fix it, references and the affected asset](docs/screenshots/finding-detail-light.png)](docs/screenshots/finding-detail-light.png) |
+| **Recommendations** ([dark](docs/screenshots/findings-dark.png)) | **Issue detail** ([dark](docs/screenshots/finding-detail-dark.png)) |
+| [![Discoveries: a domain and its subdomains with country flag, hosting provider, open ports and issue counts](docs/screenshots/discoveries-light.png)](docs/screenshots/discoveries-light.png) | [![Discoveries: an IP address on a Cloudflare edge, with its location, ISP, CDN note and open ports](docs/screenshots/discoveries-cdn-edge-light.png)](docs/screenshots/discoveries-cdn-edge-light.png) |
+| **Discoveries** ([dark](docs/screenshots/discoveries-dark.png)) | **CDN edge address** ([dark](docs/screenshots/discoveries-cdn-edge-dark.png)) |
+| [![Scans: recent runs, a heatmap of scan activity and a comparison of the last two scans with resolved and new issues](docs/screenshots/scans-light.png)](docs/screenshots/scans-light.png) | [![Summary report: company name, security score and open issues by severity](docs/screenshots/report-light.png)](docs/screenshots/report-light.png) |
 | **Scans** ([dark](docs/screenshots/scans-dark.png)) | **Summary report** ([dark](docs/screenshots/report-dark.png)) |
+| [![Settings: weekly scan schedule with the next scan time in the local time zone](docs/screenshots/settings-schedule-light.png)](docs/screenshots/settings-schedule-light.png) | [![About dialog: versions of VulWall, nuclei, its templates, testssl.sh, retire.js and the DB-IP databases](docs/screenshots/about-light.png)](docs/screenshots/about-light.png) |
+| **Scan schedule** ([dark](docs/screenshots/settings-schedule-dark.png)) | **About** ([dark](docs/screenshots/about-dark.png)) |
 
-The screenshots show a demo install that scanned the IANA test domains
-example.com and example.net.
+Screenshots show sample data (see [Demo data](#demo-data)): the fictional
+company "Acme Demo" on reserved `.test` domains and documentation IP addresses.
+The findings use the real texts of the scanners.
 
 ## Features
 
@@ -108,6 +113,42 @@ The web UI listens on `127.0.0.1` only. To use it from another machine, see
 The first start takes a few minutes: the scanner downloads the nuclei
 templates and the geolocation databases. `docker compose logs -f scanner`
 shows progress.
+
+## Demo data
+
+To try the dashboard without scanning anything, load the sample data that the
+screenshots use:
+
+```bash
+make demo
+```
+
+This builds the images, starts MongoDB, Redis and the web app (not the
+scanner), and runs `scripts/demo-seed`. Then open the setup link (see
+[Quick start](#quick-start)) and create the admin account. If you type an
+organization name at setup, run `scripts/demo-seed` again to name it "Acme
+Demo" again.
+
+The sample data is the fictional company "Acme Demo": two root domains and
+13 subdomains under the reserved `.test` top-level domain, two IP assets,
+addresses only from the documentation ranges (`192.0.2.0/24`,
+`198.51.100.0/24`, `203.0.113.0/24`), six weekly scans over the last six
+weeks, findings from every scanner (with the scanners' real titles,
+descriptions and references), one accepted risk and one false positive. Every
+document it adds has `demo: true`.
+
+```bash
+scripts/demo-seed           # load; refuses if you already have assets or findings
+scripts/demo-seed --force   # load next to your own data
+scripts/demo-seed --reset   # remove the sample data, restore the organization's name and schedule
+```
+
+`scripts/demo-seed` runs the `demo-seed` program from the scanner image
+(`docker compose run --rm --no-deps --entrypoint demo-seed scanner`), so MongoDB
+must be running. In an installed release, run that command in `~/vulwall`.
+
+Keep the scanner stopped while you show the sample data. A real scan of the
+`.test` names finds nothing, and the dashboard always shows the newest scan.
 
 ## Configuration
 
