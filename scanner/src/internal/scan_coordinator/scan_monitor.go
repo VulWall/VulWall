@@ -17,21 +17,19 @@ import (
 
 // ScanMonitor monitors scan completion and marks scans as done
 type ScanMonitor struct {
-	redis   *redis.Client
-	db      *mongo.Database
-	logger  *zap.Logger
-	webhook *WebhookNotifier
-	tracer  trace.Tracer
+	redis  *redis.Client
+	db     *mongo.Database
+	logger *zap.Logger
+	tracer trace.Tracer
 }
 
 // NewScanMonitor creates a new scan monitor
-func NewScanMonitor(redisClient *redis.Client, db *mongo.Database, webhook *WebhookNotifier, logger *zap.Logger) *ScanMonitor {
+func NewScanMonitor(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *ScanMonitor {
 	return &ScanMonitor{
-		redis:   redisClient,
-		db:      db,
-		logger:  logger,
-		webhook: webhook,
-		tracer:  otel.Tracer("scan-monitor"),
+		redis:  redisClient,
+		db:     db,
+		logger: logger,
+		tracer: otel.Tracer("scan-monitor"),
 	}
 }
 
@@ -93,7 +91,7 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 
 	now := time.Now()
 	for _, scan := range scans {
-		scanAge := now.Sub(scan.CreatedAt)
+		scanAge := now.Sub(scanStartTime(scan))
 
 		// The quiescence barrier is the only completion path that needs a (relatively
 		// expensive) Redis round-trip. Compute it lazily — only when the cheap age /
@@ -144,6 +142,16 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 	span.SetStatus(codes.Ok, "")
 
 	return nil
+}
+
+// scanStartTime is when the scan's pipeline started. A scan queued by the web UI
+// can wait behind another scan, so its created_at is not its start; started_at
+// is set when the coordinator claims it. Older scans have no started_at.
+func scanStartTime(scan shared.Scan) time.Time {
+	if scan.StartedAt != nil {
+		return *scan.StartedAt
+	}
+	return scan.CreatedAt
 }
 
 // decideCompletion is the pure completion decision for a single scan, factored out so the
@@ -281,7 +289,8 @@ func isNoSuchKeyErr(err error) bool {
 	return err != nil && err.Error() == "ERR no such key"
 }
 
-// markDone marks a scan as done, resolves disappeared findings, and notifies the Dashboard webhook.
+// markDone marks a scan as done and resolves disappeared findings. The web UI
+// polls the scan document for the status change.
 // When timedOut is true, finding resolution is skipped because ingestion may be incomplete.
 func (m *ScanMonitor) markDone(ctx context.Context, scanID string, timedOut bool) error {
 	// Compute scan statistics before marking as done
@@ -349,9 +358,6 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string, timedOut bool
 		default:
 			m.resolveDisappearedFindings(ctx, scanID, resolvedFindingIDs)
 		}
-
-		// Notify Dashboard asynchronously (non-blocking, best-effort)
-		go m.webhook.NotifyScanComplete(scanID)
 	}
 
 	return nil

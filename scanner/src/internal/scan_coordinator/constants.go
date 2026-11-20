@@ -6,6 +6,13 @@ const (
 	// ScanMonitorInterval defines how often the scan monitor checks for completed scans
 	ScanMonitorInterval = 5 * time.Minute
 
+	// QueuedScanPollInterval defines how often the coordinator looks for scans
+	// that the web UI queued.
+	QueuedScanPollInterval = 5 * time.Second
+
+	// QueuedScanBatchSize caps how many queued scans one poll reads.
+	QueuedScanBatchSize = 100
+
 	// Scan completion thresholds
 	// ScanSafetyTimeout is the absolute upper bound for scan duration.
 	// Scans exceeding this are force-completed and finding resolution is skipped.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
@@ -15,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -23,40 +25,63 @@ import (
 )
 
 // ErrOrgNotFound indicates a scan was requested for an organization that no
-// longer exists — e.g., deleted between a cron enqueue and execution, or a bad
-// API caller. Callers should surface this as a 404, not a 500.
+// longer exists — e.g., deleted between a cron enqueue and execution.
 var ErrOrgNotFound = errors.New("organization not found")
 
-// ErrScanInProgress indicates the organization already has a running scan.
-// Callers should surface this as a 409 Conflict; the running scan will pick
-// up assets that were added before its discovery jobs were published, and
-// later additions are covered by the next scan.
+// ErrScanInProgress indicates the organization already has a queued or running
+// scan. The running scan will pick up assets that were added before its
+// discovery jobs were published, and later additions are covered by the next scan.
 var ErrScanInProgress = errors.New("scan already in progress for organization")
 
-// scanPreconditions answers the checks TriggerScan makes before it creates a
-// scan. The production implementation queries MongoDB; tests use a fake.
-type scanPreconditions interface {
+// Status sets used by the one-scan-per-organization guard.
+var (
+	// startedStatuses are the states of a scan whose pipeline is in flight.
+	startedStatuses = []string{shared.StatusPending, shared.StatusRunning}
+	// activeStatuses adds queued scans: a scheduled trigger must not start a
+	// second pipeline while a requested scan waits for the poller.
+	activeStatuses = []string{shared.StatusQueued, shared.StatusPending, shared.StatusRunning}
+)
+
+// scanStore is the MongoDB access the coordinator needs to start scans. The
+// production implementation is mongoScanStore; tests use a fake.
+type scanStore interface {
 	orgExists(ctx context.Context, orgID string) (bool, error)
-	hasRunningScan(ctx context.Context, orgID string) (bool, error)
+	hasScanIn(ctx context.Context, orgID string, statuses []string) (bool, error)
+	orgAssets(ctx context.Context, orgID string) ([]shared.Asset, error)
+	insertScan(ctx context.Context, scan shared.Scan) error
+	queuedScans(ctx context.Context) ([]shared.Scan, error)
+	// claimQueuedScan applies set to the scan only while it is still queued.
+	// It reports false when another writer changed or deleted the scan first.
+	claimQueuedScan(ctx context.Context, scanID string, set bson.M) (bool, error)
+	setScanFields(ctx context.Context, scanID string, set bson.M) error
 }
+
+// jobPublisher publishes one discovery job to a Redis stream.
+type jobPublisher func(ctx context.Context, stream string, job any) error
 
 // Service handles scan coordination logic
 type Service struct {
-	redis  *redis.Client
-	db     *mongo.Database
-	logger *zap.Logger
-	tracer trace.Tracer
-	checks scanPreconditions
+	store   scanStore
+	publish jobPublisher
+	logger  *zap.Logger
+	tracer  trace.Tracer
+
+	// startMu serializes the check-then-start sequence of the cron scheduler
+	// and the queued-scan poller, which run in different goroutines. Without
+	// it both could see "no active scan" and start two pipelines for one org.
+	startMu sync.Mutex
 }
 
 // NewService creates a new scan coordinator service
 func NewService(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *Service {
 	return &Service{
-		redis:  redisClient,
-		db:     db,
+		store: mongoScanStore{db: db},
+		publish: func(ctx context.Context, stream string, job any) error {
+			// Job queues are never trimmed (maxLen 0).
+			return redisx.PublishToStream(ctx, redisClient, stream, job, 0)
+		},
 		logger: logger,
 		tracer: otel.Tracer("scan-coordinator"),
-		checks: mongoPreconditions{db: db},
 	}
 }
 
@@ -67,7 +92,9 @@ type ScanRequest struct {
 	TriggeredBy string // "system" or user ID
 }
 
-// TriggerScan creates a scan record and publishes discovery jobs for an organization.
+// TriggerScan creates a scan record and publishes discovery jobs for an
+// organization. The cron scheduler uses it; scans requested from the web UI
+// arrive as queued documents and go through StartQueuedScans instead.
 // Returns the scan ID on success.
 func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, error) {
 	ctx, span := s.tracer.Start(ctx, "trigger_scan",
@@ -83,10 +110,13 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 		zap.String("triggered_by", req.TriggeredBy),
 	)
 
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
+
 	// Verify the org still exists before creating a scan record or publishing
-	// jobs. A stale cron entry or a bad API caller could otherwise create an
-	// orphan scan for a deleted org.
-	exists, err := s.checks.orgExists(ctx, req.OrgID)
+	// jobs. A stale cron entry could otherwise create an orphan scan for a
+	// deleted org.
+	exists, err := s.store.orgExists(ctx, req.OrgID)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -100,63 +130,31 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 		return "", ErrOrgNotFound
 	}
 
-	// One running scan per organization. Without this guard, adding several
-	// assets in a row (or a cron firing during an on-demand scan) starts a
-	// full discovery pipeline per request.
-	running, err := s.checks.hasRunningScan(ctx, req.OrgID)
+	// One active scan per organization, queued scans included. Without this
+	// guard a cron firing during an on-demand scan starts a second pipeline.
+	active, err := s.store.hasScanIn(ctx, req.OrgID, activeStatuses)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return "", fmt.Errorf("failed to check running scans: %w", err)
 	}
-	if running {
+	if active {
 		span.SetStatus(codes.Error, ErrScanInProgress.Error())
-		s.logger.Info("Skipping scan trigger: a scan is already running",
+		s.logger.Info("Skipping scan trigger: a scan is already queued or running",
 			zap.String("org_id", req.OrgID),
 		)
 		return "", ErrScanInProgress
 	}
 
-	// Get all assets for this organization first (needed for targeted_assets)
-	assets, err := s.getOrgAssets(ctx, req.OrgID)
+	assets, err := s.store.orgAssets(ctx, req.OrgID)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return "", fmt.Errorf("failed to get org assets: %w", err)
 	}
+	targetedAssets := s.targetsFor(req.OrgID, assets)
 
-	s.logger.Info("Found assets to scan",
-		zap.String("org_id", req.OrgID),
-		zap.Int("asset_count", len(assets)),
-	)
-
-	// Build targeted assets array for audit trail
-	targetedAssets := make([]shared.AssetTarget, 0, len(assets))
-	for _, asset := range assets {
-		target := shared.AssetTarget{
-			AssetID: asset.ID,
-			Type:    asset.Type,
-		}
-
-		// Set the value based on asset type
-		if asset.Type == "domain" && asset.Domain != nil {
-			target.Value = *asset.Domain
-		} else if asset.Type == "ip" && asset.IP != nil {
-			target.Value = *asset.IP
-		} else {
-			// Skip assets with missing values
-			s.logger.Warn("Asset missing required field, skipping from targeted assets",
-				zap.String("org_id", req.OrgID),
-				zap.String("asset_id", asset.ID),
-				zap.String("type", asset.Type),
-			)
-			continue
-		}
-
-		targetedAssets = append(targetedAssets, target)
-	}
-
-	// Create new scan record with targeted assets
+	now := time.Now()
 	scanID := uuid.New().String()
 	scan := shared.Scan{
 		ID:             scanID,
@@ -164,16 +162,16 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 		Status:         shared.StatusRunning,
 		Type:           req.Type,
 		TriggeredBy:    req.TriggeredBy,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		StartedAt:      &now,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 		TargetedAssets: targetedAssets,
 		Stats: shared.ScanStats{
 			TotalAssets: len(targetedAssets),
 		},
 	}
 
-	// Insert scan into database
-	if err := s.createScan(ctx, scan); err != nil {
+	if err := s.store.insertScan(ctx, scan); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return "", fmt.Errorf("failed to create scan: %w", err)
@@ -187,8 +185,8 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 		zap.Int("targeted_assets_count", len(targetedAssets)),
 	)
 
-	// Publish discovery jobs for each asset
 	if err := s.publishDiscoveryJobs(ctx, req.OrgID, scanID, assets); err != nil {
+		s.markFailed(ctx, scanID, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return "", fmt.Errorf("failed to publish discovery jobs: %w", err)
@@ -205,21 +203,53 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 	return scanID, nil
 }
 
-// createScan inserts a new scan record into the database
-func (s *Service) createScan(ctx context.Context, scan shared.Scan) error {
-	coll := s.db.Collection(shared.CollectionScans)
-	_, err := coll.InsertOne(ctx, scan)
-	return err
+// targetsFor builds the targeted_assets audit trail for a scan. Assets with a
+// missing value are skipped (and are skipped again by publishDiscoveryJobs).
+func (s *Service) targetsFor(orgID string, assets []shared.Asset) []shared.AssetTarget {
+	targets := make([]shared.AssetTarget, 0, len(assets))
+	for _, asset := range assets {
+		target := shared.AssetTarget{AssetID: asset.ID, Type: asset.Type}
+		switch {
+		case asset.Type == "domain" && asset.Domain != nil:
+			target.Value = *asset.Domain
+		case asset.Type == "ip" && asset.IP != nil:
+			target.Value = *asset.IP
+		default:
+			s.logger.Warn("Asset missing required field, skipping from targeted assets",
+				zap.String("org_id", orgID),
+				zap.String("asset_id", asset.ID),
+				zap.String("type", asset.Type),
+			)
+			continue
+		}
+		targets = append(targets, target)
+	}
+	return targets
 }
 
-// mongoPreconditions implements scanPreconditions against MongoDB.
-type mongoPreconditions struct {
+// markFailed moves a scan to "failed" so it does not block its organization
+// until the monitor's safety timeout. Best-effort: errors are only logged.
+func (s *Service) markFailed(ctx context.Context, scanID string, cause error) {
+	now := time.Now()
+	err := s.store.setScanFields(ctx, scanID, bson.M{
+		"status":       shared.StatusFailed,
+		"completed_at": now,
+		"updated_at":   now,
+	})
+	s.logger.Error("Scan failed to start",
+		zap.String("scan_id", scanID),
+		zap.NamedError("cause", cause),
+		zap.Error(err),
+	)
+}
+
+// mongoScanStore implements scanStore against MongoDB.
+type mongoScanStore struct {
 	db *mongo.Database
 }
 
 // orgExists reports whether an organization document exists for orgID.
-// Mirrors the org-collection access pattern used by the scheduler.
-func (m mongoPreconditions) orgExists(ctx context.Context, orgID string) (bool, error) {
+func (m mongoScanStore) orgExists(ctx context.Context, orgID string) (bool, error) {
 	coll := m.db.Collection(shared.CollectionOrganizations)
 	err := coll.FindOne(ctx, shared.OrgIDFilter(orgID)).Err()
 	if err == mongo.ErrNoDocuments {
@@ -231,14 +261,14 @@ func (m mongoPreconditions) orgExists(ctx context.Context, orgID string) (bool, 
 	return true, nil
 }
 
-// hasRunningScan reports whether the organization has a scan that is still
-// pending or running (the same states the scan monitor tracks). The monitor moves stuck scans to done/failed on timeout, so
-// a crashed pipeline cannot block an organization forever.
-func (m mongoPreconditions) hasRunningScan(ctx context.Context, orgID string) (bool, error) {
+// hasScanIn reports whether the organization has a scan in one of statuses.
+// The monitor moves stuck pending/running scans to done on timeout, so a
+// crashed pipeline cannot block an organization forever.
+func (m mongoScanStore) hasScanIn(ctx context.Context, orgID string, statuses []string) (bool, error) {
 	coll := m.db.Collection(shared.CollectionScans)
 	err := coll.FindOne(ctx, bson.M{
 		"org_id": orgID,
-		"status": bson.M{"$in": []string{shared.StatusPending, shared.StatusRunning}},
+		"status": bson.M{"$in": statuses},
 	}).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
@@ -249,17 +279,12 @@ func (m mongoPreconditions) hasRunningScan(ctx context.Context, orgID string) (b
 	return true, nil
 }
 
-// getOrgAssets retrieves all enabled user-added assets for an organization
-func (s *Service) getOrgAssets(ctx context.Context, orgID string) ([]shared.Asset, error) {
-	coll := s.db.Collection(shared.CollectionAssets)
-
-	// Query for all enabled assets (user-added assets to be scanned)
-	filter := bson.M{
+// orgAssets retrieves all enabled user-added assets for an organization.
+func (m mongoScanStore) orgAssets(ctx context.Context, orgID string) ([]shared.Asset, error) {
+	cursor, err := m.db.Collection(shared.CollectionAssets).Find(ctx, bson.M{
 		"org_id":  orgID,
 		"enabled": true,
-	}
-
-	cursor, err := coll.Find(ctx, filter)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -269,8 +294,50 @@ func (s *Service) getOrgAssets(ctx context.Context, orgID string) ([]shared.Asse
 	if err := cursor.All(ctx, &assets); err != nil {
 		return nil, err
 	}
-
 	return assets, nil
+}
+
+// insertScan inserts a new scan record.
+func (m mongoScanStore) insertScan(ctx context.Context, scan shared.Scan) error {
+	_, err := m.db.Collection(shared.CollectionScans).InsertOne(ctx, scan)
+	return err
+}
+
+// queuedScans returns queued scans, oldest first.
+func (m mongoScanStore) queuedScans(ctx context.Context) ([]shared.Scan, error) {
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: 1}}).
+		SetLimit(QueuedScanBatchSize)
+	cursor, err := m.db.Collection(shared.CollectionScans).Find(ctx, bson.M{"status": shared.StatusQueued}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var scans []shared.Scan
+	if err := cursor.All(ctx, &scans); err != nil {
+		return nil, err
+	}
+	return scans, nil
+}
+
+// claimQueuedScan updates the scan only while its status is still "queued".
+// The status in the filter makes the claim atomic.
+func (m mongoScanStore) claimQueuedScan(ctx context.Context, scanID string, set bson.M) (bool, error) {
+	res, err := m.db.Collection(shared.CollectionScans).UpdateOne(ctx,
+		bson.M{"_id": scanID, "status": shared.StatusQueued},
+		bson.M{"$set": set},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount == 1, nil
+}
+
+// setScanFields applies set to one scan.
+func (m mongoScanStore) setScanFields(ctx context.Context, scanID string, set bson.M) error {
+	_, err := m.db.Collection(shared.CollectionScans).UpdateOne(ctx, bson.M{"_id": scanID}, bson.M{"$set": set})
+	return err
 }
 
 // publishDiscoveryJobs publishes discovery jobs to Redis for each asset
@@ -282,6 +349,7 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 
 	domainCount := 0
 	ipCount := 0
+	failed := 0
 
 	for _, asset := range assets {
 		switch asset.Type {
@@ -307,8 +375,8 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 				Created:      time.Now(),
 			}
 
-			// Publish to job queue WITHOUT MAXLEN (queues should not be trimmed)
-			if err := redisx.PublishToStream(ctx, s.redis, shared.StreamDomainDiscoveryQueue, job, 0); err != nil {
+			if err := s.publish(ctx, shared.StreamDomainDiscoveryQueue, job); err != nil {
+				failed++
 				s.logger.Error("Failed to publish domain discovery job",
 					zap.String("org_id", orgID),
 					zap.String("asset_id", asset.ID),
@@ -345,8 +413,8 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 				Created:      time.Now(),
 			}
 
-			// Publish to job queue WITHOUT MAXLEN (queues should not be trimmed)
-			if err := redisx.PublishToStream(ctx, s.redis, shared.StreamIPDiscoveryQueue, job, 0); err != nil {
+			if err := s.publish(ctx, shared.StreamIPDiscoveryQueue, job); err != nil {
+				failed++
 				s.logger.Error("Failed to publish IP discovery job",
 					zap.String("org_id", orgID),
 					zap.String("asset_id", asset.ID),
@@ -377,6 +445,14 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 		attribute.Int("jobs.ip_count", ipCount),
 		attribute.Int("jobs.total_count", domainCount+ipCount),
 	)
+
+	// A scan whose every job failed to publish can never make progress.
+	if failed > 0 && domainCount+ipCount == 0 {
+		err := fmt.Errorf("all %d discovery jobs failed to publish", failed)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
 
 	span.SetStatus(codes.Ok, "")
 

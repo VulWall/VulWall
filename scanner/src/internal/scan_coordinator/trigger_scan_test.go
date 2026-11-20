@@ -2,56 +2,141 @@ package scan_coordinator
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"net/http"
-	"net/http/httptest"
-	"strings"
+	"slices"
 	"testing"
+	"time"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
 
-type fakePreconditions struct {
-	exists     bool
-	running    bool
-	runningErr error
+// fakeStore is an in-memory scanStore. Scans are keyed by _id.
+type fakeStore struct {
+	orgs      map[string]bool
+	assets    map[string][]shared.Asset
+	scans     map[string]shared.Scan
+	set       map[string]bson.M // last $set applied per scan
+	inserted  []shared.Scan
+	activeErr error
 }
 
-func (f fakePreconditions) orgExists(context.Context, string) (bool, error) {
-	return f.exists, nil
+func newFakeStore() *fakeStore {
+	return &fakeStore{
+		orgs:   map[string]bool{},
+		assets: map[string][]shared.Asset{},
+		scans:  map[string]shared.Scan{},
+		set:    map[string]bson.M{},
+	}
 }
 
-func (f fakePreconditions) hasRunningScan(context.Context, string) (bool, error) {
-	return f.running, f.runningErr
+func (f *fakeStore) orgExists(_ context.Context, orgID string) (bool, error) {
+	return f.orgs[orgID], nil
 }
 
-// newTestService returns a Service without MongoDB or Redis. It is only safe
-// for paths that return before getOrgAssets is called.
-func newTestService(checks scanPreconditions) *Service {
+func (f *fakeStore) hasScanIn(_ context.Context, orgID string, statuses []string) (bool, error) {
+	if f.activeErr != nil {
+		return false, f.activeErr
+	}
+	for _, s := range f.scans {
+		if s.OrgID == orgID && slices.Contains(statuses, s.Status) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (f *fakeStore) orgAssets(_ context.Context, orgID string) ([]shared.Asset, error) {
+	return f.assets[orgID], nil
+}
+
+func (f *fakeStore) insertScan(_ context.Context, scan shared.Scan) error {
+	f.inserted = append(f.inserted, scan)
+	f.scans[scan.ID] = scan
+	return nil
+}
+
+func (f *fakeStore) queuedScans(context.Context) ([]shared.Scan, error) {
+	var out []shared.Scan
+	for _, s := range f.scans {
+		if s.Status == shared.StatusQueued {
+			out = append(out, s)
+		}
+	}
+	slices.SortFunc(out, func(a, b shared.Scan) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	return out, nil
+}
+
+func (f *fakeStore) claimQueuedScan(ctx context.Context, scanID string, set bson.M) (bool, error) {
+	s, ok := f.scans[scanID]
+	if !ok || s.Status != shared.StatusQueued {
+		return false, nil
+	}
+	return true, f.setScanFields(ctx, scanID, set)
+}
+
+func (f *fakeStore) setScanFields(_ context.Context, scanID string, set bson.M) error {
+	s := f.scans[scanID]
+	if status, ok := set["status"].(string); ok {
+		s.Status = status
+	}
+	f.scans[scanID] = s
+	f.set[scanID] = set
+	return nil
+}
+
+// publishedJob records one call to the jobPublisher.
+type publishedJob struct {
+	stream string
+	job    any
+}
+
+func newTestService(store scanStore, publishErr error) (*Service, *[]publishedJob) {
+	var published []publishedJob
 	return &Service{
+		store: store,
+		publish: func(_ context.Context, stream string, job any) error {
+			if publishErr != nil {
+				return publishErr
+			}
+			published = append(published, publishedJob{stream, job})
+			return nil
+		},
 		logger: zap.NewNop(),
 		tracer: otel.Tracer("test"),
-		checks: checks,
-	}
+	}, &published
 }
 
-func TestTriggerScanRejectsWhenScanRunning(t *testing.T) {
-	svc := newTestService(fakePreconditions{exists: true, running: true})
+func strPtr(s string) *string { return &s }
 
-	scanID, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: "requested", TriggeredBy: "u"})
+func domainAsset(id, domain string) shared.Asset {
+	return shared.Asset{ID: id, Type: "domain", Domain: strPtr(domain), Enabled: true}
+}
 
-	if !errors.Is(err, ErrScanInProgress) {
-		t.Fatalf("err = %v, want ErrScanInProgress", err)
-	}
-	if scanID != "" {
-		t.Fatalf("scanID = %q, want empty", scanID)
+func TestTriggerScanRejectsWhenScanActive(t *testing.T) {
+	for _, status := range []string{shared.StatusQueued, shared.StatusPending, shared.StatusRunning} {
+		store := newFakeStore()
+		store.orgs["org-1"] = true
+		store.scans["s0"] = shared.Scan{ID: "s0", OrgID: "org-1", Status: status}
+		svc, _ := newTestService(store, nil)
+
+		scanID, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled, TriggeredBy: "system"})
+
+		if !errors.Is(err, ErrScanInProgress) {
+			t.Fatalf("status %q: err = %v, want ErrScanInProgress", status, err)
+		}
+		if scanID != "" || len(store.inserted) != 0 {
+			t.Fatalf("status %q: scan created despite active scan", status)
+		}
 	}
 }
 
 func TestTriggerScanOrgNotFoundBeforeRunningCheck(t *testing.T) {
-	svc := newTestService(fakePreconditions{exists: false, running: true})
+	store := newFakeStore()
+	store.activeErr = errors.New("must not be called")
+	svc, _ := newTestService(store, nil)
 
 	_, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1"})
 
@@ -62,7 +147,10 @@ func TestTriggerScanOrgNotFoundBeforeRunningCheck(t *testing.T) {
 
 func TestTriggerScanRunningCheckErrorIsWrapped(t *testing.T) {
 	boom := errors.New("mongo down")
-	svc := newTestService(fakePreconditions{exists: true, runningErr: boom})
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.activeErr = boom
+	svc, _ := newTestService(store, nil)
 
 	_, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1"})
 
@@ -71,19 +159,174 @@ func TestTriggerScanRunningCheckErrorIsWrapped(t *testing.T) {
 	}
 }
 
-func TestHandleTriggerScanReturns409WhenScanRunning(t *testing.T) {
-	api := NewAPIServer(newTestService(fakePreconditions{exists: true, running: true}), zap.NewNop(), "0", "key")
-	req := httptest.NewRequest(http.MethodPost, "/api/scans", strings.NewReader(`{"org_id":"org-1","triggered_by":"u"}`))
-	req.Header.Set("X-API-Key", "key")
-	rec := httptest.NewRecorder()
+func TestTriggerScanCreatesRunningScanAndPublishes(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "https://example.com/path")}
+	svc, published := newTestService(store, nil)
 
-	api.server.Handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409", rec.Code)
+	scanID, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled, TriggeredBy: "system"})
+	if err != nil {
+		t.Fatalf("TriggerScan: %v", err)
 	}
-	var body errorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil || body.Error == "" {
-		t.Fatalf("body = %q, err = %v; want JSON error", rec.Body.String(), err)
+
+	got := store.inserted[0]
+	if got.ID != scanID || got.Status != shared.StatusRunning || got.StartedAt == nil || got.Stats.TotalAssets != 1 {
+		t.Fatalf("inserted scan = %+v", got)
+	}
+	if len(*published) != 1 || (*published)[0].stream != shared.StreamDomainDiscoveryQueue {
+		t.Fatalf("published = %+v, want one domain job", *published)
+	}
+	job := (*published)[0].job.(shared.DiscoveryJob)
+	if job.Host != "example.com" || job.ScanID == nil || *job.ScanID != scanID {
+		t.Fatalf("job = %+v", job)
+	}
+}
+
+func TestTriggerScanMarksFailedWhenAllPublishesFail(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	svc, _ := newTestService(store, errors.New("redis down"))
+
+	_, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1"})
+
+	if err == nil {
+		t.Fatal("err = nil, want publish error")
+	}
+	if s := store.scans[store.inserted[0].ID]; s.Status != shared.StatusFailed {
+		t.Fatalf("status = %q, want failed", s.Status)
+	}
+}
+
+func queuedScan(id, orgID string, created time.Time) shared.Scan {
+	return shared.Scan{ID: id, OrgID: orgID, Status: shared.StatusQueued, TriggeredBy: "user-1", CreatedAt: created}
+}
+
+func TestQueuedScanIsClaimedInPlace(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	store.scans["q1"] = queuedScan("q1", "org-1", time.Now())
+	svc, published := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background())
+
+	if len(store.inserted) != 0 {
+		t.Fatalf("poller inserted %d scans; it must reuse the queued _id", len(store.inserted))
+	}
+	set := store.set["q1"]
+	if set["status"] != shared.StatusRunning || set["type"] != shared.ScanTypeRequested ||
+		set["stats.total_assets"] != 1 || set["started_at"] == nil || set["updated_at"] == nil {
+		t.Fatalf("claim $set = %+v", set)
+	}
+	if targets := set["targeted_assets"].([]shared.AssetTarget); len(targets) != 1 || targets[0].Value != "example.com" {
+		t.Fatalf("targeted_assets = %+v", targets)
+	}
+	if len(*published) != 1 || *(*published)[0].job.(shared.DiscoveryJob).ScanID != "q1" {
+		t.Fatalf("published = %+v, want one job for scan q1", *published)
+	}
+}
+
+func TestQueuedScanWaitsWhileOrgHasRunningScan(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: shared.StatusRunning}
+	store.scans["q1"] = queuedScan("q1", "org-1", time.Now())
+	svc, published := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["q1"].Status != shared.StatusQueued || len(*published) != 0 {
+		t.Fatalf("queued scan started while another scan runs")
+	}
+
+	// The running scan finishes; the next poll starts the queued one.
+	r1 := store.scans["r1"]
+	r1.Status = shared.StatusDone
+	store.scans["r1"] = r1
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["q1"].Status != shared.StatusRunning {
+		t.Fatalf("status = %q, want running after the other scan finished", store.scans["q1"].Status)
+	}
+}
+
+func TestOnlyOldestQueuedScanPerOrgStartsPerPoll(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	now := time.Now()
+	store.scans["new"] = queuedScan("new", "org-1", now)
+	store.scans["old"] = queuedScan("old", "org-1", now.Add(-time.Minute))
+	svc, _ := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["old"].Status != shared.StatusRunning || store.scans["new"].Status != shared.StatusQueued {
+		t.Fatalf("old=%q new=%q, want old running and new queued", store.scans["old"].Status, store.scans["new"].Status)
+	}
+}
+
+func TestQueuedScanForMissingOrgIsFailed(t *testing.T) {
+	store := newFakeStore()
+	store.scans["q1"] = queuedScan("q1", "gone", time.Now())
+	svc, _ := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["q1"].Status != shared.StatusFailed || store.set["q1"]["completed_at"] == nil {
+		t.Fatalf("scan = %+v set = %+v, want failed with completed_at", store.scans["q1"], store.set["q1"])
+	}
+}
+
+func TestQueuedScanWithoutAssetsIsDoneImmediately(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.scans["q1"] = queuedScan("q1", "org-1", time.Now())
+	svc, published := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["q1"].Status != shared.StatusDone || store.set["q1"]["completed_at"] == nil || len(*published) != 0 {
+		t.Fatalf("scan = %+v, want done with no jobs", store.scans["q1"])
+	}
+}
+
+func TestQueuedScanPublishFailureMarksFailed(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	store.scans["q1"] = queuedScan("q1", "org-1", time.Now())
+	svc, _ := newTestService(store, errors.New("redis down"))
+
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["q1"].Status != shared.StatusFailed {
+		t.Fatalf("status = %q, want failed", store.scans["q1"].Status)
+	}
+}
+
+func TestScheduledTriggerSkippedWhileScanQueued(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.scans["q1"] = queuedScan("q1", "org-1", time.Now())
+	svc, _ := newTestService(store, nil)
+
+	if _, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled}); !errors.Is(err, ErrScanInProgress) {
+		t.Fatalf("err = %v, want ErrScanInProgress", err)
+	}
+}
+
+func TestScanStartTimePrefersStartedAt(t *testing.T) {
+	created := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	started := created.Add(2 * time.Hour)
+
+	if got := scanStartTime(shared.Scan{CreatedAt: created}); !got.Equal(created) {
+		t.Fatalf("without started_at: got %v, want created_at", got)
+	}
+	if got := scanStartTime(shared.Scan{CreatedAt: created, StartedAt: &started}); !got.Equal(started) {
+		t.Fatalf("with started_at: got %v, want started_at", got)
 	}
 }

@@ -229,7 +229,7 @@ type SubscriptionSettings struct {
 type Scan struct {
 	ID          string     `json:"_id" bson:"_id"`                                       // Scan UUID
 	OrgID       string     `json:"org_id" bson:"org_id"`                                 // Organization GUID
-	Status      string     `json:"status" bson:"status"`                                 // "pending", "running", "completed", "failed"
+	Status      string     `json:"status" bson:"status"`                                 // "queued", "pending", "running", "done", "failed"
 	Type        string     `json:"type" bson:"type"`                                     // "scheduled", "requested"
 	TriggeredBy string     `json:"triggered_by,omitempty" bson:"triggered_by,omitempty"` // User ID or "system"
 	StartedAt      *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty"`

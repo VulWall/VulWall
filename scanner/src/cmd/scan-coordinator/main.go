@@ -71,28 +71,8 @@ func main() {
 	// Create scheduler (includes stream cleanup cron job)
 	scheduler := scan_coordinator.NewScheduler(service, db, streamCleaner, logger.Log)
 
-	// Create webhook notifier (empty URL = disabled)
-	webhookURL := config.GetEnv(config.EnvDashboardWebhookURL, "")
-	webhookSecret := config.GetEnv(config.EnvDashboardWebhookSecret, "")
-	webhook := scan_coordinator.NewWebhookNotifier(webhookURL, webhookSecret, logger.Log)
-	if webhook.Enabled() {
-		logger.Log.Info("Dashboard webhook enabled", zap.String("url", webhookURL))
-	}
-
 	// Create scan monitor
-	scanMonitor := scan_coordinator.NewScanMonitor(redisClient, db, webhook, logger.Log)
-
-	// Create API server
-	apiPort := config.GetEnv(config.EnvAPIPort, "8080")
-	apiKey := config.GetEnv(config.EnvAPIKey, "")
-	if apiKey == "" {
-		env := config.GetEnv(config.EnvEnvironment, "development")
-		if env == "production" {
-			logger.Log.Fatal("NIGHTWATCH_API_KEY must be set in production")
-		}
-		logger.Log.Warn("NIGHTWATCH_API_KEY is not set — scan trigger API is unauthenticated")
-	}
-	apiServer := scan_coordinator.NewAPIServer(service, logger.Log, apiPort, apiKey)
+	scanMonitor := scan_coordinator.NewScanMonitor(redisClient, db, logger.Log)
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -104,8 +84,8 @@ func main() {
 	// Start scan monitor in goroutine (runs every 15 minutes)
 	go scanMonitor.Start(ctx)
 
-	// Start API server in goroutine
-	go apiServer.Start(ctx)
+	// Start queued-scan poller (scans requested from the web UI)
+	go service.StartQueuedScans(ctx)
 
 	// Wait for shutdown signal
 	<-sigChan
