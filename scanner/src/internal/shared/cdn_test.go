@@ -10,6 +10,8 @@ func TestCDNProvider(t *testing.T) {
 		"151.101.65.140":       "Fastly",
 		"13.32.0.1":            "CloudFront",
 		"3.80.0.1":             "", // EC2, not CloudFront
+		"34.120.0.1":           "", // GCP
+		"20.50.0.1":            "", // Azure
 		"8.8.8.8":              "",
 		"203.0.113.10":         "",
 		"::ffff:104.20.23.154": "Cloudflare",

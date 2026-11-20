@@ -89,7 +89,8 @@ type IPDiscoveryFinding struct {
 	Source       string                 `json:"source" bson:"source"`                           // Source name: "port_discovery", "nmap", etc.
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"` // Parent IP discovery ID
 	IP           string                 `json:"ip" bson:"ip"`
-	TargetDomain string                 `json:"target_domain,omitempty" bson:"-"` // The IP job's TargetDomain: a name of this scan resolved to the IP, so nuclei scans that name (port ingestion skips the IP's 80/443)
+	TargetDomain string                 `json:"target_domain,omitempty" bson:"-"` // The IP job's TargetDomain: the name of this scan whose resolution led to the port scan
+	ScanHost     string                 `json:"scan_host,omitempty" bson:"-"`     // port_scan_triggers only: nuclei scans <scheme>://<scan_host>:<port> instead of the IP (a CDN edge port, see port_ingestion)
 	Port         int                    `json:"port" bson:"port"`
 	Protocol     string                 `json:"protocol" bson:"protocol"` // tcp, udp
 	Status       string                 `json:"status" bson:"status"`     // active, inactive

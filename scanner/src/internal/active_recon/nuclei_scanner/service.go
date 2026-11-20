@@ -167,8 +167,43 @@ func (s *Service) getTemplateVersion(ctx context.Context) string {
 	return strings.TrimSpace(string(output))
 }
 
-// ProcessDiscovery scans a discovered asset with Nuclei
+// ProcessDiscovery scans a discovered asset with Nuclei and ends with its coverage.
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
+	return s.process(ctx, target, true)
+}
+
+// ProcessCDNPort scans an open port of a CDN edge address by a name of this scan
+// (<scheme>://<name>:<port>; the CDN answers only requests that name a site). The run is
+// keyed to the port's discovery, but it is no evidence for it: which names reach the port can
+// differ between scans, and an "ok" from one name would resolve another name's finding. So
+// it publishes its findings and no coverage; they stay open until resolved by hand.
+//
+// The CDN accepts the connection on every edge port and forwards it to the origin, which
+// often does not listen there: then nothing answers for minutes and nuclei drops the target.
+// So the root is fetched first, and nuclei runs only when it answers (not blocked).
+func (s *Service) ProcessCDNPort(ctx context.Context, target ScanTarget) error {
+	if err := rootAnswers(ctx, s.rootClient, target.Target); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		s.logger.Warn("Nuclei target not scanned: the CDN port does not answer for this name",
+			zap.String("target", target.Target),
+			zap.Error(err),
+		)
+		return nil
+	}
+	return s.process(ctx, target, false)
+}
+
+// process runs nuclei on target and publishes its findings, then, when coverage is set, the
+// coverage of the run.
+func (s *Service) process(ctx context.Context, target ScanTarget, coverage bool) error {
+	publishCoverage := func(reported []shared.FindingKey, err error) error {
+		if !coverage {
+			return nil
+		}
+		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, err))
+	}
 	ctx, span := s.tracer.Start(ctx, "nuclei",
 		trace.WithAttributes(
 			attribute.String("org.id", target.OrgID),
@@ -205,7 +240,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(attribute.Bool("scan.success", false))
-		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
+		return publishCoverage(nil, err)
 	}
 
 	// Run Nuclei scan
@@ -278,9 +313,9 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
 	}
 	if err != nil {
-		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
+		return publishCoverage(nil, err)
 	}
-	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
+	return publishCoverage(reported, nil)
 }
 
 // publicTarget resolves the host of target (a bare host or IP, or a URL) and returns an error

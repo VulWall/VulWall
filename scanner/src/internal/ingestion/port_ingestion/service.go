@@ -117,9 +117,9 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 			return err
 		}
 
-		// 4. Publish scan trigger for active recon scanners (port only), unless a port scan
-		// of this address would only repeat or miss what the hostname scan checks.
-		if reason := portTriggerSkipReason(finding); reason != "" {
+		// 4. Publish scan trigger for active recon scanners (port only). On a CDN edge
+		// address it names the site to scan, or is skipped (portTrigger).
+		if trigger, reason := portTrigger(finding); reason != "" {
 			s.logger.Info("Port scan trigger skipped",
 				zap.String("trace_id", finding.TraceID),
 				zap.String("ip", finding.IP),
@@ -127,7 +127,7 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 				zap.String("reason", reason),
 			)
 			span.SetAttributes(attribute.String("trigger.skip_reason", reason))
-		} else if err := s.publishPortScanTrigger(ctx, finding, portDiscoveryID); err != nil {
+		} else if err := s.publishPortScanTrigger(ctx, trigger, portDiscoveryID); err != nil {
 			s.logger.Error("Failed to publish port scan trigger",
 				zap.String("trace_id", finding.TraceID),
 				zap.String("ip", finding.IP),
@@ -562,24 +562,33 @@ func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.IPDis
 	return nil
 }
 
-// portTriggerSkipReason returns why an open port gets no port_scan_triggers message (nuclei is
-// its only consumer), or "" to publish it. The port discovery itself is stored either way.
-//   - the IP is a shared CDN edge (shared.CDNProvider): it answers only requests that name a
-//     site, so nuclei by IP drops it as unresponsive after minutes, on every port. The sites
-//     behind it are scanned by hostname (domain_scan_triggers).
-//   - port 80 or 443 of an IP that a domain or subdomain of this scan resolved to
-//     (TargetDomain): nuclei scans that name on 80 and 443 already. Other ports of the IP
-//     (an admin panel on 8443) are still scanned.
+// portTrigger returns the port_scan_triggers message for an open port (nuclei is its only
+// consumer), or a reason to publish none. The port discovery itself is stored either way.
 //
-// No trigger means no nuclei coverage for the port, so its earlier nuclei findings stay open.
-func portTriggerSkipReason(finding shared.IPDiscoveryFinding) string {
-	if provider := shared.CDNProvider(finding.IP); provider != "" {
-		return "cdn_edge:" + provider
+// A shared CDN edge address (shared.CDNProvider: Cloudflare, Fastly, CloudFront, Azure Front
+// Door) answers only requests that name a site; nuclei by IP waits minutes on every port and
+// drops the target. So on such an address:
+//   - 80 and 443 get no trigger: the names behind it are scanned on 80 and 443 by hostname
+//     (domain_scan_triggers).
+//   - another port gets a trigger with ScanHost set to the name of this scan that resolved to
+//     the address (TargetDomain), and nuclei scans <scheme>://<name>:<port>: the CDN forwards
+//     that port to the name's origin.
+//   - without such a name (the address is a direct IP asset) it gets no trigger.
+//
+// Any other address keeps the IP scan on every port: a server by bare IP can show a default
+// virtual host that its names do not.
+func portTrigger(finding shared.IPDiscoveryFinding) (trigger shared.IPDiscoveryFinding, skipReason string) {
+	provider := shared.CDNProvider(finding.IP)
+	switch {
+	case provider == "":
+		return finding, ""
+	case finding.Port == 80 || finding.Port == 443:
+		return finding, "cdn_edge_web_port:" + provider
+	case finding.TargetDomain == "":
+		return finding, "cdn_edge_no_name:" + provider
 	}
-	if finding.TargetDomain != "" && (finding.Port == 80 || finding.Port == 443) {
-		return "hostname_scanned:" + finding.TargetDomain
-	}
-	return ""
+	finding.ScanHost = finding.TargetDomain
+	return finding, ""
 }
 
 // publishPortScanTrigger publishes a scan trigger for active recon scanners
