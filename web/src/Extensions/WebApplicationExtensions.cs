@@ -16,8 +16,8 @@ public static partial class WebApplicationExtensions
             ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
             ForwardLimit = 1
         };
-        // Railway terminates TLS and forwards as HTTP with X-Forwarded-Proto/For headers.
-        // Clear restrictions so Railway's proxy IP is trusted (ForwardLimit=1 prevents spoofing).
+        // A reverse proxy is expected to terminate TLS and forward X-Forwarded-Proto/For headers.
+        // Known proxies/networks are cleared so any single upstream proxy is trusted (ForwardLimit=1).
         forwardedHeadersOptions.KnownProxies.Clear();
         forwardedHeadersOptions.KnownNetworks.Clear();
         app.UseForwardedHeaders(forwardedHeadersOptions);

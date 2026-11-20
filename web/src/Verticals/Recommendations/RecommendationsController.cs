@@ -58,7 +58,7 @@ public class RecommendationsController(
         var featureAccess = await featureAccessService.GetFeatureAccessAsync();
         if (!featureAccess.CanSuppressFindings)
         {
-            TempData["Error"] = "Upgrade to Pro to suppress findings.";
+            TempData["Error"] = "Suppressing findings is not enabled.";
             if (!string.IsNullOrEmpty(returnFindingId))
                 return RedirectToAction(nameof(Detail), new { id = returnFindingId });
             return RedirectToAction(nameof(Index));
@@ -101,9 +101,8 @@ public class RecommendationsController(
         return RedirectToAction(nameof(Index));
     }
 
-    // Intentionally NOT gated: users who downgrade from Pro must still be able to
-    // remove suppressions they created while on Pro, so they can restore findings
-    // to the open list and act on them under the Free tier.
+    // Intentionally NOT gated by CanSuppressFindings: a user must always be able to
+    // remove existing suppressions and restore findings to the open list.
     [HttpPost]
     [AuditLog(Category = AuditLogCategory.Recommendations, Action = "Un-suppressed finding")]
     public async Task<IActionResult> UnsuppressFinding(UnsuppressFindingInput input, string? returnFindingId = null)

@@ -30,9 +30,8 @@ VulWall.Dashboard/
 ├── docs/                        # Setup guides and references
 │   ├── AUTH0_SETUP.md
 │   └── COMPONENTS.md
-├── ops/                         # Docker and Railway config
-│   ├── dockerfile
-│   └── railway.toml
+├── ops/                         # Docker build
+│   └── dockerfile
 └── src/                         # Application source
     ├── VulWall.Dashboard.csproj
     ├── Program.cs
@@ -65,7 +64,7 @@ VulWall.Dashboard/
 dotnet run --project src/VulWall.Dashboard.csproj
 ```
 
-### Docker (Railway)
+### Docker
 
 ```bash
 docker build -f ops/dockerfile -t vulwall-dashboard .
