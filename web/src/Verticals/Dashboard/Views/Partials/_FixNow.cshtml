@@ -43,26 +43,19 @@
                     <div class="finding-list-actions">
                         <a href="@item.DetailsUrl" class="btn btn-vw-primary btn-sm">How to fix</a>
 
-                        @if (Model.FeatureAccess.CanSuppressFindings)
+                        @if (item.CanOneClickMute && !string.IsNullOrEmpty(item.DiscoveryId))
                         {
-                            @if (item.CanOneClickMute && !string.IsNullOrEmpty(item.DiscoveryId))
-                            {
-                                <form asp-controller="Recommendations" asp-action="SuppressFinding" method="post">
-                                    <input type="hidden" name="DiscoveryId" value="@item.DiscoveryId" />
-                                    <input type="hidden" name="FindingType" value="@item.FindingType" />
-                                    <input type="hidden" name="Status" value="false_positive" />
-                                    <input type="hidden" name="returnFindingId" value="" />
-                                    <button type="submit" class="btn btn-ghost btn-sm">Mute</button>
-                                </form>
-                            }
-                            else
-                            {
-                                <a href="@item.DetailsUrl" class="btn btn-ghost btn-sm">Mute</a>
-                            }
+                            <form asp-controller="Recommendations" asp-action="SuppressFinding" method="post">
+                                <input type="hidden" name="DiscoveryId" value="@item.DiscoveryId" />
+                                <input type="hidden" name="FindingType" value="@item.FindingType" />
+                                <input type="hidden" name="Status" value="false_positive" />
+                                <input type="hidden" name="returnFindingId" value="" />
+                                <button type="submit" class="btn btn-ghost btn-sm">Mute</button>
+                            </form>
                         }
                         else
                         {
-                            <button type="button" class="btn btn-ghost btn-sm" data-feature-gate="suppress">Mute</button>
+                            <a href="@item.DetailsUrl" class="btn btn-ghost btn-sm">Mute</a>
                         }
                     </div>
                 </div>

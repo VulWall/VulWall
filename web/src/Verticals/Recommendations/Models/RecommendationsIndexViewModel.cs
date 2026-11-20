@@ -1,5 +1,3 @@
-using VulWall.Dashboard.Common.Models;
-
 namespace VulWall.Dashboard.Recommendations.Models;
 
 public class RecommendationsIndexViewModel
@@ -22,11 +20,6 @@ public class RecommendationsIndexViewModel
                                        HighFindings.Sum(f => f.AffectedAssets.Count) +
                                        MediumFindings.Sum(f => f.AffectedAssets.Count) +
                                        LowFindings.Sum(f => f.AffectedAssets.Count);
-
-    /// <summary>
-    /// Feature access based on subscription tier
-    /// </summary>
-    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Full;
 
     /// <summary>
     /// All open findings flattened in severity order (critical first).

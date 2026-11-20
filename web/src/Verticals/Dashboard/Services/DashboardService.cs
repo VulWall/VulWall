@@ -19,14 +19,11 @@ public class DashboardService(
     ScansRepository scansRepository,
     DiscoveriesRepository discoveriesRepository,
     KnowledgeBaseCacheService knowledgeBaseCache,
-    IFeatureAccessService featureAccessService,
     ISecurityScoreProvider securityScoreProvider,
     ISuppressionFilter suppressionFilter)
 {
     public async Task<Models.IndexViewModel> GetIndexViewModelAsync()
     {
-        var featureAccess = await featureAccessService.GetFeatureAccessAsync();
-
         // ── Fetch shared data once ──────────────────────────────────────
         var allFindingsTask = findingsRepository.GetAllAsync();
         var allDiscoveriesTask = discoveriesRepository.GetAllAsync();
@@ -187,7 +184,6 @@ public class DashboardService(
 
         var model = new Models.IndexViewModel
         {
-            FeatureAccess = featureAccess,
             HasScanData = latestScan != null,
             PrimaryDomain = primaryDomain,
             LastScanTimeAgo = latestScan?.CreatedAt.ToRelativeTime() ?? "never",
@@ -196,13 +192,13 @@ public class DashboardService(
             ScoreVerdict = scoreVerdict,
             TotalAssets = (int)totalAssets,
             CriticalIssues = criticalIssues,
-            CriticalIssuesTrend = featureAccess.CanViewTrends ? criticalTrend : 0,
+            CriticalIssuesTrend = criticalTrend,
             HighIssues = highFindings,
-            HighIssuesTrend = featureAccess.CanViewTrends ? highTrend : 0,
+            HighIssuesTrend = highTrend,
             DiscoveredAssets = (int)discoveredAssets,
-            DiscoveredAssetsTrend = featureAccess.CanViewTrends ? discoveredTrend : 0,
+            DiscoveredAssetsTrend = discoveredTrend,
             SecurityScore = scoreResult.Score,
-            SecurityScoreTrend = featureAccess.CanViewTrends ? scoreResult.Trend : 0,
+            SecurityScoreTrend = scoreResult.Trend,
             SecurityScoreBreakdown = scoreResult.Breakdown,
             SecurityScoreSummary = scoreResult.Summary,
             SecurityScoreCap = scoreResult.AppliedCap,

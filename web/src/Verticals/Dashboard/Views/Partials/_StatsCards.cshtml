@@ -1,7 +1,7 @@
 @model VulWall.Dashboard.Dashboard.Models.IndexViewModel
 
 @{
-    var showTrends = Model.HasScanData && Model.FeatureAccess.CanViewTrends;
+    var showTrends = Model.HasScanData;
 }
 
 <div class="stats-grid">

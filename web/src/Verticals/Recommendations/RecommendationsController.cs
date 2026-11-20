@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Recommendations.Constants;
 using VulWall.Dashboard.Recommendations.Models;
@@ -13,8 +12,7 @@ namespace VulWall.Dashboard.Recommendations;
 public class RecommendationsController(
     ILogger<RecommendationsController> logger,
     RecommendationsService recommendationsService,
-    FindingSuppressionService suppressionService,
-    IFeatureAccessService featureAccessService)
+    FindingSuppressionService suppressionService)
     : Controller
 {
     public async Task<IActionResult> Index()
@@ -53,14 +51,6 @@ public class RecommendationsController(
     [HttpPost]
     public async Task<IActionResult> SuppressFinding(SuppressFindingInput input, string? returnFindingId = null)
     {
-        var featureAccess = await featureAccessService.GetFeatureAccessAsync();
-        if (!featureAccess.CanSuppressFindings)
-        {
-            TempData["Error"] = "Suppressing findings is not enabled.";
-            if (!string.IsNullOrEmpty(returnFindingId))
-                return RedirectToAction(nameof(Detail), new { id = returnFindingId });
-            return RedirectToAction(nameof(Index));
-        }
 
         if (!ModelState.IsValid)
         {
@@ -99,8 +89,6 @@ public class RecommendationsController(
         return RedirectToAction(nameof(Index));
     }
 
-    // Intentionally NOT gated by CanSuppressFindings: a user must always be able to
-    // remove existing suppressions and restore findings to the open list.
     [HttpPost]
     public async Task<IActionResult> UnsuppressFinding(UnsuppressFindingInput input, string? returnFindingId = null)
     {

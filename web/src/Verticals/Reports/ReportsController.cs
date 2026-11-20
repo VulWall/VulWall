@@ -5,6 +5,7 @@ using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Services.RateLimiter;
+using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Reports.Models;
 using VulWall.Dashboard.Reports.Services;
@@ -28,14 +29,12 @@ public class ReportsController(
     SharedLinkService sharedLinkService,
     SharedLinksPublicRepository sharedLinksPublicRepository,
     IpRateLimiterService rateLimiter,
-    IFeatureAccessService featureAccessService,
     ISuppressionFilter suppressionFilter)
     : Controller
 {
     public async Task<IActionResult> Index()
     {
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
-        var featureAccess = await featureAccessService.GetFeatureAccessAsync();
 
         var organization = await organizationRepository.GetByIdAsync(orgId);
 
@@ -61,7 +60,7 @@ public class ReportsController(
             CompanyName = organization?.CompanyName ?? "Organization",
             Scans = scanItems,
             SelectedScanId = scanItems.FirstOrDefault()?.Id,
-            FeatureAccess = featureAccess
+            SharedLinksEnabled = ServiceSettings.Instance.SharedLinksEnabled
         };
 
         return View(model);
@@ -72,7 +71,6 @@ public class ReportsController(
         try
         {
             var orgId = await organizationContext.GetCurrentOrgIdAsync();
-            var featureAccess = await featureAccessService.GetFeatureAccessAsync();
 
             var organization = await organizationRepository.GetByIdAsync(orgId);
             if (organization == null)
@@ -122,7 +120,6 @@ public class ReportsController(
                 findings,
                 discoveries,
                 selectedScan,
-                featureAccess,
                 allDoneScans,
                 allFindings,
                 previousScan?.Id,
@@ -143,7 +140,6 @@ public class ReportsController(
     {
         try
         {
-            var featureAccess = await featureAccessService.GetFeatureAccessAsync();
             var orgId = await organizationContext.GetCurrentOrgIdAsync();
 
             var organization = await organizationRepository.GetByIdAsync(orgId);
@@ -186,7 +182,6 @@ public class ReportsController(
                 findings,
                 discoveries,
                 selectedScan,
-                featureAccess,
                 organization.Logo
             );
 
@@ -202,8 +197,7 @@ public class ReportsController(
     [HttpPost]
     public async Task<IActionResult> CreateSharedLink([FromBody] CreateSharedLinkRequest request)
     {
-        var featureAccess = await featureAccessService.GetFeatureAccessAsync();
-        if (!featureAccess.CanShareReports)
+        if (!ServiceSettings.Instance.SharedLinksEnabled)
         {
             return BadRequest(new CreateSharedLinkResponse
             {
@@ -258,7 +252,7 @@ public class ReportsController(
     {
         const string endpoint = "shared-reports";
 
-        if (!(await featureAccessService.GetFeatureAccessAsync()).CanShareReports)
+        if (!ServiceSettings.Instance.SharedLinksEnabled)
         {
             return NotFound();
         }
@@ -365,16 +359,12 @@ public class ReportsController(
                 .OrderByDescending(s => s.CreatedAt)
                 .FirstOrDefault();
 
-        // Shared reports always render full report content
-        var sharedFeatureAccess = Common.Models.FeatureAccess.Full;
-
         var report = await summaryReportBuilder.BuildReportAsync(
             link.OrgId,
             organization.CompanyName ?? "Unknown Organization",
             scanFindings,
             allDiscoveries,
             scan,
-            sharedFeatureAccess,
             orgDoneScans,
             allFindings,
             previousScan?.Id,

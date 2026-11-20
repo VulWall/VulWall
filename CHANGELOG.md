@@ -137,3 +137,6 @@ First open-source, self-hosted release, under the MIT License.
   card, and the scanner's `system_audit_logs` stream and audit ingestion
   slice. Nothing writes or reads the `audit_logs` collection any more; an
   existing one is left in place and is safe to drop.
+- The feature-access layer (`IFeatureAccessService`, `FeatureAccess`): trends
+  and finding suppression are always on. Shared report links stay behind
+  `SHARED_LINKS_ENABLED`.

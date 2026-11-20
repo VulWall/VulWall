@@ -13,5 +13,6 @@ internal static class TestEnvironment
     internal static void Initialize()
     {
         Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "");
+        Environment.SetEnvironmentVariable("SHARED_LINKS_ENABLED", "false"); // the default
     }
 }

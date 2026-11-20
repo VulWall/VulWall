@@ -6,9 +6,6 @@ namespace VulWall.Dashboard.Dashboard.Models;
 
 public class IndexViewModel
 {
-    // Feature access based on subscription tier
-    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Full;
-
     // Header
     public string PrimaryDomain { get; set; } = string.Empty;
     public string LastScanTimeAgo { get; set; } = string.Empty;

@@ -1,12 +1,7 @@
-using VulWall.Dashboard.Common.Models;
-
 namespace VulWall.Dashboard.Reports.Models;
 
 public class SummaryReportViewModel
 {
-    // Feature Access
-    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Full;
-
     // Header Information
     public string OrgId { get; set; } = string.Empty;
     public string OrganizationName { get; set; } = string.Empty;
