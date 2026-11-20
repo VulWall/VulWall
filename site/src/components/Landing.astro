@@ -1,0 +1,330 @@
+---
+// Body of the home page, below the hero.
+import InstallCommand from './InstallCommand.astro';
+import Screenshot from './Screenshot.astro';
+
+const checks = [
+	{
+		icon: 'fa-sitemap',
+		title: 'Subdomain discovery',
+		body: 'Finds the subdomains of your domains with subfinder and resolves each one to its IP addresses.',
+	},
+	{
+		icon: 'fa-network-wired',
+		title: 'Port scanning',
+		body: 'Scans the TCP ports of every IP address it finds and records the open ones.',
+	},
+	{
+		icon: 'fa-bug',
+		title: 'Known vulnerabilities',
+		body: 'Runs nuclei templates for CVEs, exposed files, misconfigurations, default logins and subdomain takeovers. Intrusive and DoS templates are off.',
+	},
+	{
+		icon: 'fa-lock',
+		title: 'TLS and certificates',
+		body: 'Checks protocols, ciphers and certificates with testssl.sh.',
+	},
+	{
+		icon: 'fa-code',
+		title: 'JavaScript libraries',
+		body: 'Downloads the scripts your sites load and flags outdated libraries with known vulnerabilities, using retire.js.',
+	},
+	{
+		icon: 'fa-shield-halved',
+		title: 'HTTP security headers',
+		body: 'Reports missing or weak headers such as Content-Security-Policy and Strict-Transport-Security.',
+	},
+	{
+		icon: 'fa-envelope',
+		title: 'Email security',
+		body: 'Checks the SPF, DMARC and DKIM records that stop other people from sending mail as your domain.',
+	},
+	{
+		icon: 'fa-earth-europe',
+		title: 'WAF, cloud and location',
+		body: 'Detects web application firewalls and cloud providers, and looks up the country and network owner of each IP.',
+	},
+	{
+		icon: 'fa-lightbulb',
+		title: 'Fix guidance (optional AI)',
+		body: 'Every finding comes with the scanner’s own advice. Add an Anthropic API key and VulWall also writes plain-language fix guidance and executive summaries.',
+	},
+];
+---
+
+<div class="landing not-content">
+	<section class="shot-section" aria-label="Dashboard">
+		<Screenshot file="dashboard.png" alt="The VulWall dashboard" />
+	</section>
+
+	<section>
+		<p class="overline">What it checks</p>
+		<h2>One scanner for everything you expose to the internet</h2>
+		<p class="lead">
+			Give VulWall your domains and IP addresses. It works out what is reachable from the
+			internet and checks each part of it, on a schedule or when you click Scan now.
+		</p>
+		<ul class="grid">
+			{
+				checks.map((c) => (
+					<li class="card">
+						<span class="icon" aria-hidden="true">
+							<i class={`fa-solid ${c.icon}`} />
+						</span>
+						<h3>{c.title}</h3>
+						<p>{c.body}</p>
+					</li>
+				))
+			}
+		</ul>
+	</section>
+
+	<section class="split">
+		<div>
+			<p class="overline">Self-hosted</p>
+			<h2>Your data stays with you</h2>
+			<p class="lead">
+				VulWall runs on your own server with Docker Compose. There is no account to create
+				and nothing to sign up for.
+			</p>
+			<ul class="points">
+				<li>
+					<i class="fa-solid fa-check" aria-hidden="true"></i>
+					Assets, scan results and reports are kept in a MongoDB database on your server.
+				</li>
+				<li>
+					<i class="fa-solid fa-check" aria-hidden="true"></i>
+					VulWall sends no telemetry. Tracing is off unless you turn it on, and then it goes to
+					a backend you choose.
+				</li>
+				<li>
+					<i class="fa-solid fa-check" aria-hidden="true"></i>
+					AI guidance is optional. Without an API key, nothing goes to Anthropic.
+				</li>
+				<li>
+					<i class="fa-solid fa-check" aria-hidden="true"></i>
+					The web UI listens on 127.0.0.1 only, until you put a reverse proxy in front of it.
+				</li>
+			</ul>
+			<p class="small">
+				The scanner does need the internet: it downloads nuclei templates and IP databases, and
+				subdomain discovery looks up your domain names in public sources. See
+				<a href="/docs/faq/#what-leaves-my-server">what leaves your server</a>.
+			</p>
+		</div>
+		<Screenshot file="findings.png" alt="A list of findings, ranked by severity" />
+	</section>
+
+	<section>
+		<p class="overline">How it works</p>
+		<h2>From a domain name to a list of fixes</h2>
+		<ol class="steps">
+			<li class="card">
+				<span class="num">1</span>
+				<h3>Add your domains and IPs</h3>
+				<p>Add only assets you own or have written permission to test.</p>
+			</li>
+			<li class="card">
+				<span class="num">2</span>
+				<h3>VulWall maps your attack surface</h3>
+				<p>It finds subdomains, resolves IP addresses and scans their ports.</p>
+			</li>
+			<li class="card">
+				<span class="num">3</span>
+				<h3>You get findings and fixes</h3>
+				<p>
+					Each scanner checks what was found. Findings are grouped by severity, with what to
+					do about each one.
+				</p>
+			</li>
+		</ol>
+		<p class="more"><a href="/docs/how-it-works/">Read how the scan pipeline works</a></p>
+	</section>
+
+	<section class="cta">
+		<h2>Install VulWall</h2>
+		<p class="lead">
+			One command on any machine with Docker. It downloads the release, checks its checksums and
+			starts the stack.
+		</p>
+		<InstallCommand />
+		<p class="links">
+			<a href="/docs/getting-started/requirements/">Requirements</a>
+			<a href="/docs/getting-started/manual-install/">Install with git clone</a>
+			<a href="/docs/">Documentation</a>
+			<a href="https://github.com/VulWall/VulWall">Source code</a>
+		</p>
+	</section>
+
+	<section class="legal">
+		<p>
+			<strong>Scan only what you are allowed to scan.</strong> VulWall sends port scans and
+			vulnerability probes. Add only systems you own or have written permission to test.
+		</p>
+		<p>
+			VulWall is free software under the <a href="/docs/license/">GNU AGPL-3.0</a>. The VulWall
+			name and logo are trademarks of Moji Tajik.
+		</p>
+	</section>
+</div>
+
+<style>
+	.landing {
+		display: flex;
+		flex-direction: column;
+		gap: clamp(3rem, 8vw, 5.5rem);
+		margin-top: 2.5rem;
+		padding-bottom: 2rem;
+		color: var(--vw-text-body);
+	}
+	section {
+		min-width: 0;
+	}
+	.overline {
+		margin: 0 0 0.5rem;
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--vw-link);
+	}
+	h2 {
+		margin: 0 0 0.75rem;
+		max-width: 30ch;
+		font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+		line-height: 1.25;
+		letter-spacing: -0.02em;
+		color: var(--vw-text-heading);
+	}
+	h3 {
+		margin: 0 0 0.4rem;
+		font-size: 1.0625rem;
+		letter-spacing: -0.01em;
+		color: var(--vw-text-heading);
+	}
+	p {
+		margin: 0;
+		line-height: 1.6;
+	}
+	.lead {
+		max-width: 62ch;
+		font-size: var(--sl-text-lg);
+		color: var(--vw-text-body);
+	}
+	a {
+		color: var(--vw-link);
+	}
+	.card {
+		padding: 1.5rem;
+		border: 1px solid var(--vw-border);
+		border-radius: var(--radius-lg);
+		background: var(--vw-surface-card);
+		box-shadow: var(--vw-shadow-card);
+	}
+	.card p {
+		font-size: var(--sl-text-sm);
+		color: var(--vw-text-muted);
+	}
+	.grid,
+	.steps {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+		gap: 1rem;
+		margin: 2rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.icon,
+	.num {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		margin-bottom: 1rem;
+		border-radius: var(--radius-md);
+		background: var(--sl-color-accent-low);
+		color: var(--vw-link);
+	}
+	.num {
+		font-family: var(--sl-font-mono);
+		font-weight: 500;
+	}
+	.split {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 2rem;
+		align-items: center;
+	}
+	@media (min-width: 60rem) {
+		.split {
+			grid-template-columns: 1fr 1.1fr;
+			gap: 3rem;
+		}
+	}
+	.points {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin: 1.5rem 0;
+		padding: 0;
+		list-style: none;
+	}
+	.points li {
+		display: flex;
+		gap: 0.75rem;
+		line-height: 1.5;
+	}
+	.points i {
+		flex-shrink: 0;
+		margin-top: 0.3rem;
+		color: var(--vw-success-text);
+	}
+	.small {
+		font-size: var(--sl-text-sm);
+		color: var(--vw-text-muted);
+	}
+	.more {
+		margin-top: 1.5rem;
+		font-weight: 500;
+	}
+	.cta {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		padding: clamp(2rem, 5vw, 3rem) clamp(1rem, 4vw, 2rem);
+		border: 1px solid var(--vw-border);
+		border-radius: var(--radius-xl);
+		background: var(--vw-surface-card);
+		box-shadow: var(--vw-shadow-card);
+		text-align: center;
+	}
+	.cta h2 {
+		margin: 0;
+	}
+	.cta :global(.install) {
+		width: min(100%, 36rem);
+		text-align: left;
+	}
+	.links {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.5rem 1.5rem;
+		font-size: var(--sl-text-sm);
+		font-weight: 500;
+	}
+	.legal {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding-top: 1.5rem;
+		border-top: 1px solid var(--vw-border);
+		font-size: var(--sl-text-sm);
+		color: var(--vw-text-muted);
+	}
+	.legal strong {
+		color: var(--vw-text-body);
+	}
+</style>

@@ -1,0 +1,19 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { getEntry, render } from 'astro:content';
+
+const entry = await getEntry('changelog', 'changelog');
+if (!entry) throw new Error('CHANGELOG.md was not loaded');
+const { Content, headings } = await render(entry);
+---
+
+<StarlightPage
+	frontmatter={{
+		title: 'Changelog',
+		description: 'Notable changes in each VulWall release.',
+		editUrl: 'https://github.com/VulWall/VulWall/edit/main/CHANGELOG.md',
+	}}
+	headings={headings}
+>
+	<Content />
+</StarlightPage>
