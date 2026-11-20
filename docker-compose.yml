@@ -1,0 +1,93 @@
+# VulWall self-hosted stack.
+#
+#   cp .env.example .env
+#   docker compose up -d
+#   open http://localhost:8080
+#
+# Optional tracing (Jaeger UI on http://localhost:16686):
+#   set OTEL_ENABLED=true in .env, then
+#   docker compose --profile tracing up -d
+
+name: vulwall
+
+services:
+  mongo:
+    image: mongo:7.0.29
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:7.4.11-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  scanner:
+    build: ./scanner
+    image: ghcr.io/vulwall/scanner:${VULWALL_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: vulwall
+      REDIS_URI: redis://redis:6379/0
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      NUCLEI_WORKERS: ${NUCLEI_WORKERS:-2}
+      TESTSSL_CONCURRENCY: ${TESTSSL_CONCURRENCY:-5}
+      ALLOW_PRIVATE_TARGETS: ${ALLOW_PRIVATE_TARGETS:-false}
+      GEO_DOWNLOAD: ${GEO_DOWNLOAD:-true}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-vulwall-scanner}
+    volumes:
+      - nuclei-templates:/data/nuclei-templates
+      - geo-data:/data/geo
+
+  web:
+    build: ./web
+    image: ghcr.io/vulwall/web:${VULWALL_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "${VULWALL_PORT:-8080}:8080"
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: vulwall
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      SHARED_LINKS_ENABLED: ${SHARED_LINKS_ENABLED:-false}
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.76.0
+    profiles: ["tracing"]
+    restart: unless-stopped
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+
+volumes:
+  mongo-data:
+  redis-data:
+  nuclei-templates:
+  geo-data:
