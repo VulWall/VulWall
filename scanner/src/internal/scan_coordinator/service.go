@@ -27,12 +27,26 @@ import (
 // API caller. Callers should surface this as a 404, not a 500.
 var ErrOrgNotFound = errors.New("organization not found")
 
+// ErrScanInProgress indicates the organization already has a running scan.
+// Callers should surface this as a 409 Conflict; the running scan will pick
+// up assets that were added before its discovery jobs were published, and
+// later additions are covered by the next scan.
+var ErrScanInProgress = errors.New("scan already in progress for organization")
+
+// scanPreconditions answers the checks TriggerScan makes before it creates a
+// scan. The production implementation queries MongoDB; tests use a fake.
+type scanPreconditions interface {
+	orgExists(ctx context.Context, orgID string) (bool, error)
+	hasRunningScan(ctx context.Context, orgID string) (bool, error)
+}
+
 // Service handles scan coordination logic
 type Service struct {
 	redis  *redis.Client
 	db     *mongo.Database
 	logger *zap.Logger
 	tracer trace.Tracer
+	checks scanPreconditions
 }
 
 // NewService creates a new scan coordinator service
@@ -42,6 +56,7 @@ func NewService(redisClient *redis.Client, db *mongo.Database, logger *zap.Logge
 		db:     db,
 		logger: logger,
 		tracer: otel.Tracer("scan-coordinator"),
+		checks: mongoPreconditions{db: db},
 	}
 }
 
@@ -70,8 +85,8 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 
 	// Verify the org still exists before creating a scan record or publishing
 	// jobs. A stale cron entry or a bad API caller could otherwise create an
-	// orphan scan for a deleted org. See NightWatch #167.
-	exists, err := s.orgExists(ctx, req.OrgID)
+	// orphan scan for a deleted org.
+	exists, err := s.checks.orgExists(ctx, req.OrgID)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -83,6 +98,23 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 			zap.String("org_id", req.OrgID),
 		)
 		return "", ErrOrgNotFound
+	}
+
+	// One running scan per organization. Without this guard, adding several
+	// assets in a row (or a cron firing during an on-demand scan) starts a
+	// full discovery pipeline per request.
+	running, err := s.checks.hasRunningScan(ctx, req.OrgID)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return "", fmt.Errorf("failed to check running scans: %w", err)
+	}
+	if running {
+		span.SetStatus(codes.Error, ErrScanInProgress.Error())
+		s.logger.Info("Skipping scan trigger: a scan is already running",
+			zap.String("org_id", req.OrgID),
+		)
+		return "", ErrScanInProgress
 	}
 
 	// Get all assets for this organization first (needed for targeted_assets)
@@ -180,11 +212,34 @@ func (s *Service) createScan(ctx context.Context, scan shared.Scan) error {
 	return err
 }
 
+// mongoPreconditions implements scanPreconditions against MongoDB.
+type mongoPreconditions struct {
+	db *mongo.Database
+}
+
 // orgExists reports whether an organization document exists for orgID.
 // Mirrors the org-collection access pattern used by the scheduler.
-func (s *Service) orgExists(ctx context.Context, orgID string) (bool, error) {
-	coll := s.db.Collection(shared.CollectionOrganizations)
+func (m mongoPreconditions) orgExists(ctx context.Context, orgID string) (bool, error) {
+	coll := m.db.Collection(shared.CollectionOrganizations)
 	err := coll.FindOne(ctx, shared.OrgIDFilter(orgID)).Err()
+	if err == mongo.ErrNoDocuments {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// hasRunningScan reports whether the organization has a scan that is still
+// pending or running (the same states the scan monitor tracks). The monitor moves stuck scans to done/failed on timeout, so
+// a crashed pipeline cannot block an organization forever.
+func (m mongoPreconditions) hasRunningScan(ctx context.Context, orgID string) (bool, error) {
+	coll := m.db.Collection(shared.CollectionScans)
+	err := coll.FindOne(ctx, bson.M{
+		"org_id": orgID,
+		"status": bson.M{"$in": []string{shared.StatusPending, shared.StatusRunning}},
+	}).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}

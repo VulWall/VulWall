@@ -2,6 +2,7 @@ package scan_coordinator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -194,7 +195,11 @@ func (sc *Scheduler) triggerScan(org shared.Organization) {
 		OrgID:       org.ID,
 		Type:        shared.ScanTypeScheduled,
 		TriggeredBy: "system",
-	}); err != nil {
+	}); errors.Is(err, ErrScanInProgress) {
+		sc.logger.Info("Skipping cron scan: a scan is already running",
+			zap.String("org_id", org.ID),
+		)
+	} else if err != nil {
 		sc.logger.Error("Failed to process organization scan",
 			zap.String("org_id", org.ID),
 			zap.String("company_name", org.CompanyName),

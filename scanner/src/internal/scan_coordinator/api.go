@@ -109,6 +109,10 @@ func (a *APIServer) handleTriggerScan(w http.ResponseWriter, r *http.Request) {
 			a.writeJSON(w, http.StatusNotFound, errorResponse{Error: "organization not found"})
 			return
 		}
+		if errors.Is(err, ErrScanInProgress) {
+			a.writeJSON(w, http.StatusConflict, errorResponse{Error: "scan already in progress"})
+			return
+		}
 		a.logger.Error("Failed to trigger scan",
 			zap.String("org_id", req.OrgID),
 			zap.Error(err),
