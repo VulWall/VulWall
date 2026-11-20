@@ -27,15 +27,28 @@ public class NightWatchWebhookService(
             return;
         }
 
-        var org = await organizationRepository.GetByIdAsync(scan.OrgId);
-        if (org is null || string.IsNullOrWhiteSpace(org.OwnerEmail))
-        {
-            logger.LogWarning("No owner email found for organization {OrgId}, skipping scan completion email", scan.OrgId);
-            return;
-        }
-
         var findingsList = (await findingsRepository.FindAsync(f => f.ScanIds.Contains(scanId))).ToList();
 
+        var org = await organizationRepository.GetByIdAsync(scan.OrgId);
+        if (org is null || string.IsNullOrWhiteSpace(org.OwnerEmail))
+            logger.LogInformation("No owner email for organization {OrgId}, skipping scan completion email", scan.OrgId);
+        else
+            await SendScanCompletedEmailAsync(scan, org, org.OwnerEmail, findingsList);
+
+        // Generate and persist AI executive summary — fire-and-forget so webhook returns fast
+        _ = Task.Run(() => GenerateAndPersistExecutiveSummaryAsync(scanId, scan.OrgId, findingsList));
+    }
+
+    /// <summary>
+    /// Best effort: email delivery is optional (the default IEmailService does not send), so a
+    /// failed or skipped send is left to the email implementation to log.
+    /// </summary>
+    private async Task SendScanCompletedEmailAsync(
+        Data.Entities.Scan.Scan scan,
+        Data.Entities.Organization.Organization org,
+        string ownerEmail,
+        List<Data.Entities.Finding.Finding> findingsList)
+    {
         var (critical, high, medium, low) = FindingSeverityCounter.CountBySeverityGrouped(findingsList);
         var totalFindings = critical + high + medium + low;
         var (criticalRaw, highRaw, mediumRaw, lowRaw) = FindingSeverityCounter.CountBySeverityRaw(findingsList);
@@ -73,14 +86,9 @@ public class NightWatchWebhookService(
         };
 
         var scanSubject = $"Scan Result {(scan.CompletedAt ?? DateTime.UtcNow):MMMM dd, yyyy}";
-        var sent = await emailService.SendTemplateAsync(org.OwnerEmail, EmailTemplate.ScanComplete, variables, scanSubject);
+        var sent = await emailService.SendTemplateAsync(ownerEmail, EmailTemplate.ScanComplete, variables, scanSubject);
         if (sent)
-            logger.LogInformation("Scan completion email sent to {Email} for scan {ScanId}", org.OwnerEmail, scanId);
-        else
-            logger.LogWarning("Failed to send scan completion email to {Email} for scan {ScanId}", org.OwnerEmail, scanId);
-
-        // Generate and persist AI executive summary — fire-and-forget so webhook returns fast
-        _ = Task.Run(() => GenerateAndPersistExecutiveSummaryAsync(scanId, scan.OrgId, findingsList));
+            logger.LogInformation("Scan completion email sent to {Email} for scan {ScanId}", ownerEmail, scan.Id);
     }
 
     private async Task GenerateAndPersistExecutiveSummaryAsync(
