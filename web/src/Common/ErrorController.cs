@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using VulWall.Dashboard.Common.Contracts.Models;
+using VulWall.Dashboard.Common.Utils;
 
 namespace VulWall.Dashboard.Common;
 
@@ -17,7 +18,8 @@ public class ErrorController(ILogger<ErrorController> logger, IWebHostEnvironmen
 
         var statusCode = Response.StatusCode;
         var requestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier;
-        var originalPath = statusCodeFeature?.OriginalPath ?? exceptionFeature?.Path ?? HttpContext.Request.Path.ToString();
+        var originalPath = LogSanitizer.Clean(
+            statusCodeFeature?.OriginalPath ?? exceptionFeature?.Path ?? HttpContext.Request.Path.ToString());
 
         var model = ErrorViewModel.FromStatusCode(statusCode);
         model.RequestId = requestId;
@@ -42,7 +44,8 @@ public class ErrorController(ILogger<ErrorController> logger, IWebHostEnvironmen
         }
         else
         {
-            logger.LogWarning(
+            logger.Log(
+                statusCode == StatusCodes.Status404NotFound ? LogLevel.Debug : LogLevel.Warning,
                 "Error page displayed. StatusCode: {StatusCode}, RequestId: {RequestId}, Path: {Path}",
                 statusCode,
                 requestId,
@@ -59,14 +62,16 @@ public class ErrorController(ILogger<ErrorController> logger, IWebHostEnvironmen
     {
         var requestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier;
         var statusCodeFeature = HttpContext.Features.Get<IStatusCodeReExecuteFeature>();
-        var originalPath = statusCodeFeature?.OriginalPath ?? HttpContext.Request.Path.ToString();
+        var originalPath = LogSanitizer.Clean(statusCodeFeature?.OriginalPath ?? HttpContext.Request.Path.ToString());
 
         // Create error view model
         var model = ErrorViewModel.FromStatusCode(statusCode);
         model.RequestId = requestId;
         model.IsDevelopment = environment.IsDevelopment();
 
-        logger.LogWarning(
+        // Anyone can request a missing page, so 404s stay out of the default log level.
+        logger.Log(
+            statusCode == StatusCodes.Status404NotFound ? LogLevel.Debug : LogLevel.Warning,
             "Status code error. StatusCode: {StatusCode}, RequestId: {RequestId}, Path: {Path}",
             statusCode,
             requestId,
