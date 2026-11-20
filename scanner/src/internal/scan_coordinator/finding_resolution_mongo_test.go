@@ -47,6 +47,7 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 		bson.M{"_id": "live", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{"s1", "s2", thisScan}},
 		bson.M{"_id": "gone", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{"s0"}},
 		bson.M{"_id": "never", "org_id": org, "asset_type": shared.AssetTypeSubdomain},
+		bson.M{"_id": "port", "org_id": org, "asset_type": shared.AssetTypePort, "scan_ids": bson.A{"s2", thisScan}},
 	)
 	insert(shared.CollectionFindings,
 		bson.M{"_id": "f-fixed", "org_id": org, "discovery_id": "live", "source": "http-headers", "finding_type": "a", "title": "A", "status": "open", "scan_ids": bson.A{"s2"}},
@@ -54,6 +55,9 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 		bson.M{"_id": "f-nuclei", "org_id": org, "discovery_id": "live", "source": "nuclei", "finding_type": "c", "title": "C", "status": "open", "scan_ids": bson.A{"s2"}},
 		bson.M{"_id": "f-gone", "org_id": org, "discovery_id": "gone", "source": "nuclei", "finding_type": "d", "title": "D", "status": "open", "scan_ids": bson.A{"s0"}},
 		bson.M{"_id": "f-never", "org_id": org, "discovery_id": "never", "source": "nuclei", "finding_type": "e", "title": "E", "status": "open"},
+		bson.M{"_id": "f-port", "org_id": org, "discovery_id": "port", "source": "nuclei", "finding_type": "h", "title": "H", "status": "open", "scan_ids": bson.A{"s2"}},
+		bson.M{"_id": "f-name-run", "org_id": org, "discovery_id": "port", "source": "nuclei", "finding_type": "i", "title": "I", "status": "open", "scan_ids": bson.A{"s2"},
+			"metadata": bson.M{shared.FindingMetaScanHost: "shop.example.com", "template_id": "i"}},
 		bson.M{"_id": "f-seen", "org_id": org, "discovery_id": "live", "source": "nuclei", "finding_type": "g", "title": "G", "status": "open", "scan_ids": bson.A{thisScan}},
 	)
 	absent := func(scan string) bson.M {
@@ -63,6 +67,7 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 		bson.M{"scan_id": thisScan, "org_id": org, "source": "http-headers", "discovery_id": "live", "status": shared.CoverageOK,
 			"reported": bson.A{bson.M{"finding_type": "b", "title": "B"}}},
 		bson.M{"scan_id": thisScan, "org_id": org, "source": "nuclei", "discovery_id": "live", "status": shared.CoverageError},
+		bson.M{"scan_id": thisScan, "org_id": org, "source": "nuclei", "discovery_id": "port", "status": shared.CoverageOK},
 		absent(thisScan), absent("s2"), absent("s1"),
 	)
 
@@ -73,13 +78,14 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 		t.Fatal(err)
 	}
 	slices.Sort(d.unchecked)
-	if !slices.Equal(d.notReproduced, []string{"f-fixed"}) || !slices.Equal(d.gone, []string{"f-gone"}) ||
-		!slices.Equal(d.unchecked, []string{"f-never", "f-nuclei", "f-still"}) {
+	slices.Sort(d.notReproduced)
+	if !slices.Equal(d.notReproduced, []string{"f-fixed", "f-port"}) || !slices.Equal(d.gone, []string{"f-gone"}) ||
+		!slices.Equal(d.unchecked, []string{"f-name-run", "f-never", "f-nuclei", "f-still"}) {
 		t.Fatalf("decision = %+v", d)
 	}
 
-	if n := m.resolve(ctx, scan, d); n != 2 {
-		t.Fatalf("resolved %d, want 2", n)
+	if n := m.resolve(ctx, scan, d); n != 3 {
+		t.Fatalf("resolved %d, want 3", n)
 	}
 	var got struct {
 		Status           string `bson:"status"`

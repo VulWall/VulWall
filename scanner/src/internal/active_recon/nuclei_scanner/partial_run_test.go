@@ -16,6 +16,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // twoMatches is nuclei JSONL stdout with two matches, as the run in
@@ -116,7 +118,8 @@ func TestProcessDiscoveryPublishesMatchesOfIncompleteRun(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fakeNuclei(t, twoMatches, tc.stderr, 0)
 			rdb.Del(ctx, shared.StreamSecurityFindings)
-			s := &Service{redis: rdb, logger: zap.NewNop(), tracer: otel.Tracer("test"), rootClient: newRootClient()}
+			core, logs := observer.New(zapcore.DebugLevel)
+			s := &Service{redis: rdb, logger: zap.New(core), tracer: otel.Tracer("test"), rootClient: newRootClient()}
 			scanID := "scan-1"
 			target := ScanTarget{Target: tc.target, DiscoveryID: "d1", OrgID: "org", ScanID: &scanID}
 
@@ -149,6 +152,13 @@ func TestProcessDiscoveryPublishesMatchesOfIncompleteRun(t *testing.T) {
 			cov := got[tc.wantFindings].Coverage
 			if cov == nil || cov.Status != shared.CoverageError || len(cov.Reported) != 0 || !strings.Contains(cov.Error, tc.wantErr) {
 				t.Fatalf("coverage = %+v, want error mentioning %q and nothing reported", cov, tc.wantErr)
+			}
+			// The target did not answer: expected, so Warn, not Error.
+			if n := logs.FilterLevelExact(zapcore.ErrorLevel).Len(); n != 0 {
+				t.Fatalf("%d Error entries, want none: %v", n, logs.FilterLevelExact(zapcore.ErrorLevel).All())
+			}
+			if logs.FilterMessage("Nuclei scan failed").FilterLevelExact(zapcore.WarnLevel).Len() != 1 {
+				t.Fatalf("want one Warn 'Nuclei scan failed' entry, got %v", logs.All())
 			}
 		})
 	}

@@ -182,12 +182,17 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 		return nil
 	}
 
-	// Build target URL
+	// Build target URL. A CDN edge port comes with the name to ask for (port ingestion sets
+	// ScanHost): the edge answers only requests that name a site.
 	protocol := "http"
 	if finding.Port == 443 || finding.Port == 8443 {
 		protocol = "https"
 	}
-	target := fmt.Sprintf("%s://%s:%d", protocol, finding.IP, finding.Port)
+	host := finding.IP
+	if finding.ScanHost != "" {
+		host = finding.ScanHost
+	}
+	target := fmt.Sprintf("%s://%s:%d", protocol, host, finding.Port)
 
 	// Use the discovery_id from the finding
 	// The port scanner already generated a deterministic ID for this port
@@ -200,7 +205,9 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 		OrgID:       finding.OrgID,
 	}
 
-	// Process the scan
+	if finding.ScanHost != "" {
+		return c.service.ProcessCDNPort(ctx, scanTarget)
+	}
 	return c.service.ProcessDiscovery(ctx, scanTarget)
 }
 

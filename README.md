@@ -125,7 +125,7 @@ comments.
 | `SECURE_COOKIES` | `false` | Set to `true` when VulWall is served over HTTPS |
 | `TRUSTED_PROXIES` | empty | IPs/CIDRs of reverse proxies whose `X-Forwarded-*` headers are trusted |
 | `NUCLEI_WORKERS` | `2` | Concurrent nuclei processes |
-| `NUCLEI_RATE_LIMIT` | `50` | Requests per second for each nuclei process |
+| `NUCLEI_RATE_LIMIT` | `30` | Requests per second for each nuclei process |
 | `NUCLEI_INTERACTSH` | `off` | `on` runs nuclei's out-of-band (OAST) checks. Vulnerable targets then call back to ProjectDiscovery's public interactsh servers unless you set your own |
 | `NUCLEI_INTERACTSH_SERVER` | empty | https URL of your own interactsh server |
 | `NUCLEI_INTERACTSH_TOKEN` | empty | Auth token of that server |
@@ -276,6 +276,14 @@ Planned work, each tracked in a GitHub issue:
 - [Single sign-on with OpenID Connect](https://github.com/VulWall/VulWall/issues/14)
 - [Run new nuclei templates on all assets right after an update](https://github.com/VulWall/VulWall/issues/15)
 - [Easy setup for a self-hosted callback (interactsh) server](https://github.com/VulWall/VulWall/issues/18)
+- [Run nuclei in batches instead of one process per target](https://github.com/VulWall/VulWall/issues/19)
+- [Find secrets in public JavaScript and HTML](https://github.com/VulWall/VulWall/issues/20)
+- [Business context on assets: owner, criticality, environment, tags](https://github.com/VulWall/VulWall/issues/21)
+- [Retest a single finding](https://github.com/VulWall/VulWall/issues/22)
+- [Scan on change: targeted scans when a host, port or technology changes](https://github.com/VulWall/VulWall/issues/23)
+- [Detect exposed AI infrastructure (Ollama, MCP servers, vector databases)](https://github.com/VulWall/VulWall/issues/24)
+- [Leaked credentials through Have I Been Pwned](https://github.com/VulWall/VulWall/issues/25)
+- [Look-alike and phishing domain monitoring](https://github.com/VulWall/VulWall/issues/26)
 
 ### Ideas
 
@@ -285,6 +293,9 @@ These are not planned yet:
 - [Scan container images and VMs for vulnerable packages](https://github.com/VulWall/VulWall/issues/9)
 - [Workspaces for MSPs and consultants](https://github.com/VulWall/VulWall/issues/16)
 - [MCP server for AI assistants](https://github.com/VulWall/VulWall/issues/17)
+- [Suggest related domains and subsidiaries](https://github.com/VulWall/VulWall/issues/27)
+- [Opt-in AI validation of a finding](https://github.com/VulWall/VulWall/issues/28)
+- [LLM-drafted nuclei templates for new CVEs](https://github.com/VulWall/VulWall/issues/29)
 
 ## Contributing
 

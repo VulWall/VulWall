@@ -4,7 +4,8 @@
 @{
     var hasHosting = !string.IsNullOrEmpty(Model.CountryCode)
                      || !string.IsNullOrEmpty(Model.CloudProvider)
-                     || !string.IsNullOrEmpty(Model.Isp);
+                     || !string.IsNullOrEmpty(Model.Isp)
+                     || !string.IsNullOrEmpty(Model.CdnEdge);
 }
 
 <div class="disc-drawer" id="drawer-@Model.Id">
@@ -39,6 +40,13 @@
                 <div class="disc-drawer-row">
                     <span class="label">ISP</span>
                     <span class="value">@Model.Isp</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.CdnEdge))
+            {
+                <div class="disc-drawer-row">
+                    <span class="label">CDN edge</span>
+                    <span class="value">@Model.CdnEdge · scanned for vulnerabilities through its hostnames, not by IP</span>
                 </div>
             }
             @if (!string.IsNullOrEmpty(Model.Waf))

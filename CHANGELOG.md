@@ -63,8 +63,16 @@ First open-source, self-hosted release, under the MIT License.
   the scanner picks up a changed schedule within 5 minutes.
 - nuclei scans domains and subdomains by hostname, so TLS SNI and the Host
   header reach sites behind a CDN, WAF or virtual host. Every address of the
-  name must be public before the run. Open ports are scanned by IP and port.
-- `NUCLEI_RATE_LIMIT` (default 50) sets the requests per second of each
+  name must be public before the run. Open ports are scanned by IP and port,
+  except on a CDN edge address (Cloudflare, Fastly, CloudFront, Azure Front
+  Door): its ports 80 and 443 are left to the scan by name, and another open
+  port is scanned as `<name>:<port>` when it answers. nuclei by IP waited
+  minutes on each such port and then dropped it. Findings of a
+  `<name>:<port>` run are not resolved by later scans: resolve them by hand,
+  or they close when the port stays closed for 3 scans. A CDN edge address
+  added as an IP asset gets no nuclei scan (its port scan still runs); the
+  Discoveries page marks such an address as a CDN edge.
+- `NUCLEI_RATE_LIMIT` (default 30) sets the requests per second of each
   nuclei process. At nuclei's own 150, a home or office connection times out
   and nuclei drops the target.
 - nuclei's out-of-band (OAST) checks are off by default. With
@@ -84,6 +92,9 @@ First open-source, self-hosted release, under the MIT License.
   the affected assets; its findings stay open and the next scan that checks
   the asset settles them. A scan cut off by a scanner restart is closed as
   "Interrupted by restart" and resolves nothing.
+- A scan stays open while a scanner still works on a target, also when one
+  nuclei run takes longer than the 30 minutes after which the scan monitor
+  treats queued work as stuck.
 - Domain discovery re-checks the subdomains earlier scans found and retries
   only failed DNS lookups, not names that do not exist. Before the scanner
   treats a domain, a known subdomain or an email record as missing, it asks

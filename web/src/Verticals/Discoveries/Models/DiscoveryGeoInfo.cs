@@ -12,6 +12,12 @@ public class DiscoveryGeoInfo
     public string? CloudRegion { get; set; }
     public string? Waf { get; set; }
 
+    /// <summary>
+    /// The CDN whose shared edge this IP is (metadata.cdn_edge, set by the scanner). The scanner
+    /// runs nuclei on the names behind it, not on the address.
+    /// </summary>
+    public string? CdnEdge { get; set; }
+
     public static DiscoveryGeoInfo FromMetadata(Dictionary<string, object?>? metadata)
     {
         var geoInfo = new DiscoveryGeoInfo();
@@ -58,6 +64,9 @@ public class DiscoveryGeoInfo
             // Extract WAF
             if (metadata.TryGetValue("waf", out var waf))
                 geoInfo.Waf = waf?.ToString();
+
+            if (metadata.TryGetValue("cdn_edge", out var cdnEdge))
+                geoInfo.CdnEdge = cdnEdge?.ToString();
         }
         catch
         {

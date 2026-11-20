@@ -73,7 +73,7 @@ const (
 	EnvNucleiTemplatesDir = "NUCLEI_TEMPLATES_DIR"
 	// EnvNucleiWorkers is the number of concurrent nuclei processes, shared by both trigger streams (default: 2)
 	EnvNucleiWorkers = "NUCLEI_WORKERS"
-	// EnvNucleiRateLimit is the nuclei request rate per process, requests per second (default: 50)
+	// EnvNucleiRateLimit is the nuclei request rate per process, requests per second (default: 30)
 	EnvNucleiRateLimit = "NUCLEI_RATE_LIMIT"
 	// EnvNucleiInteractsh turns on nuclei's out-of-band (OAST) checks through interactsh
 	// servers: "on" or "true" (default: off, nuclei runs with -ni)

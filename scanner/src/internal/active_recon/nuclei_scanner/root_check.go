@@ -65,3 +65,26 @@ func rootBlocked(ctx context.Context, client *http.Client, target string) error 
 	}
 	return nil
 }
+
+// rootAnswers GETs the target root before a run and returns an error unless it answers and
+// the answer is not a block (shared.BlockedResponse): no answer within rootCheckTimeout, a
+// 403, 429 or 5xx (a CDN's "origin unreachable" 52x) or a WAF challenge.
+func rootAnswers(ctx context.Context, client *http.Client, target string) error {
+	var lastErr error
+	for _, u := range rootURLs(target) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("User-Agent", shared.DefaultUserAgent)
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, shared.BlockedBodyPrefix))
+		resp.Body.Close()
+		return shared.BlockedResponse(u, resp.StatusCode, resp.Header, body)
+	}
+	return lastErr
+}

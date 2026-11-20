@@ -93,7 +93,7 @@ container health check; the scanner opens no port).
 - Ingestion service: **ONLY writer of scan data in MongoDB** — single source of truth (the coordinator writes only `scans`)
 - All jobs require `org_id` — consumers MUST validate and skip if missing
 - All findings require `source` — ingestion MUST validate and skip if missing
-- Every scanner ends each target with a coverage message (`shared.TargetCoverage`): `ok` + the keys of every finding it reported, or `error` when the check did not complete. A scan resolves a finding only on that evidence (see ARCHITECTURE.md, scan completion and finding resolution); a new scanner without it never resolves its findings
+- Every scanner ends each target with a coverage message (`shared.TargetCoverage`): `ok` + the keys of every finding it reported, or `error` when the check did not complete. A scan resolves a finding only on that evidence (see ARCHITECTURE.md, scan completion and finding resolution); a new scanner without it never resolves its findings. One deliberate exception: a nuclei `<name>:<port>` run on a CDN edge port publishes findings and no coverage (see ARCHITECTURE.md, nuclei targets)
 - Components get Redis/Mongo/logger from `main.go`; return errors from `Start()` — never `os.Exit` or `logger.Fatal` inside a component
 - Trigger streams use `CreateConsumerGroupFromLatest` (from `$`) — ephemeral
 - Result/job streams use `CreateConsumerGroup` (from `0`) — guaranteed delivery
@@ -156,14 +156,14 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `ANTHROPIC_MODEL` | Anthropic model for the KB engine (default: `claude-sonnet-4-6`) |
 | `ENVIRONMENT` | `development` (console logs) / `production` (JSON logs; the image default) |
 | `NUCLEI_WORKERS` | Concurrent nuclei processes across both trigger streams (default 2) |
-| `NUCLEI_RATE_LIMIT` | nuclei `-rl`, requests per second per process (default 50; not a positive integer = default, with a warning). nuclei's own 150 saturates a home/office uplink: it drops the target as "unresponsive permanently" and the run is coverage `error` |
+| `NUCLEI_RATE_LIMIT` | nuclei `-rl`, requests per second per process (default 30; not a positive integer = default, with a warning). nuclei's own 150 saturates a home/office uplink: it drops the target as "unresponsive permanently" and the run is coverage `error` |
 | `NUCLEI_INTERACTSH` | `on`/`true` runs nuclei's OAST checks via interactsh; anything else = `-ni` (default off: callbacks would go to ProjectDiscovery's public `oast.*` servers) |
 | `NUCLEI_INTERACTSH_SERVER` / `NUCLEI_INTERACTSH_TOKEN` | Self-hosted interactsh server (`-iserver`, https URL only; an invalid value keeps OAST off with a startup warning) and its token (`-itoken`; a secret, never logged) |
 | `NUCLEI_TEMPLATES_DIR` | nuclei templates directory (default `$HOME/nuclei-templates`; image: `/data/nuclei-templates`) |
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
 | `TESTSSL_CONCURRENCY` | Concurrent testssl.sh scans (default 5) |
-| `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry delivered < 30 min ago). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
+| `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry idle < 30 min; a running handler's entry is refreshed every minute). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
 | `SCAN_MIN_RUNTIME` | Minimum scan age before a scan can complete, Go duration (default `10m`). Same as above |
 | `DNS_RESOLVE_CONCURRENCY` | Concurrent subdomain DNS lookups in domain discovery (default 50); each name is published as soon as it resolves |
 | `DNS_RECHECK_RESOLVERS` | Public resolvers (comma list, default `1.1.1.1,8.8.8.8`) asked directly when the local resolver says a root domain, a known subdomain, or an email record (SPF, DMARC, MX, NS) does not exist; `off` disables the check (the root then counts as a resolver failure, known subdomains are never confirmed gone, and the local email answer is final) |

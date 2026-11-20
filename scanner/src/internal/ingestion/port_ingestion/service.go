@@ -117,8 +117,17 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 			return err
 		}
 
-		// 4. Publish scan trigger for active recon scanners (port only)
-		if err := s.publishPortScanTrigger(ctx, finding, portDiscoveryID); err != nil {
+		// 4. Publish scan trigger for active recon scanners (port only). On a CDN edge
+		// address it names the site to scan, or is skipped (portTrigger).
+		if trigger, reason := portTrigger(finding); reason != "" {
+			s.logger.Info("Port scan trigger skipped",
+				zap.String("trace_id", finding.TraceID),
+				zap.String("ip", finding.IP),
+				zap.Int("port", finding.Port),
+				zap.String("reason", reason),
+			)
+			span.SetAttributes(attribute.String("trigger.skip_reason", reason))
+		} else if err := s.publishPortScanTrigger(ctx, trigger, portDiscoveryID); err != nil {
 			s.logger.Error("Failed to publish port scan trigger",
 				zap.String("trace_id", finding.TraceID),
 				zap.String("ip", finding.IP),
@@ -161,6 +170,9 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 
 		// IP geolocation enrichment now handled by discovery_enrichment service
 		var metadata map[string]interface{}
+		if provider := shared.CDNProvider(finding.IP); provider != "" {
+			metadata = map[string]interface{}{shared.DiscoveryMetaCDNEdge: provider}
+		}
 
 		newIPDiscovery := shared.Discovery{
 			ID:             ipDiscoveryID,
@@ -206,11 +218,16 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 		return "", false, err
 	}
 
-	// IP exists - update last_seen and add scan_id to array
+	// IP exists - update last_seen and add scan_id to array; keep the CDN edge mark current
 	update := bson.M{
 		"$set": bson.M{
 			"last_seen": timestamp,
 		},
+	}
+	if provider := shared.CDNProvider(finding.IP); provider != "" {
+		update["$set"].(bson.M)["metadata."+shared.DiscoveryMetaCDNEdge] = provider
+	} else {
+		update["$unset"] = bson.M{"metadata." + shared.DiscoveryMetaCDNEdge: ""}
 	}
 	// Add scan_id to array if present
 	if finding.ScanID != nil {
@@ -551,6 +568,35 @@ func (s *Service) publishEnrichmentJob(ctx context.Context, finding shared.IPDis
 	)
 
 	return nil
+}
+
+// portTrigger returns the port_scan_triggers message for an open port (nuclei is its only
+// consumer), or a reason to publish none. The port discovery itself is stored either way.
+//
+// A shared CDN edge address (shared.CDNProvider: Cloudflare, Fastly, CloudFront, Azure Front
+// Door) answers only requests that name a site; nuclei by IP waits minutes on every port and
+// drops the target. So on such an address:
+//   - 80 and 443 get no trigger: the names behind it are scanned on 80 and 443 by hostname
+//     (domain_scan_triggers).
+//   - another port gets a trigger with ScanHost set to the name of this scan that resolved to
+//     the address (TargetDomain), and nuclei scans <scheme>://<name>:<port>: the CDN forwards
+//     that port to the name's origin.
+//   - without such a name (the address is a direct IP asset) it gets no trigger.
+//
+// Any other address keeps the IP scan on every port: a server by bare IP can show a default
+// virtual host that its names do not.
+func portTrigger(finding shared.IPDiscoveryFinding) (trigger shared.IPDiscoveryFinding, skipReason string) {
+	provider := shared.CDNProvider(finding.IP)
+	switch {
+	case provider == "":
+		return finding, ""
+	case finding.Port == 80 || finding.Port == 443:
+		return finding, "cdn_edge_web_port:" + provider
+	case finding.TargetDomain == "":
+		return finding, "cdn_edge_no_name:" + provider
+	}
+	finding.ScanHost = finding.TargetDomain
+	return finding, ""
 }
 
 // publishPortScanTrigger publishes a scan trigger for active recon scanners

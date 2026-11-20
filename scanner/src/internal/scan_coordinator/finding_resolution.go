@@ -31,6 +31,12 @@ type findingRef struct {
 	Source      string `bson:"source"`
 	FindingType string `bson:"finding_type"`
 	Title       string `bson:"title"`
+	Metadata    struct {
+		// ScanHost is set on a nuclei finding from a <name>:<port> run on a CDN edge port
+		// (shared.FindingMetaScanHost). Such a run reports no coverage, so a coverage record of
+		// the port comes from another kind of run (by IP) and is no evidence about it.
+		ScanHost string `bson:"scan_host"`
+	} `bson:"metadata"`
 }
 
 // discoveryRef is the part of a discovery that resolution needs.
@@ -110,6 +116,9 @@ func decideResolutions(in resolutionInput) resolutionDecision {
 // notReproduced reports whether cov proves that f is no longer present: the check completed
 // and did not report f.
 func notReproduced(f findingRef, cov coverageRef) bool {
+	if f.Metadata.ScanHost != "" {
+		return false // reported by a run under a name; cov is not from that run
+	}
 	if cov.Status != shared.CoverageOK {
 		return false // no record, or the check did not complete
 	}
@@ -169,7 +178,7 @@ func (m *ScanMonitor) loadResolutionInput(ctx context.Context, scan shared.Scan)
 
 	cursor, err := m.db.Collection(shared.CollectionFindings).Find(ctx,
 		bson.M{"org_id": scan.OrgID, "status": shared.FindingStatusOpen, "scan_ids": bson.M{"$ne": scan.ID}},
-		options.Find().SetProjection(bson.M{"discovery_id": 1, "source": 1, "finding_type": 1, "title": 1}),
+		options.Find().SetProjection(bson.M{"discovery_id": 1, "source": 1, "finding_type": 1, "title": 1, "metadata." + shared.FindingMetaScanHost: 1}),
 	)
 	if err != nil {
 		return in, err

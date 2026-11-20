@@ -30,6 +30,21 @@ cd scanner
 make build test vet        # src/bin/nightwatch, go test, go vet
 ```
 
+Some scanner tests need a real MongoDB and Redis and skip without them. Run
+them against throwaway containers, one package at a time (`-p 1`): tests in
+different packages share streams such as `security_findings`, so parallel
+packages read each other's messages. CI runs them the same way.
+
+```bash
+docker run -d --rm --name vw-test-mongo -p 127.0.0.1:27018:27017 mongo:7
+docker run -d --rm --name vw-test-redis -p 127.0.0.1:6380:6379 redis:7-alpine
+cd scanner/src
+VULWALL_TEST_MONGO_URI=mongodb://127.0.0.1:27018 \
+VULWALL_TEST_REDIS_URI=redis://127.0.0.1:6380/0 \
+  go test -race -count=1 -p 1 ./...
+docker rm -f vw-test-mongo vw-test-redis
+```
+
 `make run` starts the scanner on your machine. It needs Redis and MongoDB
 (for example the compose services with their ports published through a
 `docker-compose.override.yml`) and, for full scans, `nuclei`, `testssl.sh` and

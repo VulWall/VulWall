@@ -167,8 +167,43 @@ func (s *Service) getTemplateVersion(ctx context.Context) string {
 	return strings.TrimSpace(string(output))
 }
 
-// ProcessDiscovery scans a discovered asset with Nuclei
+// ProcessDiscovery scans a discovered asset with Nuclei and ends with its coverage.
 func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error {
+	return s.process(ctx, target, true)
+}
+
+// ProcessCDNPort scans an open port of a CDN edge address by a name of this scan
+// (<scheme>://<name>:<port>; the CDN answers only requests that name a site). The run is
+// keyed to the port's discovery, but it is no evidence for it: which names reach the port can
+// differ between scans, and an "ok" from one name would resolve another name's finding. So
+// it publishes its findings and no coverage; they stay open until resolved by hand.
+//
+// The CDN accepts the connection on every edge port and forwards it to the origin, which
+// often does not listen there: then nothing answers for minutes and nuclei drops the target.
+// So the root is fetched first, and nuclei runs only when it answers (not blocked).
+func (s *Service) ProcessCDNPort(ctx context.Context, target ScanTarget) error {
+	if err := rootAnswers(ctx, s.rootClient, target.Target); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		s.logger.Warn("Nuclei target not scanned: the CDN port does not answer for this name",
+			zap.String("target", target.Target),
+			zap.Error(err),
+		)
+		return nil
+	}
+	return s.process(ctx, target, false)
+}
+
+// process runs nuclei on target and publishes its findings, then, when coverage is set, the
+// coverage of the run.
+func (s *Service) process(ctx context.Context, target ScanTarget, coverage bool) error {
+	publishCoverage := func(reported []shared.FindingKey, err error) error {
+		if !coverage {
+			return nil
+		}
+		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, err))
+	}
 	ctx, span := s.tracer.Start(ctx, "nuclei",
 		trace.WithAttributes(
 			attribute.String("org.id", target.OrgID),
@@ -205,7 +240,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(attribute.Bool("scan.success", false))
-		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
+		return publishCoverage(nil, err)
 	}
 
 	// Run Nuclei scan
@@ -224,12 +259,12 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		// (down, or a WAF that banned the scanner). Only a target that still accepts a
 		// connection afterwards makes the run evidence.
 		if rerr := shared.Reachable(ctx, reachAddrs(target.Target)...); rerr != nil {
-			err = fmt.Errorf("target not reachable after the run: %w", rerr)
+			err = targetSide(fmt.Errorf("target not reachable after the run: %w", rerr))
 		} else if berr := rootBlocked(ctx, s.rootClient, target.Target); berr != nil {
 			// nuclei says nothing about a 403 or a WAF challenge on every request: its
 			// templates then met the block, not the application. Its matches may come from
 			// the block or challenge page too, so none of them is published.
-			err = fmt.Errorf("target blocks the scanner: %w", berr)
+			err = targetSide(fmt.Errorf("target blocks the scanner: %w", berr))
 			if len(findings) > 0 {
 				s.logger.Warn("Nuclei matches dropped: target blocks the scanner",
 					zap.String("target", target.Target),
@@ -244,7 +279,11 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		// "error", so the scan resolves no nuclei finding on this target. The matches of an
 		// incomplete or failed run are still real and are published below (not those of a
 		// blocked run, dropped above).
-		s.logger.Error("Nuclei scan failed",
+		logFailure := s.logger.Error
+		if isTargetSide(err) {
+			logFailure = s.logger.Warn // the target did not answer: expected, not a scanner fault
+		}
+		logFailure("Nuclei scan failed",
 			zap.String("target", target.Target),
 			zap.Int("findings_count", len(findings)),
 			zap.Error(err),
@@ -268,15 +307,22 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	reported := make([]shared.FindingKey, 0, len(findings))
 	for _, nucleiOutput := range findings {
 		finding := s.convertToSecurityFinding(nucleiOutput, target)
+		if !coverage {
+			// A run that is no evidence for its discovery: mark its findings so that no
+			// coverage record of the discovery can resolve them.
+			if u, err := url.Parse(target.Target); err == nil {
+				finding.Metadata[shared.FindingMetaScanHost] = u.Hostname()
+			}
+		}
 		if err := s.publishFinding(ctx, finding); err != nil {
 			return fmt.Errorf("publish nuclei finding %s: %w", nucleiOutput.TemplateID, err)
 		}
 		reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
 	}
 	if err != nil {
-		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
+		return publishCoverage(nil, err)
 	}
-	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
+	return publishCoverage(reported, nil)
 }
 
 // publicTarget resolves the host of target (a bare host or IP, or a URL) and returns an error
@@ -477,7 +523,7 @@ func runProblem(target string, stderr []byte) error {
 		}
 		for _, addr := range reachAddrs(target) {
 			if strings.Contains(line, "Skipped "+addr+" from target list") {
-				return fmt.Errorf("nuclei dropped the target during the run: %s", strings.TrimSpace(line))
+				return targetSide(fmt.Errorf("nuclei dropped the target during the run: %s", strings.TrimSpace(line)))
 			}
 		}
 		if strings.Contains(line, "Scan completed in") {
@@ -488,6 +534,23 @@ func runProblem(target string, stderr []byte) error {
 		return errors.New("nuclei did not report a completed scan")
 	}
 	return nil
+}
+
+// targetSideError marks a run that did not complete because of the target, not the scanner:
+// nuclei dropped it as unresponsive, it stopped accepting connections, or it blocks the
+// scanner. Such a run is still coverage "error", but it is expected (a CDN or WAF in front,
+// a host that went down), so it is logged at Warn. Every other failure (no nuclei binary,
+// no templates, [FTL], a non-zero exit, unreadable output) stays at Error.
+type targetSideError struct{ err error }
+
+func (e targetSideError) Error() string { return e.err.Error() }
+func (e targetSideError) Unwrap() error { return e.err }
+
+func targetSide(err error) error { return targetSideError{err} }
+
+func isTargetSide(err error) bool {
+	var t targetSideError
+	return errors.As(err, &t)
 }
 
 // scanSummary returns nuclei's "Scan completed in ..." log line, for the log.
