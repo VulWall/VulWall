@@ -4,9 +4,12 @@ using Microsoft.AspNetCore.Mvc;
 using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.NightWatch;
+using VulWall.Dashboard.Common.Services.NightWatch.Models;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Services;
+using VulWall.Dashboard.Scans.Models;
+using VulWall.Dashboard.Scans.Services;
 
 namespace VulWall.Dashboard.Assets;
 
@@ -14,6 +17,7 @@ namespace VulWall.Dashboard.Assets;
 public class AssetsController(
     AssetsService assetsService,
     NightWatchService nightWatchService,
+    ScansService scansService,
     IOrganizationContext organizationContext) : Controller
 {
     public async Task<IActionResult> Index()
@@ -136,19 +140,37 @@ public class AssetsController(
         return User.FindFirst(ClaimTypes.Email)?.Value;
     }
 
+    /// <summary>
+    /// Starts a scan for a newly added asset unless the org already has one running.
+    /// Adding several assets in a row must not start one scan per asset: the running scan
+    /// does not pick up the new asset, so it is included in the next scan instead.
+    /// </summary>
     private async Task TriggerScanAndSetTempData(string assetName)
     {
+        var alreadyRunningMessage =
+            $"Asset {assetName} has been added. A scan is already running; the asset will be included in the next scan.";
+
+        if (await scansService.GetScanNowStateAsync() == ScanNowState.InProgress)
+        {
+            TempData["Info"] = alreadyRunningMessage;
+            return;
+        }
+
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
         var triggeredBy = User.FindFirst(ClaimTypes.Email)?.Value ?? "unknown";
-        var scanId = await nightWatchService.TriggerScanAsync(orgId, triggeredBy);
+        var result = await nightWatchService.TriggerScanAsync(orgId, triggeredBy);
 
-        if (scanId != null)
+        switch (result.Outcome)
         {
-            TempData["ScanTriggered"] = assetName;
-        }
-        else
-        {
-            TempData["Info"] = $"Asset {assetName} has been added successfully.";
+            case TriggerScanOutcome.Started:
+                TempData["ScanTriggered"] = assetName;
+                break;
+            case TriggerScanOutcome.AlreadyRunning:
+                TempData["Info"] = alreadyRunningMessage;
+                break;
+            default:
+                TempData["Info"] = $"Asset {assetName} has been added successfully.";
+                break;
         }
     }
 
