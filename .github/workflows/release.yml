@@ -109,10 +109,10 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             # Re-run of this workflow: replace the assets of the existing release.
             gh release upload "$TAG" --clobber \
-              dist/docker-compose.yml dist/env.example dist/SHA256SUMS
+              dist/docker-compose.yml dist/env.example dist/vulwall dist/SHA256SUMS
           else
             gh release create "$TAG" ${prerelease:+--prerelease} --verify-tag \
               --title "VulWall $TAG" \
               --notes "See [CHANGELOG.md](https://github.com/VulWall/VulWall/blob/$TAG/CHANGELOG.md). Install or upgrade: \`curl -fsSL https://vulwall.com/install.sh | sh\`" \
-              dist/docker-compose.yml dist/env.example dist/SHA256SUMS
+              dist/docker-compose.yml dist/env.example dist/vulwall dist/SHA256SUMS
           fi

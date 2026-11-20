@@ -6,7 +6,9 @@
 #                       digests when SCANNER_DIGEST and WEB_DIGEST are set)
 #   env.example         copy of .env.example (GitHub renames release assets
 #                       that start with a period, so the asset has none)
-#   SHA256SUMS          checksums of the two files above
+#   vulwall             the helper command (copy of scripts/vulwall), which
+#                       install.sh puts in the install directory
+#   SHA256SUMS          checksums of the three files above
 #
 # Usage: scripts/release-assets.sh VERSION OUTDIR [IMAGE_PREFIX]
 #   VERSION       image tag, e.g. 0.1.0 (a leading "v" is removed)
@@ -53,10 +55,12 @@ VERSION=$version PREFIX=$prefix SCANNER_PIN=$scanner_digest WEB_PIN=$web_digest 
 ' "$root/docker-compose.yml" > "$outdir/docker-compose.yml"
 
 cp "$root/.env.example" "$outdir/env.example"
+cp "$root/scripts/vulwall" "$outdir/vulwall"
+chmod 755 "$outdir/vulwall"
 
 cd "$outdir"
 if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum docker-compose.yml env.example > SHA256SUMS
+    sha256sum docker-compose.yml env.example vulwall > SHA256SUMS
 else
-    shasum -a 256 docker-compose.yml env.example > SHA256SUMS
+    shasum -a 256 docker-compose.yml env.example vulwall > SHA256SUMS
 fi
