@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -202,12 +203,17 @@ func downloadFile(ctx context.Context, url, filePath string, httpClient *http.Cl
 	limitedReader := io.LimitReader(resp.Body, 10*1024*1024)
 
 	// A WAF challenge page served in place of the script would read as a script without
-	// vulnerabilities: it is a failed download.
+	// vulnerabilities: it is a failed download. Only an HTML answer is checked for challenge
+	// markers: a real script may mention them (Cloudflare's own challenge scripts do).
 	head, err := io.ReadAll(io.LimitReader(limitedReader, shared.BlockedBodyPrefix))
 	if err != nil {
 		return err
 	}
-	if err := shared.BlockedResponse(url, resp.StatusCode, resp.Header, head); err != nil {
+	var htmlHead []byte
+	if isHTML(resp.Header.Get("Content-Type"), head) {
+		htmlHead = head
+	}
+	if err := shared.BlockedResponse(url, resp.StatusCode, resp.Header, htmlHead); err != nil {
 		return err
 	}
 
@@ -223,6 +229,15 @@ func downloadFile(ctx context.Context, url, filePath string, httpClient *http.Cl
 	}
 	_, err = io.Copy(out, limitedReader)
 	return err
+}
+
+// isHTML reports whether a response is an HTML page: by its Content-Type, or by a body that
+// starts with "<" when the type says nothing.
+func isHTML(contentType string, body []byte) bool {
+	if strings.Contains(strings.ToLower(contentType), "html") {
+		return true
+	}
+	return len(bytes.TrimSpace(body)) > 0 && bytes.TrimSpace(body)[0] == '<'
 }
 
 // isRetryableError determines if an error is transient and worth retrying

@@ -45,17 +45,26 @@ func TestFetchHTMLBlockedStatusIsIncomplete(t *testing.T) {
 // download, not a script without vulnerabilities.
 func TestDownloadFileChallengeFails(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ok.js" {
+		switch r.URL.Path {
+		case "/ok.js":
 			w.Write([]byte("var a = 1;"))
-			return
+		case "/cf.js":
+			// A real script that names the challenge variable is still a script.
+			w.Header().Set("Content-Type", "application/javascript")
+			w.Write([]byte("(function(){var o=window._cf_chl_opt||{};})();"))
+		default:
+			w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+			w.Write([]byte(challengePage))
 		}
-		w.Write([]byte(challengePage))
 	}))
 	defer srv.Close()
 	dir := t.TempDir()
 
 	if err := downloadFile(context.Background(), srv.URL+"/ok.js", filepath.Join(dir, "ok.js"), srv.Client()); err != nil {
 		t.Fatalf("plain script: %v", err)
+	}
+	if err := downloadFile(context.Background(), srv.URL+"/cf.js", filepath.Join(dir, "cf.js"), srv.Client()); err != nil {
+		t.Fatalf("script that mentions the challenge: %v", err)
 	}
 	err := downloadFile(context.Background(), srv.URL+"/app.js", filepath.Join(dir, "app.js"), srv.Client())
 	if err == nil || errors.Is(err, shared.ErrGone) {
