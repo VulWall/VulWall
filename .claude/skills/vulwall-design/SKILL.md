@@ -82,4 +82,4 @@ The components are exposed on `window.VulWallDesignSystem_2af3fe`. (In productio
 - **Voice:** calm, plain-English security expert. Address the user as "you". Translate scanner jargon into outcomes and fixes. Sentence case for headings/buttons; UPPERCASE only for the wordmark and solid severity chips. Never alarmist.
 
 ## Source & provenance
-Reverse-engineered from the real product: `web/` in this repository (canonical tokens from `site.css` / `vulwall-tokens.css`; the `ScanHeatmap` from `Scans/index.css`). Explore it for production fidelity. Webfonts are Google-hosted (Inter + JetBrains Mono match the product; Chakra Petch is the display face) — swap in pinned/local fonts for offline use.
+Reverse-engineered from the real product: `web/` in this repository (canonical tokens from `site.css`; the `ScanHeatmap` from `Scans/index.css`). Explore it for production fidelity. Webfonts are Google-hosted (Inter + JetBrains Mono match the product; Chakra Petch is the display face) — swap in pinned/local fonts for offline use.

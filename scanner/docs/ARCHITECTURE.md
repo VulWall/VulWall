@@ -2,7 +2,7 @@
 
 ## Overview
 
-VulWall NightWatch is a **vertically-sliced Go monorepo** for security scanning. Each feature domain is an independent service sharing common infrastructure.
+The VulWall scanner (formerly NightWatch) is a **vertically-sliced Go monorepo** for security scanning. Each feature domain is a separate package (a "component"), and all components run as goroutines in **one binary**, `nightwatch` (`src/cmd/nightwatch/main.go`). Components never call each other directly: they communicate only through Redis streams, so the pipeline behaves as it did when every component was its own service.
 
 **Key principles:**
 - **Vertical slice architecture** — each feature is self-contained
@@ -77,7 +77,7 @@ KNOWLEDGE BASE FLOW:
 3. knowledge-base-engine calls Anthropic Claude API to generate business + technical KB content
 4. Publishes KBGenerationResult to kb_generation_results
 5. kb_ingestion upserts to knowledge_base collection (_id = "kb_" + findingType, $setOnInsert for idempotency)
-6. Dashboard reads from knowledge_base collection (shared across all orgs, ~84 entries)
+6. The web app reads from knowledge_base collection (shared across all orgs, ~84 entries)
 
 SCAN COORDINATOR FLOW:
 1. Runs on cron schedule per organization (scan_cron field)
@@ -126,7 +126,7 @@ Input: domain_discovery_queue
     Ingestion Service → MongoDB
 ```
 
-Benefits: independent scaling, deploy/update independently, single MongoDB writer.
+Benefits: components stay decoupled (Redis is the only interface), a single MongoDB writer, and simple operations: one process and one container image.
 
 ---
 
@@ -136,27 +136,39 @@ Benefits: independent scaling, deploy/update independently, single MongoDB write
 
 **Components:**
 - `scheduler.go` — cron-based scheduler using `robfig/cron/v3`
-- `service.go` — core coordination logic (trigger scans, publish jobs)
-- `scan_monitor.go` — tracks scan completion via consumer group pending counts
+- `queued_scans.go` — polls MongoDB every 5 s for scans the web app queued and starts them
+- `service.go` — core coordination logic (start scans, publish jobs, one-active-scan guard)
+- `scan_monitor.go` — marks scans done when the pipeline has drained (see `pipeline.go`)
 - `stream_cleanup.go` — trims result streams on schedule
+
+The web app and the scanner share no HTTP API. The web app inserts a `scans`
+document with `status: "queued"` and polls the document for `done`/`failed`.
 
 **Cron schedules:**
 - Per-org scan: `scan_cron` field (6-field: `sec min hour day month weekday`)
 - Org refresh: `0 * * * *` (hourly)
 - Stream cleanup: `5 */6 * * *` (every 6 hours)
-- Scan monitor: every 15 minutes
+- Scan monitor: every 5 minutes
+- Queued-scan poll: every 5 seconds (ticker, not cron)
 
 **Scan lifecycle:**
-1. Cron fires → create Scan record (status=running)
-2. Query enabled assets → publish discovery jobs with scan_id
+1. Either the web app inserts a scan with status `queued` and the poller claims it in place (status `running`, `started_at` set), or the cron fires and the coordinator inserts a scan with status `running`
+2. Query enabled assets → publish discovery jobs with the scan's `_id` as `scan_id`
 3. Discovery → ingestion → active recon pipeline processes normally
-4. Scan monitor polls consumer groups → marks scan "done" when all have 0 pending
+4. Scan monitor checks the pipeline groups → marks the scan `done` when every group has drained (or a timeout fires)
+
+Only one scan per organization is active at a time; see the lifecycle rules in [DATABASE.md](DATABASE.md#scans-collection).
 
 ---
 
 ## Knowledge Base Engine Architecture
 
 **Location:** `src/internal/enrichers/knowledge_base/`
+
+The KB engine is **optional**. `nightwatch` starts it only when
+`ANTHROPIC_API_KEY` is set; otherwise findings show the scanners' own
+`description`, `remediation` and `references`, and `kb_generation_queue` keeps
+its jobs until the key is configured.
 
 ```
 security_findings → findings_ingestion
@@ -175,7 +187,7 @@ security_findings → findings_ingestion
                                     └── Upsert to knowledge_base collection (_id = "kb_" + findingType)
 ```
 
-**Key design:** ONE entry per unique finding_type (~84 types), shared across all orgs. Uses `$setOnInsert` for idempotent writes. Dashboard reads from this collection for recommendations, reports, and security scores.
+**Key design:** ONE entry per unique finding_type (~84 types), shared across all orgs. Uses `$setOnInsert` for idempotent writes. The web app reads from this collection for recommendations, reports, and security scores.
 
 **Components:** Anthropic client with retry logic (429/502/503/504/529), embedded prompts, bounded response reads (1MB), prompt injection mitigation via metadata filtering.
 
@@ -249,4 +261,4 @@ The orchestrator runs all consumer slices concurrently:
 - **History tracking:** IP resolution changes (domains), service changes (ports), scan tracking (`scan_ids` array with `$addToSet`)
 - **Protocol-aware dedup:** `192.168.1.1:53/tcp` ≠ `192.168.1.1:53/udp`
 - **Separation of concerns:** Discovery services publish to Redis, ingestion service persists to MongoDB
-- **Bootstrap pattern:** All services use `bootstrap.Run()` or `bootstrap.RunSimple()` for consistent initialization and guaranteed OpenTelemetry setup
+- **Single binary:** `nightwatch` initializes config, logger, tracing, Redis and MongoDB once and supervises every component; a failing component stops the process so the container restarts cleanly

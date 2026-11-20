@@ -1,32 +1,41 @@
 # Service Registry
 
-> **Single source of truth** for all services, Redis streams, consumer groups, and MongoDB collections.
+> **Single source of truth** for all components, Redis streams, consumer groups, and MongoDB collections.
 > Keep this in sync with code changes — the scan_monitor bug class happens when this drifts.
 
-## Service Inventory
+## Component Inventory
 
-| # | Service | Consumer Group | Consumes From | Produces To | Bootstrap | MongoDB |
+All components run as goroutines inside **one process**, the `nightwatch` binary
+(`src/cmd/nightwatch/main.go`). They share one Redis client, one MongoDB client,
+one logger and one tracer provider, and they still talk to each other only
+through Redis streams. If one component returns an error, `nightwatch` stops
+all of them and exits non-zero, so the container restart policy restarts the
+whole scanner.
+
+| # | Component | Consumer Group | Consumes From | Produces To | Started in `main.go` by | MongoDB |
 |---|---------|---------------|---------------|-------------|-----------|---------|
-| 1 | **domain-discovery** | `shodan_subdomain_service` | `domain_discovery_queue` | `domain_discovery_results` | RunSimple (Streams) | No |
-| 2 | **port-discovery** | `port_discovery_service` | `ip_discovery_queue` | `ip_discovery_results` | RunSimple (Streams) | No |
-| 3 | **nuclei-scanner** | `nuclei_scanner_service` | `domain_scan_triggers` + `port_scan_triggers` | `security_findings` | RunSimple (manual) | No |
-| 4 | **testssl-scanner** | `testssl_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
-| 5 | **js-dependency-scanner** | `js_dependency_scanner_service` | `domain_scan_triggers` | `security_findings` | Run | No |
-| 6 | **http-header-scanner** | `http_header_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
-| 7 | **email-security-scanner** | `email_security_scanner_service` | `domain_scan_triggers` | `security_findings` | RunSimple (manual) | No |
-| 8 | **discovery-enrichment** | `discovery_enrichment_service` | `discovery_enrichment_queue` | `discovery_enrichment_results` | RunSimple (manual) | No |
-| 9 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | RunSimple (Streams) | No |
-| 10 | **domain-ingestion** | `domain_ingestion_service` | `domain_discovery_results` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` | Orchestrator | Yes |
-| 11 | **port-ingestion** | `port_ingestion_service` | `ip_discovery_results` | `discovery_enrichment_queue`, `port_scan_triggers` | Orchestrator | Yes |
-| 12 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | `kb_generation_queue` | Orchestrator | Yes |
-| 13 | **enrichment-ingestion** | `enrichment_ingestion_service` | `discovery_enrichment_results` | MongoDB `discoveries` | Orchestrator | Yes |
-| 14 | **kb-ingestion** | `kb_ingestion_service` | `kb_generation_results` | MongoDB `knowledge_base` | Orchestrator | Yes |
-| 15 | **audit-ingestion** | `audit_ingestion_service` | `system_audit_logs` | MongoDB `audit_logs` | Orchestrator | Yes |
-| 16 | **scan-coordinator** | _(scheduler, not consumer)_ | — | `domain_discovery_queue`, `ip_discovery_queue` | Manual | Yes (read) |
+| 1 | **domain-discovery** | `shodan_subdomain_service` | `domain_discovery_queue` | `domain_discovery_results` | `consumers()` | No |
+| 2 | **port-discovery** | `port_discovery_service` | `ip_discovery_queue` | `ip_discovery_results` | `consumers()` | No |
+| 3 | **nuclei-scanner** | `nuclei_scanner_service` | `domain_scan_triggers` + `port_scan_triggers` | `security_findings` | `consumers()` | No |
+| 4 | **testssl-scanner** | `testssl_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
+| 5 | **js-dependency-scanner** | `js_dependency_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
+| 6 | **http-header-scanner** | `http_header_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
+| 7 | **email-security-scanner** | `email_security_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
+| 8 | **discovery-enrichment** | `discovery_enrichment_service` | `discovery_enrichment_queue` | `discovery_enrichment_results` | `consumers()` | No |
+| 9 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | `knowledgeBase()` — only when `ANTHROPIC_API_KEY` is set | No |
+| 10 | **domain-ingestion** | `domain_ingestion_service` | `domain_discovery_results` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` | `consumers()` → ingestion orchestrator | Yes |
+| 11 | **port-ingestion** | `port_ingestion_service` | `ip_discovery_results` | `discovery_enrichment_queue`, `port_scan_triggers` | `consumers()` → ingestion orchestrator | Yes |
+| 12 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | `kb_generation_queue` | `consumers()` → ingestion orchestrator | Yes |
+| 13 | **enrichment-ingestion** | `enrichment_ingestion_service` | `discovery_enrichment_results` | MongoDB `discoveries` | `consumers()` → ingestion orchestrator | Yes |
+| 14 | **kb-ingestion** | `kb_ingestion_service` | `kb_generation_results` | MongoDB `knowledge_base` | `consumers()` → ingestion orchestrator | Yes |
+| 15 | **audit-ingestion** | `audit_ingestion_service` | `system_audit_logs` | MongoDB `audit_logs` | `consumers()` → ingestion orchestrator | Yes |
+| 16 | **scan-coordinator** | _(not a consumer)_ | MongoDB `scans` (status `queued`) | `domain_discovery_queue`, `ip_discovery_queue` | `coordinatorComponents()` | Yes (`scans` only) |
 
 **Notes:**
-- Ingestion services (#10–15) run as concurrent slices inside a single ingestion orchestrator process
-- Scan coordinator (#16) uses cron scheduling, not consumer groups
+- Ingestion slices (#10–15) run inside the ingestion orchestrator (`src/internal/ingestion/orchestrator.go`).
+- The scan coordinator (#16) is three goroutines: the cron **scheduler** (per-org `scan_cron`, plus stream cleanup), the **queued-scan poller** (every 5 s, claims scans the web app queued), and the **scan monitor** (marks scans `done`). It writes only the `scans` collection; see the scan lifecycle in [DATABASE.md](DATABASE.md#scans-collection).
+- Without `ANTHROPIC_API_KEY` the KB engine (#9) does not start. `kb_generation_queue` keeps its jobs until the key is set.
+- `main.go` creates the job-queue groups (`0`) and every trigger-stream group (`$`) before any component starts.
 
 ---
 
@@ -116,15 +125,15 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 
 | Collection | Constant | Purpose | Writer(s) |
 |------------|----------|---------|-----------|
-| `assets` | `CollectionAssets` | User-added assets to scan (managed via UI) | Dashboard |
+| `assets` | `CollectionAssets` | User-added assets to scan (managed via UI) | web app |
 | `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (domain, subdomain, ip, port) | domain-ingestion, port-ingestion, enrichment-ingestion |
 | `findings` | `CollectionFindings` | Security vulnerabilities from scanners | findings-ingestion |
 | `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries keyed by finding_type (~84 entries) | kb-ingestion |
-| `organizations` | `CollectionOrganizations` | Org settings with subscription/scan config | Dashboard |
-| `scans` | `CollectionScans` | Scan execution records | scan-coordinator, scan-monitor |
+| `organizations` | `CollectionOrganizations` | Org settings with subscription/scan config | web app |
+| `scans` | `CollectionScans` | Scan execution records | web app (inserts `queued`), scan-coordinator, scan-monitor |
 | `audit_logs` | `CollectionAuditLogs` | System audit events | audit-ingestion |
 
-**Read-only access (NightWatch):** `assets`, `organizations` — written by Dashboard, read by scan-coordinator.
+**Read-only access (scanner):** `assets`, `organizations` — written by the web app, read by scan-coordinator. The web app creates the default organization with `subscription_settings.scan_cron`.
 
 ---
 

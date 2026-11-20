@@ -36,7 +36,7 @@ This positioning drives every design decision in this system: **clarity over com
 
 This design system was reverse-engineered from real VulWall product code and brand assets. The reader may not have access to these, but they are recorded here so the system can be regenerated and extended:
 
-- **This repository — `web/`** — the dashboard codebase. The canonical token system comes from `web/src/wwwroot/css/Common/site.css` and `vulwall-tokens.css`; component conventions from `web/CLAUDE.md`. Brand raster logos from `web/src/wwwroot/img/`.
+- **This repository — `web/`** — the dashboard codebase. The canonical token system comes from `web/src/wwwroot/css/Common/site.css`; component conventions from `web/CLAUDE.md`. Brand raster logos from `web/src/wwwroot/img/`.
 - **This repository — `scanner/`** — the scanning engine. It wraps community tools such as `nuclei`, `testssl.sh` and `retire.js`.
 - **Brand assets:** the blue-gradient logomark (→ `assets/logo-mark.svg`) and the white logomark and wordmark PNGs in `assets/`.
 
