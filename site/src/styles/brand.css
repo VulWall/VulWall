@@ -24,7 +24,7 @@
 	--vw-text-heading: var(--text-heading);
 	--vw-text-body: var(--text-body);
 	--vw-text-muted: var(--text-muted);
-	--vw-link: var(--brand-blue);
+	--vw-link: var(--text-link);
 	--vw-hero: var(--brand-gradient);
 	--vw-code-bg: var(--brand-very-dark);
 
