@@ -38,6 +38,11 @@ First open-source, self-hosted release, under the MIT License.
   the DB-IP ASN organization name. Linode addresses show the Akamai logo.
 - The Discoveries page shows the "IP geolocation by DB-IP" attribution that
   the DB-IP Lite license (CC BY 4.0) requires.
+- Settings → Scan schedule: turn scheduled scans off, or run them daily,
+  weekly or monthly at a time in a chosen time zone (stored as a UTC cron
+  in `scan_settings`). The Settings page, sidebar and Scans page show the
+  next scan. The scanner reloads schedules every 5 minutes instead of every
+  hour, and keeps the current schedules when the reload fails.
 
 ### Changed
 

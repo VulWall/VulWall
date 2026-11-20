@@ -20,7 +20,7 @@ public class ScansController(
     {
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
         var organization = await organizationRepository.GetByIdAsync(orgId);
-        var scanCron = organization?.ScanSettings?.ScanCron;
+        var scanCron = organization?.ScanSettings?.ActiveCron;
 
         var model = await scansService.GetIndexViewModelAsync(scanCron);
         return View(model);
@@ -44,7 +44,7 @@ public class ScansController(
     {
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
         var organization = await organizationRepository.GetByIdAsync(orgId);
-        var scanCron = organization?.ScanSettings?.ScanCron;
+        var scanCron = organization?.ScanSettings?.ActiveCron;
         var vm = await scansService.GetLiveScanStatusAsync(scanCron);
         return PartialView("Partials/_LiveScanStatus", vm);
     }

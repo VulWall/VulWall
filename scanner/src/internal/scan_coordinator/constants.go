@@ -45,11 +45,11 @@ const (
 	// is merely between throttled activity writes is not misread as settled.
 	ScanSettleGrace = 90 * time.Second
 
-	// RefreshCron defines how often the scheduler reloads organizations from MongoDB.
-	// Standard 5-field cron: every hour at minute 0.
-	RefreshCron = "0 * * * *"
+	// RefreshCron defines how often the scheduler reloads organizations from MongoDB, so a
+	// schedule changed in the web app takes effect within 5 minutes.
+	RefreshCron = "*/5 * * * *"
 
 	// StreamCleanupCron defines how often the stream cleaner trims fully-processed messages.
-	// Every 6 hours (at minute 5, offset from org refresh at minute 0).
+	// Every 6 hours, at minute 5.
 	StreamCleanupCron = "5 */6 * * *"
 )

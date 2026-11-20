@@ -138,7 +138,7 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 | `organizations` | `CollectionOrganizations` | Org settings with the scan schedule (`scan_settings`) | web app |
 | `scans` | `CollectionScans` | Scan execution records | web app (inserts `queued`), scan-coordinator, scan-monitor |
 
-**Read-only access (scanner):** `assets`, `organizations` — written by the web app, read by scan-coordinator. The web app creates the default organization with `scan_settings.scan_cron`.
+**Read-only access (scanner):** `assets`, `organizations` — written by the web app, read by scan-coordinator. The web app creates the default organization with `scan_settings.scan_cron` (UTC) and `scan_settings.enabled`, and changes them from Settings → Scan schedule; the scheduler reloads organizations every 5 minutes.
 
 ---
 

@@ -27,7 +27,7 @@ public static class DefaultOrganization
         return await repository.CreateAsync(new OrgEntity
         {
             CompanyName = DefaultName,
-            ScanSettings = new ScanSettings { ScanCron = ScanCronGenerator.RandomWeekly() },
+            ScanSettings = new ScanSettings { ScanCron = ScanCronGenerator.RandomWeekly(), Enabled = true },
             CreatedAt = now,
             UpdatedAt = now
         });

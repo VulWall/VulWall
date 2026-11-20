@@ -127,7 +127,7 @@ Each vertical is self-contained and includes:
 * **Recommendations**: AI-powered security recommendations for findings
 * **Reports**: Report generation (Summary, Technical), shared report links
 * **Scans**: Scan history, results, findings overview
-* **Settings**: User settings, company details, preferences
+* **Settings**: User settings, company details, scan schedule, preferences
 
 ### Common Layer (Shared Across Verticals)
 The Common layer contains **only** types needed for cross-vertical communication:
@@ -512,7 +512,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 | Reports | `ReportGenerationService` | Report building |
 | Reports | `ExecutiveSummaryProcessor` / `ExecutiveSummaryPoller` | Background AI executive summaries for finished scans |
 | Scans | `ScansService` | Scan data aggregation |
-| Settings | `SettingsService` | Company info, logo, tour state |
+| Settings | `SettingsService` | Company info, logo, scan schedule, tour state |
 
 ## Authentication & Authorization
 
@@ -541,7 +541,8 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 ## Common Services
 
 ### Organization Context
-- A self-hosted install has exactly one organization. `DefaultOrganization.EnsureExistsAsync` creates it at startup ("My Organization", random weekly `scan_settings.scan_cron`); `/setup` renames it.
+- A self-hosted install has exactly one organization. `DefaultOrganization.EnsureExistsAsync` creates it at startup ("My Organization", random weekly `scan_settings.scan_cron`, `enabled: true`); `/setup` renames it.
+- Scan schedule: Settings → Scan schedule (`ScanScheduleCron`) turns Off / Daily / Weekly / Monthly plus a local time and time zone into a 5-field UTC `scan_settings.scan_cron`; Off sets `enabled: false` and keeps the cron. `scan_settings.timezone` is web-only (form display). Read the cron through `ScanSettings.ActiveCron` (null when off) everywhere a next scan is shown. The scanner reloads organizations every 5 minutes.
 - `IOrganizationContext` always resolves that organization for an authenticated user. There is no org switching.
 - Used by org-scoped repositories. Background jobs have no `HttpContext`: they use the `*PublicRepository` classes instead.
 

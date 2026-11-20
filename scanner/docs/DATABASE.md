@@ -223,7 +223,8 @@ type Organization struct {
 }
 
 type ScanSettings struct {
-    ScanCron string `bson:"scan_cron"` // 6-field cron (e.g., "0 0 2 * * *")
+    ScanCron string `bson:"scan_cron"`         // 5-field cron in UTC (e.g., "0 2 * * *")
+    Enabled  *bool  `bson:"enabled,omitempty"` // false = no scheduled scans; missing = on
 }
 
 type Scan struct {
@@ -507,7 +508,9 @@ read by the guards for older documents but is no longer written.
   created_at: ISODate("..."),
   updated_at: ISODate("..."),
   scan_settings: {
-    scan_cron: "0 0 2 * * *"      // Daily at 2 AM (6-field: sec min hour day month weekday)
+    scan_cron: "0 2 * * *",       // Daily at 02:00 UTC (5-field: min hour day month weekday)
+    enabled: true,                // false turns scheduled scans off
+    timezone: "Europe/Amsterdam"  // Web app only: the zone the Settings form shows the time in
   }
 }
 ```

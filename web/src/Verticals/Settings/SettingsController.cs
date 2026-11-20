@@ -25,7 +25,8 @@ public class SettingsController(
             Website = organization.Website,
             OwnerEmail = organization.OwnerEmail,
             OrgId = organization.Id,
-            HasLogo = organization.Logo is { Length: > 0 }
+            HasLogo = organization.Logo is { Length: > 0 },
+            ScanSchedule = Services.SettingsService.BuildScanSchedule(organization.ScanSettings, DateTime.UtcNow)
         };
 
         return View(vm);
@@ -88,6 +89,31 @@ public class SettingsController(
 
         TempData["Success"] = "Logo uploaded successfully";
         return RedirectToAction(nameof(Index));
+    }
+
+    [Authorize]
+    [HttpPost]
+    public async Task<IActionResult> UpdateScanSchedule(ScanScheduleInput input)
+    {
+        string? error;
+        if (!ModelState.IsValid)
+        {
+            error = "Check the schedule fields and try again.";
+        }
+        else
+        {
+            var orgId = await organizationContext.GetCurrentOrgIdAsync();
+            error = await settingsService.UpdateScanScheduleAsync(orgId, input);
+        }
+
+        if (error != null)
+            TempData["Error"] = error;
+        else
+            TempData["Success"] = input.Frequency == ScanFrequency.Off
+                ? "Scheduled scans are off."
+                : "Scan schedule saved.";
+
+        return Redirect(Url.Action(nameof(Index)) + "#schedule");
     }
 
     [Authorize]

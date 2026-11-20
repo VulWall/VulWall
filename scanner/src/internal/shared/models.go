@@ -241,7 +241,14 @@ type Organization struct {
 
 // ScanSettings is the organization's scan schedule, written by the web app
 type ScanSettings struct {
-	ScanCron string `json:"scan_cron" bson:"scan_cron"` // Cron expression for scan schedule (e.g., "0 2 * * *" = daily at 2 AM)
+	ScanCron string `json:"scan_cron" bson:"scan_cron"` // 5-field cron in UTC (e.g., "0 2 * * *" = daily at 02:00 UTC)
+	// Enabled is false when the schedule is turned off. A missing field counts as on.
+	Enabled *bool `json:"enabled,omitempty" bson:"enabled,omitempty"`
+}
+
+// Scheduled reports whether the organization should get scheduled scans.
+func (s ScanSettings) Scheduled() bool {
+	return (s.Enabled == nil || *s.Enabled) && s.ScanCron != ""
 }
 
 // Scan represents a scan execution in the system

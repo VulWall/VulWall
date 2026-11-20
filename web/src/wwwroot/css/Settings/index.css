@@ -269,3 +269,42 @@ select.vw-fld { cursor: pointer; }
 @media (max-width: 640px) {
     .vw-fld-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Scan schedule ───────────────────────────────────────── */
+.vw-schedule-status {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    margin: 16px 0 22px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+}
+.vw-schedule-dot {
+    width: 8px;
+    height: 8px;
+    margin-top: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--text-faint);
+}
+.vw-schedule-dot--on { background: var(--vw-success); }
+.vw-schedule-status-title { font-size: 15px; font-weight: 600; color: var(--text-heading); }
+.vw-schedule-status-meta  { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.vw-schedule-zone {
+    margin-left: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+.vw-schedule-status .mono,
+#scanScheduleForm .mono { font-family: var(--font-mono, 'JetBrains Mono', monospace); }
+.vw-schedule-note {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 16px 0 0;
+}
+.vw-schedule-note i { color: var(--vw-primary); margin-right: 6px; }
+#scanScheduleForm [hidden] { display: none !important; }
+[data-bs-theme="dark"] #scanScheduleForm input[type="time"] { color-scheme: dark; }
