@@ -242,7 +242,14 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 			continue
 		}
 
-		recordCount := tryAXFR(ctx, domain, host)
+		// The nameserver comes from the target's own DNS, so it can point
+		// anywhere, including internal addresses. Dial only a validated IP.
+		addr, err := axfrAddress(ctx, host)
+		if err != nil {
+			continue
+		}
+
+		recordCount := tryAXFR(ctx, domain, addr)
 		if recordCount > 0 {
 			vulnerableNS = append(vulnerableNS, fmt.Sprintf("%s (%d records)", host, recordCount))
 			totalRecords += recordCount
@@ -271,10 +278,23 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 	}
 }
 
-// tryAXFR attempts an AXFR transfer against a single nameserver.
+// axfrAddress resolves a nameserver host with the shared public-IP guard and
+// returns "ip:53" for the first validated address. Any reserved answer rejects
+// the nameserver, unless ALLOW_PRIVATE_TARGETS is set. Dialing the IP (not the
+// host) stops a second lookup from being rebound to a private address.
+func axfrAddress(ctx context.Context, host string) (string, error) {
+	ips, err := shared.ResolvePublicIPs(ctx, host)
+	if err != nil {
+		return "", err
+	}
+	return net.JoinHostPort(ips[0].String(), "53"), nil
+}
+
+// tryAXFR attempts an AXFR transfer against a single nameserver address
+// (ip:port, from axfrAddress).
 // Returns the number of records received, or 0 if the transfer was refused/failed.
 // Caps at maxAXFRRecords and cancels the transfer to stop the underlying read.
-func tryAXFR(ctx context.Context, domain, nameserver string) int {
+func tryAXFR(ctx context.Context, domain, addr string) int {
 	const (
 		maxAXFRRecords = 10000
 		axfrTimeout    = 10 * time.Second
@@ -290,7 +310,7 @@ func tryAXFR(ctx context.Context, domain, nameserver string) int {
 	t.DialTimeout = axfrTimeout
 	t.ReadTimeout = axfrTimeout
 
-	ch, err := t.In(m, net.JoinHostPort(nameserver, "53"))
+	ch, err := t.In(m, addr)
 	if err != nil {
 		return 0
 	}

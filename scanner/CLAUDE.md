@@ -160,7 +160,7 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `TESTSSL_CONCURRENCY` | Concurrent testssl.sh scans (default 5) |
 | `IP_ENRICHMENT_DB_PATH` | Country MMDB (DB-IP Country Lite; default `./data/dbip-country-lite.mmdb`) |
 | `IP_ASN_DB_PATH` | Optional ASN MMDB (DB-IP ASN Lite; default `./data/dbip-asn-lite.mmdb`) |
-| `ALLOW_PRIVATE_TARGETS` | `true` disables the private/reserved IP guard (SSRF dialer, discovery, port scanner, testssl `--ip` check, nuclei `-lna`). Default `false`; enable only to scan internal networks on purpose |
+| `ALLOW_PRIVATE_TARGETS` | `true` disables the private/reserved IP guard (SSRF dialer, discovery, port scanner, testssl `--ip` check, nuclei `-lna`, AXFR nameserver dial). Default `false`; enable only to scan internal networks on purpose |
 | `OTEL_ENABLED` | `true` turns on OTLP trace export (default `false`); see docs/OBSERVABILITY.md |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_SERVICE_NAME` | Standard OTLP settings |
 
