@@ -28,7 +28,8 @@ scanner/
 ├── README.md
 └── src/                   # Go source code
     ├── cmd/
-    │   └── nightwatch/      # The single binary: wires and supervises every component
+    │   ├── nightwatch/      # The single binary: wires and supervises every component
+    │   └── demo-seed/       # Sample data for demos/screenshots (internal/demoseed); writes MongoDB directly, outside the pipeline, every doc marked demo: true
     ├── internal/
     │   ├── core/            # config, logger, mongox, redisx, telemetry, subfinderx
     │   ├── shared/          # models.go, constants.go (cross-component)

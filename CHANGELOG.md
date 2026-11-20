@@ -43,6 +43,9 @@ First open-source, self-hosted release, under the MIT License.
 - CI (build, vet, tests including the MongoDB- and Redis-backed scanner
   tests, actionlint), multi-arch release images (amd64, arm64) and
   Dependabot.
+- Sample data for demos and screenshots: `make demo` or `scripts/demo-seed`
+  loads the fictional "Acme Demo" (`.test` domains, documentation IP ranges,
+  six weekly scans, real scanner texts); `--reset` removes it again.
 
 #### Scanning
 

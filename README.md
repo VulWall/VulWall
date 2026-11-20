@@ -135,7 +135,8 @@ addresses only from the documentation ranges (`192.0.2.0/24`,
 `198.51.100.0/24`, `203.0.113.0/24`), six weekly scans over the last six
 weeks, findings from every scanner (with the scanners' real titles,
 descriptions and references), one accepted risk and one false positive. Every
-document it adds has `demo: true`.
+document it inserts has `demo: true`; the organization is renamed, and its own
+name, schedule and tour state are kept for `--reset`.
 
 ```bash
 scripts/demo-seed           # load; refuses if you already have assets or findings
@@ -145,7 +146,8 @@ scripts/demo-seed --reset   # remove the sample data, restore the organization's
 
 `scripts/demo-seed` runs the `demo-seed` program from the scanner image
 (`docker compose run --rm --no-deps --entrypoint demo-seed scanner`), so MongoDB
-must be running. In an installed release, run that command in `~/vulwall`.
+must be running. In an installed release (v0.1.0 or later), run that command
+in `~/vulwall`.
 
 Keep the scanner stopped while you show the sample data. A real scan of the
 `.test` names finds nothing, and the dashboard always shows the newest scan.
