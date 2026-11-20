@@ -260,6 +260,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues privately, as
 described in [SECURITY.md](SECURITY.md).
 
+## Credits
+
+VulWall is built and maintained by [Moji Tajik](https://github.com/MojtabaTajik).
+[Reyhaneh Kamali](https://reyhane.pro/), UI/UX Designer, designed the logo,
+the colour palette and the design system. VulWall runs on open-source tools
+and data, listed with their licenses in [NOTICE](NOTICE).
+
 ## License
 
 VulWall is released under the [MIT License](LICENSE).
@@ -271,5 +278,9 @@ licenses; see [NOTICE](NOTICE).
 Trademarks: the VulWall name and logo are trademarks of Moji Tajik. The MIT
 License covers the code only; it gives no right to use the VulWall name or
 logo. If you distribute a modified version, give it a different name.
+
+The logo and brand assets are © 2026 Moji Tajik, designed by Reyhaneh Kamali
+(https://reyhane.pro/), and are not covered by the MIT License. NOTICE lists
+the files.
 
 Source: https://github.com/VulWall/VulWall

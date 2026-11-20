@@ -67,6 +67,13 @@ First open-source, self-hosted release, under the MIT License.
   `upgrade`, `backup`, `restore`, `reset-admin`, `doctor`, `uninstall` and
   `version`. It is a release asset, checked against `SHA256SUMS` like the
   other files.
+- An About dialog, opened from the version line in the sidebar footer. It
+  shows the web and scanner versions, the nuclei, templates, testssl.sh,
+  retire.js and DB-IP versions, links and credits. "Copy system info"
+  copies versions and counts for a bug report (no domains, IP addresses or
+  emails). "Check for updates" asks GitHub for the latest release, only
+  when you click it. The scanner writes its versions to the `system_info`
+  collection at start and every 5 minutes.
 
 ### Changed
 

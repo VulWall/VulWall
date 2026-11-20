@@ -134,6 +134,7 @@ container health check; the scanner opens no port).
 | `knowledge_base` | Shared KB entries by finding_type (only when the KB engine runs) |
 | `organizations` | Org settings with scan_cron |
 | `scans` | Scan execution records (web app inserts `queued`; coordinator claims) |
+| `system_info` | Scanner and tool versions (`_id: "scanner"`, written by `core/sysinfo`; read by the web About dialog) |
 
 ### Key Constants Location
 - Stream/collection names: `src/internal/shared/constants.go`

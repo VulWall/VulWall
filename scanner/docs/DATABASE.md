@@ -11,6 +11,7 @@
 | `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries by finding_type (~84 entries) | Ingestion |
 | `organizations` | `CollectionOrganizations` | Org settings with the scan schedule (`scan_settings`) | Dashboard |
 | `scans` | `CollectionScans` | Scan execution records | Scan coordinator |
+| `system_info` | `sysinfo.Collection` | Versions of the scanner and its tools, for the web app's About dialog (one document, `_id: "scanner"`) | `sysinfo` (scanner start-up, then every 5 min) |
 
 ---
 
@@ -571,6 +572,25 @@ read by the guards for older documents but is no longer written.
     enabled: true,                // false turns scheduled scans off
     timezone: "Europe/Amsterdam"  // Web app only: the zone the Settings form shows the time in
   }
+}
+```
+
+### system_info Collection
+Written by `internal/core/sysinfo` at start-up and every 5 minutes (`$set`, upsert). Not scan
+data. The web app reads it and shows an empty or missing value as "unknown".
+```javascript
+{
+  _id: "scanner",
+  version: "v0.1.0",                 // VULWALL_VERSION (release tag; "dev" for local builds)
+  nuclei: "3.11.1",                  // NUCLEI_VERSION, pinned in scanner/Dockerfile
+  nuclei_templates: "v10.5.2",       // from nuclei's .templates-config.json; "" before the first update
+  nuclei_templates_updated_at: ISODate("..."), // mtime of <templates dir>/.checksum, or null
+  testssl: "v3.2.5",                 // TESTSSL_VERSION, pinned in scanner/Dockerfile
+  retire: "5.4.2",                   // installed retire package.json
+  dbip_country_date: "2026-11-01",   // DB-IP Lite build date (MMDB metadata)
+  dbip_asn_date: "2026-11-01",
+  started_at: ISODate("..."),        // when this scanner process started
+  updated_at: ISODate("...")
 }
 ```
 
