@@ -185,8 +185,10 @@ main() {
         say ""
         say "  http://localhost:$port/setup?token=$token"
         say ""
-        say "The link works until the admin account exists. To see the token again:"
-        say "  grep SETUP_TOKEN $qdir/.env"
+        say "The link works until the admin account exists."
+        if [ "$token" = "$(env_setup_token)" ]; then
+            say "To see the token again: grep SETUP_TOKEN $qdir/.env"
+        fi
     else
         say "VulWall is running. To create the admin account, open"
         say "  http://localhost:$port/setup?token=<your SETUP_TOKEN>"
