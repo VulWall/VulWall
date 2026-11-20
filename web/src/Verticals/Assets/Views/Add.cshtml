@@ -12,41 +12,45 @@
     <div class="add-eyebrow">ADD ASSET</div>
     <h1 class="add-hero-title">Monitor a new asset</h1>
     <p class="add-lead">
-        Add a domain and we'll start watching its external attack surface —
+        Add a domain or IP address and we'll start watching its external attack surface —
         discovering exposures and ranking what actually matters.
     </p>
 
-    @if (ViewBag.QuickAddDomain is string qd)
-    {
-        <div class="add-quickadd">
-            <div class="add-quickadd__mark">
-                <i class="fas fa-shield-halved"></i>
-            </div>
-            <div class="add-quickadd__body">
-                <div class="add-quickadd__eyebrow">
-                    <i class="fas fa-circle-check"></i> Verified — no DNS setup needed
-                </div>
-                <p class="add-quickadd__lead">
-                    Your email confirms you own <span class="add-quickadd__domain">@qd</span>.
-                    Add it and start scanning its external attack surface right now.
-                </p>
-            </div>
-            <form method="post" asp-action="QuickAdd" class="add-quickadd__action">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-bolt"></i> Scan @qd now
-                </button>
-            </form>
-        </div>
+    @{
+        var isIp = Model.AssetType == AssetType.Ip;
     }
 
     <div class="add-asset-grid">
         <div class="add-form-card">
             <form method="post" asp-action="Add" id="addAssetForm">
-                @* IP assets are temporarily disabled (ownership verification deferred), so domain is the only type.
-                   Plain name= (not asp-for) submits the literal Domain value regardless of model state. *@
-                <input type="hidden" name="AssetType" value="@((int)AssetType.Domain)" />
+                <fieldset class="asset-type-picker" aria-label="Asset type">
+                    <div class="asset-type-tile-wrap">
+                        <input class="asset-type-radio" type="radio" name="AssetType" id="assetTypeDomain"
+                               value="@AssetType.Domain" @(isIp ? null : "checked") />
+                        <label class="asset-type-tile" for="assetTypeDomain">
+                            <span class="tile-icon"><i class="fas fa-globe"></i></span>
+                            <span>
+                                <span class="tile-title d-block">Domain</span>
+                                <span class="tile-sub d-block">example.com and its subdomains</span>
+                            </span>
+                            <span class="tile-check"><i class="fas fa-check"></i></span>
+                        </label>
+                    </div>
+                    <div class="asset-type-tile-wrap">
+                        <input class="asset-type-radio" type="radio" name="AssetType" id="assetTypeIp"
+                               value="@AssetType.Ip" @(isIp ? "checked" : null) />
+                        <label class="asset-type-tile" for="assetTypeIp">
+                            <span class="tile-icon"><i class="fas fa-server"></i></span>
+                            <span>
+                                <span class="tile-title d-block">IP address</span>
+                                <span class="tile-sub d-block">A single public IPv4 or IPv6 host</span>
+                            </span>
+                            <span class="tile-check"><i class="fas fa-check"></i></span>
+                        </label>
+                    </div>
+                </fieldset>
 
-                <div id="domainFields" class="asset-input-group">
+                <div id="domainFields" class="asset-input-group" @(isIp ? "hidden" : null)>
                     <label asp-for="DomainName" class="form-label">Domain name</label>
                     <div class="add-input-wrap">
                         <input asp-for="DomainName" type="text" class="form-control add-mono-input"
@@ -64,6 +68,28 @@
                     <span asp-validation-for="DomainName" class="text-danger small"></span>
                 </div>
 
+                <div id="ipFields" class="asset-input-group" @(isIp ? null : "hidden")>
+                    <label asp-for="IpAddress" class="form-label">IP address</label>
+                    <div class="add-input-wrap">
+                        <input asp-for="IpAddress" type="text" class="form-control add-mono-input"
+                               placeholder="203.0.113.10" autocomplete="off" spellcheck="false" id="ipInput" />
+                        <span class="input-validity-icon" id="ipValidIcon">
+                            <i class="fas fa-circle-check text-success"></i>
+                        </span>
+                        <span class="input-validity-icon" id="ipInvalidIcon">
+                            <i class="fas fa-circle-exclamation text-danger"></i>
+                        </span>
+                    </div>
+                    <div class="add-helper-text" id="ipHelper">
+                        <i class="fas fa-circle-info"></i> A public address — private ranges are not scanned.
+                    </div>
+                    <span asp-validation-for="IpAddress" class="text-danger small"></span>
+                </div>
+
+                <div class="alert alert-warning mt-4 mb-0" role="note">
+                    <i class="fas fa-triangle-exclamation me-2"></i>Only scan assets you own or are authorized to test.
+                </div>
+
                 <div class="d-flex gap-2 mt-4">
                     <a href="@Url.Action("Index")" class="btn btn-secondary">Cancel</a>
                     <button type="submit" class="btn btn-primary" id="addSubmitBtn">
@@ -77,17 +103,16 @@
         <div class="add-context-rail">
             <div class="add-rail-card">
                 <div class="add-rail-eyebrow">WHAT HAPPENS NEXT</div>
-                <div id="stepsForDomain" class="add-steps">
+                <div class="add-steps">
                     @{
-                        var domainSteps = new[]
+                        var steps = new[]
                         {
-                            ("Verify ownership", "Add one DNS TXT record so we know the domain is yours."),
                             ("Discover", "We map subdomains, open ports and services automatically."),
-                            ("Scan", "NightWatch runs its scanners across your perimeter."),
+                            ("Scan", "The scanner runs its checks across your perimeter."),
                             ("See findings", "Plain-English results, ranked by what actually matters.")
                         };
                     }
-                    @foreach (var (i, step) in domainSteps.Select((s, i) => (i + 1, s)))
+                    @foreach (var (i, step) in steps.Select((s, i) => (i + 1, s)))
                     {
                         <div class="add-step">
                             <span class="add-step-num">@i</span>
@@ -98,11 +123,6 @@
                         </div>
                     }
                 </div>
-            </div>
-
-            <div class="add-tip-strip">
-                <i class="fas fa-bolt" style="color: var(--brand-orange);"></i>
-                Get notified the moment a new exposure is found.
             </div>
         </div>
     </div>

@@ -1,15 +1,19 @@
 // No inline event handlers — attach all listeners here.
 // CSP: script-src 'self', no 'unsafe-inline'. This file is loaded type="module".
-//
-// Domain is currently the only asset type (IP assets are temporarily disabled while
-// ownership verification is built), so there is no type toggle — just live validation
-// of the domain field.
 
 const DOMAIN_REGEX = /^(?=.{1,253}$)(?!-)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/i;
+const IPV4_REGEX = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+// Loose IPv6 shape check; the server does the authoritative parse.
+const IPV6_REGEX = /^[0-9a-f:]+$/i;
 
 function isValidDomain(val) {
     if (!val) return null; // null = empty, not invalid
     return DOMAIN_REGEX.test(val);
+}
+
+function isValidIp(val) {
+    if (!val) return null;
+    return IPV4_REGEX.test(val) || (val.includes(':') && IPV6_REGEX.test(val));
 }
 
 function setValidityUI(validIconId, invalidIconId, helperId, valid, neutralText, validText, invalidText) {
@@ -31,20 +35,44 @@ function setValidityUI(validIconId, invalidIconId, helperId, valid, neutralText,
     }
 }
 
+function hookTypeToggle() {
+    const domainFields = document.getElementById('domainFields');
+    const ipFields = document.getElementById('ipFields');
+
+    document.querySelectorAll('input[name="AssetType"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            const isIp = document.getElementById('assetTypeIp')?.checked === true;
+            if (domainFields) domainFields.hidden = isIp;
+            if (ipFields) ipFields.hidden = !isIp;
+            (isIp ? document.getElementById('ipInput') : document.getElementById('domainInput'))?.focus();
+        });
+    });
+}
+
 function hookInputValidation() {
     const domainInput = document.getElementById('domainInput');
+    const ipInput = document.getElementById('ipInput');
 
     domainInput?.addEventListener('input', () => {
-        const val = domainInput.value.trim();
         setValidityUI(
-            'domainValidIcon', 'domainInvalidIcon', 'domainHelper', isValidDomain(val),
+            'domainValidIcon', 'domainInvalidIcon', 'domainHelper', isValidDomain(domainInput.value.trim()),
             '<i class="fas fa-circle-info"></i> No http:// or paths — just the bare domain.',
             '<i class="fas fa-circle-check"></i> Looks good — a valid domain.',
             '<i class="fas fa-circle-exclamation"></i> That doesn\'t look like a valid domain name.'
         );
     });
+
+    ipInput?.addEventListener('input', () => {
+        setValidityUI(
+            'ipValidIcon', 'ipInvalidIcon', 'ipHelper', isValidIp(ipInput.value.trim()),
+            '<i class="fas fa-circle-info"></i> A public address — private ranges are not scanned.',
+            '<i class="fas fa-circle-check"></i> Looks good — a valid IP address.',
+            '<i class="fas fa-circle-exclamation"></i> That doesn\'t look like a valid IP address.'
+        );
+    });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    hookTypeToggle();
     hookInputValidation();
 });

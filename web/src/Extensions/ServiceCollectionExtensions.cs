@@ -2,7 +2,6 @@ using Anthropic;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using MongoDB.Driver;
-using DnsClient;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Razor;
 using VulWall.Dashboard.Common.Services.AIServices;
@@ -12,7 +11,6 @@ using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Extensions.Configuration;
 using VulWall.Dashboard.Settings.Services;
 using VulWall.Dashboard.Assets.Services;
-using VulWall.Dashboard.Assets.Services.DomainVerifier;
 using VulWall.Dashboard.Reports.Services.ReportGeneration;
 using VulWall.Dashboard.Reports.Services;
 using VulWall.Dashboard.Reports.Services.SharedLinkService;
@@ -153,18 +151,6 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAssetServices(this IServiceCollection services)
     {
-        // DNS lookup client for domain verification
-        services.AddSingleton<ILookupClient>(_ =>
-        {
-            var options = new LookupClientOptions
-            {
-                UseCache = true,
-                Timeout = TimeSpan.FromSeconds(5)
-            };
-            return new LookupClient(options);
-        });
-
-        services.AddScoped<IDomainVerifier, DomainVerifier>();
         services.AddScoped<AssetsService>();
 
         return services;
