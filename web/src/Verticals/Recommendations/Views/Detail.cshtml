@@ -194,12 +194,23 @@ else if (status == "muted")
                         : Model.Finding.Description)</p>
             </div>
 
+            @if (Model.Finding.ScannerRemediation is { } remediation)
+            {
+                <div class="recommendation-section">
+                    <div class="recommendation-section__header">
+                        <span class="section-icon section-icon--fix"><i class="fas fa-wrench"></i></span>
+                        <h3>How to fix</h3>
+                    </div>
+                    <p>@remediation</p>
+                </div>
+            }
+
             @if (Model.Finding.References.Count > 0)
             {
                 <div class="recommendation-section">
                     <div class="recommendation-section__header">
-                        <span class="section-icon section-icon--fix"><i class="fas fa-book-open"></i></span>
-                        <h3>References and fixes</h3>
+                        <span class="section-icon section-icon--explain"><i class="fas fa-book-open"></i></span>
+                        <h3>References</h3>
                     </div>
                     <ul class="reference-list">
                         @foreach (var reference in Model.Finding.References)

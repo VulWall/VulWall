@@ -44,9 +44,10 @@ public class FindingItemViewModel
     public string? DetectedBy { get; set; }
 
     /// <summary>
-    /// Reference URLs the scanner attached to the finding (metadata.reference). Shown as the
-    /// fallback guidance when the finding type has no knowledge-base entry.
+    /// Fix text and reference URLs the scanner attached to the finding. Shown as the fallback
+    /// guidance when the finding type has no knowledge-base entry.
     /// </summary>
+    public string? ScannerRemediation { get; set; }
     public List<string> References { get; set; } = [];
     public string? Status { get; set; }
 }

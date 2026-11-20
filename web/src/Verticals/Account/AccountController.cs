@@ -18,7 +18,6 @@ namespace VulWall.Dashboard.Account;
 /// A hosted fork that needs SSO would replace this controller and the cookie scheme
 /// registration in ServiceCollectionExtensions.AddLocalAuthentication with an OIDC handler.
 /// </summary>
-[AllowAnonymous]
 public class AccountController(
     AccountService accountService,
     IpRateLimiterService rateLimiter,
@@ -26,6 +25,7 @@ public class AccountController(
 {
     private const string LoginRateLimitEndpoint = "login";
 
+    [AllowAnonymous]
     [HttpGet("/setup")]
     public async Task<IActionResult> Setup()
     {
@@ -35,6 +35,7 @@ public class AccountController(
         return View(new SetupInput { OrganizationName = DefaultOrganization.DefaultName });
     }
 
+    [AllowAnonymous]
     [HttpPost("/setup")]
     public async Task<IActionResult> Setup(SetupInput input)
     {
@@ -56,6 +57,7 @@ public class AccountController(
         return Redirect("/");
     }
 
+    [AllowAnonymous]
     [HttpGet("/login")]
     public async Task<IActionResult> Login(string? returnUrl = null)
     {
@@ -68,6 +70,7 @@ public class AccountController(
         return View(new LoginInput { ReturnUrl = returnUrl });
     }
 
+    [AllowAnonymous]
     [HttpPost("/login")]
     [AuditLog(Category = AuditLogCategory.Account, Action = "Logged in")]
     public async Task<IActionResult> Login(LoginInput input)

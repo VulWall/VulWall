@@ -33,6 +33,14 @@ public class Finding : IEntity<string>, IOrganizationEntity
     [BsonElement("finding_type")]
     public string? FindingType { get; set; }
 
+    /// <summary>How to fix, when the scanner provides it (written by the scanner's ingestion).</summary>
+    [BsonElement("remediation")]
+    public string? Remediation { get; set; }
+
+    /// <summary>Advisory and documentation URLs from the scanner.</summary>
+    [BsonElement("references")]
+    public List<string>? References { get; set; }
+
     [BsonElement("source")]
     public string? Source { get; set; }
 

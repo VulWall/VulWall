@@ -198,7 +198,8 @@ public class RecommendationsService(
             Status = finding.Status,
             Cve = ExtractFirstMetadataValue(finding.Metadata, "cve", "cves"),
             Cwe = ExtractFirstMetadataValue(finding.Metadata, "cwe", "cwes"),
-            References = ExtractReferenceUrls(finding.Metadata),
+            ScannerRemediation = string.IsNullOrWhiteSpace(finding.Remediation) ? null : finding.Remediation.Trim(),
+            References = ExtractReferenceUrls(finding.References, finding.Metadata),
             BusinessImpact = BusinessImpactMapper.GetBusinessImpact(finding.FindingType),
             VulnerabilityExplanation = kb?.Technical?.VulnerabilityExplanation,
             PotentialImpact = kb?.Technical?.Impact,
@@ -277,19 +278,17 @@ public class RecommendationsService(
     private const int MaxReferences = 10;
 
     /// <summary>
-    /// Reads reference URLs from finding metadata. Ingestion stores them under "reference"
-    /// (renamed from "references"); the value can be a string, an array or null. Only absolute
-    /// http/https URLs are returned, because the values are rendered as links.
+    /// Collects reference URLs from the finding's top-level <c>references</c> field and, for
+    /// findings written before the scanner stored that field, from <c>metadata.reference</c> /
+    /// <c>metadata.references</c> (a string, an array or null). Only absolute http/https URLs are
+    /// returned, because the values are rendered as links.
     /// </summary>
-    internal static List<string> ExtractReferenceUrls(MongoDB.Bson.BsonDocument? metadata)
+    internal static List<string> ExtractReferenceUrls(IEnumerable<string>? references, MongoDB.Bson.BsonDocument? metadata)
     {
-        if (metadata == null)
-            return [];
-
-        var candidates = new List<string>();
-        foreach (var key in new[] { "reference", "references" })
+        var candidates = new List<string>(references ?? []);
+        foreach (var key in metadata == null ? [] : new[] { "reference", "references" })
         {
-            if (!metadata.TryGetValue(key, out var value))
+            if (!metadata!.TryGetValue(key, out var value))
                 continue;
             if (value.IsString)
                 candidates.Add(value.AsString);

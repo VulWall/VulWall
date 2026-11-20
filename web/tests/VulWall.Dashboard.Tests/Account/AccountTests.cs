@@ -180,6 +180,15 @@ public class AccountControllerTests(MongoFixture mongo)
     }
 
     [Fact]
+    public void Logout_RequiresAuthentication()
+    {
+        // A class-level [AllowAnonymous] would override [Authorize] on Logout.
+        Assert.Empty(typeof(AccountController).GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute), true));
+        var logout = typeof(AccountController).GetMethod(nameof(AccountController.Logout))!;
+        Assert.NotEmpty(logout.GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), true));
+    }
+
+    [Fact]
     public async Task SetupGet_NoAdmin_ShowsSetupPage()
     {
         var (controller, _) = Create();
