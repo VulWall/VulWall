@@ -21,19 +21,20 @@ whole scanner.
 | 5 | **js-dependency-scanner** | `js_dependency_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
 | 6 | **http-header-scanner** | `http_header_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
 | 7 | **email-security-scanner** | `email_security_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
-| 8 | **discovery-enrichment** | `discovery_enrichment_service` | `discovery_enrichment_queue` | `discovery_enrichment_results` | `consumers()` | No |
-| 9 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | `knowledgeBase()` — only when `ANTHROPIC_API_KEY` is set | No |
-| 10 | **domain-ingestion** | `domain_ingestion_service` | `domain_discovery_results` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` | `consumers()` → ingestion orchestrator | Yes |
-| 11 | **port-ingestion** | `port_ingestion_service` | `ip_discovery_results` | `discovery_enrichment_queue`, `port_scan_triggers` (none for 80/443 of a CDN edge address, nor for any port of one without a name; see ARCHITECTURE.md, nuclei targets) | `consumers()` → ingestion orchestrator | Yes |
-| 12 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | MongoDB `findings`, `scan_coverage`; `kb_generation_queue` | `consumers()` → ingestion orchestrator | Yes |
-| 13 | **enrichment-ingestion** | `enrichment_ingestion_service` | `discovery_enrichment_results` | MongoDB `discoveries` | `consumers()` → ingestion orchestrator | Yes |
-| 14 | **kb-ingestion** | `kb_ingestion_service` | `kb_generation_results` | MongoDB `knowledge_base` | `consumers()` → ingestion orchestrator | Yes |
-| 15 | **scan-coordinator** | _(not a consumer)_ | MongoDB `scans` (status `queued`) | `domain_discovery_queue`, `ip_discovery_queue` | `coordinatorComponents()` | Yes (writes `scans`; the scan monitor also resolves `findings`) |
+| 8 | **certificate-scanner** | `certificate_scanner_service` | `domain_scan_triggers` + `port_scan_triggers` | `security_findings` | `consumers()` | No |
+| 9 | **discovery-enrichment** | `discovery_enrichment_service` | `discovery_enrichment_queue` | `discovery_enrichment_results` | `consumers()` | No |
+| 10 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | `knowledgeBase()` — only when `ANTHROPIC_API_KEY` is set | No |
+| 11 | **domain-ingestion** | `domain_ingestion_service` | `domain_discovery_results` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` | `consumers()` → ingestion orchestrator | Yes |
+| 12 | **port-ingestion** | `port_ingestion_service` | `ip_discovery_results` | `discovery_enrichment_queue`, `port_scan_triggers` (none for 80/443 of a CDN edge address, nor for any port of one without a name; see ARCHITECTURE.md, nuclei targets) | `consumers()` → ingestion orchestrator | Yes |
+| 13 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | MongoDB `findings`, `scan_coverage`; `kb_generation_queue` | `consumers()` → ingestion orchestrator | Yes |
+| 14 | **enrichment-ingestion** | `enrichment_ingestion_service` | `discovery_enrichment_results` | MongoDB `discoveries` | `consumers()` → ingestion orchestrator | Yes |
+| 15 | **kb-ingestion** | `kb_ingestion_service` | `kb_generation_results` | MongoDB `knowledge_base` | `consumers()` → ingestion orchestrator | Yes |
+| 16 | **scan-coordinator** | _(not a consumer)_ | MongoDB `scans` (status `queued`) | `domain_discovery_queue`, `ip_discovery_queue` | `coordinatorComponents()` | Yes (writes `scans`; the scan monitor also resolves `findings`) |
 
 **Notes:**
-- Ingestion slices (#10–14) run inside the ingestion orchestrator (`src/internal/ingestion/orchestrator.go`).
-- The scan coordinator (#15) is three goroutines: the cron **scheduler** (per-org `scan_cron`, plus stream cleanup), the **queued-scan poller** (every 5 s, claims scans the web app queued), and the **scan monitor** (marks scans `done`). It writes the `scans` collection, and the scan monitor also resolves `findings`; see the scan lifecycle in [DATABASE.md](DATABASE.md#scans-collection).
-- Without `ANTHROPIC_API_KEY` the KB engine (#9) does not start. `kb_generation_queue` keeps its jobs until the key is set.
+- Ingestion slices (#11–15) run inside the ingestion orchestrator (`src/internal/ingestion/orchestrator.go`).
+- The scan coordinator (#16) is three goroutines: the cron **scheduler** (per-org `scan_cron`, plus stream cleanup), the **queued-scan poller** (every 5 s, claims scans the web app queued), and the **scan monitor** (marks scans `done`). It writes the `scans` collection, and the scan monitor also resolves `findings`; see the scan lifecycle in [DATABASE.md](DATABASE.md#scans-collection).
+- Without `ANTHROPIC_API_KEY` the KB engine (#10) does not start. `kb_generation_queue` keeps its jobs until the key is set.
 - Every consumer uses `redisx.ConsumeStream`: a handler error is retried in the worker (3 attempts), then the message goes to `dead_letter` (capped at about 10,000 entries, `MAXLEN ~`) and is ACKed; malformed messages (`redisx.Permanent`) and panics go there at once. Shutdown leaves the message pending.
 - **Restart loses pending work, including KB and enrichment.** At startup `ReleaseOrphanedPending` deletes the previous process's consumers, with their pending entries, from every group in `ownedGroups()`. For the scan-pipeline groups this is safe: the running scan is closed `interrupted_by_restart` and resolves nothing. For the terminal groups it is a loss: a `kb_generation_queue` job or a `discovery_enrichment_queue` job that was in progress is dropped (its finding keeps no KB entry until the next new finding of that type takes the Redis `kb_generating:<type>` lock after 24 h; its discovery keeps the enrichment of the previous scan).
 - `main.go` creates the job-queue groups (`0`) and every trigger-stream group (`$`) before any component starts.
@@ -48,9 +49,9 @@ whole scanner.
 | `domain_discovery_results` | `StreamDomainDiscoveryResults` | result | domain-discovery | domain-ingestion | `0` |
 | `ip_discovery_queue` | `StreamIPDiscoveryQueue` | job | scan-coordinator, domain-ingestion | port-discovery | `0` |
 | `ip_discovery_results` | `StreamIPDiscoveryResults` | result | port-discovery | port-ingestion | `0` |
-| `domain_scan_triggers` | `StreamDomainScanTriggers` | trigger | domain-ingestion | nuclei, testssl, js-dep, http-header, email-security | `$` |
-| `port_scan_triggers` | `StreamPortScanTriggers` | trigger | port-ingestion | nuclei | `$` |
-| `security_findings` | `StreamSecurityFindings` | result | nuclei, testssl, js-dep, http-header, email-security (findings and coverage); domain-discovery, port-discovery (coverage only) | findings-ingestion | `0` |
+| `domain_scan_triggers` | `StreamDomainScanTriggers` | trigger | domain-ingestion | nuclei, testssl, js-dep, http-header, email-security, certificate | `$` |
+| `port_scan_triggers` | `StreamPortScanTriggers` | trigger | port-ingestion | nuclei, certificate | `$` |
+| `security_findings` | `StreamSecurityFindings` | result | nuclei, testssl, js-dep, http-header, email-security, certificate (findings and coverage); domain-discovery, port-discovery (coverage only) | findings-ingestion | `0` |
 | `discovery_enrichment_queue` | `StreamDiscoveryEnrichmentQueue` | job | domain-ingestion, port-ingestion | discovery-enrichment | `0` |
 | `discovery_enrichment_results` | `StreamDiscoveryEnrichmentResults` | result | discovery-enrichment | enrichment-ingestion | `0` |
 | `kb_generation_queue` | `StreamKBGenerationQueue` | job | findings-ingestion | knowledge-base-engine | `0` |
@@ -83,7 +84,9 @@ The table is in check order: upstream stages first. Every stage publishes its re
 | `domain_scan_triggers` | `js_dependency_scanner_service` | js-dependency-scanner |
 | `domain_scan_triggers` | `http_header_scanner_service` | http-header-scanner |
 | `domain_scan_triggers` | `email_security_scanner_service` | email-security-scanner |
+| `domain_scan_triggers` | `certificate_scanner_service` | certificate-scanner |
 | `port_scan_triggers` | `nuclei_scanner_service` | nuclei-scanner |
+| `port_scan_triggers` | `certificate_scanner_service` | certificate-scanner |
 | `security_findings` | `findings_ingestion_service` | findings-ingestion |
 
 The two discovery job queues are included because a discovery job can run for many minutes (subfinder plus DNS resolution of thousands of names) while every downstream group is idle; without them a scan was marked `done` mid-discovery and late subdomains arrived after finding resolution.
@@ -126,6 +129,7 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 **Dual-strategy consumers:**
 - **nuclei-scanner**: `$` on both `domain_scan_triggers` and `port_scan_triggers`
 - **testssl-scanner**: `$` on `domain_scan_triggers` only
+- **certificate-scanner**: `$` on both `domain_scan_triggers` and `port_scan_triggers`
 
 ---
 
@@ -158,6 +162,7 @@ Each service defines its consumer group constant in its own `constants.go`:
 | js-dependency-scanner | `src/internal/active_recon/js_dependency_scanner/constants.go` | `GroupJSDependencyScanner` |
 | http-header-scanner | `src/internal/active_recon/http_header_scanner/constants.go` | `GroupHTTPHeaderScanner` |
 | email-security-scanner | `src/internal/active_recon/email_security_scanner/constants.go` | `GroupEmailSecurityScanner` |
+| certificate-scanner | `src/internal/active_recon/certificate_scanner/constants.go` | `GroupCertificateScanner` |
 | discovery-enrichment | `src/internal/active_recon/discovery_enrichment/constants.go` | `GroupDiscoveryEnrichment` |
 | knowledge-base-engine | `src/internal/enrichers/knowledge_base/constants.go` | `GroupKBEngine` |
 | domain-ingestion | `src/internal/ingestion/domain_ingestion/constants.go` | `GroupDomainIngestion` |

@@ -36,9 +36,11 @@ scan coordinator
                    │                                               │
                    ▼                                               ├──▶ nuclei
              ip_discovery_results ──▶ port ingestion ──▶ MongoDB   ├──▶ testssl.sh
+                                          │                        ├──▶ certificate expiry
                                           │                        ├──▶ JavaScript dependencies
                                           ▼                        ├──▶ HTTP headers
-                                   port_scan_triggers ──▶ nuclei   └──▶ email security
+                                   port_scan_triggers ──▶ nuclei,  └──▶ email security
+                                                certificate expiry         │
                                                                            │
                                      security_findings ◀───────────────────┘
                                            │

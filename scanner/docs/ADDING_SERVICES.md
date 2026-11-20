@@ -148,7 +148,7 @@ Consumer creates groups on both `domain_scan_triggers` and `port_scan_triggers`.
 - [ ] Scanner interface in `scanner/` package
 - [ ] Service orchestration under 200 lines
 - [ ] Convert results to `shared.SecurityFinding`
-- [ ] Set `Source` to a consistent lowercase name (existing: "nuclei", "testssl", "jsscanner", "http-headers", "email-security")
+- [ ] Set `Source` to a consistent lowercase name (existing: "nuclei", "testssl", "jsscanner", "http-headers", "email-security", "certificate")
 - [ ] Publish to `shared.StreamSecurityFindings`
 - [ ] Publish a coverage message per target (`shared.TargetCoverage`) after the findings
 - [ ] Inject TraceContext before publishing

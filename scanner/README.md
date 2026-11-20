@@ -64,6 +64,7 @@ All of these run as goroutines in the `nightwatch` process
 | **js-dependency-scanner** | JS library vulnerabilities (retire.js) | domain_scan_triggers | security_findings |
 | **http-header-scanner** | Security header checks | domain_scan_triggers | security_findings |
 | **email-security-scanner** | SPF / DMARC / DKIM checks | domain_scan_triggers | security_findings |
+| **certificate-scanner** | TLS certificate expiry (Go TLS handshake, no tool) | domain/port_scan_triggers | security_findings |
 | **discovery-enrichment** | WAF, cloud and IP geolocation (DB-IP Lite) | discovery_enrichment_queue | discovery_enrichment_results |
 | **knowledge-base-engine** | AI remediation guidance (only with `ANTHROPIC_API_KEY`) | kb_generation_queue | kb_generation_results |
 

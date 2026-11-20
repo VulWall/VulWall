@@ -415,12 +415,12 @@ show it without a knowledge-base entry (the KB engine is optional and only runs
 when `ANTHROPIC_API_KEY` is set). Empty values are not written, and an update
 never clears text that an earlier scan stored.
 
-| Field | Type | nuclei | testssl | jsscanner (retire.js) | http-headers | email-security |
-|-------|------|--------|---------|-----------------------|--------------|----------------|
-| `title` | string | `info.name` | `TLS/SSL: <test id>` | component, version, summary, CVEs | rule title | check title |
-| `description` | string | `info.description` | testssl `finding` text | advisory summary | rule explanation | check explanation |
-| `remediation` | string, optional | `info.remediation` | — | — | — | — |
-| `references` | string array, optional | `info.reference` | — | advisory URLs | MDN / OWASP URLs | RFC / guide URLs |
+| Field | Type | nuclei | testssl | certificate | jsscanner (retire.js) | http-headers | email-security |
+|-------|------|--------|---------|-------------|-----------------------|--------------|----------------|
+| `title` | string | `info.name` | `TLS/SSL: <test id>` | `TLS certificate expires soon: <host>` / `TLS certificate expired: <host>` | component, version, summary, CVEs | rule title | check title |
+| `description` | string | `info.description` | testssl `finding` text | expiry date, days left, subject, issuer | advisory summary | rule explanation | check explanation |
+| `remediation` | string, optional | `info.remediation` | — | renew / check ACME auto-renewal | — | — | — |
+| `references` | string array, optional | `info.reference` | — | — | advisory URLs | MDN / OWASP URLs | RFC / guide URLs |
 
 The same URLs also stay in `metadata.reference` (nuclei) and
 `metadata.references` (other scanners) for backward compatibility; new readers

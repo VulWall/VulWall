@@ -41,8 +41,27 @@ hostnames behind it instead. The Discoveries page marks such an address as a CDN
 
 ### TLS
 
-[testssl.sh](https://testssl.sh) checks the TLS setup of your HTTPS services: protocol versions,
-cipher suites, certificates and known TLS vulnerabilities.
+[testssl.sh](https://testssl.sh) checks the HTTPS service (port 443) of each domain and
+subdomain for known TLS vulnerabilities, such as Heartbleed, ROBOT, POODLE and SWEET32.
+
+### Certificate expiry
+
+VulWall's own check reads the TLS certificate of each domain and subdomain on port 443, by its
+name, and of each open port that uses TLS from the start (465, 636, 993, 995, 5986, 6443 and
+8443), by IP address. It only reads the certificate; it does not check whether a browser trusts
+it.
+
+- A certificate that expires within 30 days is a **medium** finding, "TLS certificate expires
+  soon".
+- Within 7 days it becomes **high**. The finding stays the same one, so it does not come back as
+  a new finding every day; its description shows the expiry date, the days left, the subject and
+  the issuer.
+- An expired certificate is a **high** finding, "TLS certificate expired".
+
+Set the limits with `CERT_EXPIRY_WARN_DAYS` and `CERT_EXPIRY_CRITICAL_DAYS` (see
+[Configuration](/docs/configuration/)). The finding is resolved by the first scan that reads a
+renewed certificate. A scan that cannot connect to the port, or cannot complete the TLS
+handshake, leaves it open.
 
 ### JavaScript dependencies
 

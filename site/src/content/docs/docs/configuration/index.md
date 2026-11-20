@@ -35,6 +35,8 @@ Docker Compose recreates the containers whose settings changed. Your data is kep
 | `NUCLEI_INCLUDE_TAGS` | `cve,vuln,exposure,misconfig,default-login,token,takeover,kev,xss,lfi,ssrf,rce,sqli,auth-bypass,unauth,panel` | Comma-separated nuclei template tags to run. Empty means the default. |
 | `NUCLEI_EXCLUDE_TAGS` | `intrusive,dos,fuzz` | Comma-separated nuclei template tags to skip. Empty means the default. **Warning:** these exclusions keep scans safe for production sites. If you remove `intrusive`, `dos` or `fuzz`, nuclei sends attack payloads, fuzzing and floods that can change data on, or take down, the sites you scan. |
 | `TESTSSL_CONCURRENCY` | `5` | Number of testssl.sh scans that run at the same time. |
+| `CERT_EXPIRY_WARN_DAYS` | `30` | A TLS certificate that expires within this many days is a medium finding. |
+| `CERT_EXPIRY_CRITICAL_DAYS` | `7` | A TLS certificate that expires within this many days, or has expired, is a high finding. Must not be more than `CERT_EXPIRY_WARN_DAYS`; an invalid value of either one gives both defaults, and the scanner log says why. |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scans of private and internal IP ranges. Turn it on only to scan your internal network. |
 | `GEO_DOWNLOAD` | `true` | Download the free DB-IP Lite geolocation databases at start. Set to `false` on hosts without internet access. |
 | `GEO_MAX_AGE_DAYS` | `35` | Age in days after which the geolocation databases are downloaded again at start. |
