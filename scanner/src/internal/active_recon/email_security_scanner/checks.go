@@ -251,7 +251,12 @@ func checkZoneTransfer(ctx context.Context, resolver dnsResolver, domain string)
 		// The nameserver comes from the target's own DNS, so it can point
 		// anywhere, including internal addresses. Dial only a validated IP.
 		addr, err := axfrAddress(ctx, host)
+		if errors.Is(err, shared.ErrReservedIP) {
+			continue // the guard refuses it: nothing to check, by design
+		}
 		if err != nil {
+			// The nameserver was not looked up: whether it allows a transfer is unknown.
+			incomplete = append(incomplete, fmt.Errorf("AXFR against %s: %w", host, err))
 			continue
 		}
 
@@ -308,10 +313,7 @@ func axfrAddress(ctx context.Context, host string) (string, error) {
 // when the attempt neither succeeded nor was refused (axfrFailure).
 // Caps at maxAXFRRecords and cancels the transfer to stop the underlying read.
 func tryAXFR(ctx context.Context, domain, addr string) (int, error) {
-	const (
-		maxAXFRRecords = 10000
-		axfrTimeout    = 10 * time.Second
-	)
+	const axfrTimeout = 10 * time.Second
 
 	axfrCtx, axfrCancel := context.WithTimeout(ctx, axfrTimeout)
 	defer axfrCancel()
@@ -328,15 +330,29 @@ func tryAXFR(ctx context.Context, domain, addr string) (int, error) {
 		return 0, axfrFailure(err)
 	}
 
+	return countAXFR(axfrCtx, ch)
+}
+
+// countAXFR counts the records of a transfer. A transfer that sent records is open, whatever
+// happens next. A deadline before the first record leaves the answer unknown: an error.
+func countAXFR(ctx context.Context, ch <-chan *dns.Envelope) (int, error) {
+	const maxAXFRRecords = 10000
 	var count int
 	for envelope := range ch {
 		select {
-		case <-axfrCtx.Done():
+		case <-ctx.Done():
 			go drainChannel(ch)
+			if count == 0 {
+				return 0, fmt.Errorf("AXFR timed out before any record: %w", ctx.Err())
+			}
 			return count, nil
 		default:
 		}
 		if envelope.Error != nil {
+			if count > 0 {
+				go drainChannel(ch)
+				return count, nil
+			}
 			return 0, axfrFailure(envelope.Error)
 		}
 		count += len(envelope.RR)
@@ -344,6 +360,9 @@ func tryAXFR(ctx context.Context, domain, addr string) (int, error) {
 			go drainChannel(ch)
 			return count, nil
 		}
+	}
+	if count == 0 && ctx.Err() != nil {
+		return 0, fmt.Errorf("AXFR timed out before any record: %w", ctx.Err())
 	}
 	return count, nil
 }
