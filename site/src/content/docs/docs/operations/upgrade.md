@@ -8,7 +8,12 @@ Your data is kept in Docker volumes, so it survives upgrades.
 
 ## Installed with the script
 
-Run the install script again:
+```sh
+~/vulwall/vulwall upgrade
+```
+
+This downloads the install script from `https://vulwall.com/install.sh` and runs it for the
+install directory. Running the script yourself does the same:
 
 ```sh
 curl -fsSL https://vulwall.com/install.sh | sh
@@ -16,12 +21,14 @@ curl -fsSL https://vulwall.com/install.sh | sh
 
 It downloads the compose file of the latest release, keeps your `.env`, pulls the new images and
 restarts the containers that changed. Use the same `VULWALL_DIR` as for the install if you
-changed it.
+changed it. If you edited `docker-compose.yml`, it saves your version as
+`docker-compose.yml.bak.<time>` first; put your changes in `docker-compose.override.yml`
+instead.
 
 To install a specific release, or to go back to an older one:
 
 ```sh
-curl -fsSL https://vulwall.com/install.sh | VULWALL_VERSION=0.1.0 sh
+VULWALL_VERSION=0.1.0 ~/vulwall/vulwall upgrade
 ```
 
 New releases can add settings. Compare your `.env` with the new `.env.example` to see them.

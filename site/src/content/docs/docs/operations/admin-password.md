@@ -7,7 +7,18 @@ If you know the current password, change it in **Settings**. Changing the passwo
 every other session.
 
 If you lost it: VulWall has one admin account. To replace it, delete it and run the first-run
-setup again. Your assets, scans and findings stay. Run these commands in the install directory:
+setup again. Your assets, scans and findings stay.
+
+If you installed with the [install script](/docs/getting-started/install/):
+
+```sh
+~/vulwall/vulwall reset-admin
+```
+
+It asks first, then deletes the admin account, writes a new `SETUP_TOKEN` to `.env`, restarts the
+web app and prints the new setup link. Open the link and create the admin account again.
+
+Without the `vulwall` command, run these commands in the install directory:
 
 ```sh
 docker compose stop web

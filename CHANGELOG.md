@@ -43,6 +43,30 @@ First open-source, self-hosted release, under the MIT License.
   in `scan_settings`). The Settings page, sidebar and Scans page show the
   next scan. The scanner reloads schedules every 5 minutes instead of every
   hour, and keeps the current schedules when the reload fails.
+- The install script checks the host before it changes anything: it stops
+  on Windows shells (use WSL 2), on 32-bit systems and on CPUs that MongoDB
+  cannot run on (no AVX on x86-64; older than ARMv8.2-A on ARM, such as the
+  Raspberry Pi 4). `VULWALL_SKIP_CPU_CHECK=1` skips the CPU check. It warns
+  when Docker has less than 2 GB of memory or the disk less than 5 GB free.
+- On Linux, the install script offers to install Docker with Docker's
+  official script, to start a stopped Docker daemon, and to install a
+  missing Compose plugin. It asks on the terminal first and uses `sudo` only
+  for these steps; `VULWALL_INSTALL_DOCKER=1` agrees without asking.
+- When port 8080 is in use by another program, the install script picks a
+  free port from 8081 to 8099 and saves it as `VULWALL_PORT` in `.env`.
+- When a container keeps crashing during the install, the script stops at
+  once and shows its last log lines, with CPU advice when MongoDB stops with
+  an illegal instruction. It also waits for the scanner to become healthy,
+  and warns with hints about outbound access when it does not.
+- Over SSH, the install script prints the `ssh -L` command that opens the
+  web UI from your own computer.
+- The install script saves a locally edited `docker-compose.yml` as
+  `docker-compose.yml.bak.<time>` before it replaces the file.
+- The `vulwall` command, installed by the install script into the install
+  directory (and optionally linked into `~/.local/bin`): `status`, `logs`,
+  `upgrade`, `backup`, `restore`, `reset-admin`, `doctor`, `uninstall` and
+  `version`. It is a release asset, checked against `SHA256SUMS` like the
+  other files.
 
 ### Changed
 

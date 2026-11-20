@@ -1,0 +1,438 @@
+#!/bin/sh
+# vulwall: manage a VulWall install made by https://vulwall.com/install.sh
+#
+#   vulwall help
+#
+# The installer puts this script in the install directory (default ~/vulwall)
+# and can link it into ~/.local/bin. It runs Docker Compose in the install
+# directory, so it works for an install from the repository as well.
+#
+# Source: https://github.com/VulWall/VulWall/blob/main/scripts/vulwall (MIT)
+
+set -eu
+
+INSTALLER_URL=https://vulwall.com/install.sh
+DOCS_URL=https://vulwall.com/docs
+
+say() { printf '%s\n' "$*"; }
+warn() { printf 'Warning: %s\n' "$*" >&2; }
+die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
+
+usage() {
+    cat <<'EOF'
+Usage: vulwall [-y] <command> [arguments]
+
+Commands:
+  status            Containers, their health, the installed release and the URL
+  logs [service]    Follow the logs (services: web, scanner, mongo, redis)
+  upgrade           Upgrade to the latest release (runs the installer again)
+  backup [file]     Back up the database and .env
+                    (default: vulwall-backup-<date>.archive.gz in this directory)
+  restore <file>    Replace all data with a backup made by "vulwall backup"
+  reset-admin       Delete the admin account and print a new setup link
+  doctor            Check Docker, the CPU, ports, disk space, the containers and
+                    the scanner's internet access
+  uninstall         Stop VulWall and delete it with all its data
+  version           Installed release and images
+  help              This help
+
+Options:
+  -y, --yes         Do not ask for confirmation (restore, reset-admin, uninstall)
+
+Environment:
+  VULWALL_DIR       install directory (default: the directory of this script)
+  VULWALL_VERSION   release for "upgrade" (default: the latest release)
+EOF
+}
+
+# --- Questions ------------------------------------------------------------------
+
+yes=0
+
+have_tty() { (: </dev/tty) 2>/dev/null; }
+
+confirm() { # question
+    [ "$yes" = 0 ] || return 0
+    have_tty || die "No terminal to confirm on. Run again with -y to confirm."
+    printf '%s [y/N] ' "$1" >/dev/tty
+    read -r reply </dev/tty || return 1
+    case $reply in [yY] | [yY][eE][sS]) return 0 ;; *) return 1 ;; esac
+}
+
+# --- Docker ---------------------------------------------------------------------
+
+docker_sudo=0
+
+dk() {
+    if [ "$docker_sudo" = 1 ]; then
+        # sudo resets the environment: pass on what Docker Compose reads from it.
+        sudo env ${SETUP_TOKEN+"SETUP_TOKEN=$SETUP_TOKEN"} \
+            ${VULWALL_PORT+"VULWALL_PORT=$VULWALL_PORT"} \
+            ${COMPOSE_PROJECT_NAME+"COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME"} \
+            docker "$@"
+    else
+        docker "$@"
+    fi
+}
+
+compose() { dk compose "$@"; }
+
+# Uses sudo when this user cannot use Docker yet, for example right after the
+# installer added it to the docker group.
+setup_docker() {
+    command -v docker >/dev/null 2>&1 || die "Docker is not installed."
+    out=$(docker info 2>&1 </dev/null) && return 0
+    case $out in
+        *"permission denied"*)
+            if [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1; then
+                warn "Your user may not use Docker yet (log out and back in after joining the docker group). Using sudo."
+                docker_sudo=1
+                return 0
+            fi
+            ;;
+    esac
+    die "Cannot reach the Docker daemon. Is Docker running?"
+}
+
+# --- Install directory ----------------------------------------------------------
+
+# The directory of this script, also when it runs through a symlink such as
+# ~/.local/bin/vulwall.
+script_dir() {
+    self=$0
+    case $self in */*) ;; *) self=$(command -v "$self") ;; esac
+    while [ -L "$self" ]; do
+        link=$(readlink "$self")
+        case $link in
+            /*) self=$link ;;
+            *) self=$(dirname "$self")/$link ;;
+        esac
+    done
+    cd "$(dirname "$self")" && pwd -P
+}
+
+# --- Helpers --------------------------------------------------------------------
+
+# Makes path $1 absolute, relative to the directory the command was run from.
+abspath() {
+    case $1 in
+        /*) say "$1" ;;
+        *) say "$origin/$1" ;;
+    esac
+}
+
+web_url() {
+    hostport=$(compose port web 8080 2>/dev/null </dev/null || true)
+    p=${hostport##*:}
+    case $p in '' | *[!0-9]*) return 1 ;; esac
+    say "http://localhost:$p"
+}
+
+release_version() {
+    v=$(sed -n '1s/^# VulWall \([0-9A-Za-z.+-]*\) release compose file.*/\1/p' docker-compose.yml)
+    say "${v:-unknown (not a release compose file)}"
+}
+
+is_hex32() {
+    [ "${#1}" -eq 32 ] || return 1
+    case $1 in *[!0-9a-f]*) return 1 ;; esac
+}
+
+wait_web() {
+    i=0
+    while [ "$i" -lt 60 ]; do
+        id=$(compose ps -q web 2>/dev/null </dev/null || true)
+        if [ -n "$id" ]; then
+            st=$(dk inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$id" 2>/dev/null </dev/null || true)
+            [ "$st" = healthy ] && return 0
+        fi
+        i=$((i + 1))
+        sleep 3
+    done
+    return 1
+}
+
+# Same test as install.sh: MongoDB needs AVX on x86-64 and ARMv8.2-A on ARM.
+cpu_supported() { # arch cpuinfo_file
+    [ -r "$2" ] || return 0
+    case $1 in
+        amd64) grep -qE '^flags.* avx( .*|$)' "$2" ;;
+        arm64) grep -qE '^Features.* (fphp|dcpop|sha3|sm3|sm4|asimddp|sha512|sve)( .*|$)' "$2" ;;
+    esac
+}
+
+# --- Commands -------------------------------------------------------------------
+
+cmd_status() {
+    compose ps -a </dev/null
+    say ""
+    say "Release: $(release_version)"
+    say "Images:"
+    compose config --images </dev/null | sed 's/^/  /'
+    if url=$(web_url); then
+        say "URL:     $url"
+    else
+        say "URL:     (the web container is not running)"
+    fi
+}
+
+cmd_logs() {
+    compose logs -f --tail 100 "$@" </dev/null
+}
+
+cmd_upgrade() {
+    url=${VULWALL_INSTALLER_URL:-$INSTALLER_URL}
+    case $url in
+        https://*) proto='=https' ;;
+        http://*)
+            [ "${VULWALL_ALLOW_HTTP:-}" = 1 ] ||
+                die "VULWALL_INSTALLER_URL uses http://. Use https://, or set VULWALL_ALLOW_HTTP=1 for local testing."
+            proto='=http,https'
+            ;;
+        *) die "VULWALL_INSTALLER_URL must start with https://" ;;
+    esac
+    tmpf=$(mktemp "${TMPDIR:-/tmp}/vulwall-install.XXXXXX")
+    trap 'rm -f "$tmpf"' EXIT
+    trap 'exit 130' INT TERM
+    curl -fsSL --proto "$proto" --proto-redir "$proto" --retry 3 -o "$tmpf" "$url" ||
+        die "Download failed: $url"
+    say "Running the installer from $url for $dir"
+    # The installer verifies the release files against SHA256SUMS before it
+    # changes anything.
+    VULWALL_DIR=$dir sh "$tmpf" </dev/null
+}
+
+cmd_backup() {
+    [ "$#" -le 1 ] || die "Usage: vulwall backup [file]"
+    file=$(abspath "${1:-vulwall-backup-$(date +%Y%m%d-%H%M%S).archive.gz}")
+    case $file in
+        *.archive.gz) envfile=${file%.archive.gz}.env ;;
+        *) envfile=$file.env ;;
+    esac
+    [ ! -e "$file" ] || die "$file already exists."
+    [ ! -e "$envfile" ] || die "$envfile already exists."
+    # Backups hold findings and secrets: readable by you only.
+    umask 077
+    if ! compose exec -T mongo mongodump --quiet --db vulwall --archive --gzip >"$file.partial" </dev/null ||
+        [ ! -s "$file.partial" ]; then
+        rm -f "$file.partial"
+        die "mongodump failed. Is VulWall running? Try: vulwall status"
+    fi
+    mv "$file.partial" "$file"
+    say "Database: $file"
+    if [ -f .env ]; then
+        cp .env "$envfile"
+        say "Settings: $envfile"
+    fi
+    say "Both files contain secrets. Keep them somewhere other than this host."
+}
+
+cmd_restore() {
+    [ "$#" -eq 1 ] || die "Usage: vulwall restore <file>"
+    file=$(abspath "$1")
+    [ -f "$file" ] || die "No such file: $file"
+    confirm "This replaces all VulWall data with the backup in $file. Continue?" || die "Cancelled."
+    compose exec -T mongo mongorestore --quiet --drop --archive --gzip <"$file" ||
+        die "mongorestore failed."
+    say "Restored $file."
+    say "Settings such as SETUP_TOKEN and ANTHROPIC_API_KEY are in .env, not in the database."
+    say "If you need them, copy them from the .env file of the backup."
+}
+
+cmd_reset_admin() {
+    [ "$#" -eq 0 ] || die "Usage: vulwall reset-admin"
+    confirm "This deletes the admin account (assets, scans and findings stay) and makes a new setup link. Continue?" ||
+        die "Cancelled."
+    compose stop web </dev/null
+    compose exec -T mongo mongosh vulwall --quiet --eval 'db.users.deleteOne({_id:"admin"})' </dev/null >/dev/null ||
+        die "Could not delete the admin account. Is MongoDB running? Try: vulwall status"
+    token=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+    is_hex32 "$token" || die "Could not generate a setup token from /dev/urandom."
+    # Replace every SETUP_TOKEN line. The new .env is written next to the old one
+    # under umask 077 and renamed, so it stays readable by you only.
+    (
+        umask 077
+        sed -e '/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}SETUP_TOKEN[[:space:]]*=/d' \
+            -e '/^# First-run setup token, generated by /d' .env >.env.new
+        printf '# First-run setup token, generated by vulwall reset-admin.\nSETUP_TOKEN=%s\n' "$token" >>.env.new
+        mv .env.new .env
+    ) || die "Could not write the setup token to $dir/.env."
+    if [ -n "${SETUP_TOKEN:-}" ]; then
+        warn "SETUP_TOKEN is set in your environment and overrides .env. Unset it first."
+    fi
+    # "up" re-reads .env, "restart" would not.
+    compose up -d web </dev/null
+    wait_web || die "The web app did not become healthy. See: vulwall logs web"
+    url=$(web_url) || url=http://localhost:8080
+    say "The admin account is deleted. Open this link to create it again:"
+    say ""
+    say "  $url/setup?token=$token"
+}
+
+cmd_doctor() {
+    problems=0
+    ok() { say "  ok    $*"; }
+    bad() { say "  FAIL  $*"; problems=$((problems + 1)); }
+    note() { say "  warn  $*"; }
+
+    say "Docker"
+    ok "Docker $(dk version -f '{{.Server.Version}}' 2>/dev/null </dev/null || echo '?'), Compose $(compose version --short 2>/dev/null </dev/null || echo '?')"
+
+    say "Host"
+    if [ "$(uname -s)" = Linux ]; then
+        case $(uname -m) in
+            x86_64) arch=amd64 ;;
+            aarch64) arch=arm64 ;;
+            *) arch=other ;;
+        esac
+        if [ "$arch" = other ]; then
+            bad "CPU architecture $(uname -m) is not supported (amd64 and arm64 only)"
+        elif cpu_supported "$arch" /proc/cpuinfo; then
+            ok "CPU ($arch) has what MongoDB needs"
+        elif [ "$arch" = amd64 ]; then
+            bad "CPU has no AVX, which MongoDB needs (in a VM, set the CPU type to 'host')"
+        else
+            bad "CPU is older than ARMv8.2-A, which MongoDB needs (Raspberry Pi 4 is not supported)"
+        fi
+    else
+        ok "CPU check skipped: Docker Desktop runs containers in its own VM"
+    fi
+    mem=$(dk info -f '{{.MemTotal}}' 2>/dev/null </dev/null || echo 0)
+    case $mem in '' | *[!0-9]*) mem=0 ;; esac
+    if [ "$((mem / 1048576))" -ge 3500 ]; then
+        ok "Memory: $((mem / 1048576)) MB"
+    elif [ "$((mem / 1048576))" -ge 1800 ]; then
+        note "Memory: $((mem / 1048576)) MB (4 GB recommended)"
+    else
+        bad "Memory: $((mem / 1048576)) MB (at least 2 GB needed)"
+    fi
+    paths=$dir
+    if [ "$(uname -s)" = Linux ]; then
+        root=$(dk info -f '{{.DockerRootDir}}' 2>/dev/null </dev/null || true)
+        [ -z "$root" ] || paths="$dir
+$root"
+    fi
+    printf '%s\n' "$paths" | while IFS= read -r p; do
+        kb=$(df -Pk "$p" 2>/dev/null </dev/null | awk 'NR == 2 { print $4 }')
+        case $kb in '' | *[!0-9]*) continue ;; esac
+        if [ "$kb" -ge $((5 * 1024 * 1024)) ]; then
+            say "  ok    Disk: $((kb / 1024)) MB free for $p"
+        else
+            say "  FAIL  Disk: $((kb / 1024)) MB free for $p (at least 5 GB needed)"
+        fi
+    done | tee "$tmpd/disk"
+    if grep -q FAIL "$tmpd/disk"; then problems=$((problems + 1)); fi
+
+    say "Containers"
+    for s in mongo redis scanner web; do
+        id=$(compose ps -a -q "$s" 2>/dev/null </dev/null | head -n 1 || true)
+        if [ -z "$id" ]; then
+            bad "$s: no container (run: cd $qdir && docker compose up -d)"
+            continue
+        fi
+        st=$(dk inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}} restarts={{.RestartCount}}' "$id" 2>/dev/null </dev/null || echo unknown)
+        case $st in
+            "running healthy "*) ok "$s: $st" ;;
+            "running starting "*) note "$s: $st" ;;
+            *) bad "$s: $st (see: vulwall logs $s)" ;;
+        esac
+    done
+    if url=$(web_url); then
+        ok "Web UI: $url (bound to 127.0.0.1)"
+    else
+        bad "Web UI: the web container publishes no port"
+    fi
+
+    say "Scanner internet access"
+    if [ -n "$(compose ps -q scanner 2>/dev/null </dev/null || true)" ]; then
+        # Runs in the scanner container, which has curl and BusyBox nslookup.
+        # shellcheck disable=SC2016
+        compose exec -T scanner sh -c '
+            if nslookup github.com >/dev/null 2>&1; then echo "ok    DNS: github.com resolves"
+            else echo "FAIL  DNS: github.com does not resolve"; fi
+            for url in https://github.com/ https://download.db-ip.com/; do
+                if curl -sS -o /dev/null --max-time 15 "$url" 2>/dev/null; then echo "ok    HTTPS: $url"
+                else echo "FAIL  HTTPS: $url (curl exit code $?)"; fi
+            done' </dev/null 2>&1 | LC_ALL=C tr -cd '[:print:]\n' | sed 's/^/  /' | tee "$tmpd/net"
+        if grep -q FAIL "$tmpd/net"; then problems=$((problems + 1)); fi
+    else
+        bad "The scanner is not running"
+    fi
+
+    say ""
+    if [ "$problems" -eq 0 ]; then
+        say "No problems found."
+    else
+        say "$problems problem(s) found. Docs: $DOCS_URL/"
+        return 1
+    fi
+}
+
+cmd_uninstall() {
+    [ "$#" -eq 0 ] || die "Usage: vulwall uninstall"
+    case $dir in
+        / | "$HOME" | "$HOME/") die "Refusing to delete $dir." ;;
+    esac
+    confirm "This stops VulWall and deletes $dir with all VulWall data (database, settings). Continue?" ||
+        die "Cancelled."
+    compose down -v --remove-orphans </dev/null
+    link=$HOME/.local/bin/vulwall
+    if [ -L "$link" ] && [ "$(readlink "$link")" = "$dir/vulwall" ]; then
+        rm -f "$link"
+    fi
+    cd /
+    rm -rf -- "$dir"
+    say "VulWall is uninstalled. Docker's downloaded images stay; remove them with: docker image prune -a"
+}
+
+cmd_version() {
+    say "VulWall $(release_version) in $dir"
+    compose config --images </dev/null
+}
+
+main() {
+    while [ "$#" -gt 0 ]; do
+        case $1 in
+            -y | --yes) yes=1; shift ;;
+            -h | --help) usage; return 0 ;;
+            *) break ;;
+        esac
+    done
+    [ "$#" -gt 0 ] || { usage; return 0; }
+    cmd=$1
+    shift
+    case $cmd in
+        help) usage; return 0 ;;
+        status | logs | upgrade | backup | restore | reset-admin | doctor | uninstall | version) ;;
+        *) usage >&2; die "Unknown command: $cmd" ;;
+    esac
+
+    origin=$(pwd)
+    dir=${VULWALL_DIR:-$(script_dir)}
+    cd "$dir" 2>/dev/null || die "No such directory: $dir"
+    dir=$(pwd -P)
+    qdir="'$(printf '%s' "$dir" | sed "s/'/'\\\\''/g")'"
+    [ -f docker-compose.yml ] ||
+        die "$dir has no docker-compose.yml. Set VULWALL_DIR to your VulWall install directory."
+
+    # upgrade runs the installer itself, which handles a missing Docker.
+    [ "$cmd" = upgrade ] || setup_docker
+
+    tmpd=$(mktemp -d "${TMPDIR:-/tmp}/vulwall.XXXXXX")
+    trap 'rm -rf "$tmpd"' EXIT
+    case $cmd in
+        status) cmd_status ;;
+        logs) cmd_logs "$@" ;;
+        upgrade) rm -rf "$tmpd"; cmd_upgrade ;;
+        backup) cmd_backup "$@" ;;
+        restore) cmd_restore "$@" ;;
+        reset-admin) cmd_reset_admin "$@" ;;
+        doctor) cmd_doctor ;;
+        uninstall) cmd_uninstall "$@" ;;
+        version) cmd_version ;;
+    esac
+}
+
+# Everything runs from here, so the script can replace or delete its own file
+# (upgrade, uninstall) safely.
+main "$@"

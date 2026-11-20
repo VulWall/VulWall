@@ -47,3 +47,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - run: docker compose config -q
       - run: docker compose --profile tracing config -q
+
+  scripts:
+    name: Installer and helper scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: shellcheck install.sh scripts/vulwall scripts/release-assets.sh scripts/test/install_test.sh
+      - run: dash scripts/test/install_test.sh
