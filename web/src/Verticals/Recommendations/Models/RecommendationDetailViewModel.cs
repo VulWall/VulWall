@@ -15,4 +15,9 @@ public class RecommendationDetailViewModel
     /// Feature access based on subscription tier
     /// </summary>
     public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Full;
+
+    /// <summary>
+    /// True when ANTHROPIC_API_KEY is not set, so the page can explain how to get AI guidance.
+    /// </summary>
+    public bool ShowAiKeyHint { get; set; }
 }

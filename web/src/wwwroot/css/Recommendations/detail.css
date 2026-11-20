@@ -106,12 +106,9 @@
 [data-bs-theme="dark"] .scanner-output__text { color: var(--vw-gray-400); }
 
 /* ── No recommendation state ───────────────────────── */
-.no-recommendation { text-align: center; padding: 3rem 2rem; background: var(--bs-body-bg); border: 1px dashed var(--vw-gray-300); border-radius: 12px; }
-[data-bs-theme="dark"] .no-recommendation { background: var(--vw-dark-surface); border-color: var(--vw-dark-border); }
-.no-recommendation i { font-size: 3rem; color: var(--vw-primary); opacity: 0.4; margin-bottom: 1rem; }
-.no-recommendation h4 { margin: 0 0 0.5rem; font-size: 1.25rem; }
-.no-recommendation p { margin: 0; color: var(--vw-gray-600); }
-[data-bs-theme="dark"] .no-recommendation p { color: var(--vw-gray-400); }
+/* ── Fallback guidance (no knowledge-base entry) ────── */
+.reference-list a { color: var(--vw-primary); word-break: break-all; }
+.ai-key-hint { margin: 0; font-size: 12.5px; color: var(--vw-gray-500); }
 
 /* ── Sidebar ────────────────────────────────────────── */
 .detail-sidebar { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; }

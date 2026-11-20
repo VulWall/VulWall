@@ -42,5 +42,11 @@ public class FindingItemViewModel
     public string? Cve { get; set; }
     public string? Cwe { get; set; }
     public string? DetectedBy { get; set; }
+
+    /// <summary>
+    /// Reference URLs the scanner attached to the finding (metadata.reference). Shown as the
+    /// fallback guidance when the finding type has no knowledge-base entry.
+    /// </summary>
+    public List<string> References { get; set; } = [];
     public string? Status { get; set; }
 }
