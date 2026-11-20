@@ -77,6 +77,9 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 
 	// Process the job
 	if err := c.service.ProcessJob(ctx, job); err != nil {
+		if ctx.Err() != nil {
+			return err // shutdown: ConsumeStream logs it at Info and leaves the job unACKed
+		}
 		c.logger.Error("Job processing failed",
 			zap.String("trace_id", job.TraceID),
 			zap.String("org_id", job.OrgID),
