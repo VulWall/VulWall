@@ -33,13 +33,6 @@ public class ServiceSettings : EnvLoader
     public string TrustedProxies = string.Empty;
 
     /// <summary>
-    /// Enables password-protected shared report links. When false (default) the share UI is
-    /// hidden and /shared-reports/* returns 404.
-    /// </summary>
-    [Env(Name = "SHARED_LINKS_ENABLED", Default = "false")]
-    public bool SharedLinksEnabled;
-
-    /// <summary>
     /// Set to true when the app is served over HTTPS (directly or behind a TLS-terminating proxy).
     /// Enables Secure cookies, HSTS and HTTP→HTTPS redirection. Default false so a plain
     /// <c>docker compose up</c> on http://localhost works.

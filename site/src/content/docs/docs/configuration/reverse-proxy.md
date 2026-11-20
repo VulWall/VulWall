@@ -42,7 +42,7 @@ VulWall reads the client's IP address and the original scheme from the `X-Forwar
   docker inspect <proxy-container> --format '{{(index .NetworkSettings.Networks "vulwall_default").IPAddress}}'
   ```
 
-This setting matters for rate limiting. Login and shared-report passwords are rate-limited per client IP (5 failed
+This setting matters for rate limiting. Login attempts are rate-limited per client IP (5 failed
 attempts per 15 minutes). If `TRUSTED_PROXIES` does not match your proxy, VulWall sees every
 request as coming from the proxy, so all users share one limit and a few wrong passwords lock
 everyone out. Login also has a limit for the admin account of 20 attempts per 15 minutes from all
@@ -93,9 +93,3 @@ TRUSTED_PROXIES=172.18.0.1
 ```
 
 Replace `172.18.0.1` with the address you found above.
-
-## Shared report links
-
-If you turn on `SHARED_LINKS_ENABLED`, people with a link and its password can open a report
-without an account. Shared links only work for people who can reach your VulWall, so they need
-the reverse proxy too.

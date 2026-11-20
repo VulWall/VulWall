@@ -10,16 +10,9 @@ public interface ISuppressionFilter
 {
     /// <summary>
     /// Returns the active suppressed (discoveryId, findingType) key set for the current
-    /// org-scoped context (authenticated paths).
+    /// org-scoped context.
     /// </summary>
     Task<HashSet<(string DiscoveryId, string FindingType)>> GetActiveSuppressionKeysAsync();
-
-    /// <summary>
-    /// Returns the active suppressed (discoveryId, findingType) key set for the given org,
-    /// using the public (non-org-scoped) repository. Used by unauthenticated paths such as
-    /// shared reports.
-    /// </summary>
-    Task<HashSet<(string DiscoveryId, string FindingType)>> GetActiveSuppressionKeysForOrgAsync(string orgId);
 
     /// <summary>
     /// Filters a sequence of findings by excluding open findings whose (discoveryId, findingType)

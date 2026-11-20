@@ -14,7 +14,6 @@ public static class MongoDbIndexManager
         await Task.WhenAll(
             CreateFindingIndexes(database),
             CreateScanIndexes(database, logger),
-            CreateSharedLinkIndexes(database),
             CreateAssetIndexes(database),
             CreateTrendIndexes(database),
             CreateDiscoveryIndexes(database),
@@ -96,21 +95,6 @@ public static class MongoDbIndexManager
                     .Ascending("org_id")
                     .Descending("created_at"),
                 new CreateIndexOptions { Name = "org_id_1_created_at_-1", Background = true })
-        ]);
-    }
-
-    private static async Task CreateSharedLinkIndexes(IMongoDatabase database)
-    {
-        var collection = database.GetCollection<BsonDocument>("shared_links");
-
-        await collection.Indexes.CreateManyAsync([
-            new CreateIndexModel<BsonDocument>(
-                Builders<BsonDocument>.IndexKeys.Ascending("token"),
-                new CreateIndexOptions { Name = "token_1", Background = true, Unique = true }),
-
-            new CreateIndexModel<BsonDocument>(
-                Builders<BsonDocument>.IndexKeys.Ascending("org_id"),
-                new CreateIndexOptions { Name = "org_id_1", Background = true })
         ]);
     }
 

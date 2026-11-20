@@ -4,7 +4,7 @@ namespace VulWall.Dashboard.Common.Services.RateLimiter;
 
 /// <summary>
 /// Counts attempts per endpoint in a fixed window. By default the counter is keyed on the
-/// caller's IP; pass a <c>subject</c> (for example a shared-link token) to key it on that value
+/// caller's IP; pass a <c>subject</c> (for example the admin account) to key it on that value
 /// instead, so attempts from many IPs against one target share a single counter.
 /// <para>
 /// Callers reserve an attempt with <see cref="TryReserveAttempt"/> <em>before</em> the expensive
@@ -18,7 +18,7 @@ public class IpRateLimiterService(IMemoryCache cache, IHttpContextAccessor httpC
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(15);
 
     // One lock for every counter: the critical sections are a few instructions and only run on
-    // login / shared-link password attempts. Static so instances sharing a cache stay consistent.
+    // login and change-password attempts. Static so instances sharing a cache stay consistent.
     private static readonly Lock Gate = new();
 
     private sealed class Counter
@@ -56,21 +56,6 @@ public class IpRateLimiterService(IMemoryCache cache, IHttpContextAccessor httpC
         lock (Gate)
         {
             GetOrCreateCounter(key).Count++;
-        }
-    }
-
-    /// <summary>
-    /// Gives back one reserved attempt, for a check that succeeded but must not clear the whole
-    /// counter (for example a shared-link IP counter: one correct link must not wipe failures
-    /// on other links, but correct views must not use up the limit either).
-    /// </summary>
-    public void RefundAttempt(string endpoint, string? subject = null)
-    {
-        var key = GetKey(endpoint, subject);
-        lock (Gate)
-        {
-            if (cache.Get<Counter>(key) is { Count: > 0 } counter)
-                counter.Count--;
         }
     }
 

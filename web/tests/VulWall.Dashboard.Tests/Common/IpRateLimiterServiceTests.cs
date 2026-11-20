@@ -7,7 +7,7 @@ namespace VulWall.Dashboard.Tests.Common;
 
 public class IpRateLimiterServiceTests
 {
-    private const string Endpoint = "shared-reports";
+    private const string Endpoint = "login";
 
     // HttpContextAccessor keeps its context in a static AsyncLocal, so two instances in one test
     // would share it. A plain fixed accessor gives each simulated caller its own IP.
@@ -31,35 +31,35 @@ public class IpRateLimiterServiceTests
     }
 
     [Fact]
-    public void TokenCounter_IsSharedAcrossIps()
+    public void SubjectCounter_IsSharedAcrossIps()
     {
         var cache = new MemoryCache(new MemoryCacheOptions());
         var first = new Caller(cache, "198.51.100.1").Limiter;
         var second = new Caller(cache, "198.51.100.2").Limiter;
 
-        Fail(first, 3, "token-a");
-        Fail(second, 2, "token-a");
+        Fail(first, 3, "subject-a");
+        Fail(second, 2, "subject-a");
 
-        Assert.True(first.IsRateLimited(Endpoint, "token-a"));
-        Assert.True(second.IsRateLimited(Endpoint, "token-a"));
+        Assert.True(first.IsRateLimited(Endpoint, "subject-a"));
+        Assert.True(second.IsRateLimited(Endpoint, "subject-a"));
         Assert.False(second.IsRateLimited(Endpoint)); // per-IP counter is separate
     }
 
     [Fact]
-    public void ResettingOneToken_DoesNotResetAnotherTokenOrTheIpCounter()
+    public void ResettingOneSubject_DoesNotResetAnotherSubjectOrTheIpCounter()
     {
         var cache = new MemoryCache(new MemoryCacheOptions());
         var limiter = new Caller(cache, "198.51.100.1").Limiter;
 
-        Fail(limiter, 5, "token-a");
+        Fail(limiter, 5, "subject-a");
         Fail(limiter, 5);
-        limiter.RecordAttempt(Endpoint, "token-b");
+        limiter.RecordAttempt(Endpoint, "subject-b");
 
-        limiter.ResetAttempts(Endpoint, "token-b");
+        limiter.ResetAttempts(Endpoint, "subject-b");
 
-        Assert.True(limiter.IsRateLimited(Endpoint, "token-a"));
+        Assert.True(limiter.IsRateLimited(Endpoint, "subject-a"));
         Assert.True(limiter.IsRateLimited(Endpoint));
-        Assert.Equal(5, limiter.GetRemainingAttempts(Endpoint, "token-b"));
+        Assert.Equal(5, limiter.GetRemainingAttempts(Endpoint, "subject-b"));
     }
 
     [Fact]
@@ -115,36 +115,8 @@ public class IpRateLimiterServiceTests
         var limiter = new Caller(new MemoryCache(new MemoryCacheOptions()), "198.51.100.1").Limiter;
 
         var results = await Task.WhenAll(Enumerable.Range(0, 100)
-            .Select(_ => Task.Run(() => limiter.TryReserveAttempt(Endpoint, "token-a"))));
+            .Select(_ => Task.Run(() => limiter.TryReserveAttempt(Endpoint, "subject-a"))));
 
         Assert.Equal(IpRateLimiterService.DefaultMaxAttempts, results.Count(r => r));
-    }
-
-    [Fact]
-    public void RefundAttempt_CorrectViewsDoNotUseUpTheLimit_ButFailuresStillCount()
-    {
-        var limiter = new Caller(new MemoryCache(new MemoryCacheOptions()), "198.51.100.1").Limiter;
-
-        // Six successful views: reserve, then refund.
-        for (var i = 0; i < 6; i++)
-        {
-            Assert.True(limiter.TryReserveAttempt(Endpoint));
-            limiter.RefundAttempt(Endpoint);
-        }
-
-        // Five failures (kept), then even a correct password is refused.
-        for (var i = 0; i < 5; i++)
-            Assert.True(limiter.TryReserveAttempt(Endpoint));
-        Assert.False(limiter.TryReserveAttempt(Endpoint));
-    }
-
-    [Fact]
-    public void RefundAttempt_WithoutCounter_DoesNothing()
-    {
-        var limiter = new Caller(new MemoryCache(new MemoryCacheOptions()), "198.51.100.1").Limiter;
-
-        limiter.RefundAttempt(Endpoint);
-
-        Assert.Equal(IpRateLimiterService.DefaultMaxAttempts, limiter.GetRemainingAttempts(Endpoint));
     }
 }

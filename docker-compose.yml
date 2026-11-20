@@ -95,7 +95,6 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
-      SHARED_LINKS_ENABLED: ${SHARED_LINKS_ENABLED:-false}
       SETUP_TOKEN: ${SETUP_TOKEN:-}
     volumes:
       # Data-protection keys that sign the auth cookies. Kept off MongoDB so the scanner,

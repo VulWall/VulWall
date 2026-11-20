@@ -114,7 +114,6 @@ comments.
 | `VULWALL_BUILD_VERSION` | `dev` | Version that images built from source show in the About dialog. `make build` and `make up` set it to `dev (<short commit>)` |
 | `SECURE_COOKIES` | `false` | Set to `true` when VulWall is served over HTTPS |
 | `TRUSTED_PROXIES` | empty | IPs/CIDRs of reverse proxies whose `X-Forwarded-*` headers are trusted |
-| `SHARED_LINKS_ENABLED` | `false` | Password-protected shared report links |
 | `NUCLEI_WORKERS` | `2` | Concurrent nuclei processes |
 | `NUCLEI_RATE_LIMIT` | `50` | Requests per second for each nuclei process |
 | `TESTSSL_CONCURRENCY` | `5` | Concurrent testssl.sh scans |
@@ -145,9 +144,9 @@ access. Docker writes its own iptables rules, so ports it publishes bypass
 host firewalls such as ufw and firewalld, and anyone who can reach the host
 gets plain HTTP.
 
-Login and shared-report passwords are rate-limited per client IP (5 failed
-attempts per 15 minutes), and login also has a limit for the admin account (20
-attempts per 15 minutes from all IPs). If `TRUSTED_PROXIES` does not match your
+Login attempts are rate-limited per client IP (5 failed attempts per 15
+minutes), and login also has a limit for the admin account (20 attempts per 15
+minutes from all IPs). If `TRUSTED_PROXIES` does not match your
 proxy, VulWall sees every request as coming from the proxy, so all clients
 share one IP limit and a few wrong passwords lock everyone out.
 

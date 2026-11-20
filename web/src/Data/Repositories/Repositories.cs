@@ -9,7 +9,6 @@ using VulWall.Dashboard.Data.Entities.Scan;
 using VulWall.Dashboard.Data.Entities.Finding;
 using VulWall.Dashboard.Data.Entities.FindingSuppression;
 using VulWall.Dashboard.Data.Entities.KnowledgeBase;
-using VulWall.Dashboard.Data.Entities.SharedLink;
 using VulWall.Dashboard.Data.Entities.Organization;
 using VulWall.Dashboard.Data.Entities.SystemInfo;
 
@@ -53,20 +52,8 @@ public class FindingsRepository(
     ILogger<OrgScopedRepository<Finding, string>> logger)
     : OrgScopedRepository<Finding, string>(database, "findings", orgContext, logger);
 
-// SharedLinksRepository uses OrgScopedRepository for authenticated operations
-// For public access by token, use SharedLinksPublicRepository
-public class SharedLinksRepository(
-    IMongoDatabase database,
-    IOrganizationContext orgContext,
-    ILogger<OrgScopedRepository<SharedLink, string>> logger)
-    : OrgScopedRepository<SharedLink, string>(database, "shared_links", orgContext, logger);
-
-// SharedLinksPublicRepository uses BaseMongoRepository for public (anonymous) access by token
-public class SharedLinksPublicRepository(IMongoDatabase database)
-    : BaseMongoRepository<SharedLink, string>(database, "shared_links");
-
 // ScansPublicRepository uses BaseMongoRepository for access outside a user request
-// (shared reports, background jobs).
+// (background jobs).
 public class ScansPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<Scan, string>(database, "scans")
 {
@@ -189,7 +176,3 @@ public class FindingSuppressionsRepository(
     IOrganizationContext orgContext,
     ILogger<OrgScopedRepository<FindingSuppression, string>> logger)
     : OrgScopedRepository<FindingSuppression, string>(database, "finding_suppressions", orgContext, logger);
-
-// FindingSuppressionsPublicRepository uses BaseMongoRepository for anonymous access (e.g., shared reports)
-public class FindingSuppressionsPublicRepository(IMongoDatabase database)
-    : BaseMongoRepository<FindingSuppression, string>(database, "finding_suppressions");
