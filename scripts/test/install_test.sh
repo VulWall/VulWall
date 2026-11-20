@@ -507,6 +507,9 @@ env_mode() {
 }
 t "env: appending keeps .env private" 0 env_mode && expect "$work/out" "^-rw-------$"
 
+env_private() { dir=$work/case; (umask 022 && : >.env); make_env_private; ls -l .env | cut -c1-10; }
+t "env: an existing .env is made private" 0 env_private && expect "$work/out" "^-rw-------$"
+
 # --- Helper link ----------------------------------------------------------------------------
 
 link_case() { # answer existing(-|file)

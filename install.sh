@@ -393,6 +393,13 @@ env_replace() { # name value comment
     ) || { rm -f .env.new; die "Could not write $1 to $dir/.env."; }
 }
 
+# .env holds secrets. An install made before the installer used umask 077, or a
+# .env the user created, may be readable by others.
+make_env_private() {
+    chmod 600 .env 2>/dev/null ||
+        warn "Could not make $dir/.env private (chmod 600). It holds secrets: fix its permissions."
+}
+
 is_hex32() {
     [ "${#1}" -eq 32 ] || return 1
     case $1 in *[!0-9a-f]*) return 1 ;; esac
@@ -681,6 +688,7 @@ main() {
         say "Created $dir/.env (edit it to change settings)"
     fi
     ensure_setup_token
+    make_env_private
     choose_port
 
     say "Pulling images (the first time this takes a few minutes)..."
