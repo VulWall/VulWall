@@ -187,6 +187,7 @@ func convertToSecurityFinding(check scanner.HeaderCheckResult, pageURL string, t
 		Severity:    check.Severity,
 		Title:       check.Title,
 		Description: check.Description,
+		References:  check.References,
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,
 		Timestamp:   time.Now(),

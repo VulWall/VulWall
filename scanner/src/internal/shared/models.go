@@ -146,6 +146,8 @@ type SecurityFinding struct {
 	Severity     string                 `json:"severity" bson:"severity"`                     // info, low, medium, high, critical
 	Title        string                 `json:"title" bson:"title"`                           // Short title
 	Description  string                 `json:"description" bson:"description"`               // Detailed description
+	Remediation  string                 `json:"remediation,omitempty" bson:"remediation,omitempty"` // How to fix, when the scanner provides it
+	References   []string               `json:"references,omitempty" bson:"references,omitempty"`   // Advisory / documentation URLs
 	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"` // Scanner-specific data
 	Status           string                 `json:"status" bson:"status"`                                                   // open, resolved
 	Timestamp        time.Time              `json:"timestamp" bson:"timestamp"`                                             // When finding was discovered

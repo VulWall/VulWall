@@ -106,6 +106,8 @@ type SecurityFinding struct {
     Severity     string                 `json:"severity"`     // info, low, medium, high, critical
     Title        string                 `json:"title"`
     Description  string                 `json:"description"`
+    Remediation  string                 `json:"remediation,omitempty"` // only when the scanner provides it
+    References   []string               `json:"references,omitempty"`
     Metadata     map[string]interface{} `json:"metadata,omitempty"`
     Status       string                 `json:"status"`       // open, resolved
     Timestamp    time.Time              `json:"timestamp"`
@@ -228,7 +230,7 @@ type SubscriptionSettings struct {
 type Scan struct {
     ID             string        `bson:"_id"`
     OrgID          string        `bson:"org_id"`
-    Status         string        `bson:"status"`       // pending, running, done, failed
+    Status         string        `bson:"status"`       // queued, pending, running, done, failed
     Type           string        `bson:"type"`          // scheduled, requested
     TriggeredBy    string        `bson:"triggered_by"`  // user ID or "system"
     StartedAt      *time.Time    `bson:"started_at,omitempty"`
@@ -328,6 +330,8 @@ type ScanStats struct {
   source: "nuclei",
   title: "Remote Code Execution",
   description: "...",
+  remediation: "...",            // optional
+  references: ["https://..."],   // optional
   metadata: { /* scanner-specific */ },
   status: "open",
   scan_ids: ["scan-abc-456"],
@@ -336,6 +340,24 @@ type ScanStats struct {
   resolved_at: null
 }
 ```
+
+#### Finding text written by the scanners
+
+Each finding carries the scanner's own human-readable text, so the web app can
+show it without a knowledge-base entry (the KB engine is optional and only runs
+when `ANTHROPIC_API_KEY` is set). Empty values are not written, and an update
+never clears text that an earlier scan stored.
+
+| Field | Type | nuclei | testssl | jsscanner (retire.js) | http-headers | email-security |
+|-------|------|--------|---------|-----------------------|--------------|----------------|
+| `title` | string | `info.name` | `TLS/SSL: <test id>` | component, version, summary, CVEs | rule title | check title |
+| `description` | string | `info.description` | testssl `finding` text | advisory summary | rule explanation | check explanation |
+| `remediation` | string, optional | `info.remediation` | — | — | — | — |
+| `references` | string array, optional | `info.reference` | — | advisory URLs | MDN / OWASP URLs | RFC / guide URLs |
+
+The same URLs also stay in `metadata.reference` (nuclei) and
+`metadata.references` (other scanners) for backward compatibility; new readers
+should use the top-level `references` field.
 
 ### Knowledge Base Collection
 ```javascript
@@ -380,6 +402,34 @@ type ScanStats struct {
 ```
 
 ### Scans Collection
+
+**Lifecycle.** Two writers create scans:
+
+- **Requested scans** — the web app inserts
+  `{_id, org_id, status: "queued", triggered_by, created_at}`. The scan
+  coordinator polls every 5 s and claims the document in place: it sets
+  `status: "running"`, `type: "requested"`, `started_at`, `updated_at`,
+  `targeted_assets` and `stats.total_assets`, then publishes discovery jobs
+  with that `_id`.
+- **Scheduled scans** — the coordinator's cron inserts a new document with
+  `status: "running"` and `started_at`.
+
+Status values: `queued` → `running` → `done` (or `failed`). `pending` is still
+read by the guards for older documents but is no longer written.
+
+- One active scan per organization. A queued scan waits while its organization
+  has a `pending` or `running` scan and starts on a later poll. Only the oldest
+  queued scan of an organization starts in one poll, so several queued
+  requests run one after another.
+- A scheduled trigger is skipped while the organization has a `queued`,
+  `pending` or `running` scan.
+- A queued scan whose organization does not exist becomes `failed`. A queued
+  scan with no enabled assets becomes `done` at once. If no discovery job can
+  be published, the scan becomes `failed`. Each of these sets `completed_at`.
+- The scan monitor sets `status: "done"`, `completed_at` and the `stats.*`
+  counters when the pipeline is drained. Scan age for the completion timeouts
+  is measured from `started_at` (from `created_at` when `started_at` is absent).
+
 ```javascript
 {
   _id: "scan-uuid-456",
@@ -387,7 +437,7 @@ type ScanStats struct {
   status: "running",
   type: "scheduled",
   triggered_by: "system",
-  started_at: null,
+  started_at: ISODate("..."),
   completed_at: null,
   created_at: ISODate("..."),
   updated_at: ISODate("..."),

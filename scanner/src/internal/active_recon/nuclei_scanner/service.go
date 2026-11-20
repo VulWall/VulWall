@@ -344,6 +344,8 @@ func (s *Service) convertToSecurityFinding(nucleiOutput NucleiOutput, target Sca
 		Severity:    severity,
 		Title:       nucleiOutput.Info.Name,
 		Description: nucleiOutput.Info.Description,
+		Remediation: nucleiOutput.Info.Remediation,
+		References:  nucleiOutput.Info.Reference,
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,
 		Timestamp:   time.Now(),

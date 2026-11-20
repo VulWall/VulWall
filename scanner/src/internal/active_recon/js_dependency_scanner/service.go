@@ -207,6 +207,7 @@ func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL strin
 		Severity:    vuln.Severity,
 		Title:       title,
 		Description: vuln.Summary,
+		References:  vuln.References,
 		Metadata:    metadata,
 		Status:      shared.FindingStatusOpen,
 		Timestamp:   time.Now(),
