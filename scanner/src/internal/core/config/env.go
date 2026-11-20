@@ -18,8 +18,6 @@ const (
 	// Service Configuration
 	// ===========================================
 
-	// EnvServiceName is the service identifier for logging and telemetry
-	EnvServiceName = "SERVICE_NAME"
 	// EnvEnvironment is the deployment environment (development/production)
 	EnvEnvironment = "ENVIRONMENT"
 	// EnvVulWallVersion is the release the image was built from (scanner/Dockerfile build arg)
@@ -34,7 +32,7 @@ const (
 
 	// EnvAnthropicAPIKey is the Anthropic API key for knowledge base generation
 	EnvAnthropicAPIKey = "ANTHROPIC_API_KEY"
-	// EnvAnthropicModel is the Anthropic model to use (default: claude-sonnet-4-5-20250514)
+	// EnvAnthropicModel is the Anthropic model to use (default: claude-sonnet-4-6)
 	EnvAnthropicModel = "ANTHROPIC_MODEL"
 
 	// ===========================================

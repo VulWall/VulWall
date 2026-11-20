@@ -13,7 +13,6 @@ type Config struct {
 	RedisURI    string
 	MongoURI    string
 	MongoDB     string
-	ServiceName string
 	Environment string
 }
 
@@ -27,7 +26,6 @@ func Load() (*Config, error) {
 		RedisURI:    GetEnv(EnvRedisURI, "redis://localhost:6379/0"),
 		MongoURI:    GetEnv(EnvMongoURI, "mongodb://localhost:27017"),
 		MongoDB:     GetEnv(EnvMongoDB, "vulwall"),
-		ServiceName: GetEnv(EnvServiceName, "vulwall-scanner"),
 		Environment: GetEnv(EnvEnvironment, "development"),
 	}, nil
 }
