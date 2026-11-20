@@ -25,6 +25,7 @@ type Dataset struct {
 	Scans        []scanDoc
 	Coverage     []coverageDoc
 	Suppressions []suppressionDoc
+	Knowledge    []kbDoc
 	SystemInfo   sysinfoDoc
 }
 
@@ -356,6 +357,14 @@ func Build(orgID string, now time.Time, version string) *Dataset {
 			FindingType: s.findingType, Status: s.status, Note: s.note, SuppressedBy: "admin",
 			SuppressedAt: now.AddDate(0, 0, -s.daysAgo).Add(-3 * time.Hour), Active: true, Demo: true,
 		})
+	}
+
+	// Knowledge-base entries, created when their finding type was first seen.
+	for _, kb := range knowledgeBase() {
+		created := starts[0].Add(25 * time.Minute)
+		kb.ID, kb.Model, kb.Published, kb.Version = "kb_"+kb.FindingType, kbModel, true, 1
+		kb.CreatedAt, kb.UpdatedAt, kb.Demo = created, created, true
+		ds.Knowledge = append(ds.Knowledge, kb)
 	}
 
 	templatesAt := now.AddDate(0, 0, -1).Add(-2 * time.Hour)

@@ -53,9 +53,19 @@ func TestApplyAndReset(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// An entry the KB engine wrote for a demo finding type.
+	if _, err := db.Collection(shared.CollectionKnowledgeBase).InsertOne(ctx, bson.M{
+		"_id": "kb_missing-csp", "finding_type": "missing-csp", "model": "claude-sonnet-4-6", "published": true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
 	ds, err := Apply(ctx, db, Options{Now: testNow, Version: "v0.1.0"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if n := count(t, ctx, db, shared.CollectionKnowledgeBase, bson.M{"demo": true, "published": true}); n != int64(len(ds.Knowledge)-1) {
+		t.Errorf("%d demo KB entries, want %d (one kept from the KB engine)", n, len(ds.Knowledge)-1)
 	}
 
 	// Documents decode into the scanner's own models.
@@ -152,6 +162,9 @@ func TestApplyAndReset(t *testing.T) {
 		if n := count(t, ctx, db, coll, bson.M{"demo": true}); n != 0 {
 			t.Errorf("%s: %d demo documents left", coll, n)
 		}
+	}
+	if n := count(t, ctx, db, shared.CollectionKnowledgeBase, bson.M{"_id": "kb_missing-csp", "model": "claude-sonnet-4-6"}); n != 1 {
+		t.Error("Reset removed or changed the KB engine's entry")
 	}
 	if n := count(t, ctx, db, shared.CollectionAssets, bson.M{"domain": "real.example"}); n != 1 {
 		t.Error("Reset removed a real asset")

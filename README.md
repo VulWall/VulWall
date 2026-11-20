@@ -134,7 +134,9 @@ The sample data is the fictional company "Acme Demo": two root domains and
 addresses only from the documentation ranges (`192.0.2.0/24`,
 `198.51.100.0/24`, `203.0.113.0/24`), six weekly scans over the last six
 weeks, findings from every scanner (with the scanners' real titles,
-descriptions and references), one accepted risk and one false positive. Every
+descriptions and references), one accepted risk, one false positive and
+sample knowledge-base entries for four finding types (as the optional AI
+engine would write them). Every
 document it inserts has `demo: true`; the organization is renamed, and its own
 name, schedule and tour state are kept for `--reset`.
 

@@ -16,7 +16,9 @@
 
 Sample data: `demo-seed` (`src/cmd/demo-seed`, `src/internal/demoseed`) inserts documents with
 the shapes below into `assets`, `discoveries`, `findings`, `scans`, `scan_coverage`,
-`system_info` (only when missing) and the web app's `finding_suppressions`, each with an extra
+`system_info` and `knowledge_base` (only where the document is missing; published entries for
+the top demo finding types, `model: "demo-seed (sample entry)"`) and the web app's
+`finding_suppressions`, each with an extra
 `demo: true`. `demo-seed --reset` deletes exactly those and restores the organization from
 `demo_seed`. Nothing else writes or reads the `demo` field.
 

@@ -198,3 +198,36 @@ func TestJSTitleMatchesTheScannerFormat(t *testing.T) {
 		t.Errorf("long summary not cut: %q", got)
 	}
 }
+
+// The knowledge-base entries follow the KB engine's response schema and belong to finding
+// types that are open in the latest scan, so the Recommendations tiles count them.
+func TestBuildKnowledgeBaseEntries(t *testing.T) {
+	ds := Build("org1", testNow, "v0.1.0")
+	latestID := ds.Scans[len(ds.Scans)-1].ID
+	exploitable, quick := 0, 0
+	for _, kb := range ds.Knowledge {
+		if !kb.Demo || !kb.Published || kb.ID != "kb_"+kb.FindingType {
+			t.Errorf("%s: demo=%v published=%v id=%s", kb.FindingType, kb.Demo, kb.Published, kb.ID)
+		}
+		if !slices.ContainsFunc(ds.Findings, func(f findingDoc) bool {
+			return f.FindingType == kb.FindingType && slices.Contains(f.ScanIDs, latestID)
+		}) {
+			t.Errorf("%s: no finding of this type in the latest scan", kb.FindingType)
+		}
+		b, m := kb.Business, kb.Metadata
+		if !slices.Contains([]string{"immediate", "high", "medium", "low"}, b.Urgency) ||
+			!slices.Contains([]string{"trivial", "small", "medium", "large"}, m.EstimatedEffort) ||
+			b.Title == "" || b.Summary == "" || len(b.Actions) < 2 || len(kb.Technical.RemediationSteps) == 0 {
+			t.Errorf("%s: entry does not follow the schema: %+v", kb.FindingType, kb)
+		}
+		if m.IsExploitable {
+			exploitable++
+		}
+		if m.EstimatedEffort == "trivial" || m.EstimatedEffort == "small" {
+			quick++
+		}
+	}
+	if len(ds.Knowledge) < 3 || exploitable == 0 || quick == 0 {
+		t.Errorf("%d entries, %d exploitable, %d quick wins", len(ds.Knowledge), exploitable, quick)
+	}
+}

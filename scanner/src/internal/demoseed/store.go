@@ -30,7 +30,7 @@ var orgFields = []string{"company_name", "industry", "website", "scan_settings",
 // demoCollections hold only documents that Apply inserted (demo: true); Reset deletes those.
 var demoCollections = []string{
 	shared.CollectionAssets, shared.CollectionDiscoveries, shared.CollectionFindings, shared.CollectionScans,
-	shared.CollectionScanCoverage, collSuppressions, sysinfo.Collection,
+	shared.CollectionScanCoverage, collSuppressions, sysinfo.Collection, shared.CollectionKnowledgeBase,
 }
 
 // ErrHasData means the organization already has assets or findings that are not sample data.
@@ -88,6 +88,14 @@ func Apply(ctx context.Context, db *mongo.Database, opt Options) (*Dataset, erro
 	for _, w := range writes {
 		if _, err := db.Collection(w.coll).InsertMany(ctx, w.docs); err != nil {
 			return nil, fmt.Errorf("insert %s: %w", w.coll, err)
+		}
+	}
+	// Knowledge-base entries are shared by finding type: keep an entry the KB engine wrote.
+	for _, kb := range ds.Knowledge {
+		_, err := db.Collection(shared.CollectionKnowledgeBase).UpdateOne(ctx, bson.M{"_id": kb.ID},
+			bson.M{"$setOnInsert": kb}, options.Update().SetUpsert(true))
+		if err != nil {
+			return nil, fmt.Errorf("write knowledge_base: %w", err)
 		}
 	}
 	// A running scanner owns system_info; only fill it in when it has never run.
