@@ -134,8 +134,11 @@ func run() error {
 // createConsumerGroups creates the groups of the discovery job queues (from
 // "0") and of the trigger streams (from "$").
 func createConsumerGroups(ctx context.Context, rdb *redis.Client, log *zap.Logger) error {
+	if err := domain_discovery.DropLegacyGroup(ctx, rdb, log); err != nil {
+		return err
+	}
 	jobQueues := []struct{ stream, group string }{
-		{shared.StreamDomainDiscoveryQueue, domain_discovery.GroupShodanSubdomainService},
+		{shared.StreamDomainDiscoveryQueue, domain_discovery.GroupDomainDiscovery},
 		{shared.StreamIPDiscoveryQueue, port_discovery.GroupPortDiscovery},
 	}
 	for _, q := range jobQueues {

@@ -14,7 +14,7 @@ whole scanner.
 
 | # | Component | Consumer Group | Consumes From | Produces To | Started in `main.go` by | MongoDB |
 |---|---------|---------------|---------------|-------------|-----------|---------|
-| 1 | **domain-discovery** | `shodan_subdomain_service` | `domain_discovery_queue` | `domain_discovery_results` | `consumers()` | No |
+| 1 | **domain-discovery** | `domain_discovery_service` | `domain_discovery_queue` | `domain_discovery_results` | `consumers()` | No |
 | 2 | **port-discovery** | `port_discovery_service` | `ip_discovery_queue` | `ip_discovery_results` | `consumers()` | No |
 | 3 | **nuclei-scanner** | `nuclei_scanner_service` | `domain_scan_triggers` + `port_scan_triggers` | `security_findings` | `consumers()` | No |
 | 4 | **testssl-scanner** | `testssl_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
@@ -143,7 +143,7 @@ Each service defines its consumer group constant in its own `constants.go`:
 
 | Service | File | Constant |
 |---------|------|----------|
-| domain-discovery | `src/internal/discoveries/domain_discovery/constants.go` | `GroupShodanSubdomainService` |
+| domain-discovery | `src/internal/discoveries/domain_discovery/constants.go` | `GroupDomainDiscovery` |
 | port-discovery | `src/internal/discoveries/port_discovery/constants.go` | `GroupPortDiscovery` |
 | nuclei-scanner | `src/internal/active_recon/nuclei_scanner/constants.go` | `GroupNucleiScanner` |
 | testssl-scanner | `src/internal/active_recon/testssl_scanner/constants.go` | `GroupTestSSLScanner` |

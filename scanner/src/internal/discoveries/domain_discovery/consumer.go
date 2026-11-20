@@ -35,7 +35,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 	return redisx.ConsumeStream(ctx, c.redis, redisx.ConsumerConfig{
 		Stream:         shared.StreamDomainDiscoveryQueue,
-		Group:          GroupShodanSubdomainService,
+		Group:          GroupDomainDiscovery,
 		ConsumerPrefix: "worker",
 		BatchSize:      ConsumerBatchSize,
 		Handler:        c.processMessage,
