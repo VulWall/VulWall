@@ -46,7 +46,7 @@
             {
                 <div class="disc-drawer-row">
                     <span class="label">CDN edge</span>
-                    <span class="value">@Model.CdnEdge · scanned for vulnerabilities through its hostnames, not by IP</span>
+                    <span class="value" title="A shared CDN address: VulWall scans the hostnames behind it for vulnerabilities, not the IP address itself.">@Model.CdnEdge · tested through its hostnames</span>
                 </div>
             }
             @if (!string.IsNullOrEmpty(Model.Waf))
