@@ -21,7 +21,7 @@
                 Create the admin account for this install. You use it to sign in and manage your assets.
             </p>
 
-            <form method="post" action="/setup" class="auth-form" novalidate>
+            <form method="post" action="/setup" asp-antiforgery="true" class="auth-form" novalidate>
                 <div asp-validation-summary="ModelOnly" class="auth-form-alert" role="alert"></div>
 
                 <div class="auth-field">

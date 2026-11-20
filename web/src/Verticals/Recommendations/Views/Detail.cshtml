@@ -220,7 +220,7 @@ else if (status == "muted")
             }
         }
 
-        <!-- Original scanner output (the fallback above already shows the description) -->
+        @* Original scanner output (the fallback above already shows the description) *@
         @if (Model.Finding.HasAIRecommendation && !string.IsNullOrEmpty(Model.Finding.Description))
         {
             <div class="scanner-output-section">

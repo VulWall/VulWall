@@ -16,7 +16,7 @@
         </div>
 
         <div class="claim-card auth-form-card">
-            <form method="post" action="/login" class="auth-form" novalidate>
+            <form method="post" action="/login" asp-antiforgery="true" class="auth-form" novalidate>
                 <div asp-validation-summary="ModelOnly" class="auth-form-alert" role="alert"></div>
                 <input type="hidden" asp-for="ReturnUrl" />
 

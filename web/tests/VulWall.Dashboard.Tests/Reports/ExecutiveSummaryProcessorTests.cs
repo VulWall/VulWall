@@ -16,12 +16,14 @@ public class ExecutiveSummaryProcessorTests(MongoFixture mongo)
 {
     private sealed class FakeAi(string? response) : IAIService
     {
-        public int Calls { get; private set; }
+        private int _calls;
+        public int Calls => Volatile.Read(ref _calls);
 
         public Task<string?> GetResponseAsync(string promptName, string userMessage, string? model = null,
             CancellationToken cancellationToken = default)
         {
-            Calls++;
+            // Called from concurrent workers in one test.
+            Interlocked.Increment(ref _calls);
             return Task.FromResult(response);
         }
     }
