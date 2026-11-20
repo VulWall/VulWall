@@ -258,6 +258,13 @@
     object-fit: contain;
     flex-shrink: 0;
 }
+/* Provider logos are single-colour brand marks (some near-black, e.g. AWS): give them a
+   light chip in dark theme so they stay visible. */
+[data-bs-theme="dark"] .disc-hosting .geo-cloud-logo {
+    background: var(--brand-off-white);
+    border-radius: 3px;
+    padding: 2px;
+}
 .disc-hosting .country-code {
     font-family: var(--font-mono);
     font-size: 0.75rem;

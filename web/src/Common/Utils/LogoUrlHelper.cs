@@ -6,13 +6,31 @@ using Microsoft.Extensions.FileProviders;
 namespace VulWall.Dashboard.Common.Utils;
 
 /// <summary>
-/// Resolves country-flag and cloud-provider logo images served from wwwroot/images/logos.
+/// Resolves country-flag and cloud-provider logo images served from wwwroot/images/logos
+/// (flags from flag-icons, provider logos from simple-icons; see NOTICE).
 /// Returns null when the image is not shipped, so the view renders a generic icon instead.
 /// Inputs come from scan data in the database, so only safe slugs ever reach a file path.
 /// </summary>
 public static partial class LogoUrlHelper
 {
     private const string BasePath = "/images/logos";
+
+    // Substring of the scanner's cloud provider name ("AWS", "Azure", "GCP", "Fastly") or of
+    // the DB-IP ASN organization (e.g. "Amazon.com, Inc.", "Google LLC") -> shipped logo slug.
+    private static readonly (string Match, string Slug)[] KnownProviders =
+    [
+        ("cloudflare", "cloudflare"),
+        ("amazon", "aws"),
+        ("aws", "aws"),
+        ("azure", "azure"),
+        ("microsoft", "azure"),
+        ("gcp", "gcp"),
+        ("google", "gcp"),
+        ("fastly", "fastly"),
+        ("digitalocean", "digitalocean"),
+        ("akamai", "akamai"),
+        ("oracle", "oracle"),
+    ];
 
     // File existence per web root and path, cached for the process lifetime (wwwroot is
     // read-only at runtime).
@@ -26,7 +44,7 @@ public static partial class LogoUrlHelper
             return null;
 
         var code = countryCode.Trim().ToLowerInvariant();
-        return CountryCodeRegex().IsMatch(code) ? Resolve(webRoot, $"{BasePath}/countries/{code}.png") : null;
+        return CountryCodeRegex().IsMatch(code) ? Resolve(webRoot, $"{BasePath}/countries/{code}.svg") : null;
     }
 
     /// <param name="webRoot">The app's web root, IWebHostEnvironment.WebRootFileProvider.</param>
@@ -34,7 +52,7 @@ public static partial class LogoUrlHelper
     public static string? GetCloudProviderLogoUrl(IFileProvider webRoot, string? provider)
     {
         var slug = NormalizeProviderName(provider);
-        return slug == null ? null : Resolve(webRoot, $"{BasePath}/cloud/{slug}.png");
+        return slug == null ? null : Resolve(webRoot, $"{BasePath}/cloud/{slug}.svg");
     }
 
     /// <summary>
@@ -46,8 +64,11 @@ public static partial class LogoUrlHelper
             return null;
 
         var name = provider.Trim().ToLowerInvariant();
-        if (name.Contains("cloudflare"))
-            return "cloudflare";
+        foreach (var (match, known) in KnownProviders)
+        {
+            if (name.Contains(match))
+                return known;
+        }
 
         var slug = NonSlugRegex().Replace(name, "-").Trim('-');
         return slug.Length is > 0 and <= 64 ? slug : null;

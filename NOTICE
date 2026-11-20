@@ -53,6 +53,22 @@ DB-IP Lite databases (IP to Country Lite, IP to ASN Lite)
   not part of the source code or the image.
 
 ------------------------------------------------------------------------------
+Images included in the web app (web/src/wwwroot/images/logos)
+------------------------------------------------------------------------------
+
+flag-icons 7.6.0 (country flags, countries/*.svg)
+  https://github.com/lipis/flag-icons
+  Copyright (c) 2013 Panayiotis Lipiridis
+  License: MIT (countries/LICENSE)
+
+simple-icons 11.15.0 (cloud provider logos, cloud/*.svg)
+  https://github.com/simple-icons/simple-icons
+  License: CC0 1.0 Universal (cloud/LICENSE.md). The SVGs are unmodified
+  except for an added fill attribute with the brand colour from the same
+  release. The logos are trademarks of their owners and are shown only to
+  identify the hosting provider of a discovered IP; see cloud/DISCLAIMER.md.
+
+------------------------------------------------------------------------------
 Services run by docker-compose.yml (separate images, not distributed by VulWall)
 ------------------------------------------------------------------------------
 
