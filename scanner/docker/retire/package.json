@@ -4,6 +4,6 @@
   "description": "retire.js for the scanner image, installed with npm ci from package-lock.json",
   "license": "MIT",
   "dependencies": {
-    "retire": "5.4.2"
+    "retire": "6.1.1"
   }
 }
