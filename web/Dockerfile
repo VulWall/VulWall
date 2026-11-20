@@ -13,7 +13,7 @@ RUN dotnet restore src/VulWall.Dashboard.csproj -a "$TARGETARCH"
 COPY src/ src/
 RUN dotnet publish src/VulWall.Dashboard.csproj -c Release -a "$TARGETARCH" -o /app/out --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:12b1135f5f8b3c0a214f2a680ff2033dff4f684f445d6c697d9524ceeb303586 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:11.0@sha256:bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242 AS final
 WORKDIR /app
 
 # curl is only used by the container healthcheck
