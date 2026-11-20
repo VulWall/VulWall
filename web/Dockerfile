@@ -1,14 +1,17 @@
 # Build context: web/  (docker build -t vulwall-web web/)
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# The SDK stage runs on the build machine's own architecture and cross-compiles for the target,
+# so a multi-arch build does not run the SDK under QEMU emulation.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG TARGETARCH
 WORKDIR /src
 
 # Restore first so the package layer is cached across source changes
 COPY src/VulWall.Dashboard.csproj src/
-RUN dotnet restore src/VulWall.Dashboard.csproj
+RUN dotnet restore src/VulWall.Dashboard.csproj -a "$TARGETARCH"
 
 COPY src/ src/
-RUN dotnet publish src/VulWall.Dashboard.csproj -c Release -o /app/out --no-restore
+RUN dotnet publish src/VulWall.Dashboard.csproj -c Release -a "$TARGETARCH" -o /app/out --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
