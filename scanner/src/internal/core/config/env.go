@@ -86,6 +86,11 @@ const (
 	EnvNucleiExcludeTags = "NUCLEI_EXCLUDE_TAGS"
 	// EnvTestSSLConcurrency is the number of concurrent testssl.sh workers (default: 5)
 	EnvTestSSLConcurrency = "TESTSSL_CONCURRENCY"
+	// EnvCertExpiryWarnDays: a TLS certificate that expires within this many days is a
+	// medium finding (default: 30)
+	EnvCertExpiryWarnDays = "CERT_EXPIRY_WARN_DAYS"
+	// EnvCertExpiryCriticalDays: within this many days, or already expired, it is high (default: 7)
+	EnvCertExpiryCriticalDays = "CERT_EXPIRY_CRITICAL_DAYS"
 	// EnvIPEnrichmentDBPath is the path to the country MMDB file (e.g., DB-IP IP to Country Lite)
 	EnvIPEnrichmentDBPath = "IP_ENRICHMENT_DB_PATH"
 	// EnvIPASNDBPath is the path to the optional ASN MMDB file (e.g., DB-IP IP to ASN Lite); fills the ISP field

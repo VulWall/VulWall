@@ -33,7 +33,9 @@ func scanPipelineGroups() []StreamGroup {
 		{shared.StreamDomainScanTriggers, "js_dependency_scanner_service"},
 		{shared.StreamDomainScanTriggers, "http_header_scanner_service"},
 		{shared.StreamDomainScanTriggers, "email_security_scanner_service"},
+		{shared.StreamDomainScanTriggers, "certificate_scanner_service"},
 		{shared.StreamPortScanTriggers, "nuclei_scanner_service"},
+		{shared.StreamPortScanTriggers, "certificate_scanner_service"},
 		{shared.StreamSecurityFindings, "findings_ingestion_service"},
 	}
 }

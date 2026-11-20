@@ -150,6 +150,7 @@ public class TechnicalReportBuilder(
         {
             ["http-headers"] = "A05", // Security Misconfiguration
             ["testssl"] = "A02",      // Cryptographic Failures
+            ["certificate"] = "A02",  // Cryptographic Failures
             ["jsscanner"] = "A06",    // Vulnerable and Outdated Components
             ["webtechprofiler"] = "A06", // Vulnerable and Outdated Components
             ["nuclei"] = "A05",       // Security Misconfiguration (fallback)

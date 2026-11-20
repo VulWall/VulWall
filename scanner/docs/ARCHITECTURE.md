@@ -178,8 +178,8 @@ its input, so the scan cannot drain before the evidence lands. `findings_ingesti
 
 | Source | `status` | Means |
 |--------|----------|-------|
-| a scanner (`nuclei`, `testssl`, `jsscanner`, `http-headers`, `email-security`) | `ok` + `reported` | The check ran to completion on that discovery; `reported` lists the `(finding_type, title)` of every finding it reported |
-| a scanner | `error` | The check did not complete: a tool error; a testssl.sh run that exited non-zero (1-239: checks that could not run; 240+: fatal) or whose JSON has no numeric `scanTime` or has a `scanProblem`/`FATAL` entry; a nuclei or testssl target that no longer accepts a TCP connection after the run (`shared.Reachable`: nuclei reports "no findings" also for a target that went down or banned the scanner mid-run); a nuclei run that exited non-zero, logged `[FTL]` or no "Scan completed", or dropped the target (`Skipped <host:port> from target list`, which nuclei logs and still exits 0); a nuclei target whose root answers 403, 429, 5xx or a WAF challenge after the run; an http/https probe that neither answered nor refused (timeout, TLS failure, 403/429/5xx, a WAF challenge: `shared.BlockedResponse`; a 404 or 410 is a definite answer, `shared.ErrGone`); an http/https check in which both protocols refused the connection (`shared.ErrNoAnswer`: nothing was checked); a JS file that did not download (other than 404/410) or came back as a WAF challenge page; a retire.js failure; a transient SPF/DMARC/NS/MX lookup error; an AXFR attempt that timed out before any record, or a nameserver that did not resolve (one the SSRF guard refuses is skipped); a "no record" answer (SPF, DMARC, MX, NS) that the public resolvers did not confirm; a 403, 429 or 5xx answer, a WAF challenge, or a failed CORS or HTTPS-redirect request in the header check; or a host that did not resolve in this scan |
+| a scanner (`nuclei`, `testssl`, `certificate`, `jsscanner`, `http-headers`, `email-security`) | `ok` + `reported` | The check ran to completion on that discovery; `reported` lists the `(finding_type, title)` of every finding it reported |
+| a scanner | `error` | The check did not complete: a tool error; a testssl.sh run that exited non-zero (1-239: checks that could not run; 240+: fatal) or whose JSON has no numeric `scanTime` or has a `scanProblem`/`FATAL` entry; a nuclei or testssl target that no longer accepts a TCP connection after the run (`shared.Reachable`: nuclei reports "no findings" also for a target that went down or banned the scanner mid-run); a nuclei run that exited non-zero, logged `[FTL]` or no "Scan completed", or dropped the target (`Skipped <host:port> from target list`, which nuclei logs and still exits 0); a nuclei target whose root answers 403, 429, 5xx or a WAF challenge after the run; an http/https probe that neither answered nor refused (timeout, TLS failure, 403/429/5xx, a WAF challenge: `shared.BlockedResponse`; a 404 or 410 is a definite answer, `shared.ErrGone`); an http/https check in which both protocols refused the connection (`shared.ErrNoAnswer`: nothing was checked); a JS file that did not download (other than 404/410) or came back as a WAF challenge page; a retire.js failure; a transient SPF/DMARC/NS/MX lookup error; an AXFR attempt that timed out before any record, or a nameserver that did not resolve (one the SSRF guard refuses is skipped); a "no record" answer (SPF, DMARC, MX, NS) that the public resolvers did not confirm; a 403, 429 or 5xx answer, a WAF challenge, or a failed CORS or HTTPS-redirect request in the header check; a certificate check whose connection or TLS handshake failed (refused, timed out, not TLS, refused by the SSRF guard: no certificate was read); or a host that did not resolve in this scan |
 | `domain_discovery` | `absent` | A domain or subdomain that an earlier scan saw has no address: the local resolver and every public resolver (`DNS_RECHECK_RESOLVERS`) say NXDOMAIN or NODATA |
 | `port_discovery` | `ok` | The port scan of that IP completed and found at least one port open (discovery id = the IP's). A scan with no open port is no evidence: a block looks the same |
 
@@ -363,14 +363,42 @@ do not. The findings of a `<name>:<port>` run carry `metadata.scan_host` (the na
 resolution rule never resolves such a finding as `not_reproduced` (`notReproduced()` in
 `finding_resolution.go`): a coverage record of the port can only come from a run by IP (for
 example after the address leaves the CDN ranges), which did not check the name. Such a finding
-is resolved by hand, or as `host_no_longer_found` when the port is closed in 3 scans. The port discovery is stored in every case; only the nuclei trigger changes (nuclei is
-the only consumer of `port_scan_triggers`). The PTR check in `port_discovery` (CDN PTR
+is resolved by hand, or as `host_no_longer_found` when the port is closed in 3 scans. The port discovery is stored in every case; only the port trigger changes (nuclei and the
+certificate check consume `port_scan_triggers`; the certificate check skips CDN edge ports). The PTR check in `port_discovery` (CDN PTR
 suffixes, domain-resolved IPs only) is unchanged; it misses Cloudflare, whose edge addresses
 have no PTR record.
 
 Findings that nuclei reported on a CDN `<ip>:<port>` before this rule never get nuclei coverage
 again, so they stay open (counted as unchecked) until resolved by hand. A fresh install has
 none.
+
+**certificate targets:** `certificate_scanner` reads the leaf certificate of a TLS handshake
+(Go `crypto/tls`, no external tool) through `shared.SSRFSafeDialContext`, with
+`InsecureSkipVerify` (the certificate is only read: an expired or self-signed one must still be
+read), TLS 1.0 as the lowest version and every cipher suite Go implements, RSA key exchange
+included, so an old server still gives up its certificate. It sends no request; the subject and
+issuer are cut to 200 bytes (the server chooses them, and the description reaches the KB prompt).
+
+| Trigger | Target | SNI |
+|---------|--------|-----|
+| a domain or subdomain (`domain_scan_triggers`) | `<host>:443` | the hostname |
+| an open port in `tlsPorts` (465, 636, 993, 995, 5986, 6443, 8443; `port_scan_triggers`) | `<ip>:<port>` | none: the server's default certificate |
+| port 443, other ports, a CDN edge port (`scan_host` set) | none | — |
+
+Port 443 is left out of the port path because its names are checked by hostname; a CDN edge
+port is left out for the reason nuclei publishes no coverage there (the name can change between
+scans). A certificate that expires within `CERT_EXPIRY_WARN_DAYS` (30) is a medium
+`tls-certificate-expiring` finding, within `CERT_EXPIRY_CRITICAL_DAYS` (7) a high one; an expired
+one is a high `tls-certificate-expired` finding. The title is `TLS certificate expires soon:
+<host>` or `TLS certificate expired: <host>` (`<host>:<port>` for a port), so the key stays the
+same on every scan while the condition holds; the day count, `NotAfter`, subject and issuer are
+in the description and `metadata` (an update of the same key rewrites `severity` and
+`description`, so medium becomes high in place). When an expiring certificate expires, the
+expired finding is reported and the coverage `ok` no longer lists the expiring one, which is
+resolved `not_reproduced`; a renewed certificate resolves either. Coverage is `ok` only when the
+handshake completed and the certificate was read, under its own source `certificate`, so a
+testssl.sh run that fails does not keep a renewed certificate's finding open. nuclei's
+`expired-ssl` template reports an expired certificate too, under its own title.
 
 ---
 

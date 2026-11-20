@@ -37,8 +37,8 @@ The findings use the real texts of the scanners.
   - [testssl.sh](https://testssl.sh) for TLS/SSL weaknesses
   - [retire.js](https://retirejs.github.io/retire.js/) for outdated
     JavaScript libraries
-  - its own checks for missing or weak HTTP security headers, and for SPF,
-    DMARC and DKIM
+  - its own checks for missing or weak HTTP security headers, for SPF,
+    DMARC and DKIM, and for TLS certificates that expire soon
 - Detects WAFs and cloud providers, and looks up the country and network
   owner of each IP with the free DB-IP Lite data.
 - The dashboard shows assets, scan history, discoveries, findings and
@@ -178,6 +178,8 @@ comments.
 | `NUCLEI_INCLUDE_TAGS` | `cve,vuln,exposure,misconfig,...` | nuclei template tags to run (full list in `.env.example`) |
 | `NUCLEI_EXCLUDE_TAGS` | `intrusive,dos,fuzz` | nuclei template tags to skip. Removing these makes scans intrusive: attack payloads and floods that can change or take down the sites you scan |
 | `TESTSSL_CONCURRENCY` | `5` | Concurrent testssl.sh scans |
+| `CERT_EXPIRY_WARN_DAYS` | `30` | A TLS certificate that expires within this many days is a medium finding |
+| `CERT_EXPIRY_CRITICAL_DAYS` | `7` | Within this many days, or expired, it is a high finding |
 | `DNS_RESOLVE_CONCURRENCY` | `50` | Concurrent DNS lookups when domain discovery resolves subdomains |
 | `DNS_RECHECK_RESOLVERS` | `1.1.1.1,8.8.8.8` | Public resolvers asked when the local resolver says a name does not exist; `off` stops these lookups |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scanning private/internal IP ranges |

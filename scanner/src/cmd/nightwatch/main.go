@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/certificate_scanner"
 	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/discovery_enrichment"
 	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/email_security_scanner"
 	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/http_header_scanner"
@@ -158,7 +159,9 @@ func createConsumerGroups(ctx context.Context, rdb *redis.Client, log *zap.Logge
 		{shared.StreamDomainScanTriggers, js_dependency_scanner.GroupJSDependencyScanner},
 		{shared.StreamDomainScanTriggers, http_header_scanner.GroupHTTPHeaderScanner},
 		{shared.StreamDomainScanTriggers, email_security_scanner.GroupEmailSecurityScanner},
+		{shared.StreamDomainScanTriggers, certificate_scanner.GroupCertificateScanner},
 		{shared.StreamPortScanTriggers, nuclei_scanner.GroupNucleiScanner},
+		{shared.StreamPortScanTriggers, certificate_scanner.GroupCertificateScanner},
 	}
 	for _, t := range triggers {
 		if err := redisx.CreateConsumerGroupFromLatest(ctx, rdb, t.stream, t.group); err != nil {
@@ -198,6 +201,7 @@ func consumers(rdb *redis.Client, db *mongo.Database, log *zap.Logger) ([]compon
 		{"port-discovery", port_discovery.NewConsumer(rdb, named("port-discovery")).Start},
 		{"nuclei-scanner", nuclei_scanner.NewConsumer(rdb, named("nuclei-scanner")).Start},
 		{"testssl-scanner", testssl_scanner.NewConsumer(rdb, named("testssl-scanner")).Start},
+		{"certificate-scanner", certificate_scanner.NewConsumer(rdb, named("certificate-scanner")).Start},
 		{"js-dependency-scanner", jsDeps.Start},
 		{"http-header-scanner", headers.Start},
 		{"email-security-scanner", email.Start},

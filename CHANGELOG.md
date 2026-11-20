@@ -120,6 +120,12 @@ First open-source, self-hosted release, under the MIT License.
 - IP geolocation from the free DB-IP Lite country and ASN databases,
   downloaded at start (`GEO_DOWNLOAD=false` turns that off), with the
   attribution the license asks for on the Discoveries page.
+- TLS certificate expiry check (finding source `certificate`): each domain
+  and subdomain on 443 by name, and open TLS ports (465, 636, 993, 995,
+  5986, 6443, 8443) by IP. A certificate that expires within 30 days is
+  medium, within 7 days or expired high (`CERT_EXPIRY_WARN_DAYS`,
+  `CERT_EXPIRY_CRITICAL_DAYS`). testssl.sh runs only its vulnerability
+  checks, and nuclei reports only certificates that have already expired.
 
 #### Web app
 

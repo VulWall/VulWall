@@ -35,7 +35,7 @@ scanner/
     │   ├── shared/          # models.go, constants.go (cross-component)
     │   ├── scan_coordinator/  # scheduler, queued-scan poller, scan monitor, stream cleanup
     │   ├── discoveries/     # domain_discovery, port_discovery
-    │   ├── active_recon/    # nuclei, testssl, js_dep, http_header, email_security, discovery_enrichment
+    │   ├── active_recon/    # nuclei, testssl, certificate, js_dep, http_header, email_security, discovery_enrichment
     │   ├── enrichers/       # knowledge_base (optional Anthropic Claude KB engine)
     │   └── ingestion/       # orchestrator + 5 slices (domain, port, findings, enrichment, kb)
     ├── go.mod
@@ -46,7 +46,7 @@ scanner/
 
 | Document | Purpose |
 |----------|---------|
-| **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** | All 15 components, Redis streams, consumer groups, scan monitor coverage — **the ground truth** |
+| **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** | All 16 components, Redis streams, consumer groups, scan monitor coverage — **the ground truth** |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Communication flows, design patterns, model ownership rules |
 | **[docs/DATABASE.md](docs/DATABASE.md)** | Go models, MongoDB schemas, scan lifecycle, finding text fields |
 | **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** | Optional OpenTelemetry tracing (any OTLP backend), logging |
@@ -163,6 +163,7 @@ Environment variables (the repo-root `.env.example` lists the ones users set; `d
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default `DefaultIncludeTags`: cve,vuln,exposure,...). Unset = default; set but empty = no filter (`getTagEnv`). `docker-compose.yml` puts the default in for an empty `.env` value, so "no filter" needs a compose override; keep its copy of the defaults in sync with `constants.go` |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default `DefaultExcludeTags`: intrusive,dos,fuzz). Same empty handling as above. Removing these makes scans intrusive |
 | `TESTSSL_CONCURRENCY` | Concurrent testssl.sh scans (default 5) |
+| `CERT_EXPIRY_WARN_DAYS` / `CERT_EXPIRY_CRITICAL_DAYS` | Certificate scanner: a TLS certificate that expires within the warn limit is medium, within the critical limit (or expired) high (defaults 30 / 7). A value that is not a positive integer, or critical above warn, gives both defaults with a startup warning |
 | `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry idle < 30 min; a running handler's entry is refreshed every minute). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
 | `SCAN_MIN_RUNTIME` | Minimum scan age before a scan can complete, Go duration (default `10m`). Same as above |
 | `DNS_RESOLVE_CONCURRENCY` | Concurrent subdomain DNS lookups in domain discovery (default 50); each name is published as soon as it resolves |

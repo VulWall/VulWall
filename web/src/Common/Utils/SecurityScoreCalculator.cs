@@ -29,6 +29,7 @@ public static class SecurityScoreCalculator
         {
             { "nuclei", 1.0 },
             { "testssl", 0.6 },
+            { "certificate", 0.6 },
             { "http-headers", 0.4 },
             { "jsscanner", 0.3 },
             { "webtechprofiler", 0.2 },
