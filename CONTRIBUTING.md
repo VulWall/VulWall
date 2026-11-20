@@ -11,7 +11,16 @@ Run the whole stack from source:
 
 ```bash
 cp .env.example .env
-docker compose up -d --build
+make up                    # docker compose up -d --build
+```
+
+`make build` builds the images without starting them. Both targets set
+`VULWALL_BUILD_VERSION` to `dev (<short commit>)`, so the About dialog shows
+which commit you run. A plain `docker compose build` shows `dev`; to set the
+version yourself:
+
+```bash
+VULWALL_BUILD_VERSION="dev ($(git rev-parse --short HEAD))" docker compose build
 ```
 
 Work on the scanner:

@@ -37,7 +37,12 @@ services:
       retries: 10
 
   scanner:
-    build: ./scanner
+    build:
+      context: ./scanner
+      args:
+        # Version shown in the About dialog. `make build` sets "dev (<commit>)";
+        # release images get the tag from release.yml.
+        VULWALL_VERSION: ${VULWALL_BUILD_VERSION:-dev}
     image: ghcr.io/vulwall/scanner:${VULWALL_VERSION:-latest}
     restart: unless-stopped
     depends_on:
@@ -67,7 +72,12 @@ services:
       - geo-data:/data/geo
 
   web:
-    build: ./web
+    build:
+      context: ./web
+      args:
+        # Version shown in the About dialog. `make build` sets "dev (<commit>)";
+        # release images get the tag from release.yml.
+        VULWALL_VERSION: ${VULWALL_BUILD_VERSION:-dev}
     image: ghcr.io/vulwall/web:${VULWALL_VERSION:-latest}
     restart: unless-stopped
     depends_on:

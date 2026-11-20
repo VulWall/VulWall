@@ -72,6 +72,24 @@ public class AboutServiceTests(MongoFixture mongo)
     }
 
     [Fact]
+    public async Task Get_DevBuildVersions_AreShownAsIs()
+    {
+        var (service, db) = Create();
+        await db.GetCollection<BsonDocument>("system_info").InsertOneAsync(new BsonDocument
+        {
+            { "_id", "scanner" },
+            { "version", "dev (abc1234)" },
+        });
+
+        var info = await service.GetAsync("dev (abc1234)", Now);
+
+        Assert.Equal("dev (abc1234)", info.Versions.Single(v => v.Label == "VulWall web").Value);
+        Assert.Equal("dev (abc1234)", info.Versions.Single(v => v.Label == "VulWall scanner").Value);
+        Assert.Contains("VulWall web: dev (abc1234)\n", info.CopyText.ReplaceLineEndings("\n"));
+        Assert.Contains("VulWall scanner: dev (abc1234)\n", info.CopyText.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
     public async Task Get_ScannerValues_AreOneLineAndBounded()
     {
         var (service, db) = Create();

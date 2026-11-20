@@ -582,7 +582,7 @@ data. The web app reads it and shows an empty or missing value as "unknown".
 ```javascript
 {
   _id: "scanner",
-  version: "v0.1.0",                 // VULWALL_VERSION (release tag; "dev" for local builds)
+  version: "v0.1.0",                 // VULWALL_VERSION (release tag; "dev" or "dev (<commit>)" for local builds)
   nuclei: "3.11.1",                  // NUCLEI_VERSION, pinned in scanner/Dockerfile
   nuclei_templates: "v10.5.2",       // from nuclei's .templates-config.json; "" before the first update
   nuclei_templates_updated_at: ISODate("..."), // mtime of <templates dir>/.checksum, or null

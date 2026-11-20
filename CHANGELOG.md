@@ -85,6 +85,10 @@ First open-source, self-hosted release, under the MIT License.
 - "Check for updates" in the About dialog says why a check failed: no
   published release yet, GitHub's rate limit (the answer is kept until the
   limit resets, at most an hour), or no connection to GitHub.
+- `make build` and `make up` in the repository root build the images from
+  source. The About dialog of those images shows `dev (<short commit>)`
+  instead of `dev`; `VULWALL_BUILD_VERSION` sets that text for a plain
+  `docker compose build`.
 
 ### Changed
 
