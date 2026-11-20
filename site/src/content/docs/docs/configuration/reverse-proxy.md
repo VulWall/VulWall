@@ -6,7 +6,7 @@ description: Reach VulWall from other machines through a TLS reverse proxy, with
 VulWall serves plain HTTP on port 8080, and Docker Compose publishes it on `127.0.0.1` only. To
 use it from other machines, put a reverse proxy in front of it that terminates TLS.
 
-:::danger[Do not publish port 8080 on all interfaces]
+:::caution[Do not publish port 8080 on all interfaces]
 Changing the port mapping to `"8080:8080"` is not a safe shortcut. Docker writes its own iptables
 rules, so ports it publishes bypass host firewalls such as ufw and firewalld, and anyone who can
 reach the host gets plain HTTP.
