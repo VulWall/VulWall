@@ -283,3 +283,9 @@ First open-source, self-hosted release, under the MIT License.
   `SHARED_LINKS_ENABLED`.
 - The Settings "Preferences" tab and its "Restart tour" button. The welcome
   tour still opens on the first visit to the dashboard.
+- Shared report links: the Share buttons and shared-links list on the Reports
+  page, the public `/shared-reports/{token}` page and the
+  `SHARED_LINKS_ENABLED` setting. Old links return 404 and the setting is
+  ignored. To share a report, print it or save it as a PDF from the browser.
+  Nothing writes or reads the `shared_links` collection any more; an
+  existing one (with its `token_1` and `org_id_1` indexes) is safe to drop.

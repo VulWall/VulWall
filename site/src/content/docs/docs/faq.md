@@ -37,8 +37,8 @@ As many as your server can handle. More assets mean longer scans and more memory
 
 ### Can several people use it?
 
-A VulWall install has one organization and one admin account. Reports can be shared with a
-password-protected link if you turn on `SHARED_LINKS_ENABLED`.
+A VulWall install has one organization and one admin account. To share a report, open it and
+use your browser's print dialog to save it as a PDF.
 
 ### Can it scan my internal network?
 
