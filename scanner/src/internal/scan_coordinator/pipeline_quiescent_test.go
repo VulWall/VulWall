@@ -3,6 +3,7 @@ package scan_coordinator
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"github.com/redis/go-redis/v9"
@@ -11,9 +12,10 @@ import (
 // fakeStreams is an in-memory view of streams and groups. onRead, when set, runs before each
 // read of a stream, so a test can change the state between two reads.
 type fakeStreams struct {
-	lastID map[string]string
-	groupz map[string]map[string]redis.XInfoGroup
-	onRead func(stream string)
+	lastID  map[string]string
+	groupz  map[string]map[string]redis.XInfoGroup
+	onRead  func(stream string)
+	pending map[StreamGroup][]time.Duration
 }
 
 func (f *fakeStreams) lastGeneratedID(_ context.Context, stream string) (string, error) {

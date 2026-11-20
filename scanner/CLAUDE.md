@@ -158,6 +158,8 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
 | `TESTSSL_CONCURRENCY` | Concurrent testssl.sh scans (default 5) |
+| `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry delivered < 30 min ago). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
+| `SCAN_MIN_RUNTIME` | Minimum scan age before a scan can complete, Go duration (default `10m`). Same as above |
 | `DNS_RESOLVE_CONCURRENCY` | Concurrent subdomain DNS lookups in domain discovery (default 50); each name is published as soon as it resolves |
 | `IP_ENRICHMENT_DB_PATH` | Country MMDB (DB-IP Country Lite; default `./data/dbip-country-lite.mmdb`) |
 | `IP_ASN_DB_PATH` | Optional ASN MMDB (DB-IP ASN Lite; default `./data/dbip-asn-lite.mmdb`) |

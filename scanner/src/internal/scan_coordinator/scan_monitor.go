@@ -2,8 +2,11 @@ package scan_coordinator
 
 import (
 	"context"
+	"os"
+	"slices"
 	"time"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
@@ -21,16 +24,71 @@ type ScanMonitor struct {
 	db     *mongo.Database
 	logger *zap.Logger
 	tracer trace.Tracer
+	policy completionPolicy
 }
 
 // NewScanMonitor creates a new scan monitor
 func NewScanMonitor(redisClient *redis.Client, db *mongo.Database, logger *zap.Logger) *ScanMonitor {
+	policy := loadCompletionPolicy(logger)
+	logger.Info("Scan completion policy",
+		zap.Duration("min_runtime", policy.minRuntime),
+		zap.Duration("idle_timeout", policy.idleTimeout),
+		zap.Duration("settle_grace", policy.settleGrace),
+		zap.Duration("stuck_threshold", policy.stuckAfter),
+		zap.Duration("safety_timeout", policy.safetyTimeout),
+	)
 	return &ScanMonitor{
 		redis:  redisClient,
 		db:     db,
 		logger: logger,
 		tracer: otel.Tracer("scan-monitor"),
+		policy: policy,
 	}
+}
+
+// completionPolicy holds the thresholds of decideCompletion.
+type completionPolicy struct {
+	minRuntime    time.Duration
+	idleTimeout   time.Duration
+	settleGrace   time.Duration
+	stuckAfter    time.Duration
+	safetyTimeout time.Duration
+}
+
+func defaultCompletionPolicy() completionPolicy {
+	return completionPolicy{
+		minRuntime:    ScanMinRuntime,
+		idleTimeout:   ScanIdleTimeout,
+		settleGrace:   ScanSettleGrace,
+		stuckAfter:    ScanStuckThreshold,
+		safetyTimeout: ScanSafetyTimeout,
+	}
+}
+
+// loadCompletionPolicy returns the default policy with SCAN_IDLE_TIMEOUT and SCAN_MIN_RUNTIME
+// applied. A value that is not a positive Go duration is logged and ignored.
+func loadCompletionPolicy(log *zap.Logger) completionPolicy {
+	p := defaultCompletionPolicy()
+	for _, o := range []struct {
+		env string
+		dst *time.Duration
+	}{
+		{config.EnvScanIdleTimeout, &p.idleTimeout},
+		{config.EnvScanMinRuntime, &p.minRuntime},
+	} {
+		raw := os.Getenv(o.env)
+		if raw == "" {
+			continue
+		}
+		d, err := time.ParseDuration(raw)
+		if err != nil || d <= 0 {
+			log.Warn("Ignoring invalid duration; using the default",
+				zap.String("env", o.env), zap.String("value", raw), zap.Duration("default", *o.dst))
+			continue
+		}
+		*o.dst = d
+	}
+	return p
 }
 
 // Start begins monitoring scans every ScanMonitorInterval (5 minutes)
@@ -90,15 +148,14 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 	}
 
 	now := time.Now()
+	p := m.policy
 	for _, scan := range scans {
 		scanAge := now.Sub(scanStartTime(scan))
 
-		// The quiescence barrier is the only completion path that needs a (relatively
-		// expensive) Redis round-trip. Compute it lazily — only when the cheap age /
-		// activity guards could actually let it complete the scan — so the safety and
-		// idle-timeout paths never pay for it.
+		// The Redis reads are computed lazily — only when the cheap age / activity guards
+		// could let them matter — so most ticks of a running scan cost no Redis round-trip.
 		quiescent := false
-		if quiescenceGuardsMet(scanAge, scan.LastActivityAt, now) {
+		if p.quiescenceGuardsMet(scanAge, scan.LastActivityAt, now) {
 			q, err := m.pipelineQuiescent(ctx)
 			if err != nil {
 				m.logger.Warn("Pipeline quiescence check failed; deferring to idle/safety timeout",
@@ -110,7 +167,29 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 			}
 		}
 
-		complete, reason, timedOut := decideCompletion(scanAge, scan.LastActivityAt, quiescent, now)
+		inFlight := false
+		if !quiescent && p.idleGuardsMet(scanAge, scan.LastActivityAt, now) {
+			work, err := freshPendingWork(ctx, redisStreamInfo{m.redis}, scanPipelineGroups(), p.stuckAfter)
+			switch {
+			case err != nil:
+				// Without the reading, keep the scan open: the safety timeout still ends it.
+				inFlight = true
+				m.logger.Warn("Work-in-flight check failed; not applying the idle timeout",
+					zap.String("scan_id", scan.ID), zap.Error(err))
+			case work != nil:
+				inFlight = true
+				m.logger.Info("Idle timeout suppressed: work in flight",
+					zap.String("scan_id", scan.ID),
+					zap.Duration("idle_for", now.Sub(*scan.LastActivityAt)),
+					zap.String("stream", work.Stream),
+					zap.String("group", work.Group),
+					zap.Int64("pending", work.Pending),
+					zap.Duration("youngest_pending_idle", work.YoungestIdle),
+				)
+			}
+		}
+
+		complete, reason, timedOut := p.decideCompletion(scanAge, scan.LastActivityAt, quiescent, inFlight, now)
 		if !complete {
 			continue
 		}
@@ -157,27 +236,30 @@ func scanStartTime(scan shared.Scan) time.Time {
 // decideCompletion is the pure completion decision for a single scan, factored out so the
 // full truth table can be unit-tested without Redis or MongoDB. Paths, in precedence order:
 //
-//  1. safety_timeout   — scanAge > ScanSafetyTimeout (3h). Force-complete; timedOut=true so
+//  1. safety_timeout   — scanAge > safetyTimeout (3h). Force-complete; timedOut=true so
 //     finding resolution is skipped (ingestion may still be incomplete).
-//  2. pipeline_quiescent — the scan has run past ScanMinRuntime, ingestion has produced work
-//     and been quiet for ScanSettleGrace, AND every finding-producing stream/group has drained
-//     (no pending AND no undelivered entries). This replaces the old XPending-only fast path,
-//     which was blind to unread trigger messages and marked scans done ~30s in.
+//  2. pipeline_quiescent — the scan has run past minRuntime, ingestion has produced work
+//     and been quiet for settleGrace, AND every scan-pipeline stream/group has drained
+//     (no pending AND no undelivered entries).
 //  3. idle_timeout     — a backstop for a stuck or never-created group where quiescence can
-//     never be satisfied: no ingestion activity for ScanIdleTimeout after ScanMinRuntime.
+//     never be satisfied: no ingestion activity for idleTimeout after minRuntime, AND no
+//     watched group holds work in flight (a pending entry delivered less than stuckAfter
+//     ago). A long discovery job publishes nothing for minutes while it works; without the
+//     in-flight guard it was closed here, and its late results arrived after finding
+//     resolution.
 //
 // A scan that never produced any activity (LastActivityAt == nil) is intentionally closed only
 // by the safety timeout — we never want to complete a scan that has shown no sign of work.
-func decideCompletion(scanAge time.Duration, lastActivityAt *time.Time, quiescent bool, now time.Time) (complete bool, reason string, timedOut bool) {
-	if scanAge > ScanSafetyTimeout {
+func (p completionPolicy) decideCompletion(scanAge time.Duration, lastActivityAt *time.Time, quiescent, workInFlight bool, now time.Time) (complete bool, reason string, timedOut bool) {
+	if scanAge > p.safetyTimeout {
 		return true, "safety_timeout", true
 	}
 
-	if quiescent && quiescenceGuardsMet(scanAge, lastActivityAt, now) {
+	if quiescent && p.quiescenceGuardsMet(scanAge, lastActivityAt, now) {
 		return true, "pipeline_quiescent", false
 	}
 
-	if scanAge > ScanMinRuntime && lastActivityAt != nil && now.Sub(*lastActivityAt) > ScanIdleTimeout {
+	if !workInFlight && p.idleGuardsMet(scanAge, lastActivityAt, now) {
 		return true, "idle_timeout", false
 	}
 
@@ -186,12 +268,57 @@ func decideCompletion(scanAge time.Duration, lastActivityAt *time.Time, quiescen
 
 // quiescenceGuardsMet reports whether a scan is old enough and has been quiet long enough that
 // a "pipeline drained" reading can be trusted to mean "done" rather than "hasn't started yet."
-// ScanSettleGrace is larger than the ingestion activity-write throttle so a scan that is merely
+// settleGrace is larger than the ingestion activity-write throttle so a scan that is merely
 // between throttled activity writes is not mistaken for settled.
-func quiescenceGuardsMet(scanAge time.Duration, lastActivityAt *time.Time, now time.Time) bool {
-	return scanAge > ScanMinRuntime &&
+func (p completionPolicy) quiescenceGuardsMet(scanAge time.Duration, lastActivityAt *time.Time, now time.Time) bool {
+	return scanAge > p.minRuntime &&
 		lastActivityAt != nil &&
-		now.Sub(*lastActivityAt) > ScanSettleGrace
+		now.Sub(*lastActivityAt) > p.settleGrace
+}
+
+// idleGuardsMet reports whether the scan is past minRuntime and has had no ingestion activity
+// for idleTimeout — the idle timeout applies unless work is in flight.
+func (p completionPolicy) idleGuardsMet(scanAge time.Duration, lastActivityAt *time.Time, now time.Time) bool {
+	return scanAge > p.minRuntime &&
+		lastActivityAt != nil &&
+		now.Sub(*lastActivityAt) > p.idleTimeout
+}
+
+// pendingWork describes the group that holds work in flight.
+type pendingWork struct {
+	StreamGroup
+	Pending      int64
+	YoungestIdle time.Duration
+}
+
+// freshPendingWork returns the first group that has a pending entry delivered less than
+// stuckAfter ago, or nil. Such an entry is a job a live consumer is still working on. When
+// every pending entry is older, the consumers are treated as stuck. The youngest entry counts,
+// not the oldest: entries a consumer read ahead and holds behind a long job get old without
+// meaning anything is stuck.
+func freshPendingWork(ctx context.Context, info streamInfo, groups []StreamGroup, stuckAfter time.Duration) (*pendingWork, error) {
+	for _, sg := range groups {
+		present, err := info.groups(ctx, sg.Stream)
+		if err != nil {
+			return nil, err
+		}
+		g, ok := present[sg.Group]
+		if !ok || g.Pending == 0 {
+			continue
+		}
+		idles, err := info.pendingIdle(ctx, sg.Stream, sg.Group, g.Pending)
+		if err != nil {
+			return nil, err
+		}
+		if len(idles) == 0 {
+			continue
+		}
+		youngest := slices.Min(idles)
+		if youngest < stuckAfter {
+			return &pendingWork{StreamGroup: sg, Pending: g.Pending, YoungestIdle: youngest}, nil
+		}
+	}
+	return nil, nil
 }
 
 // pipelineQuiescent reports whether every group in scanPipelineGroups() has fully drained its
@@ -212,6 +339,8 @@ type streamInfo interface {
 	lastGeneratedID(ctx context.Context, stream string) (string, error)
 	// groups returns the stream's consumer groups by name, empty for a missing stream.
 	groups(ctx context.Context, stream string) (map[string]redis.XInfoGroup, error)
+	// pendingIdle returns the time since last delivery of up to count pending entries.
+	pendingIdle(ctx context.Context, stream, group string, count int64) ([]time.Duration, error)
 }
 
 // pipelineQuiescent checks the groups one at a time, in the given order, and reads each
@@ -255,6 +384,20 @@ func groupQuiescent(pending int64, lastDeliveredID, lastGeneratedID string) bool
 }
 
 type redisStreamInfo struct{ rdb *redis.Client }
+
+func (r redisStreamInfo) pendingIdle(ctx context.Context, stream, group string, count int64) ([]time.Duration, error) {
+	entries, err := r.rdb.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: stream, Group: group, Start: "-", End: "+", Count: min(count, 1000),
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+	idles := make([]time.Duration, len(entries))
+	for i, e := range entries {
+		idles[i] = e.Idle
+	}
+	return idles, nil
+}
 
 // lastGeneratedID returns the stream's last-generated entry id, or the empty-stream id
 // ("0-0") if the stream does not exist yet.
