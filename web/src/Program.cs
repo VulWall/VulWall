@@ -11,13 +11,6 @@ builder.Services.AddMongoServices();
 
 var port = ServiceSettings.Instance.Port;
 builder.WebHost.UseUrls($"http://*:{port}");
-builder.WebHost.UseSentry(o =>
-{
-    o.Dsn = ServiceSettings.Instance.SentryDsn;
-    o.Environment = builder.Environment.EnvironmentName;
-    o.TracesSampleRate = 1.0;
-    o.SendDefaultPii = false;
-});
 
 var app = builder.Build();
 app.ConfigureDashboardPipeline();
