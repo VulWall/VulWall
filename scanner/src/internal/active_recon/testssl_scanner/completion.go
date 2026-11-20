@@ -22,7 +22,7 @@ func runComplete(exitCode int, jsonData []byte) error {
 	case exitCode >= testsslFatalExit:
 		return fmt.Errorf("testssl.sh stopped with fatal exit code %d%s", exitCode, problemSuffix(jsonData))
 	case exitCode > 0:
-		return fmt.Errorf("testssl.sh could not run %d check(s) (exit code %d)", exitCode, exitCode)
+		return fmt.Errorf("testssl.sh could not run %d check(s) (exit code %d)%s", exitCode, exitCode, warnSuffix(jsonData))
 	}
 	if len(strings.TrimSpace(string(jsonData))) == 0 {
 		return errors.New("testssl.sh wrote no JSON output")
@@ -87,4 +87,43 @@ func problemSuffix(jsonData []byte) string {
 		return ": " + p
 	}
 	return ""
+}
+
+// warnSuffix is ": <id> (<finding>); ..." of the WARN entries in scanResult (the checks that
+// could not run), for error messages. The top-level clientProblem entries are not included.
+func warnSuffix(jsonData []byte) string {
+	var out struct {
+		ScanResult []json.RawMessage `json:"scanResult"`
+	}
+	if json.Unmarshal(jsonData, &out) != nil {
+		return ""
+	}
+	var warns []string
+	add := func(f TestSSLFinding) {
+		if strings.EqualFold(f.Severity, "WARN") {
+			warns = append(warns, fmt.Sprintf("%s (%s)", f.ID, f.Finding))
+		}
+	}
+	for _, raw := range out.ScanResult {
+		var f TestSSLFinding
+		if json.Unmarshal(raw, &f) == nil {
+			add(f)
+		}
+		var host map[string]json.RawMessage
+		if json.Unmarshal(raw, &host) != nil {
+			continue
+		}
+		for _, v := range host {
+			var list []TestSSLFinding
+			if json.Unmarshal(v, &list) == nil {
+				for _, f := range list {
+					add(f)
+				}
+			}
+		}
+	}
+	if len(warns) == 0 {
+		return ""
+	}
+	return ": " + strings.Join(warns, "; ")
 }

@@ -31,6 +31,7 @@ func TestRunCompleteOnRealOutput(t *testing.T) {
 		{"connection refused", 246, "testssl_refused.json", false, "fatal exit code 246"},
 		// Plain HTTP port: testssl reaches the end (numeric scanTime) but 9 checks could not run.
 		{"not TLS", 9, "testssl_notls.json", false, "could not run 9"},
+		{"not TLS names the checks", 9, "testssl_notls.json", false, "OpenSSL handshake didn't succeed"},
 		// Server stopped mid-run: exit 246, "repeated TCP connect problems, giving up".
 		{"stopped mid-run", 246, "testssl_midrun.json", false, "giving up"},
 	}
