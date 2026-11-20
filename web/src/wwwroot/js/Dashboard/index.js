@@ -116,9 +116,11 @@ function initTimelineChart(chartData, range) {
             pointRadius: 0,
             pointHoverRadius: 4,
             pointHoverBackgroundColor: '#fff',
-            pointHoverBorderColor: color
+            pointHoverBorderColor: color,
+            maxBarThickness: 48
         };
     });
+    shapeForScanCount(datasets, (range0.labels ?? []).length);
 
     const gridColor = cssVar('--vw-gray-200', 'rgba(0,0,0,0.06)');
     const tickColor = cssVar('--vw-gray-500', '#94a3b8');
@@ -201,7 +203,17 @@ function updateChart(chart, range) {
     SEVERITIES.forEach((sev, i) => {
         chart.data.datasets[i].data = range[sev.key] ?? [];
     });
+    shapeForScanCount(chart.data.datasets, chart.data.labels.length);
     chart.update();
+}
+
+// A stacked area needs two scans: with one, its bands have no width and the chart looks
+// empty. A single scan is drawn as one stacked bar instead.
+function shapeForScanCount(datasets, scanCount) {
+    datasets.forEach((ds) => {
+        ds.type = scanCount === 1 ? 'bar' : 'line';
+        ds.backgroundColor = scanCount === 1 ? ds.borderColor : hexToRgba(ds.borderColor, 0.82);
+    });
 }
 
 // Expand a #RRGGBB color to rgba() with the given alpha. Non-hex inputs pass through.
