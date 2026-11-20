@@ -269,19 +269,13 @@ func (p completionPolicy) decideCompletion(scanAge time.Duration, lastActivityAt
 	return false, ""
 }
 
-// reconcileFindings decides whether a closing scan may resolve the open findings it did not
-// see. A false resolution tells a customer an unfixed vulnerability is fixed, so every doubt
-// keeps findings open: only a pipeline_quiescent close of a scan that discovered something
-// reconciles. skip names the reason when it does not. Findings under a degraded asset stay
-// open even then (findingsToResolve).
-func reconcileFindings(completionReason string, totalDiscoveries int) (ok bool, skip string) {
-	switch {
-	case completionReason != shared.ScanCompletionPipelineQuiescent:
+// reconcileFindings decides whether a closing scan may resolve findings at all. A false
+// resolution tells a customer an unfixed vulnerability is fixed, so only a pipeline_quiescent
+// close resolves: a timeout closes a scan whose evidence may still be in flight. Even then a
+// finding is resolved only on positive evidence (decideResolutions).
+func reconcileFindings(completionReason string) (ok bool, skip string) {
+	if completionReason != shared.ScanCompletionPipelineQuiescent {
 		return false, "closed by " + completionReason + " before the pipeline drained"
-	case totalDiscoveries == 0:
-		// A scan with zero discoveries produced no evidence and must never mass-resolve the
-		// previous scan's real findings.
-		return false, "scan has zero discoveries"
 	}
 	return true, ""
 }
@@ -461,8 +455,8 @@ func isNoSuchKeyErr(err error) bool {
 }
 
 // markDone marks a scan as done with its completion reason and, when reconcileFindings
-// allows it, resolves the open findings the scan did not see, except those under a degraded
-// asset. The web UI polls the scan document for the status change.
+// allows it, resolves the open findings that the scan's evidence proves gone
+// (findingsToResolve). The web UI polls the scan document for the status change.
 func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error {
 	// Read the scan now, not from the monitor tick's listing: a degraded asset that ingestion
 	// recorded after that listing, but before the pipeline read as drained, must count.
@@ -477,31 +471,39 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error
 			zap.String("scan_id", scanID),
 			zap.Error(err),
 		)
-		// Continue with marking scan as done even if stats computation fails. The empty
-		// stats have zero discoveries, so the findings are not reconciled.
+		// Continue with marking the scan as done even if stats computation fails.
 		stats = &shared.ScanStats{}
 	}
 
-	reconcile, skip := reconcileFindings(reason, stats.TotalDiscoveries)
-	var resolveIDs, uncheckedIDs []string
-	if reconcile {
-		resolveIDs, uncheckedIDs, err = m.findingsToResolve(ctx, scan)
+	reconcile, skip := reconcileFindings(reason)
+	var decision resolutionDecision
+	if reconcile && scan.ID != "" {
+		decision, err = m.findingsToResolve(ctx, scan)
 		if err != nil {
 			m.logger.Error("Failed to select the findings to resolve",
 				zap.String("scan_id", scanID), zap.Error(err))
 			reconcile, skip = false, "could not select the findings to resolve"
-			resolveIDs, uncheckedIDs = nil, nil
+			decision = resolutionDecision{}
 		}
+	} else if reconcile {
+		reconcile, skip = false, "could not read the scan"
 	}
-	// A scan with a degraded asset resolved only part of the findings: it is partial.
-	fullyReconciled := reconcile && len(scan.DegradedAssets) == 0
-	stats.ResolvedFindings = len(resolveIDs)
+
+	// Resolve before closing the scan, so the scan's counts are what was written.
+	resolved := 0
+	if reconcile {
+		resolved = m.resolve(ctx, scan, decision)
+	}
+	stats.ResolvedFindings = resolved
+	stats.UncheckedFindings = len(decision.unchecked)
 
 	now := time.Now()
 	set := bson.M{
-		"status":                     shared.StatusDone,
-		"completion_reason":          reason,
-		"findings_reconciled":        fullyReconciled,
+		"status":            shared.StatusDone,
+		"completion_reason": reason,
+		// A scan that drained with every asset fully checked. The web app shows the others
+		// as partial. Finding resolution does not depend on it.
+		"findings_reconciled":        reconcile && len(scan.DegradedAssets) == 0,
 		"completed_at":               now,
 		"updated_at":                 now,
 		"stats.total_discoveries":    stats.TotalDiscoveries,
@@ -510,20 +512,19 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error
 		"stats.total_findings":       stats.TotalFindings,
 		"stats.new_findings":         stats.NewFindings,
 		"stats.resolved_findings":    stats.ResolvedFindings,
+		"stats.unchecked_findings":   stats.UncheckedFindings,
 	}
-	if len(uncheckedIDs) > 0 {
-		set["unchecked_finding_ids"] = uncheckedIDs
+	if len(decision.unchecked) > 0 {
+		set["unchecked_finding_ids"] = decision.unchecked
 	}
-	update := bson.M{"$set": set}
 
 	// The status guard keeps a scan that another writer already closed (for
 	// example as failed) from being reopened as done.
 	result, err := m.db.Collection(shared.CollectionScans).UpdateOne(
 		ctx,
 		bson.M{"_id": scanID, "status": bson.M{"$in": startedStatuses}},
-		update,
+		bson.M{"$set": set},
 	)
-
 	if err != nil {
 		m.logger.Error("Failed to mark scan as done",
 			zap.String("scan_id", scanID),
@@ -531,103 +532,68 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error
 		)
 		return err
 	}
-
 	if result.ModifiedCount == 0 {
 		return nil
 	}
 	m.logger.Info("Scan marked as done",
 		zap.String("scan_id", scanID),
 		zap.String("completion_reason", reason),
-		zap.Bool("findings_reconciled", fullyReconciled),
+		zap.Int("resolved_findings", stats.ResolvedFindings),
+		zap.Int("unchecked_findings", stats.UncheckedFindings),
 		zap.Int("degraded_assets", len(scan.DegradedAssets)),
 		zap.Time("completed_at", now),
 	)
-
 	if !reconcile {
 		m.logger.Warn("Skipping finding resolution",
 			zap.String("scan_id", scanID),
 			zap.String("why", skip),
 		)
-		return nil
-	}
-	if len(uncheckedIDs) > 0 {
-		m.logger.Warn("Leaving findings of degraded assets open",
-			zap.String("scan_id", scanID),
-			zap.Any("degraded_assets", scan.DegradedAssets),
-			zap.Int("unchecked_findings", len(uncheckedIDs)),
-		)
-	}
-
-	if err := m.resolveDisappearedFindings(ctx, scan, resolveIDs); err != nil {
-		// The findings stay open; do not claim the scan reconciled them.
-		if _, uerr := m.db.Collection(shared.CollectionScans).UpdateOne(ctx,
-			bson.M{"_id": scanID},
-			bson.M{"$set": bson.M{"findings_reconciled": false, "stats.resolved_findings": 0}},
-		); uerr != nil {
-			m.logger.Error("Failed to record that findings were not reconciled",
-				zap.String("scan_id", scanID), zap.Error(uerr))
-		}
 	}
 	return nil
 }
 
-// resolveDisappearedFindings bulk-updates the open findings that the scan did not see
-// (findingsToResolve), marking them as resolved. This is best-effort: errors are logged and
-// returned, but do not fail the scan completion.
-func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scan shared.Scan, resolvedFindingIDs []string) error {
-	scanID := scan.ID
-	if len(resolvedFindingIDs) == 0 {
-		return nil
-	}
-
-	ctx, span := m.tracer.Start(ctx, "resolve_disappeared_findings",
+// resolve writes the decision and returns how many findings it resolved. Errors are logged:
+// the findings stay open and the scan still closes.
+func (m *ScanMonitor) resolve(ctx context.Context, scan shared.Scan, d resolutionDecision) int {
+	ctx, span := m.tracer.Start(ctx, "resolve_findings",
 		trace.WithAttributes(
-			attribute.String("scan.id", scanID),
-			attribute.Int("findings.resolved_count", len(resolvedFindingIDs)),
+			attribute.String("scan.id", scan.ID),
+			attribute.Int("findings.not_reproduced", len(d.notReproduced)),
+			attribute.Int("findings.host_no_longer_found", len(d.gone)),
+			attribute.Int("findings.unchecked", len(d.unchecked)),
 		),
 	)
 	defer span.End()
 
-	now := time.Now()
-	result, err := m.db.Collection(shared.CollectionFindings).UpdateMany(ctx,
-		// Re-check status and scan_ids: a late ingestion write may have seen the finding.
-		bson.M{
-			"_id":      bson.M{"$in": resolvedFindingIDs},
-			"org_id":   scan.OrgID,
-			"status":   shared.FindingStatusOpen,
-			"scan_ids": bson.M{"$ne": scanID},
-		},
-		bson.M{"$set": bson.M{
-			"status":              shared.FindingStatusResolved,
-			"resolved_at":         now,
-			"resolved_by_scan_id": scanID,
-		}},
-	)
-
-	if err != nil {
-		m.logger.Error("Failed to mark findings as resolved",
-			zap.String("scan_id", scanID),
-			zap.Int("count", len(resolvedFindingIDs)),
-			zap.Error(err),
-		)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to resolve findings")
-		return err
+	var total int64
+	for _, batch := range []struct {
+		ids    []string
+		reason string
+	}{
+		{d.notReproduced, ResolutionNotReproduced},
+		{d.gone, ResolutionHostNoLongerFound},
+	} {
+		n, err := m.resolveFindings(ctx, scan, batch.ids, batch.reason)
+		if err != nil {
+			m.logger.Error("Failed to mark findings as resolved",
+				zap.String("scan_id", scan.ID),
+				zap.String("resolution_reason", batch.reason),
+				zap.Int("count", len(batch.ids)),
+				zap.Error(err),
+			)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to resolve findings")
+			continue
+		}
+		total += n
+		if len(batch.ids) > 0 {
+			m.logger.Info("Marked findings as resolved",
+				zap.String("scan_id", scan.ID),
+				zap.String("resolution_reason", batch.reason),
+				zap.Int("expected", len(batch.ids)),
+				zap.Int64("updated", n),
+			)
+		}
 	}
-
-	m.logger.Info("Marked findings as resolved",
-		zap.String("scan_id", scanID),
-		zap.Int("expected", len(resolvedFindingIDs)),
-		zap.Int64("updated", result.ModifiedCount),
-	)
-
-	span.AddEvent("findings_resolved",
-		trace.WithAttributes(
-			attribute.String("scan.id", scanID),
-			attribute.Int("findings.expected", len(resolvedFindingIDs)),
-			attribute.Int64("findings.updated", result.ModifiedCount),
-		),
-	)
-	span.SetStatus(codes.Ok, "")
-	return nil
+	return int(total)
 }

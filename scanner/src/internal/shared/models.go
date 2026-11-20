@@ -269,16 +269,17 @@ type Scan struct {
 	LastActivityAt *time.Time `json:"last_activity_at,omitempty" bson:"last_activity_at,omitempty"` // Updated by ingestion services on each batch
 	// CompletionReason is how the scan was closed: ScanCompletion* or ScanReasonInterruptedByRestart.
 	CompletionReason string `json:"completion_reason,omitempty" bson:"completion_reason,omitempty"`
-	// FindingsReconciled is true only when the close resolved every open finding this scan
-	// did not see, for every asset. False for a partial scan: a timeout or restart close
-	// (nothing resolved), or a scan with DegradedAssets (resolved only outside the degraded
-	// roots). Nil on scans closed before the field existed.
+	// FindingsReconciled is true when the scan drained (pipeline_quiescent) and no asset was
+	// degraded. False for a partial scan: a timeout close (nothing resolved), or a scan with
+	// DegradedAssets. The web app labels the latter partial. Nil on scans closed before the
+	// field existed. Resolution itself depends only on positive evidence (scan_coverage).
 	FindingsReconciled *bool `json:"findings_reconciled,omitempty" bson:"findings_reconciled,omitempty"`
 	// DegradedAssets is added to by ingestion ($addToSet) when domain discovery reports that
 	// it could not fully see a root domain asset.
 	DegradedAssets []DegradedAsset `json:"degraded_assets,omitempty" bson:"degraded_assets,omitempty"`
 	// UncheckedFindingIDs are the open findings that this scan did not see and left open
-	// because they are under a degraded asset. Written by the scan monitor at close.
+	// because it had no positive evidence that they are gone (the check of their target did
+	// not run or not complete, or the host was not seen). Written by the scan monitor at close.
 	UncheckedFindingIDs []string `json:"unchecked_finding_ids,omitempty" bson:"unchecked_finding_ids,omitempty"`
 	CreatedAt      time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at" bson:"updated_at"`
@@ -299,6 +300,9 @@ type ScanStats struct {
 	TotalFindings       int `json:"total_findings" bson:"total_findings"`
 	NewFindings         int `json:"new_findings" bson:"new_findings"`
 	ResolvedFindings    int `json:"resolved_findings" bson:"resolved_findings"`
+	// UncheckedFindings: open findings this scan did not see and could not resolve, because
+	// it had no positive evidence that they are gone (see Scan.UncheckedFindingIDs).
+	UncheckedFindings int `json:"unchecked_findings" bson:"unchecked_findings"`
 }
 
 // AssetTarget represents an asset that was targeted for scanning
