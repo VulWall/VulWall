@@ -74,8 +74,10 @@ const (
 	EnvNucleiExcludeTags = "NUCLEI_EXCLUDE_TAGS"
 	// EnvTestSSLConcurrency is the number of concurrent testssl.sh workers (default: 5)
 	EnvTestSSLConcurrency = "TESTSSL_CONCURRENCY"
-	// EnvIPEnrichmentDBPath is the path to MaxMind GeoIP MMDB file
+	// EnvIPEnrichmentDBPath is the path to the country MMDB file (e.g., DB-IP IP to Country Lite)
 	EnvIPEnrichmentDBPath = "IP_ENRICHMENT_DB_PATH"
+	// EnvIPASNDBPath is the path to the optional ASN MMDB file (e.g., DB-IP IP to ASN Lite); fills the ISP field
+	EnvIPASNDBPath = "IP_ASN_DB_PATH"
 	// EnvWAFRulesPath is the path to WAF detection rules JSON file
 	EnvWAFRulesPath = "WAF_RULES_PATH"
 	// EnvCloudDetectorEnabled enables/disables cloud provider detection (true/false)

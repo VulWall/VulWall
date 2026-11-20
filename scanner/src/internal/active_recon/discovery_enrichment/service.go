@@ -34,7 +34,8 @@ type Service struct {
 func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error) {
 	// Load service-specific settings via GetEnv
 	wafRulesPath := config.GetEnv(config.EnvWAFRulesPath, "./internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json")
-	ipEnrichmentDBPath := config.GetEnv(config.EnvIPEnrichmentDBPath, "./data/dbip-isp-country.mmdb")
+	ipEnrichmentDBPath := config.GetEnv(config.EnvIPEnrichmentDBPath, "./data/dbip-country-lite.mmdb")
+	ipASNDBPath := config.GetEnv(config.EnvIPASNDBPath, "./data/dbip-asn-lite.mmdb")
 	cloudDetectorEnabled := config.GetEnvBool(config.EnvCloudDetectorEnabled, true)
 	cloudDataDir := config.GetEnv(config.EnvCloudDataDir, "./internal/active_recon/discovery_enrichment/cloud/data")
 
@@ -51,14 +52,16 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error)
 	// Initialize IP geolocation enricher (graceful failure if DB missing)
 	var geoEnricher *geolocation.IPEnricher
 	if ipEnrichmentDBPath != "" {
-		geoEnricher, err = geolocation.NewIPEnricher(ipEnrichmentDBPath)
+		geoEnricher, err = geolocation.NewIPEnricher(ipEnrichmentDBPath, ipASNDBPath)
 		if err != nil {
 			logger.Warn("Failed to initialize IP enricher, continuing without geolocation",
 				zap.String("db_path", ipEnrichmentDBPath),
 				zap.Error(err))
 		} else {
 			logger.Info("IP geolocation enricher initialized",
-				zap.String("db_path", ipEnrichmentDBPath))
+				zap.String("db_path", ipEnrichmentDBPath),
+				zap.String("asn_db_path", ipASNDBPath),
+				zap.Bool("asn_loaded", geoEnricher.HasASN()))
 		}
 	}
 
