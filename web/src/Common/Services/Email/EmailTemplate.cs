@@ -4,5 +4,4 @@ public enum EmailTemplate
 {
     ScanComplete,
     DeleteAccountVerification,
-    ClaimNotification,
 }

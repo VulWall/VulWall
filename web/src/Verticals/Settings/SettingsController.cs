@@ -78,13 +78,6 @@ public class SettingsController(
         if (signup)
             builder.WithParameter("screen_hint", "signup");
 
-        // When the returnUrl targets the claim flow, force Auth0 to start a fresh OIDC flow.
-        // Without this, Auth0 detects an existing SSO session and resumes a prior authorization
-        // request via /resume?state=..., sending back a state that doesn't match the current
-        // correlation cookie -> 400 on /callback.
-        if (returnUrl.Contains("/claim/", StringComparison.OrdinalIgnoreCase))
-            builder.WithParameter("prompt", "login");
-
         var authenticationProperties = builder.Build();
 
         await HttpContext.ChallengeAsync(Auth0Constants.AuthenticationScheme, authenticationProperties);

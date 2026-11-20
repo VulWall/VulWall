@@ -1,0 +1,276 @@
+/* Standalone auth page styles (AuthError) */
+.claim-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, var(--brand-dark-blue) 0%, var(--brand-blue) 100%);
+}
+
+.claim-container {
+    max-width: 500px;
+    width: 100%;
+}
+
+.claim-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.claim-logo {
+    height: 48px;
+    margin-bottom: 1.5rem;
+}
+
+.claim-title {
+    color: #fff;
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.claim-card {
+    background: var(--bs-body-bg, #fff);
+    border-radius: 16px;
+    padding: 2.5rem;
+    box-shadow: var(--card-shadow);
+    text-align: center;
+}
+
+.org-logo {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 auto 1.5rem;
+    display: block;
+}
+
+.org-badge {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand-dark-blue) 0%, var(--brand-blue) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+}
+
+.org-badge i {
+    font-size: 2rem;
+    color: #fff;
+}
+
+.org-name {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--bs-body-color);
+    margin-bottom: 0.75rem;
+}
+
+.claim-description {
+    color: var(--vw-gray-600);
+    margin-bottom: 2rem;
+    line-height: 1.6;
+}
+
+.features-list {
+    text-align: left;
+    margin-bottom: 2rem;
+    padding: 1.25rem;
+    background: var(--vw-gray-50);
+    border-radius: 12px;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    color: var(--bs-body-color);
+}
+
+.feature-item:not(:last-child) {
+    border-bottom: 1px solid var(--vw-gray-200);
+}
+
+.feature-item i {
+    color: var(--brand-blue);
+    width: 20px;
+    text-align: center;
+}
+
+.btn-claim {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 1rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, var(--brand-dark-blue) 0%, var(--brand-blue) 100%);
+    border: none;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-claim:hover {
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 86, 161, 0.3);
+}
+
+.btn-claim:active {
+    transform: translateY(0);
+}
+
+.login-note {
+    margin-top: 1.5rem;
+    color: var(--vw-gray-600);
+    font-size: 0.875rem;
+}
+
+.login-note a {
+    color: var(--brand-blue);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.login-note a:hover {
+    text-decoration: underline;
+}
+
+.claim-footer {
+    text-align: center;
+    margin-top: 1.5rem;
+}
+
+.trust-message,
+.help-text {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.trust-message i {
+    color: var(--brand-orange);
+}
+
+.help-text a {
+    color: #fff;
+    text-decoration: underline;
+}
+
+/* Error Card Styles */
+.error-card {
+    padding: 3rem 2.5rem;
+}
+
+.error-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--severity-high-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+}
+
+.error-icon i {
+    font-size: 2.5rem;
+    color: var(--severity-high);
+}
+
+.error-message {
+    font-size: 1.125rem;
+    color: var(--bs-body-color);
+    margin-bottom: 2rem;
+    line-height: 1.6;
+}
+
+.error-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.error-actions .btn {
+    padding: 0.875rem 1.5rem;
+}
+
+/* Confirmation Warning Styles */
+.confirm-warning {
+    text-align: left;
+    margin-bottom: 2rem;
+    padding: 1.25rem;
+    background: var(--severity-medium-bg);
+    border-radius: 12px;
+    border-left: 4px solid var(--severity-medium);
+}
+
+.confirm-warning-icon {
+    margin-bottom: 0.75rem;
+}
+
+.confirm-warning-icon i {
+    font-size: 1.5rem;
+    color: var(--severity-medium);
+}
+
+.confirm-warning-text {
+    color: var(--bs-body-color);
+    line-height: 1.6;
+    margin: 0;
+    font-size: 0.9375rem;
+}
+
+/* Dark Mode Support */
+[data-bs-theme="dark"] .claim-card {
+    background: var(--vw-dark-surface);
+}
+
+[data-bs-theme="dark"] .features-list {
+    background: var(--vw-dark-surface-alt);
+}
+
+[data-bs-theme="dark"] .feature-item:not(:last-child) {
+    border-bottom-color: var(--vw-dark-border);
+}
+
+[data-bs-theme="dark"] .claim-description,
+[data-bs-theme="dark"] .login-note {
+    color: var(--vw-gray-400);
+}
+
+[data-bs-theme="dark"] .error-icon {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+[data-bs-theme="dark"] .confirm-warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-left-color: var(--severity-medium);
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .claim-page {
+        padding: 1rem;
+    }
+
+    .claim-card {
+        padding: 1.5rem;
+    }
+
+    .claim-title {
+        font-size: 1.5rem;
+    }
+
+    .org-name {
+        font-size: 1.25rem;
+    }
+}

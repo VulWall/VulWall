@@ -33,10 +33,6 @@ public static class MongoDbIndexManager
                 Builders<BsonDocument>.IndexKeys.Ascending("user_ids"),
                 new CreateIndexOptions { Name = "user_ids_1", Background = true }),
 
-            new CreateIndexModel<BsonDocument>(
-                Builders<BsonDocument>.IndexKeys.Ascending("claim_token"),
-                new CreateIndexOptions { Name = "claim_token_1", Background = true }),
-
             // Supports: Stripe webhook lookup via FindAsync(o => o.Plan.StripeCustomerId == customerId)
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("plan.stripe_customer_id"),

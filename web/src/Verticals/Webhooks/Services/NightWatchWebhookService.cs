@@ -36,55 +36,48 @@ public class NightWatchWebhookService(
 
         var findingsList = (await findingsRepository.FindAsync(f => f.ScanIds.Contains(scanId))).ToList();
 
-        if (org.IsClaimed)
+        var (critical, high, medium, low) = FindingSeverityCounter.CountBySeverityGrouped(findingsList);
+        var totalFindings = critical + high + medium + low;
+        var (criticalRaw, highRaw, mediumRaw, lowRaw) = FindingSeverityCounter.CountBySeverityRaw(findingsList);
+        var totalInstances = criticalRaw + highRaw + mediumRaw + lowRaw;
+
+        var orgName = !string.IsNullOrWhiteSpace(org.CompanyName)
+            ? org.CompanyName
+            : "your organization";
+
+        var duration = scan.CompletedAt.HasValue
+            ? FormatDuration(scan.CompletedAt.Value - scan.CreatedAt)
+            : "N/A";
+
+        var request = httpContextAccessor.HttpContext?.Request;
+        var baseUrl = request is not null ? $"{request.Scheme}://{request.Host}" : "";
+
+        var variables = new Dictionary<string, object>
         {
-            var (critical, high, medium, low) = FindingSeverityCounter.CountBySeverityGrouped(findingsList);
-            var totalFindings = critical + high + medium + low;
-            var (criticalRaw, highRaw, mediumRaw, lowRaw) = FindingSeverityCounter.CountBySeverityRaw(findingsList);
-            var totalInstances = criticalRaw + highRaw + mediumRaw + lowRaw;
+            ["orgName"] = orgName,
+            ["totalFindings"] = totalFindings.ToString(),
+            ["totalInstances"] = totalInstances.ToString(),
+            ["critical"] = critical.ToString(),
+            ["criticalInstances"] = criticalRaw.ToString(),
+            ["high"] = high.ToString(),
+            ["highInstances"] = highRaw.ToString(),
+            ["medium"] = medium.ToString(),
+            ["mediumInstances"] = mediumRaw.ToString(),
+            ["low"] = low.ToString(),
+            ["lowInstances"] = lowRaw.ToString(),
+            ["scanType"] = scan.Type.ToString(),
+            ["duration"] = duration,
+            ["completedAt"] = scan.CompletedAt?.ToString("MMMM dd, yyyy 'at' hh:mm tt UTC") ?? "N/A",
+            ["dashboardUrl"] = $"{baseUrl}/Scans",
+            ["settingsUrl"] = $"{baseUrl}/Settings"
+        };
 
-            var orgName = !string.IsNullOrWhiteSpace(org.CompanyName)
-                ? org.CompanyName
-                : "your organization";
-
-            var duration = scan.CompletedAt.HasValue
-                ? FormatDuration(scan.CompletedAt.Value - scan.CreatedAt)
-                : "N/A";
-
-            var request = httpContextAccessor.HttpContext?.Request;
-            var baseUrl = request is not null ? $"{request.Scheme}://{request.Host}" : "";
-
-            var variables = new Dictionary<string, object>
-            {
-                ["orgName"] = orgName,
-                ["totalFindings"] = totalFindings.ToString(),
-                ["totalInstances"] = totalInstances.ToString(),
-                ["critical"] = critical.ToString(),
-                ["criticalInstances"] = criticalRaw.ToString(),
-                ["high"] = high.ToString(),
-                ["highInstances"] = highRaw.ToString(),
-                ["medium"] = medium.ToString(),
-                ["mediumInstances"] = mediumRaw.ToString(),
-                ["low"] = low.ToString(),
-                ["lowInstances"] = lowRaw.ToString(),
-                ["scanType"] = scan.Type.ToString(),
-                ["duration"] = duration,
-                ["completedAt"] = scan.CompletedAt?.ToString("MMMM dd, yyyy 'at' hh:mm tt UTC") ?? "N/A",
-                ["dashboardUrl"] = $"{baseUrl}/Scans",
-                ["settingsUrl"] = $"{baseUrl}/Settings"
-            };
-
-            var scanSubject = $"Scan Result {(scan.CompletedAt ?? DateTime.UtcNow):MMMM dd, yyyy}";
-            var sent = await emailService.SendTemplateAsync(org.OwnerEmail, EmailTemplate.ScanComplete, variables, scanSubject);
-            if (sent)
-                logger.LogInformation("Scan completion email sent to {Email} for scan {ScanId}", org.OwnerEmail, scanId);
-            else
-                logger.LogWarning("Failed to send scan completion email to {Email} for scan {ScanId}", org.OwnerEmail, scanId);
-        }
+        var scanSubject = $"Scan Result {(scan.CompletedAt ?? DateTime.UtcNow):MMMM dd, yyyy}";
+        var sent = await emailService.SendTemplateAsync(org.OwnerEmail, EmailTemplate.ScanComplete, variables, scanSubject);
+        if (sent)
+            logger.LogInformation("Scan completion email sent to {Email} for scan {ScanId}", org.OwnerEmail, scanId);
         else
-        {
-            logger.LogInformation("Organization {OrgId} is unclaimed, skipping scan completion email", scan.OrgId);
-        }
+            logger.LogWarning("Failed to send scan completion email to {Email} for scan {ScanId}", org.OwnerEmail, scanId);
 
         // Generate and persist AI executive summary — fire-and-forget so webhook returns fast
         _ = Task.Run(() => GenerateAndPersistExecutiveSummaryAsync(scanId, scan.OrgId, findingsList));

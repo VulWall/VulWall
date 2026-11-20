@@ -54,21 +54,7 @@ public class Organization : IEntity<string>
     public bool CertVisible { get; set; } = true;
     
     /// <summary>
-    /// Whether this organization has been claimed by a user.
-    /// Legacy unclaimed organizations have IsClaimed = false.
-    /// </summary>
-    [BsonElement("is_claimed")]
-    public bool IsClaimed { get; set; } = true;
-
-    /// <summary>
-    /// Cryptographic token for the org claim flow. Generated on org creation.
-    /// Cleared (set to null) after successful claim to enforce single-use.
-    /// </summary>
-    [BsonElement("claim_token")]
-    public string? ClaimToken { get; set; }
-
-    /// <summary>
-    /// Auth0 User ID of the organization owner (the user who claimed or created the org).
+    /// Auth0 User ID of the organization owner (the user who created the org).
     /// </summary>
     [BsonElement("owner_id")]
     public string? OwnerId { get; set; }

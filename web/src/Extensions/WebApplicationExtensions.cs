@@ -72,7 +72,7 @@ public static partial class WebApplicationExtensions
         // Log successful logins (must be after UseAuthentication)
         app.UseMiddleware<LoginAuditMiddleware>();
 
-        // Create an org for authenticated users who don't have one yet (skips /claim paths)
+        // Create an org for authenticated users who don't have one yet
         app.UseMiddleware<EnsureOrganizationMiddleware>();
 
         app.MapControllerRoute(

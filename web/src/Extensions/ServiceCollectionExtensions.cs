@@ -23,7 +23,6 @@ using VulWall.Dashboard.Scans.Services;
 using VulWall.Dashboard.Recommendations.Services;
 using VulWall.Dashboard.Dashboard.Services;
 using VulWall.Dashboard.Discoveries.Services;
-using VulWall.Dashboard.Claim.Services;
 using VulWall.Dashboard.Common.Services.NightWatch;
 using VulWall.Dashboard.Common.Services.Email;
 using VulWall.Dashboard.Webhooks.Services;
@@ -73,7 +72,6 @@ public static class ServiceCollectionExtensions
         services.AddRecommendationsServices();
         services.AddDashboardServices();
         services.AddDiscoveriesServices();
-        services.AddClaimServices();
         services.AddWebhooksServices();
 
         return services;
@@ -266,13 +264,6 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddDiscoveriesServices(this IServiceCollection services)
     {
         services.AddScoped<DiscoveriesService>();
-
-        return services;
-    }
-
-    private static IServiceCollection AddClaimServices(this IServiceCollection services)
-    {
-        services.AddScoped<ClaimService>();
 
         return services;
     }

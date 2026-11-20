@@ -67,9 +67,6 @@ public class ServiceSettings : EnvLoader
     [Env(Name = "RESEND_DELETE_ACCOUNT_TEMPLATE_ID", Required = false)]
     public string ResendDeleteAccountTemplateId = string.Empty;
 
-    [Env(Name = "RESEND_CLAIM_NOTIFICATION_TEMPLATE_ID", Required = false)]
-    public string ResendClaimNotificationTemplateId = string.Empty;
-
     [Env(Name = "SENTRY_DSN")]
     public string? SentryDsn;
 }

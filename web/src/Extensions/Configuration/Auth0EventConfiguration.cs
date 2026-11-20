@@ -82,7 +82,6 @@ public class Auth0EventConfiguration : IPostConfigureOptions<OpenIdConnectOption
             {
                 // Correlation cookie missing or state mismatch. Common cause: Auth0 "resume" flow
                 // posts back with a cached prior state that doesn't match the new correlation cookie.
-                // prompt=login (added in SettingsController for claim URLs) prevents this on retry.
                 logger.LogWarning("OIDC correlation failure — redirecting to login for fresh OIDC flow");
                 context.Response.Redirect("/Account/Login");
                 context.HandleResponse();

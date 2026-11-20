@@ -23,8 +23,6 @@ public class EmailTemplateRegistry
         if (!string.IsNullOrWhiteSpace(settings.ResendDeleteAccountTemplateId))
             _templates[EmailTemplate.DeleteAccountVerification] = (settings.ResendDeleteAccountTemplateId, "Your VulWall account deletion verification code");
 
-        if (!string.IsNullOrWhiteSpace(settings.ResendClaimNotificationTemplateId))
-            _templates[EmailTemplate.ClaimNotification] = (settings.ResendClaimNotificationTemplateId, "You've claimed your organization on VulWall");
     }
 
     /// <summary>

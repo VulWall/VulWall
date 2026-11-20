@@ -21,7 +21,6 @@
         "STRIPE_WEBHOOKSECRET": "",
         "RESEND_API_KEY": "",
         "RESEND_SCAN_COMPLETE_TEMPLATE": "",
-        "RESEND_CLAIM_NOTIFICATION_TEMPLATE_ID": "",
         "SENTRY_DSN": ""
       }
     },

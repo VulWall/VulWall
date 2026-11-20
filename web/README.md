@@ -44,7 +44,6 @@ VulWall.Dashboard/
     ├── Middleware/               # Request pipeline middleware
     └── Verticals/               # Vertical slice architecture
         ├── Assets/
-        ├── Claim/
         ├── Dashboard/
         ├── Discoveries/
         ├── Recommendations/
