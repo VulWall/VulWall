@@ -30,7 +30,7 @@ func isDNSNotFound(err error) bool {
 }
 
 // checkSPF performs SPF record validation for a domain
-func checkSPF(ctx context.Context, resolver *net.Resolver, domain string) ([]EmailCheckResult, error) {
+func checkSPF(ctx context.Context, resolver dnsResolver, domain string) ([]EmailCheckResult, error) {
 	var results []EmailCheckResult
 
 	records, err := resolver.LookupTXT(ctx, domain)
@@ -100,7 +100,7 @@ func checkSPF(ctx context.Context, resolver *net.Resolver, domain string) ([]Ema
 }
 
 // checkDMARC performs DMARC record validation for a domain
-func checkDMARC(ctx context.Context, resolver *net.Resolver, domain string) ([]EmailCheckResult, error) {
+func checkDMARC(ctx context.Context, resolver dnsResolver, domain string) ([]EmailCheckResult, error) {
 	var results []EmailCheckResult
 
 	dmarcDomain := "_dmarc." + domain
@@ -172,7 +172,7 @@ func checkDMARC(ctx context.Context, resolver *net.Resolver, domain string) ([]E
 
 // checkDKIM checks for DKIM records at common selectors in parallel.
 // Returns immediately when the first valid DKIM record is found.
-func checkDKIM(ctx context.Context, resolver *net.Resolver, domain string) []EmailCheckResult {
+func checkDKIM(ctx context.Context, resolver dnsResolver, domain string) []EmailCheckResult {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -229,7 +229,7 @@ func checkDKIM(ctx context.Context, resolver *net.Resolver, domain string) []Ema
 // checkZoneTransfer attempts AXFR queries against each nameserver for a domain.
 // An open zone transfer is a confirmed critical recon finding — it exposes the
 // entire DNS zone (internal hostnames, staging servers, database subdomains).
-func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain string) ([]EmailCheckResult, error) {
+func checkZoneTransfer(ctx context.Context, resolver dnsResolver, domain string) ([]EmailCheckResult, error) {
 	nameservers, err := resolver.LookupNS(ctx, domain)
 	if err != nil && !isDNSNotFound(err) {
 		return nil, fmt.Errorf("NS lookup: %w", err)
@@ -240,6 +240,7 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 
 	var vulnerableNS []string
 	var totalRecords int
+	var incomplete []error
 
 	for _, ns := range nameservers {
 		host := strings.TrimSuffix(ns.Host, ".")
@@ -257,8 +258,9 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 		recordCount, err := tryAXFR(ctx, domain, addr)
 		if err != nil {
 			// The nameserver neither answered nor refused: whether it allows a transfer
-			// is unknown, so the check is incomplete.
-			return nil, fmt.Errorf("AXFR against %s: %w", host, err)
+			// is unknown, so the check is incomplete. The other nameservers are still tried.
+			incomplete = append(incomplete, fmt.Errorf("AXFR against %s: %w", host, err))
+			continue
 		}
 		if recordCount > 0 {
 			vulnerableNS = append(vulnerableNS, fmt.Sprintf("%s (%d records)", host, recordCount))
@@ -267,7 +269,7 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 	}
 
 	if len(vulnerableNS) == 0 {
-		return nil, nil
+		return nil, errors.Join(incomplete...)
 	}
 
 	return []EmailCheckResult{
@@ -285,7 +287,7 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 			Value:      strings.Join(vulnerableNS, ", "),
 			References: []string{"https://datatracker.ietf.org/doc/html/rfc5936"},
 		},
-	}, nil
+	}, errors.Join(incomplete...)
 }
 
 // axfrAddress resolves a nameserver host with the shared public-IP guard and

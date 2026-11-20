@@ -194,7 +194,12 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 	}
 
 	// The port scan of this IP completed: a port of it that was open before and is not open
-	// now was checked and found closed. After the open ports, before the ACK.
+	// now was checked and found closed. A scan that found no port open at all is no
+	// evidence: the IP may be dropping the scanner's packets (a block looks like "all
+	// closed"). After the open ports, before the ACK.
+	if len(openPorts) == 0 {
+		return nil
+	}
 	msg := shared.CoverageMessage(job.OrgID, job.ScanID, job.TraceID, shared.ScanCoverage{
 		Source:      shared.CoverageSourcePortDiscovery,
 		DiscoveryID: shared.GenerateIPID(job.OrgID, job.IP),

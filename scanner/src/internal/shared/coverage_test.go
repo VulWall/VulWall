@@ -74,3 +74,41 @@ func TestTargetCoverage(t *testing.T) {
 		t.Fatalf("unresolved host coverage = %+v, want error: a check of it proves nothing", unresolved.Coverage)
 	}
 }
+
+func TestReachable(t *testing.T) {
+	t.Setenv("ALLOW_PRIVATE_TARGETS", "true") // the listener is on loopback
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip("no loopback listener:", err)
+	}
+	defer l.Close()
+	closed, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	closedAddr := closed.Addr().String()
+	closed.Close()
+
+	ctx := context.Background()
+	if err := Reachable(ctx, closedAddr, l.Addr().String()); err != nil {
+		t.Errorf("Reachable with one open address = %v, want nil", err)
+	}
+	if err := Reachable(ctx, closedAddr); err == nil {
+		t.Error("Reachable with only a closed port = nil, want an error")
+	}
+	if err := Reachable(ctx); err == nil {
+		t.Error("Reachable with no address = nil, want an error")
+	}
+}
+
+func TestReachableHonorsSSRFGuard(t *testing.T) {
+	t.Setenv("ALLOW_PRIVATE_TARGETS", "false")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer l.Close()
+	if err := Reachable(context.Background(), l.Addr().String()); err == nil {
+		t.Fatal("Reachable dialed a loopback address with private targets disallowed")
+	}
+}

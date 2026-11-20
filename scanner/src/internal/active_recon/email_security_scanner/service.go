@@ -23,7 +23,7 @@ type Service struct {
 	redis    *redis.Client
 	logger   *zap.Logger
 	tracer   trace.Tracer
-	resolver *net.Resolver
+	resolver dnsResolver
 }
 
 // NewService creates a new email security scanner service
@@ -32,8 +32,18 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 		redis:    redisClient,
 		logger:   logger,
 		tracer:   otel.Tracer("email-security-scanner"),
-		resolver: net.DefaultResolver,
+		resolver: newResolver(),
 	}
+}
+
+// newResolver returns the system resolver, confirmed by the public resolvers of
+// DNS_RECHECK_RESOLVERS when they are configured.
+func newResolver() dnsResolver {
+	r := confirmingResolver{local: net.DefaultResolver}
+	if public := shared.RecheckResolver(shared.RecheckResolvers()); public != nil {
+		r.public = public
+	}
+	return r
 }
 
 // ProcessDiscovery processes a discovery target and checks email security (SPF, DKIM, DMARC).
@@ -103,8 +113,10 @@ func (s *Service) scanRootDomain(ctx context.Context, span trace.Span, target Sc
 
 	spf, spfErr := checkSPF(ctx, s.resolver, target.Target)
 	dmarc, dmarcErr := checkDMARC(ctx, s.resolver, target.Target)
+	dkim := checkDKIM(ctx, s.resolver, target.Target)
+	// AXFR last: it is the slowest check and shares the DNS timeout.
 	axfr, axfrErr := checkZoneTransfer(ctx, s.resolver, target.Target)
-	results := append(append(spf, dmarc...), checkDKIM(ctx, s.resolver, target.Target)...)
+	results := append(append(spf, dmarc...), dkim...)
 	return append(results, axfr...), errors.Join(spfErr, dmarcErr, axfrErr)
 }
 
