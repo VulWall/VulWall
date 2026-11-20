@@ -74,6 +74,20 @@ public class ErrorControllerTests
         AssertSafe(entry.Message);
     }
 
+    [Fact]
+    public void HandleStatusCode_SanitizesRequestId()
+    {
+        var logger = new CapturingLogger();
+        var controller = CreateController(logger, "/missing");
+        controller.HttpContext.TraceIdentifier = "id\u001b]8;;https://evil/\u0007";
+
+        controller.HandleStatusCode(400);
+
+        var entry = Assert.Single(logger.Entries);
+        AssertSafe(entry.Message);
+        Assert.Contains("RequestId: id?]8;;https://evil/?", entry.Message);
+    }
+
     private static void AssertSafe(string message) =>
         Assert.DoesNotContain(message, c => char.IsControl(c));
 

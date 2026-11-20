@@ -5,8 +5,8 @@ namespace VulWall.Dashboard.Account.Services;
 
 /// <summary>
 /// Secret that guards first-run /setup. Without it, anyone who reaches a fresh install before its
-/// owner could create the admin account. Generated per process and kept in memory only; the
-/// startup log prints the setup link. SETUP_TOKEN overrides it for unattended installs.
+/// owner could create the admin account. SETUP_TOKEN sets it (install.sh writes a random one to
+/// .env); without it, a token is generated per process and the startup log prints the setup link.
 /// </summary>
 public sealed class SetupToken
 {

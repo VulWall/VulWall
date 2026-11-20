@@ -17,7 +17,8 @@ public class ErrorController(ILogger<ErrorController> logger, IWebHostEnvironmen
         var statusCodeFeature = HttpContext.Features.Get<IStatusCodeReExecuteFeature>();
 
         var statusCode = Response.StatusCode;
-        var requestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier;
+        // Activity.Id can come from the client's traceparent header.
+        var requestId = LogSanitizer.Clean(Activity.Current?.Id ?? HttpContext.TraceIdentifier);
         var originalPath = LogSanitizer.Clean(
             statusCodeFeature?.OriginalPath ?? exceptionFeature?.Path ?? HttpContext.Request.Path.ToString());
 
@@ -60,7 +61,8 @@ public class ErrorController(ILogger<ErrorController> logger, IWebHostEnvironmen
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult HandleStatusCode(int statusCode)
     {
-        var requestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier;
+        // Activity.Id can come from the client's traceparent header.
+        var requestId = LogSanitizer.Clean(Activity.Current?.Id ?? HttpContext.TraceIdentifier);
         var statusCodeFeature = HttpContext.Features.Get<IStatusCodeReExecuteFeature>();
         var originalPath = LogSanitizer.Clean(statusCodeFeature?.OriginalPath ?? HttpContext.Request.Path.ToString());
 
