@@ -28,7 +28,8 @@ The scanner starts its knowledge-base engine only when the key is set. Finding t
 found before you set the key are queued and processed once it is set. Scans that finished less
 than 7 days before you set the key get an executive summary too.
 
-`ANTHROPIC_MODEL` selects the model for the guidance (default `claude-sonnet-4-6`).
+`ANTHROPIC_MODEL` selects the model for the guidance and the executive summaries (default
+`claude-sonnet-4-6`).
 
 ## What is sent to Anthropic
 

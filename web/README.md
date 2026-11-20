@@ -64,10 +64,15 @@ All settings are environment variables. None of them is a secret except `ANTHROP
 | `MONGO_DB` | `vulwall` | Database name (shared with the scanner) |
 | `PORT` | `8080` | HTTP port |
 | `ANTHROPIC_API_KEY` | empty | Optional. Enables AI executive summaries on reports |
-| `DEFAULT_AI_MODEL` | `claude-sonnet-4-6` | Anthropic model for executive summaries |
+| `DEFAULT_AI_MODEL` | `claude-sonnet-4-6` | Anthropic model for executive summaries. The root `docker-compose.yml` sets it from `ANTHROPIC_MODEL`, the setting the scanner uses too. A set but empty value is used as the model name, so leave it unset for the default |
 | `SECURE_COOKIES` | `false` | Set to `true` when the app is served over HTTPS. Turns on Secure cookies, HSTS and the HTTP to HTTPS redirect. Leave `false` for plain `http://localhost` |
 | `TRUSTED_PROXIES` | empty | Comma-separated IPs or CIDR ranges of reverse proxies whose `X-Forwarded-For`/`X-Forwarded-Proto` headers are trusted (for example `10.0.0.0/8`). Empty: only loopback is trusted |
 | `VULWALL_VERSION` | `dev` | Version shown in the About dialog. Set at image build time with the `VULWALL_VERSION` build argument; release images use the tag, and the root `make build` passes `dev (<short commit>)` |
+
+Image-internal settings: the image sets `PORT=8080` and `DATA_PROTECTION_KEYS_DIR=/data/keys` (a web-only
+volume), and the root compose file does not expose them. To change the host port, set `VULWALL_PORT`
+in the root `.env`. Without `DATA_PROTECTION_KEYS_DIR` (`dotnet run`), ASP.NET Core keeps the keys in
+its default per-user location.
 
 Behind a TLS-terminating reverse proxy, set `SECURE_COOKIES=true` and add the proxy to
 `TRUSTED_PROXIES` so the app sees the original scheme and client IP (login rate limiting is per IP).

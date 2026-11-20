@@ -117,7 +117,7 @@ comments.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ANTHROPIC_API_KEY` | empty | Enables AI remediation guidance and executive summaries |
-| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Model for the scanner's knowledge-base engine |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Model for AI remediation guidance and executive summaries |
 | `VULWALL_PORT` | `8080` | Host port of the web UI (bound to `127.0.0.1`) |
 | `SETUP_TOKEN` | empty | First-run setup token. The install script sets a random one; empty means a new random token at each start, printed in the log |
 | `VULWALL_VERSION` | `latest` | Image tag of `ghcr.io/vulwall/scanner` and `ghcr.io/vulwall/web` |
@@ -129,12 +129,20 @@ comments.
 | `NUCLEI_INTERACTSH` | `off` | `on` runs nuclei's out-of-band (OAST) checks. Vulnerable targets then call back to ProjectDiscovery's public interactsh servers unless you set your own |
 | `NUCLEI_INTERACTSH_SERVER` | empty | https URL of your own interactsh server |
 | `NUCLEI_INTERACTSH_TOKEN` | empty | Auth token of that server |
+| `NUCLEI_TEMPLATE_UPDATE_CRON` | `0 2 * * *` | When nuclei updates its templates: 5-field cron, UTC (daily at 02:00) |
+| `NUCLEI_INCLUDE_TAGS` | `cve,vuln,exposure,misconfig,...` | nuclei template tags to run (full list in `.env.example`) |
+| `NUCLEI_EXCLUDE_TAGS` | `intrusive,dos,fuzz` | nuclei template tags to skip. Removing these makes scans intrusive: attack payloads and floods that can change or take down the sites you scan |
 | `TESTSSL_CONCURRENCY` | `5` | Concurrent testssl.sh scans |
+| `DNS_RESOLVE_CONCURRENCY` | `50` | Concurrent DNS lookups when domain discovery resolves subdomains |
+| `DNS_RECHECK_RESOLVERS` | `1.1.1.1,8.8.8.8` | Public resolvers asked when the local resolver says a name does not exist; `off` stops these lookups |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scanning private/internal IP ranges |
 | `GEO_DOWNLOAD` | `true` | Download DB-IP Lite databases on start |
+| `GEO_MAX_AGE_DAYS` | `35` | Days before those databases are downloaded again |
+| `CLOUD_DETECTOR_ENABLED` | `true` | Label AWS, Azure, GCP and Fastly addresses (downloads their IP ranges on start) |
 | `OTEL_ENABLED` | `false` | Export OpenTelemetry traces (see below) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://jaeger:4318` | OTLP/HTTP endpoint |
 | `OTEL_EXPORTER_OTLP_HEADERS` | empty | Headers for a hosted OTLP backend |
+| `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | `parentbased_always_on` / `0.1` | Trace sampler and the ratio for the probabilistic samplers |
 
 ### Exposing VulWall
 

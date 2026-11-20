@@ -61,15 +61,26 @@ services:
       NUCLEI_INTERACTSH: ${NUCLEI_INTERACTSH:-off}
       NUCLEI_INTERACTSH_SERVER: ${NUCLEI_INTERACTSH_SERVER:-}
       NUCLEI_INTERACTSH_TOKEN: ${NUCLEI_INTERACTSH_TOKEN:-}
+      NUCLEI_TEMPLATE_UPDATE_CRON: ${NUCLEI_TEMPLATE_UPDATE_CRON:-}
+      # Same defaults as scanner/src/internal/active_recon/nuclei_scanner/constants.go.
+      # The scanner reads an empty value as "no filter", so an empty line in .env must not
+      # reach it: keep these defaults in sync with the constants.
+      NUCLEI_INCLUDE_TAGS: ${NUCLEI_INCLUDE_TAGS:-cve,vuln,exposure,misconfig,default-login,token,takeover,kev,xss,lfi,ssrf,rce,sqli,auth-bypass,unauth,panel}
+      NUCLEI_EXCLUDE_TAGS: ${NUCLEI_EXCLUDE_TAGS:-intrusive,dos,fuzz}
       TESTSSL_CONCURRENCY: ${TESTSSL_CONCURRENCY:-5}
       DNS_RESOLVE_CONCURRENCY: ${DNS_RESOLVE_CONCURRENCY:-50}
       DNS_RECHECK_RESOLVERS: ${DNS_RECHECK_RESOLVERS:-}
       ALLOW_PRIVATE_TARGETS: ${ALLOW_PRIVATE_TARGETS:-false}
       GEO_DOWNLOAD: ${GEO_DOWNLOAD:-true}
+      GEO_MAX_AGE_DAYS: ${GEO_MAX_AGE_DAYS:-35}
+      CLOUD_DETECTOR_ENABLED: ${CLOUD_DETECTOR_ENABLED:-true}
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-vulwall-scanner}
+      # The OpenTelemetry SDK reads these too and logs an error for an empty sampler name.
+      OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
     volumes:
       - nuclei-templates:/data/nuclei-templates
       - geo-data:/data/geo
@@ -96,6 +107,8 @@ services:
       MONGO_URI: mongodb://mongo:27017
       MONGO_DB: vulwall
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # The web app reads an empty value as the model name, so pass the default here.
+      DEFAULT_AI_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       SETUP_TOKEN: ${SETUP_TOKEN:-}
