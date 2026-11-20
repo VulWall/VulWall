@@ -8,8 +8,9 @@
 # Tool versions are pinned. To upgrade nuclei, change NUCLEI_VERSION and both
 # checksums (from nuclei_<version>_checksums.txt on the release page).
 
-ARG GO_IMAGE=golang:1.26.10-alpine3.24
-ARG RUNTIME_IMAGE=alpine:3.24.3
+# Base images are pinned by multi-arch index digest; Dependabot bumps tag and digest together.
+ARG GO_IMAGE=golang:1.26.10-alpine3.24@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696
+ARG RUNTIME_IMAGE=alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 
 # ---------------------------------------------------------------------------
 # Go binary (cross-compiled on the build platform for multi-arch builds)
@@ -56,14 +57,18 @@ RUN set -eu; \
 # ---------------------------------------------------------------------------
 # Runtime
 FROM ${RUNTIME_IMAGE}
-ARG RETIRE_VERSION=5.4.2
+
+# retire.js and its whole dependency tree are pinned with integrity hashes in
+# docker/retire/package-lock.json (Dependabot updates it); npm ci installs exactly that.
+COPY docker/retire/package.json docker/retire/package-lock.json /opt/retire/
 
 # testssl.sh needs bash, coreutils, procps, openssl, a DNS tool and xxd.
 # retire.js needs node. ca-certificates for every outbound TLS call.
 RUN set -eu; \
     apk add --no-cache ca-certificates tzdata curl bash coreutils procps openssl \
         bind-tools libidn socat xxd nodejs npm; \
-    npm install -g --omit=dev "retire@${RETIRE_VERSION}"; \
+    npm ci --prefix /opt/retire --omit=dev --ignore-scripts --no-audit --no-fund; \
+    ln -s /opt/retire/node_modules/.bin/retire /usr/local/bin/retire; \
     npm cache clean --force; \
     apk del npm; \
     addgroup -S -g 10001 vulwall; \

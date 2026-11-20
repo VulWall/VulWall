@@ -12,7 +12,7 @@ name: vulwall
 
 services:
   mongo:
-    image: mongo:7.0.29
+    image: mongo:7.0.29@sha256:606f8e029603330411a7dd10b5ffd50eefc297fc80cee89f10a455e496a76ae7
     restart: unless-stopped
     volumes:
       - mongo-data:/data/db
@@ -24,7 +24,7 @@ services:
       start_period: 20s
 
   redis:
-    image: redis:7.4.11-alpine
+    image: redis:7.4.11-alpine@sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
@@ -89,7 +89,7 @@ services:
       - web-keys:/data/keys
 
   jaeger:
-    image: jaegertracing/all-in-one:1.76.0
+    image: jaegertracing/all-in-one:1.76.0@sha256:ab6f1a1f0fb49ea08bcd19f6b84f6081d0d44b364b6de148e1798eb5816bacac
     profiles: ["tracing"]
     restart: unless-stopped
     ports:

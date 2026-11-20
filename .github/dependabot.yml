@@ -16,6 +16,11 @@ updates:
       nuget-dependencies:
         patterns: ["*"]
 
+  - package-ecosystem: npm
+    directory: /scanner/docker/retire
+    schedule:
+      interval: weekly
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
