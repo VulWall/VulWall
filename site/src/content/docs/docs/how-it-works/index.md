@@ -49,8 +49,8 @@ scan coordinator
                                   knowledge-base engine ──▶ knowledge base
 ```
 
-1. **Scan coordinator.** Starts scans, either on the weekly schedule or when the web app queues
-   one. It reads the enabled assets and publishes a discovery job for each domain and IP
+1. **Scan coordinator.** Starts scans, either on the schedule set in Settings → Scan schedule
+   or when the web app queues one. It reads the enabled assets and publishes a discovery job for each domain and IP
    address.
 2. **Discovery.** Domain discovery finds subdomains with subfinder and resolves them. Port
    discovery scans a list of common TCP ports on each IP address. It skips IP addresses that

@@ -66,7 +66,9 @@ Add the consumer to `consumers()` and its job-queue group (from `0`) to
 
 ### 5. Update scan monitor & registry
 
-Add consumer group to `isComplete()` and update [SERVICE_REGISTRY.md](SERVICE_REGISTRY.md).
+Add the (stream, group) pair to `scanPipelineGroups()` in
+`src/internal/scan_coordinator/pipeline.go` and to `TestScanPipelineGroups`, and update
+[SERVICE_REGISTRY.md](SERVICE_REGISTRY.md).
 
 **Key rules:**
 - Use `shared.StreamDomainDiscoveryQueue` (input) and `shared.StreamDomainDiscoveryResults` (output)
@@ -150,7 +152,7 @@ Consumer creates groups on both `domain_scan_triggers` and `port_scan_triggers`.
 - [ ] Publish a coverage message per target (`shared.TargetCoverage`) after the findings
 - [ ] Inject TraceContext before publishing
 - [ ] Extract TraceContext after consuming
-- [ ] Add to scan monitor's `isComplete()` (critical!)
+- [ ] Add to `scanPipelineGroups()` in `scan_coordinator/pipeline.go` (critical!)
 - [ ] Add to SERVICE_REGISTRY.md
 
 ### Performance patterns (use when applicable)

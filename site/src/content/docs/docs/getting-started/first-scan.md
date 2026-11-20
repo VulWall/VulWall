@@ -54,5 +54,8 @@ is opened again.
 
 ## Scheduled scans
 
-VulWall scans all enabled assets once a week. The schedule is picked at random on the first
-start, and the **Scans** page shows it. You can also start a scan at any time with **Scan now**.
+VulWall scans all enabled assets on the schedule in **Settings → Scan schedule**. Until you
+change it, that is once a week at a random time on a weekend night (UTC), picked on the first
+start. You can make it daily, weekly or monthly at a time in your time zone, or turn it off. The
+scanner picks up a change within 5 minutes. The sidebar and the **Scans** page show when the next
+scan starts. You can also start a scan at any time with **Scan now**.

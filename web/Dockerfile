@@ -27,8 +27,12 @@ COPY --from=build /app/out .
 # Created here so the mounted named volume inherits the non-root owner.
 RUN mkdir -p /data/keys && chown "$APP_UID" /data/keys
 
+# Release version shown in the UI; the release workflow passes the tag.
+ARG VULWALL_VERSION=dev
+
 ENV PORT=8080
 ENV DATA_PROTECTION_KEYS_DIR=/data/keys
+ENV VULWALL_VERSION=$VULWALL_VERSION
 EXPOSE 8080
 
 # Built-in non-root user of the official .NET images

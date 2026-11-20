@@ -81,6 +81,9 @@ First open-source, self-hosted release, under the MIT License.
   commit SHA. retire.js and its dependencies are pinned in
   `scanner/docker/retire/package-lock.json` and installed with `npm ci`.
 - `MongoDB.Driver` 3.14.1.
+- The sidebar footer shows "VulWall <version> · MIT" with a link to the
+  GitHub repository. Release images set the version from the tag
+  (`VULWALL_VERSION` build argument); other builds show "dev".
 
 ### Security
 

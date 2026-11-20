@@ -68,6 +68,7 @@ All settings are environment variables. None of them is a secret except `ANTHROP
 | `SECURE_COOKIES` | `false` | Set to `true` when the app is served over HTTPS. Turns on Secure cookies, HSTS and the HTTP to HTTPS redirect. Leave `false` for plain `http://localhost` |
 | `TRUSTED_PROXIES` | empty | Comma-separated IPs or CIDR ranges of reverse proxies whose `X-Forwarded-For`/`X-Forwarded-Proto` headers are trusted (for example `10.0.0.0/8`). Empty: only loopback is trusted |
 | `SHARED_LINKS_ENABLED` | `false` | `true` enables password-protected shared report links. When `false` the share UI is hidden and `/shared-reports/*` returns 404 |
+| `VULWALL_VERSION` | `dev` | Version shown in the sidebar footer. Set at image build time with the `VULWALL_VERSION` build argument; release images use the tag |
 
 Behind a TLS-terminating reverse proxy, set `SECURE_COOKIES=true` and add the proxy to
 `TRUSTED_PROXIES` so the app sees the original scheme and client IP (login rate limiting is per IP).
@@ -75,8 +76,9 @@ Behind a TLS-terminating reverse proxy, set `SECURE_COOKIES=true` and add the pr
 ## How it works
 
 - **Sign-in**: one local admin, stored in the `users` collection with a BCrypt password hash.
-  Login is rate-limited per IP. Data-protection keys (cookie encryption) are kept in MongoDB, so
-  sessions survive restarts.
+  Login is rate-limited per IP. Data-protection keys (cookie encryption) are stored on disk in
+  `DATA_PROTECTION_KEYS_DIR` (`/data/keys`, a web-only volume in the image), so sessions survive
+  restarts. They are not in the shared MongoDB database.
 - **Organization**: a self-hosted install has one organization. The app creates it at startup with
   a random weekly scan schedule (`scan_settings.scan_cron`, UTC), which the scanner reads. Settings →
   Scan schedule changes it (Off, daily, weekly or monthly, at a time in a chosen time zone); the
