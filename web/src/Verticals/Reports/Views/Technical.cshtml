@@ -1,0 +1,32 @@
+@model VulWall.Dashboard.Reports.Models.TechnicalReportViewModel
+@{
+    ViewData["Title"] = "Technical Report";
+    Layout = "~/Common/Views/_Layout.cshtml";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Reports/Technical/index.css" asp-append-version="true" />
+}
+
+<div class="tr-page-wrapper">
+    <article class="tr-document">
+        <partial name="~/Verticals/Reports/Views/Partials/_TechnicalHeader.cshtml" model="Model" />
+        <partial name="~/Verticals/Reports/Views/Partials/_TechnicalDetails.cshtml" model="Model.TechnicalDetails" />
+        <partial name="~/Verticals/Reports/Views/Partials/_TechnicalAssetDiscovery.cshtml" model="Model" />
+        <partial name="~/Verticals/Reports/Views/Partials/_TechnicalCompliance.cshtml" model="Model" />
+
+        <section class="tr-band tr-band--roadmap" id="roadmap">
+            <p class="tr-eyebrow">REMEDIATION ROADMAP</p>
+            <h2 class="tr-h2">What to fix, in what order</h2>
+            <partial name="~/Verticals/Reports/Views/Partials/_RemediationRoadmap.cshtml" model="Model.Roadmap" />
+        </section>
+
+        <partial name="~/Verticals/Reports/Views/Partials/_TechnicalVulnerabilities.cshtml" model="Model" />
+
+        <partial name="~/Verticals/Reports/Views/Partials/_TechnicalFooter.cshtml" model="Model" />
+    </article>
+</div>
+
+@section Scripts {
+    <script type="module" src="~/js/Reports/Technical/index.js" asp-append-version="true"></script>
+}

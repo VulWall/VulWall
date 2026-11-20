@@ -1,0 +1,43 @@
+/* Geographic and Cloud Provider Indicators */
+.geo-indicators {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.geo-flag,
+.geo-cloud-logo {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    vertical-align: middle;
+}
+
+.geo-flag {
+    border-radius: 2px;
+}
+
+.geo-cloud-logo {
+    opacity: 0.95;
+    border-radius: 3px;
+}
+
+/* Hide broken/missing images gracefully */
+.geo-flag.image-error,
+.geo-cloud-logo.image-error {
+    display: none;
+}
+
+/* Dark theme adjustments */
+[data-bs-theme="dark"] .geo-cloud-logo {
+    opacity: 0.9;
+    filter: brightness(0.95);
+}
+
+/* Hover effects */
+.geo-cloud-logo:hover {
+    transform: scale(1.1);
+    transition: transform 0.15s ease-in-out;
+}

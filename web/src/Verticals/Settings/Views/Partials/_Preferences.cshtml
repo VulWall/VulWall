@@ -1,0 +1,47 @@
+@model bool
+
+@{
+    var tourCompleted = Model;
+}
+
+<div class="vw-section-card">
+    <div class="vw-section-header">
+        <i class="fa-solid fa-sliders"></i>
+        <h2>Preferences</h2>
+    </div>
+
+    <div class="vw-pref-row">
+        <div class="vw-pref-info">
+            <i class="fa-solid fa-route"></i>
+            <div>
+                <div class="vw-pref-name">Welcome tour</div>
+                <p class="vw-pref-desc">
+                    @if (tourCompleted)
+                    {
+                        <text>You've completed the guided walkthrough. Restart it to see it again on the dashboard.</text>
+                    }
+                    else
+                    {
+                        <text>The welcome tour will show when you next visit the Dashboard.</text>
+                    }
+                </p>
+            </div>
+        </div>
+        <div class="flex-shrink-0">
+            @if (tourCompleted)
+            {
+                <form asp-action="ResetTour" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">
+                        <i class="fa-solid fa-rotate-right me-1"></i>Restart tour
+                    </button>
+                </form>
+            }
+            else
+            {
+                <span class="badge badge-success">
+                    <i class="fa-solid fa-play-circle me-1"></i>Ready
+                </span>
+            }
+        </div>
+    </div>
+</div>

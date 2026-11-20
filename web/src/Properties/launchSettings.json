@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:8081",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "NIGHTWATCH_WEBHOOK_SECRET": "",
+        "ANTHROPIC_API_KEY": "",
+        "MONGO_URI": "",
+        "AUTH0_DOMAIN": "",
+        "AUTH0_CLIENTID": "",
+        "AUTH0_CLIENTSECRET": "",
+        "AUTH0_MANAGEMENT_DOMAIN": "",
+        "STRIPE_PRO_PRICEID": "",
+        "STRIPE_PUBLISHABLEKEY": "",
+        "STRIPE_SECRETKEY": "",
+        "STRIPE_WEBHOOKSECRET": "",
+        "RESEND_API_KEY": "",
+        "RESEND_SCAN_COMPLETE_TEMPLATE": "",
+        "RESEND_CLAIM_NOTIFICATION_TEMPLATE_ID": "",
+        "SENTRY_DSN": ""
+      }
+    },
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:8081;http://localhost:8080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

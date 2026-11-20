@@ -1,0 +1,24 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /app
+
+# Copy project file first for restore layer caching
+COPY ./src/*.csproj ./VulWall.Dashboard/
+RUN dotnet restore ./VulWall.Dashboard/VulWall.Dashboard.csproj
+
+# Copy source and publish
+COPY ./src/ ./VulWall.Dashboard/
+RUN dotnet publish ./VulWall.Dashboard/VulWall.Dashboard.csproj -c Release -o /app/out
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+
+# Create non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build --chown=appuser:appuser /app/out .
+USER appuser
+ENTRYPOINT ["dotnet", "./VulWall.Dashboard.dll"]

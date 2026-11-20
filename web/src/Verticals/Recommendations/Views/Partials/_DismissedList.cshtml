@@ -1,0 +1,41 @@
+@model List<VulWall.Dashboard.Recommendations.Models.DismissedFindingViewModel>
+
+<div class="archive-panel mt-4">
+    <button class="archive-panel__toggle" id="archiveToggle" type="button" aria-expanded="false" aria-controls="archiveBody">
+        <div class="archive-panel__toggle-left">
+            <i class="fas fa-box-archive"></i>
+            <span>Dismissed &amp; accepted risk</span>
+            <span class="archive-count">@Model.Count</span>
+        </div>
+        <i class="fas fa-chevron-down archive-panel__chevron"></i>
+    </button>
+    <div class="archive-panel__body" id="archiveBody" style="display:none">
+        @foreach (var item in Model)
+        {
+            <div class="archive-row">
+                <div class="archive-row__info">
+                    <div class="archive-row__title">@item.FindingType</div>
+                    <div class="archive-row__meta">
+                        @item.StatusLabel
+                        <span class="mx-1">·</span>
+                        @item.SuppressedBy
+                        <span class="mx-1">·</span>
+                        @item.SuppressedAt.ToString("MMM dd, yyyy")
+                        @if (!string.IsNullOrEmpty(item.Target))
+                        {
+                            <span class="mx-1">·</span>
+                            <span class="archive-row__asset">@item.Target</span>
+                        }
+                    </div>
+                </div>
+                <form method="post" action="@Url.Action("UnsuppressFinding", "Recommendations")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="SuppressionId" value="@item.SuppressionId" />
+                    <button type="submit" class="btn btn-sm btn-ghost-primary">
+                        <i class="fas fa-rotate-left"></i> Restore
+                    </button>
+                </form>
+            </div>
+        }
+    </div>
+</div>

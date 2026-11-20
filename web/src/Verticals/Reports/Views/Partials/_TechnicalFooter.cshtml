@@ -1,0 +1,24 @@
+@model VulWall.Dashboard.Reports.Models.TechnicalReportViewModel
+@{
+    var toolCount = Model.TechnicalDetails.Active.Tools.Count;
+    var toolNames = string.Join(", ", Model.TechnicalDetails.Active.Tools.Select(t => t.Name));
+}
+
+<footer class="tr-footer">
+    <div class="tr-footer-coverage">
+        <p class="tr-eyebrow">SCAN COVERAGE</p>
+        <p class="tr-footer-coverage-body">
+            External, unauthenticated scan · <span class="tr-mono">@toolCount scanner@(toolCount != 1 ? "s" : "")</span>
+            (@toolNames) · @Model.Coverage.Tier tier.
+            @if (Model.Coverage.Exclusions.Any())
+            {
+                <span>Excludes @string.Join(", ", Model.Coverage.Exclusions.Take(3).Select(e => e.ToLower())).</span>
+            }
+        </p>
+        <p class="tr-footer-report-id tr-mono">@Model.ReportId</p>
+    </div>
+    <div class="tr-footer-tagline">
+        <p class="tr-tagline-line1">Find what attackers see —</p>
+        <p class="tr-tagline-line2">before they do.</p>
+    </div>
+</footer>

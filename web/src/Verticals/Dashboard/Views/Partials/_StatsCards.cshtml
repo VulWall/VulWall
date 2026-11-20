@@ -1,0 +1,67 @@
+@model VulWall.Dashboard.Dashboard.Models.IndexViewModel
+
+@{
+    var showTrends = Model.HasScanData && Model.FeatureAccess.CanViewTrends;
+}
+
+<div class="stats-grid">
+
+    <div class="stat-card" data-tour="critical-issues">
+        <div class="stat-card-top">
+            <div class="stat-icon-wrap stat-icon-wrap--critical"><i class="fas fa-circle-exclamation"></i></div>
+            @if (showTrends && Model.CriticalIssuesTrend != 0)
+            {
+                var down = Model.CriticalIssuesTrend < 0;
+                <span class="stat-trend-chip @(down ? "stat-trend-chip--good" : "stat-trend-chip--bad")">
+                    <i class="fas @(down ? "fa-arrow-down" : "fa-arrow-up")"></i>@Math.Abs(Model.CriticalIssuesTrend)
+                </span>
+            }
+        </div>
+        <div class="stat-number @(Model.HasScanData ? "stat-number--critical" : "stat-number--pending")">
+            @(Model.HasScanData ? Model.CriticalIssues.ToString() : "—")
+        </div>
+        <p class="stat-label">Critical issues</p>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card-top">
+            <div class="stat-icon-wrap stat-icon-wrap--high"><i class="fas fa-triangle-exclamation"></i></div>
+            @if (showTrends && Model.HighIssuesTrend != 0)
+            {
+                var down = Model.HighIssuesTrend < 0;
+                <span class="stat-trend-chip @(down ? "stat-trend-chip--good" : "stat-trend-chip--bad")">
+                    <i class="fas @(down ? "fa-arrow-down" : "fa-arrow-up")"></i>@Math.Abs(Model.HighIssuesTrend)
+                </span>
+            }
+        </div>
+        <div class="stat-number @(Model.HasScanData ? "stat-number--high" : "stat-number--pending")">
+            @(Model.HasScanData ? Model.HighIssues.ToString() : "—")
+        </div>
+        <p class="stat-label">High issues</p>
+    </div>
+
+    <div class="stat-card" data-tour="discovered-assets">
+        <div class="stat-card-top">
+            <div class="stat-icon-wrap stat-icon-wrap--info"><i class="fas fa-sitemap"></i></div>
+            @if (showTrends && Model.DiscoveredAssetsTrend != 0)
+            {
+                <span class="stat-trend-chip stat-trend-chip--info">
+                    <i class="fas fa-arrow-up"></i>@Math.Abs(Model.DiscoveredAssetsTrend)
+                </span>
+            }
+        </div>
+        <div class="stat-number @(Model.HasScanData ? "" : "stat-number--pending")">
+            @(Model.HasScanData ? Model.DiscoveredAssets.ToString() : "—")
+        </div>
+        <p class="stat-label">Discovered this scan</p>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card-top">
+            <div class="stat-icon-wrap stat-icon-wrap--success"><i class="fas fa-circle-check"></i></div>
+        </div>
+        <div class="stat-number stat-number--success">@Model.TotalAssets</div>
+        <p class="stat-label">Assets monitored</p>
+    </div>
+
+</div>

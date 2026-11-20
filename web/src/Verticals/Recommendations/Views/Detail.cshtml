@@ -1,0 +1,389 @@
+@model VulWall.Dashboard.Recommendations.Models.RecommendationDetailViewModel
+@using VulWall.Dashboard.Recommendations.Constants
+@{
+    ViewData["Title"] = "Security Recommendation";
+    var sev = Model.Finding.Severity.ToString().ToLower();
+    var status = Model.Finding.Status;
+    var activeCount = Model.AffectedAssets.Count;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Common/badges.css" />
+    <link rel="stylesheet" href="~/css/Common/findings.css" />
+    <link rel="stylesheet" href="~/css/Recommendations/shared.css" />
+    <link rel="stylesheet" href="~/css/Recommendations/detail.css" />
+    <link rel="stylesheet" href="~/css/Recommendations/suppression.css" />
+}
+
+@section Scripts {
+    <script src="~/js/Recommendations/detail.js"></script>
+    <script type="module" src="~/js/Recommendations/suppression.js"></script>
+}
+
+<div class="mb-3">
+    <a href="@Url.Action("Index", "Recommendations")" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Recommendations
+    </a>
+</div>
+
+@if (status == "resolved")
+{
+    <div class="status-banner status-banner--resolved">
+        <i class="fas fa-circle-check"></i>
+        <span>This finding is marked resolved. It will be re-opened automatically if the next scan still detects it.</span>
+    </div>
+}
+else if (status == "muted")
+{
+    <div class="status-banner status-banner--muted">
+        <i class="fas fa-bell-slash"></i>
+        <span>This finding is muted.</span>
+    </div>
+}
+
+<!-- Finding Header -->
+<div class="finding-header-card" style="border-left: 4px solid var(--severity-@(sev)-solid, var(--severity-@(sev)));">
+    <div class="finding-badges">
+        <span class="severity-badge severity-@sev">@Model.Finding.Severity</span>
+        @if (Model.Finding.IsNew)
+        {
+            <span class="new-badge" title="First seen: @Model.Finding.FirstDetected.ToString("MMM dd, yyyy")">
+                <i class="fas fa-star"></i>
+                New
+            </span>
+        }
+        else
+        {
+            <span class="recurring-badge" title="First seen: @Model.Finding.FirstDetected.ToString("MMM dd, yyyy") · Last seen: @Model.Finding.LastDetected.ToString("MMM dd, yyyy")">
+                <i class="fas fa-rotate"></i>
+                Recurring
+            </span>
+        }
+        @if (Model.Finding.IsExploitable == true)
+        {
+            <span class="exploitable-badge">
+                <i class="fas fa-bolt"></i> Exploitable
+            </span>
+        }
+        @if (!string.IsNullOrEmpty(Model.Finding.FindingType))
+        {
+            <span class="finding-type-badge">@Model.Finding.FindingType</span>
+        }
+        @if (!string.IsNullOrEmpty(Model.Finding.OwaspCategory))
+        {
+            <span class="owasp-badge">@Model.Finding.OwaspCategory</span>
+        }
+        @if (!string.IsNullOrEmpty(Model.Finding.EstimatedEffort))
+        {
+            <span class="effort-badge effort-@Model.Finding.EstimatedEffort.ToLower()">
+                <i class="fas fa-clock"></i> @Model.Finding.EstimatedEffort effort
+            </span>
+        }
+        @if (!string.IsNullOrEmpty(Model.Finding.Priority))
+        {
+            <span class="priority-badge">
+                <i class="fas fa-flag"></i> @Model.Finding.Priority priority
+            </span>
+        }
+    </div>
+    <h1 class="finding-title">@Model.Finding.Title</h1>
+    @if (!string.IsNullOrEmpty(Model.Finding.BusinessImpact))
+    {
+        <div class="business-impact-box">
+            <i class="fas fa-file-contract"></i>
+            <span><strong>Business impact —</strong> @Model.Finding.BusinessImpact</span>
+        </div>
+    }
+    <div class="finding-meta-row">
+        <span>
+            <i class="fas fa-server"></i>
+            @activeCount active asset@(activeCount != 1 ? "s" : "")
+        </span>
+        @if (!string.IsNullOrEmpty(Model.Finding.Cve))
+        {
+            <span class="meta-mono"><i class="fas fa-shield-halved"></i> @Model.Finding.Cve</span>
+        }
+        @if (!string.IsNullOrEmpty(Model.Finding.Cwe))
+        {
+            <span class="meta-mono"><i class="fas fa-code-branch"></i> @Model.Finding.Cwe</span>
+        }
+    </div>
+</div>
+
+<div class="detail-grid">
+    <!-- Main Content -->
+    <div class="detail-main">
+        @if (Model.Finding.HasAIRecommendation)
+        {
+            @if (!string.IsNullOrEmpty(Model.Finding.PotentialImpact))
+            {
+                <div class="ai-callout">
+                    <div class="ai-callout__header">
+                        <i class="fas fa-wand-magic"></i>
+                        <span class="ai-callout__label">AI recommendation</span>
+                        <span class="ai-callout__pill"><i class="fas fa-arrow-up"></i> Fix this first</span>
+                    </div>
+                    <p class="ai-callout__body">@Model.Finding.PotentialImpact</p>
+                </div>
+            }
+
+            @if (Model.Finding.RemediationSteps?.Count > 0)
+            {
+                <div class="recommendation-section">
+                    <div class="recommendation-section__header">
+                        <span class="section-icon section-icon--fix"><i class="fas fa-wrench"></i></span>
+                        <h3>How to fix</h3>
+                    </div>
+                    <div class="remedy-steps">
+                        @{ var stepNum = 0; }
+                        @foreach (var step in Model.Finding.RemediationSteps)
+                        {
+                            stepNum++;
+                            <div class="remedy-step">
+                                <span class="remedy-step__num">@stepNum</span>
+                                <p>@step</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(Model.Finding.VulnerabilityExplanation))
+            {
+                <div class="recommendation-section collapsible collapsed">
+                    <div class="recommendation-section__header collapsible-header" data-bs-toggle="collapse" data-bs-target="#explanationContent">
+                        <span class="section-icon section-icon--explain"><i class="fas fa-info-circle"></i></span>
+                        <h3>What is this?</h3>
+                        <i class="fas fa-chevron-down collapse-icon"></i>
+                    </div>
+                    <div class="collapse" id="explanationContent">
+                        <p>@Model.Finding.VulnerabilityExplanation</p>
+                    </div>
+                </div>
+            }
+
+            @if (Model.Finding.BestPractices?.Count > 0)
+            {
+                <div class="recommendation-section collapsible collapsed">
+                    <div class="recommendation-section__header collapsible-header" data-bs-toggle="collapse" data-bs-target="#practicesContent">
+                        <span class="section-icon section-icon--practices"><i class="fas fa-check-circle"></i></span>
+                        <h3>Best practices</h3>
+                        <i class="fas fa-chevron-down collapse-icon"></i>
+                    </div>
+                    <div class="collapse" id="practicesContent">
+                        <ul>
+                            @foreach (var practice in Model.Finding.BestPractices)
+                            {
+                                <li>@practice</li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="no-recommendation">
+                <i class="fas fa-robot"></i>
+                <h4>No Security Recommendation Available</h4>
+                <p>Security recommendation has not been generated for this finding yet.</p>
+            </div>
+        }
+
+        <!-- Original scanner output -->
+        @if (!string.IsNullOrEmpty(Model.Finding.Description))
+        {
+            <div class="scanner-output-section">
+                <div class="scanner-output__eyebrow">
+                    <i class="fas fa-file-alt"></i> Original scanner output
+                </div>
+                <p class="scanner-output__text">@Model.Finding.Description</p>
+            </div>
+        }
+    </div>
+
+    <!-- Sidebar -->
+    <div class="detail-sidebar">
+        <!-- Details -->
+        <div class="sidebar-card details-card">
+            <div class="details-card__label">Details</div>
+            <div class="details-row">
+                <span class="details-row__key">Severity</span>
+                <span class="severity-badge severity-@sev">@Model.Finding.Severity</span>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.Finding.Cve))
+            {
+                <div class="details-row">
+                    <span class="details-row__key">CVE</span>
+                    <span class="details-row__val details-row__val--mono">@Model.Finding.Cve</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.Finding.Cwe))
+            {
+                <div class="details-row">
+                    <span class="details-row__key">CWE</span>
+                    <span class="details-row__val details-row__val--mono">@Model.Finding.Cwe</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.Finding.DetectedBy))
+            {
+                <div class="details-row">
+                    <span class="details-row__key">Detected by</span>
+                    <span class="details-row__val">@Model.Finding.DetectedBy</span>
+                </div>
+            }
+            <div class="details-row">
+                <span class="details-row__key">First seen</span>
+                <span class="details-row__val">@Model.Finding.FirstDetected.ToString("MMM dd, yyyy")</span>
+            </div>
+            <div class="details-row@(string.IsNullOrEmpty(status) ? " details-row--last" : "")">
+                <span class="details-row__key">Last seen</span>
+                <span class="details-row__val">@Model.Finding.LastDetected.ToString("MMM dd, yyyy")</span>
+            </div>
+            @if (!string.IsNullOrEmpty(status))
+            {
+                <div class="details-row details-row--last">
+                    <span class="details-row__key">Status</span>
+                    <span class="status-pill status-pill--@status">@(status == "open" ? "Open" : status == "resolved" ? "Resolved" : "Muted")</span>
+                </div>
+            }
+        </div>
+
+        <!-- Suppression Panel -->
+        @{
+            var assetsWithDiscovery = Model.AffectedAssets.Where(a => !string.IsNullOrEmpty(a.DiscoveryId)).ToList();
+            var hasSuppressedAssets = assetsWithDiscovery.Any(a => a.IsSuppressed);
+            // Show the panel when the user can suppress (Pro), or when there are already-suppressed
+            // assets that a downgraded user needs to be able to restore.
+            var showSuppressionPanel = !string.IsNullOrEmpty(Model.Finding.FindingType) &&
+                                       (Model.FeatureAccess.CanSuppressFindings || hasSuppressedAssets);
+        }
+        @if (showSuppressionPanel)
+        {
+            <div class="sidebar-card suppression-panel">
+                <h5><i class="fas fa-eye-slash"></i> Mark as Dismissed</h5>
+                <p class="text-muted small mb-2">
+                    Per-asset dismissal — pick an asset below to suppress that specific instance of this finding.
+                </p>
+                @foreach (var asset in assetsWithDiscovery)
+                {
+                    @if (asset.IsSuppressed)
+                    {
+                        var badgeClass = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "false-positive" : "accepted-risk";
+                        var statusLabel = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "False Positive" : "Accepted Risk";
+                        <div class="mb-2 d-flex align-items-center justify-content-between gap-2">
+                            <span class="suppressed-badge @badgeClass small">
+                                <i class="fas fa-check-circle"></i>
+                                @(asset.Target ?? asset.DiscoveryId) — @statusLabel
+                            </span>
+                            @* Restore is always available — users who downgrade from Pro must be able
+                               to undo suppressions they created while on Pro. *@
+                            <form method="post"
+                                  action="@Url.Action("UnsuppressFinding", "Recommendations")"
+                                  class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="SuppressionId" value="@asset.SuppressionId" />
+                                <input type="hidden" name="returnFindingId" value="@Model.Finding.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-secondary btn-suppress">
+                                    <i class="fas fa-undo"></i> Restore
+                                </button>
+                            </form>
+                        </div>
+                    }
+                    else if (Model.FeatureAccess.CanSuppressFindings)
+                    {
+                        @* Dismiss form is Pro-only *@
+                        <form method="post"
+                              action="@Url.Action("SuppressFinding", "Recommendations")"
+                              class="mb-2 border rounded p-2"
+                              data-suppress-form>
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="DiscoveryId" value="@asset.DiscoveryId" />
+                            <input type="hidden" name="FindingType" value="@Model.Finding.FindingType" />
+                            <input type="hidden" name="returnFindingId" value="@Model.Finding.Id" />
+                            <label class="form-label mb-1 d-block">
+                                <i class="fas fa-globe"></i> @(asset.Target ?? asset.DiscoveryId)
+                            </label>
+                            <select name="Status"
+                                    class="form-select form-select-sm mb-1"
+                                    data-suppress-status>
+                                <option value="">— Select reason —</option>
+                                <option value="@SuppressionStatus.FalsePositive">False Positive</option>
+                                <option value="@SuppressionStatus.AcceptedRisk">Accepted Risk</option>
+                            </select>
+                            <div data-note-wrapper style="display:none">
+                                <input type="text"
+                                       name="Note"
+                                       class="form-control form-control-sm mb-1"
+                                       placeholder="Optional note (reason, ticket ID…)"
+                                       maxlength="200" />
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+                                <i class="fas fa-eye-slash"></i> Dismiss
+                            </button>
+                        </form>
+                    }
+                }
+            </div>
+        }
+
+        <!-- Affected Assets -->
+        @if (Model.AffectedAssets.Any())
+        {
+            <div class="sidebar-card affected-assets-card">
+                <h4><i class="fas fa-server"></i> Affected Assets (@Model.AffectedAssets.Count)</h4>
+                <div class="affected-assets-list">
+                    @foreach (var asset in Model.AffectedAssets)
+                    {
+                        <div class="affected-asset-item @(asset.IsSuppressed ? "is-suppressed" : "")">
+                            <div class="asset-header">
+                                <span class="asset-target">
+                                    <i class="fas fa-globe"></i>
+                                    @(asset.Target ?? "Unknown")@(asset.Port.HasValue ? $":{asset.Port}" : "")
+                                </span>
+                                @if (asset.IsSuppressed)
+                                {
+                                    var badgeClass = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "false-positive" : "accepted-risk";
+                                    var statusLabel = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "False Positive" : "Accepted Risk";
+                                    <span class="suppressed-badge @badgeClass ms-2">
+                                        <i class="fas fa-eye-slash"></i> @statusLabel
+                                    </span>
+                                }
+                            </div>
+                            <div class="asset-details">
+                                @if (!string.IsNullOrEmpty(asset.Ip))
+                                {
+                                    <span class="asset-detail">
+                                        <i class="fas fa-network-wired"></i> @asset.Ip
+                                    </span>
+                                }
+                                @if (!string.IsNullOrEmpty(asset.Protocol))
+                                {
+                                    <span class="asset-detail">
+                                        <i class="fas fa-exchange-alt"></i> @asset.Protocol
+                                    </span>
+                                }
+                                @if (!string.IsNullOrEmpty(asset.ServiceName))
+                                {
+                                    <span class="asset-detail">
+                                        <i class="fas fa-cog"></i> @asset.ServiceName
+                                    </span>
+                                }
+                            </div>
+                            <div class="asset-timeline">
+                                <span class="timeline-item">
+                                    <i class="fas fa-calendar-plus"></i>
+                                    First: @asset.FirstDetected.ToString("MMM dd, yyyy")
+                                </span>
+                                <span class="timeline-item">
+                                    <i class="fas fa-calendar-check"></i>
+                                    Last: @asset.LastDetected.ToString("MMM dd, yyyy")
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>

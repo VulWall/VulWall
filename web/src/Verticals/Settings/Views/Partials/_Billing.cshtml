@@ -1,0 +1,249 @@
+@model VulWall.Dashboard.Settings.Models.BillingDataViewModel
+
+<div class="billing-container">
+
+    @if (Model.SubscriptionStatus.IsIncomplete())
+    {
+        <!-- Incomplete subscription -->
+        <div class="vw-section-card mb-3">
+            <div class="vw-billing-section-header">
+                <i class="fa-solid fa-layer-group"></i>
+                <h2>Pending Subscription</h2>
+            </div>
+            <div class="card border-warning">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1">
+                                <i class="fa-solid fa-clock me-2" style="color: var(--vw-warning);"></i>
+                                @Model.PendingSubscriptionPlanInfo?.DisplayName
+                            </h5>
+                            <span class="badge badge-warning">
+                                <i class="fa-solid fa-exclamation-triangle me-1"></i>Payment Required
+                            </span>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small"><i class="fa-solid fa-euro-sign me-1"></i>Price</label>
+                            <p class="mb-0 fw-semibold">
+                                @if (Model.BillingInterval == "year")
+                                {
+                                    <text>€@((Model.PendingSubscriptionPlanInfo?.AnnualPrice / 12)?.ToString("0"))/mo</text>
+                                    <br /><small class="text-muted">Billed annually (€@(Model.PendingSubscriptionPlanInfo?.AnnualPrice)/yr)</small>
+                                }
+                                else
+                                {
+                                    <text>€@Model.PendingSubscriptionPlanInfo?.Price/@Model.PendingSubscriptionPlanInfo?.BillingPeriod</text>
+                                }
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small"><i class="fa-solid fa-info-circle me-1"></i>Status</label>
+                            <p class="mb-0 fw-semibold" style="color: var(--vw-warning);">Awaiting Payment</p>
+                        </div>
+                    </div>
+                    <form id="incomplete-subscription-actions-form" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="d-flex gap-2">
+                            <button type="button" id="complete-payment-btn" class="btn btn-secondary">
+                                <i class="fa-solid fa-credit-card me-2"></i>Complete Payment Now
+                            </button>
+                            <button type="button" id="cancel-incomplete-subscription-btn" class="btn btn-outline-secondary">
+                                <i class="fa-solid fa-times me-2"></i>Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="card mt-3">
+                <div class="card-body">
+                    <p class="text-muted mb-0">
+                        <i class="fa-solid fa-info-circle me-2"></i>
+                        You are currently on the <strong>Free Plan</strong> until your @Model.PendingSubscriptionPlanInfo?.DisplayName subscription payment is completed.
+                        You have <strong>24 hours</strong> to complete the payment, otherwise the upgrade will be cancelled.
+                    </p>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Active / Free plan -->
+        <div class="vw-section-card">
+            <div class="d-flex align-items-center justify-content-between gap-3 mb-4">
+                <div class="vw-billing-section-header mb-0">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <h2>Current plan</h2>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="tab" data-bs-target="#plans">
+                    <i class="fa-solid fa-eye me-2"></i>View all plans
+                </button>
+            </div>
+
+            @if (Model.SubscriptionStatus.IsActive())
+            {
+                <div class="vw-plan-hero">
+                    <div class="vw-plan-hero-icon">
+                        <i class="fa-solid fa-bolt"></i>
+                    </div>
+                    <div class="vw-plan-hero-body">
+                        <div class="vw-plan-hero-name">
+                            @Model.CurrentPlan?.DisplayName
+                            @if (Model.CancelAtPeriodEnd)
+                            {
+                                <span class="vw-status-pill warning">
+                                    <span class="vw-status-dot"></span>ENDING @Model.SubscriptionPeriodEnd?.ToString("MMM dd").ToUpper()
+                                </span>
+                            }
+                            else if (Model.SubscriptionStatus.IsPastDue())
+                            {
+                                <span class="badge badge-danger"><i class="fa-solid fa-exclamation-circle me-1"></i>Payment Failed</span>
+                            }
+                            else
+                            {
+                                <span class="vw-status-pill active">
+                                    <span class="vw-status-dot"></span>ACTIVE
+                                </span>
+                            }
+                        </div>
+                        <p class="vw-plan-hero-desc">@Model.CurrentPlan?.Description</p>
+                    </div>
+                    @if (Model.CurrentPlan?.Price > 0)
+                    {
+                        <div class="vw-plan-hero-price">
+                            @if (Model.BillingInterval == "year")
+                            {
+                                <span class="vw-price-big">€@((Model.CurrentPlan?.AnnualPrice / 12)?.ToString("0"))</span><span class="vw-price-period">/mo</span>
+                            }
+                            else
+                            {
+                                <span class="vw-price-big">€@Model.CurrentPlan?.Price</span><span class="vw-price-period">/mo</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="vw-plan-metrics">
+                    @if (Model.NextBillingDate.HasValue)
+                    {
+                        <div>
+                            <div class="vw-plan-metric-label">Next billing date</div>
+                            <div class="vw-plan-metric-value mono">@Model.NextBillingDate?.ToString("yyyy-MM-dd")</div>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(Model.PaymentMethodLast4))
+                    {
+                        <div>
+                            <div class="vw-plan-metric-label">Payment method</div>
+                            <div class="vw-plan-metric-value">
+                                <i class="fa-brands fa-cc-visa" style="color: var(--vw-primary);"></i>
+                                <span class="mono">•••• @Model.PaymentMethodLast4</span>
+                            </div>
+                        </div>
+                    }
+                    <div>
+                        <div class="vw-plan-metric-label">Billing cycle</div>
+                        <div class="vw-plan-metric-value">@(Model.BillingInterval == "year" ? "Annual" : "Monthly")</div>
+                    </div>
+                </div>
+
+                <div class="vw-plan-actions">
+                    @if (Model.CancelAtPeriodEnd)
+                    {
+                        <form id="reactivate-subscription-form" method="post" action="/Payments/ReactivateSubscription">
+                            @Html.AntiForgeryToken()
+                            <button type="button" id="reactivate-subscription-btn" class="btn btn-outline-primary btn-sm">
+                                <i class="fa-solid fa-rotate-right me-1"></i>Reactivate
+                            </button>
+                        </form>
+                    }
+                    else if (Model.CurrentPlan?.Price > 0)
+                    {
+                        <form id="cancel-subscription-form" method="post" action="/Payments/CancelSubscription">
+                            @Html.AntiForgeryToken()
+                            <button type="button" id="cancel-subscription-btn" class="btn btn-outline-danger btn-sm">
+                                <i class="fa-solid fa-xmark me-1"></i>Cancel subscription
+                            </button>
+                        </form>
+                    }
+                </div>
+            }
+            else
+            {
+                <!-- Free plan or non-active -->
+                <div class="vw-plan-hero">
+                    <div class="vw-plan-hero-body">
+                        <div class="vw-plan-hero-name">@Model.CurrentPlan?.DisplayName</div>
+                        <p class="vw-plan-hero-desc">@Model.CurrentPlan?.Description</p>
+                    </div>
+                </div>
+            }
+
+            @if (Model.SubscriptionStatus.IsPastDue())
+            {
+                <div class="alert alert-danger mt-3" role="alert">
+                    <i class="fa-solid fa-exclamation-circle me-2"></i>
+                    <strong>Payment Failed:</strong> There was an issue processing your payment. If payment is not received within 1 week, your subscription will be cancelled.
+                </div>
+            }
+            else if (Model.CancelAtPeriodEnd)
+            {
+                <div class="alert alert-info mt-3" role="alert">
+                    <i class="fa-solid fa-info-circle me-2"></i>
+                    Your @Model.CurrentPlan?.DisplayName plan will end on @Model.SubscriptionPeriodEnd?.ToString("MMMM dd, yyyy"). You will then switch to the Free plan.
+                </div>
+            }
+        </div>
+    }
+
+    @if (Model.RecentInvoices.Any())
+    {
+        <div class="vw-section-card">
+            <div class="vw-billing-section-header">
+                <i class="fa-solid fa-file-invoice"></i>
+                <h2>Payment history</h2>
+            </div>
+            <div class="vw-invoice-table">
+                <div class="vw-invoice-table-head">
+                    <span>Date</span><span>Plan</span><span>Amount</span><span>Status</span><span style="text-align:right;">Invoice</span>
+                </div>
+                @foreach (var invoice in Model.RecentInvoices)
+                {
+                    <div class="vw-invoice-row">
+                        <span class="vw-invoice-row-date">@invoice.Created.ToString("MMM dd, yyyy")</span>
+                        <span class="vw-invoice-row-plan">@(invoice.PlanName ?? "N/A")</span>
+                        <span class="vw-invoice-row-amt">€@invoice.Amount.ToString("0.00")</span>
+                        <span>
+                            @if (invoice.Status == "paid")
+                            {
+                                <span class="badge badge-success"><i class="fa-solid fa-check me-1"></i>PAID</span>
+                            }
+                            else if (invoice.Status == "open")
+                            {
+                                <span class="badge badge-warning"><i class="fa-solid fa-clock me-1"></i>OPEN</span>
+                            }
+                            else if (invoice.Status == "void" || invoice.Status == "uncollectible")
+                            {
+                                <span class="badge badge-secondary"><i class="fa-solid fa-times me-1"></i>@invoice.Status.ToUpper()</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-danger"><i class="fa-solid fa-exclamation-triangle me-1"></i>@invoice.Status.ToUpper()</span>
+                            }
+                        </span>
+                        <span class="vw-invoice-row-link">
+                            @if (!string.IsNullOrEmpty(invoice.InvoicePdfUrl))
+                            {
+                                <a href="@invoice.InvoicePdfUrl" target="_blank" rel="noopener noreferrer">
+                                    <i class="fa-solid fa-file-pdf"></i>PDF
+                                </a>
+                            }
+                        </span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+</div>

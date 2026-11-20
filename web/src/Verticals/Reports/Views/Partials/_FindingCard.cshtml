@@ -1,0 +1,108 @@
+@model VulWall.Dashboard.Reports.Models.Finding
+@{
+    var sev = string.IsNullOrEmpty(Model.Severity) ? "low" : Model.Severity.ToLowerInvariant();
+    var sevLabel = char.ToUpper(sev[0]) + sev[1..];
+    var hasCwe = !string.IsNullOrEmpty(Model.CweId);
+    var hasCve = !string.IsNullOrEmpty(Model.CveId);
+    var hasEvidence = !string.IsNullOrEmpty(Model.Evidence);
+    var hasRemediation = !string.IsNullOrEmpty(Model.Remediation);
+    var defaultOpen = ViewData["DefaultOpen"] as bool? ?? false;
+    var assetDisplay = Model.AffectedAssets.Count switch
+    {
+        0 => string.Empty,
+        1 => Model.AffectedAssets[0],
+        _ => $"{Model.AffectedAssets.Count} assets"
+    };
+}
+
+<article class="tr-accordion" data-open="@(defaultOpen ? "true" : "false")" data-finding-id="@Model.Id" data-finding-type="@Model.FindingType">
+    <button type="button" class="tr-accordion-head" aria-expanded="@(defaultOpen ? "true" : "false")">
+        <span class="tr-accordion-title">@Model.DisplayTitle</span>
+        @if (Model.Exploitable)
+        {
+            <span class="tr-exploitable-pill"><i class="fas fa-bolt"></i> Exploitable</span>
+        }
+        @if (!string.IsNullOrEmpty(assetDisplay))
+        {
+            <span class="tr-mono tr-accordion-asset">@assetDisplay</span>
+        }
+        <i class="fas tr-accordion-chevron"></i>
+    </button>
+
+    <div class="tr-accordion-body">
+        @if (hasCve || hasCwe)
+        {
+            <div class="tr-finding-tags">
+                @if (hasCve)
+                {
+                    <span class="tr-meta-chip tr-meta-chip--cve tr-mono">@Model.CveId</span>
+                }
+                @if (hasCwe)
+                {
+                    <span class="tr-meta-chip tr-mono">@Model.CweId</span>
+                }
+            </div>
+        }
+
+        @if (Model.AffectedAssets.Any())
+        {
+            <div class="tr-asset-section">
+                <span class="tr-asset-section-label">Affected assets</span>
+                <div class="tr-affected-assets">
+                    @foreach (var asset in Model.AffectedAssets.Take(8))
+                    {
+                        <span class="tr-mono tr-asset-chip">@asset</span>
+                    }
+                    @if (Model.AffectedAssets.Count > 8)
+                    {
+                        <span class="tr-asset-overflow">+@(Model.AffectedAssets.Count - 8) more</span>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (hasEvidence)
+        {
+            <div class="tr-evidence-panel">
+                <span class="tr-evidence-label">EVIDENCE</span>
+                <pre class="tr-mono tr-evidence-pre">@Model.Evidence</pre>
+            </div>
+        }
+
+        @if (hasRemediation)
+        {
+            <div class="tr-remediation-panel">
+                <span class="tr-remediation-label">Remediation</span>
+                <div class="tr-remediation-steps">
+                    @{
+                        var steps = Model.Remediation.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                    }
+                    @if (steps.Length > 1)
+                    {
+                        <ol class="tr-remediation-ol">
+                            @foreach (var step in steps)
+                            {
+                                var clean = System.Text.RegularExpressions.Regex.Replace(step.Trim(), @"^\d+\.\s*", "");
+                                <li>@clean</li>
+                            }
+                        </ol>
+                    }
+                    else
+                    {
+                        var singleStep = System.Text.RegularExpressions.Regex.Replace(Model.Remediation.Trim(), @"^\d+\.\s*", "");
+                        <p>@singleStep</p>
+                    }
+                </div>
+                @if (Model.References.Any())
+                {
+                    <div class="tr-references">
+                        @foreach (var r in Model.References.Take(3))
+                        {
+                            <a href="@r.Url" target="_blank" rel="noopener noreferrer" class="tr-ref-link">@r.Title</a>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</article>

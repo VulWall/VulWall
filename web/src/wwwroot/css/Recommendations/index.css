@@ -1,0 +1,516 @@
+/* ========================================
+   Recommendations — Fix Plan (index)
+   Summary grid + filterable/sortable findings stream + archive
+   All rules ship with a [data-bs-theme="dark"] variant.
+   ======================================== */
+
+/* ── Page header ─────────────────────────────────────────────── */
+/* Uses shared .page-header.page-header--stacked (sections.css); gap:0 keeps the
+   eyebrow/title/subtitle spacing driven by their own margins. */
+.fixplan-header { gap: 0; }
+
+.fixplan-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--vw-gray-500);
+    margin-bottom: 6px;
+}
+
+.fixplan-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--bs-body-color);
+}
+
+.fixplan-subtitle {
+    font-size: 13px;
+    color: var(--vw-gray-600);
+    margin-top: 4px;
+}
+
+/* ── Summary grid ────────────────────────────────────────────── */
+.summary-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr 1fr;
+    gap: 14px;
+}
+
+.summary-card {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--vw-gray-200);
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    padding: 16px 20px;
+}
+
+.summary-card__number {
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--bs-body-color);
+    line-height: 1;
+}
+
+.summary-card__label {
+    font-size: 13px;
+    color: var(--vw-gray-600);
+    margin-top: 4px;
+}
+
+/* ── Severity bar ────────────────────────────────────────────── */
+.severity-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--vw-gray-100);
+    margin-top: 12px;
+}
+
+.severity-bar__seg {
+    flex-basis: 0;
+    min-width: 4px;
+}
+
+.severity-bar__caption {
+    font-size: 12px;
+    color: var(--vw-gray-500);
+    margin-top: 6px;
+    margin-bottom: 0;
+}
+
+/* ── Metric cards ────────────────────────────────────────────── */
+.metric-card__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.metric-card__number {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.metric-card__icon {
+    font-size: 14px;
+}
+
+.metric-card__label {
+    font-size: 13px;
+    color: var(--vw-gray-600);
+    margin-top: 6px;
+}
+
+/* ── Controls row ────────────────────────────────────────────── */
+.controls-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Recommendations uses solid-fill active chips (vs global semi-transparent) */
+.filter-chip.is-active {
+    background: var(--vw-primary);
+    border-color: var(--vw-primary);
+    color: #fff;
+    font-weight: 600;
+}
+
+.filter-chip__count {
+    font-size: 12px;
+    opacity: .8;
+}
+
+.sort-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sort-control__label {
+    font-size: 12px;
+    color: var(--vw-gray-500);
+}
+
+.sort-control__track {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--vw-gray-100);
+    border-radius: 10px;
+}
+
+.sort-btn {
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--vw-gray-600);
+    cursor: pointer;
+    transition: all .2s;
+}
+
+.sort-btn.is-active {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    box-shadow: var(--card-shadow);
+}
+
+/* ── Findings stream ─────────────────────────────────────────── */
+.findings-stream {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.severity-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 4px;
+}
+
+.sev-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sev-dot--critical { background: var(--severity-critical-solid); }
+.sev-dot--high     { background: var(--severity-high-solid); }
+.sev-dot--medium   { background: var(--severity-medium-solid); }
+.sev-dot--low      { background: var(--severity-low-solid); }
+
+.sev-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--bs-body-color);
+}
+
+.sev-count {
+    font-family: var(--font-mono, 'Courier New', monospace);
+    font-size: 12px;
+    color: var(--vw-gray-500);
+}
+
+.sev-rule {
+    flex: 1;
+    height: 1px;
+    background: var(--vw-gray-200);
+}
+
+/* ── Finding card ────────────────────────────────────────────── */
+.finding-card {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--vw-gray-200);
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    padding: 18px 20px;
+    transition: box-shadow .2s, border-color .2s;
+}
+
+.finding-card:hover {
+    border-color: var(--vw-primary);
+    box-shadow: 0 4px 16px rgba(0, 86, 161, .1);
+}
+
+.finding-card__link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.finding-card__link:hover {
+    color: inherit;
+    text-decoration: none;
+}
+
+.finding-card__title {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    color: var(--bs-body-color);
+    margin: 0 0 6px;
+}
+
+.finding-card__impact {
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 64ch;
+    margin: 0 0 12px;
+    color: var(--bs-body-color);
+}
+
+.finding-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.meta-tag {
+    font-size: 12px;
+    color: var(--vw-gray-600);
+    background: var(--vw-gray-50);
+    border: 1px solid var(--vw-gray-200);
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.meta-tag--mono {
+    font-family: var(--font-mono, 'Courier New', monospace);
+    color: var(--vw-gray-500);
+}
+
+.asset-overflow {
+    font-size: 12px;
+    color: var(--vw-gray-600);
+    align-self: center;
+}
+
+/* ── Finding card footer ─────────────────────────────────────── */
+.finding-card__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-top: 13px;
+    border-top: 1px solid var(--vw-gray-200);
+    margin-top: 14px;
+}
+
+.finding-card__footer-meta {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.footer-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--vw-gray-600);
+}
+
+.footer-meta-item i {
+    font-size: 11px;
+    color: var(--vw-gray-500);
+}
+
+.footer-meta-item--ai {
+    color: var(--vw-primary);
+    font-weight: 600;
+}
+
+.footer-meta-item--ai i {
+    color: var(--vw-primary);
+}
+
+.finding-card__footer-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ── Ghost primary button (Dismiss / Restore) ───────────────── */
+.btn-ghost-primary {
+    background: transparent;
+    border: none;
+    color: var(--vw-primary);
+    font-size: .8rem;
+    padding: .25rem .6rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    border-radius: 6px;
+    transition: background .2s;
+}
+
+.btn-ghost-primary:hover {
+    background: rgba(0, 86, 161, .08);
+}
+
+/* ── Archive panel ───────────────────────────────────────────── */
+.archive-panel {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--vw-gray-200);
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    overflow: hidden;
+}
+
+.archive-panel__toggle {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--bs-body-color);
+}
+
+.archive-panel__toggle-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.archive-panel__toggle i:first-child {
+    color: var(--vw-gray-500);
+}
+
+.archive-count {
+    font-family: var(--font-mono, 'Courier New', monospace);
+    font-size: 12px;
+    color: var(--vw-gray-500);
+}
+
+.archive-panel__chevron {
+    font-size: 13px;
+    color: var(--vw-gray-500);
+    transition: transform .2s;
+}
+
+.archive-panel.is-open .archive-panel__chevron {
+    transform: rotate(180deg);
+}
+
+.archive-panel__body {
+    border-top: 1px solid var(--vw-gray-200);
+}
+
+.archive-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 13px 20px;
+    border-bottom: 1px solid var(--vw-gray-200);
+}
+
+.archive-row:last-child {
+    border-bottom: none;
+}
+
+.archive-row__title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--bs-body-color);
+}
+
+.archive-row__meta {
+    font-size: 12px;
+    color: var(--vw-gray-500);
+    margin-top: 2px;
+}
+
+.archive-row__asset {
+    font-family: var(--font-mono, 'Courier New', monospace);
+}
+
+/* ── Empty state ─────────────────────────────────────────────── */
+.empty-state-card {
+    padding: 60px 20px;
+}
+
+/* ── Filter utility ──────────────────────────────────────────── */
+.is-hidden {
+    display: none !important;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    .finding-card,
+    .filter-chip,
+    .sort-btn,
+    .archive-panel__chevron,
+    .btn-ghost-primary {
+        transition: none;
+    }
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 900px) {
+    .summary-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .summary-card--wide {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 576px) {
+    .summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .controls-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* ── Dark theme ──────────────────────────────────────────────── */
+[data-bs-theme="dark"] .summary-card,
+[data-bs-theme="dark"] .finding-card,
+[data-bs-theme="dark"] .archive-panel {
+    border-color: var(--vw-dark-border, #2d3748);
+}
+
+[data-bs-theme="dark"] .filter-chip {
+    border-color: var(--vw-dark-border, #2d3748);
+}
+
+[data-bs-theme="dark"] .filter-chip.is-active {
+    background: var(--vw-primary);
+    color: #fff;
+}
+
+[data-bs-theme="dark"] .sort-control__track {
+    background: rgba(255, 255, 255, .05);
+}
+
+[data-bs-theme="dark"] .sev-rule,
+[data-bs-theme="dark"] .finding-card__footer,
+[data-bs-theme="dark"] .archive-panel__body,
+[data-bs-theme="dark"] .archive-row {
+    border-color: var(--vw-dark-border, #2d3748);
+}
+
+[data-bs-theme="dark"] .meta-tag {
+    background: rgba(255, 255, 255, .05);
+    border-color: var(--vw-dark-border, #2d3748);
+    color: var(--vw-gray-400);
+}
+
+[data-bs-theme="dark"] .severity-bar {
+    background: rgba(255, 255, 255, .08);
+}
+
+[data-bs-theme="dark"] .btn-ghost-primary:hover {
+    background: rgba(255, 255, 255, .08);
+}

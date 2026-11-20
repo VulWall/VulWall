@@ -1,0 +1,75 @@
+@model VulWall.Dashboard.Reports.Models.TechnicalReportViewModel
+
+<section class="tr-band" id="infrastructure">
+    <p class="tr-eyebrow">ATTACK SURFACE</p>
+    <h2 class="tr-h2">Infrastructure &amp; services</h2>
+
+    @if (Model.NotableServices.Any())
+    {
+        <p class="tr-sub-head">Notable services</p>
+        <div class="tr-table-wrap">
+            <table class="tr-table">
+                <thead>
+                    <tr>
+                        <th>SERVICE</th>
+                        <th>HOST</th>
+                        <th>PORT</th>
+                        <th>CLOUD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var svc in Model.NotableServices)
+                    {
+                        var portNum = int.TryParse(svc.Port, out var p) ? p : 0;
+                        var isNonStandard = portNum > 0 && portNum != 80 && portNum != 443 && portNum != 22 && portNum != 25;
+                        <tr>
+                            <td class="tr-svc-name">@svc.ServiceName</td>
+                            <td class="tr-mono">@svc.Host</td>
+                            <td class="tr-mono @(isNonStandard ? "tr-port-warn" : "")">tcp/@svc.Port</td>
+                            <td>@(string.IsNullOrEmpty(svc.CloudProvider) ? "—" : svc.CloudProvider)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (Model.DiscoveredAssets.Any())
+    {
+        <p class="tr-sub-head tr-sub-head--spaced">Discovered assets</p>
+        <div class="tr-table-wrap">
+            <table class="tr-table">
+                <thead>
+                    <tr>
+                        <th>SUBDOMAIN</th>
+                        <th>IP</th>
+                        <th>CLOUD</th>
+                        <th>PORTS</th>
+                        <th>SERVICES</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var asset in Model.DiscoveredAssets.Take(20))
+                    {
+                        <tr>
+                            <td class="tr-mono">@asset.Subdomain</td>
+                            <td class="tr-mono">@(asset.IP == "N/A" ? "—" : asset.IP)</td>
+                            <td>@(asset.CloudProvider == "Unknown" ? "—" : asset.CloudProvider)</td>
+                            <td class="tr-mono">@(asset.Ports.Any() ? string.Join(", ", asset.Ports) : "—")</td>
+                            <td>@(asset.Services.Any() ? string.Join(", ", asset.Services) : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.DiscoveredAssets.Count > 20)
+        {
+            <p class="tr-table-overflow-note">Showing 20 of @Model.DiscoveredAssets.Count assets — full inventory in the dashboard.</p>
+        }
+    }
+
+    @if (!Model.NotableServices.Any() && !Model.DiscoveredAssets.Any())
+    {
+        <p class="tr-empty">No infrastructure data available for this scan.</p>
+    }
+</section>

@@ -1,0 +1,31 @@
+/* ========================================
+   Common Finding Styles
+   Shared across Recommendations, Reports, Dashboard
+   ======================================== */
+
+/* Business Impact - Blue left-border callout pattern */
+.business-impact,
+.finding-business-impact,
+.business-impact-banner {
+    font-size: 0.9rem;
+    color: var(--brand-blue);
+    background: rgba(0, 86, 161, 0.06);
+    border-left: 3px solid var(--brand-blue);
+    padding: 8px 12px;
+    border-radius: 0 6px 6px 0;
+    line-height: 1.5;
+}
+
+.business-impact i,
+.finding-business-impact i,
+.business-impact-banner i {
+    margin-right: 6px;
+}
+
+[data-bs-theme="dark"] .business-impact,
+[data-bs-theme="dark"] .finding-business-impact,
+[data-bs-theme="dark"] .business-impact-banner {
+    color: var(--vw-link-hover-dark);
+    background: rgba(0, 86, 161, 0.12);
+    border-left-color: var(--vw-link-dark);
+}

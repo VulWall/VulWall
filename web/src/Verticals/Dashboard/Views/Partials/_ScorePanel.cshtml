@@ -1,0 +1,62 @@
+@model VulWall.Dashboard.Dashboard.Models.IndexViewModel
+
+@{
+    var bandModifier = Model.HasScanData
+        ? Model.ScoreBand.ToLowerInvariant().Replace(" ", "-")
+        : "pending";
+    var trendUp = Model.SecurityScoreTrend >= 0;
+    var showTrend = Model.HasScanData && Model.FeatureAccess.CanViewTrends && Model.SecurityScoreTrend != 0;
+}
+
+<div class="score-panel" data-tour="security-score">
+    <div class="score-panel-label">
+        <i class="fas fa-shield-halved"></i>
+        <span>Security score</span>
+    </div>
+
+    <div class="score-value-row">
+        @if (Model.HasScanData)
+        {
+            <span class="score-number">@Model.SecurityScore</span>
+        }
+        else
+        {
+            <span class="score-number">&ndash;&ndash;</span>
+        }
+        <span class="score-denom">/ 100</span>
+    </div>
+
+    <div class="score-pills">
+        <span class="score-band-pill score-band-pill--@bandModifier">
+            <span class="status-pill-dot"></span>@(Model.HasScanData ? Model.ScoreBand : "Pending scan")
+        </span>
+        @if (showTrend)
+        {
+            <span class="score-trend-pill @(trendUp ? "" : "score-trend-pill--down")">
+                <i class="fas @(trendUp ? "fa-arrow-up" : "fa-arrow-down")"></i>
+                @(trendUp ? "+" : "")@Model.SecurityScoreTrend pts
+            </span>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ScoreVerdict))
+    {
+        <p class="score-verdict">@Model.ScoreVerdict</p>
+    }
+
+    @if (Model.HasScanData)
+    {
+        <div class="score-spark-wrap">
+            <div class="score-spark-head">
+                <span class="label">Trend, this period</span>
+                @if (showTrend)
+                {
+                    <span class="trend @(trendUp ? "" : "trend--down")">@(trendUp ? "Improving" : "Declining")</span>
+                }
+            </div>
+            <div class="score-sparkline-wrapper">
+                <canvas id="scoreSparkline"></canvas>
+            </div>
+        </div>
+    }
+</div>

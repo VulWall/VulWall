@@ -1,0 +1,638 @@
+/* ========================================
+   Reports Shared Styles
+   Shared across Summary + Technical reports
+   ======================================== */
+
+/* Report Header - Gradient Banner */
+.report-header {
+    background: linear-gradient(135deg, var(--brand-bg-start) 0%, var(--brand-bg-end) 100%);
+    color: var(--brand-off-white);
+    padding: 40px 20px;
+    border-radius: 12px;
+    margin-bottom: 40px;
+    box-shadow: var(--card-shadow);
+}
+
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 30px;
+}
+
+@media (max-width: 768px) {
+    .header-top {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+.header-title-section {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.company-logo {
+    max-width: 80px;
+    max-height: 80px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 8px;
+}
+
+.report-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    font-weight: 700;
+}
+
+.report-header .subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+.report-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 30px;
+}
+
+.report-meta .meta-item {
+    background: rgba(255,255,255,0.1);
+    padding: 15px;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+.report-meta .meta-label {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    margin-bottom: 5px;
+}
+
+.report-meta .meta-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Risk Level Badge (in Report Header) */
+.risk-level-badge {
+    display: inline-block;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    backdrop-filter: blur(10px);
+}
+
+.risk-level-badge.excellent {
+    border-color: #067647;
+    background: rgba(6, 118, 71, 0.2);
+}
+
+.risk-level-badge.good {
+    border-color: #067647;
+    background: rgba(6, 118, 71, 0.2);
+}
+
+.risk-level-badge.needs-attention {
+    border-color: var(--severity-medium);
+    background: rgba(245, 158, 11, 0.2);
+}
+
+.risk-level-badge.poor {
+    border-color: var(--severity-high);
+    background: rgba(197, 48, 48, 0.2);
+}
+
+.risk-level-badge.critical {
+    border-color: var(--severity-critical);
+    background: rgba(220, 38, 38, 0.2);
+}
+
+/* Report Container */
+.container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Severity Badges (Report variant) */
+.severity-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.severity-badge.severity-critical {
+    background: var(--severity-critical-bg);
+    color: var(--severity-critical);
+}
+
+.severity-badge.severity-high {
+    background: var(--severity-high-bg);
+    color: var(--severity-high);
+}
+
+.severity-badge.severity-medium {
+    background: var(--severity-medium-bg);
+    color: var(--severity-medium);
+}
+
+.severity-badge.severity-low {
+    background: var(--severity-low-bg);
+    color: var(--severity-low);
+}
+
+[data-bs-theme="dark"] .severity-badge.severity-critical {
+    background: rgba(220, 38, 38, 0.2);
+}
+
+[data-bs-theme="dark"] .severity-badge.severity-high {
+    background: rgba(197, 48, 48, 0.2);
+}
+
+[data-bs-theme="dark"] .severity-badge.severity-medium {
+    background: rgba(245, 158, 11, 0.2);
+}
+
+[data-bs-theme="dark"] .severity-badge.severity-low {
+    background: rgba(217, 119, 6, 0.2);
+}
+
+/* Report Footer */
+.report-footer {
+    margin-top: 20px;
+    padding: 30px 20px;
+    text-align: center;
+    border-top: 2px solid var(--vw-gray-200);
+    color: var(--vw-gray-600);
+    font-size: 0.9rem;
+}
+
+[data-bs-theme="dark"] .report-footer {
+    border-top-color: var(--vw-dark-border);
+    color: var(--vw-gray-400);
+}
+
+.report-footer p {
+    margin: 0;
+}
+
+/* Responsive report meta */
+@media (max-width: 768px) {
+    .report-meta {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Print Styles */
+@media print {
+    body {
+        background: white;
+    }
+
+    .container {
+        max-width: 100%;
+        padding: 20px;
+    }
+
+    .shared-report-header,
+    .shared-report-footer {
+        display: none;
+    }
+
+    .shared-report-content {
+        padding: 0;
+    }
+}
+
+/* ========================================
+   Shared Report Page Chrome
+   Status pages, password form, header bar
+   ======================================== */
+
+body {
+    background: var(--bs-body-bg, #f8f9fa);
+    min-height: 100vh;
+}
+
+/* Status Pages (Password, Error, Expired, etc.) */
+.shared-report-status {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, #212C5E 0%, #0056A1 100%);
+}
+
+.status-card {
+    background: white;
+    border-radius: 16px;
+    padding: 3rem;
+    text-align: center;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.status-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    font-size: 2rem;
+}
+
+.status-icon-error {
+    background: rgba(220, 53, 69, 0.1);
+    color: var(--bs-danger, #dc3545);
+}
+
+.status-icon-warning {
+    background: var(--severity-medium-bg);
+    color: var(--severity-medium);
+}
+
+.status-icon-lock {
+    background: rgba(0, 86, 161, 0.1);
+    color: var(--brand-blue, #0056A1);
+}
+
+.status-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 0.75rem;
+}
+
+.status-message {
+    color: #6c757d;
+    margin-bottom: 0;
+    line-height: 1.6;
+}
+
+/* Password Form */
+.password-card {
+    max-width: 400px;
+}
+
+.password-form {
+    margin-top: 1.5rem;
+    text-align: left;
+}
+
+.password-form .form-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+.password-form .input-group-text {
+    background: #f8f9fa;
+    border-right: none;
+    color: #6c757d;
+}
+
+.password-form .form-control {
+    border-left: none;
+}
+
+.password-form .form-control:focus {
+    border-color: #ced4da;
+    box-shadow: none;
+}
+
+.password-form .input-group:focus-within .input-group-text,
+.password-form .input-group:focus-within .form-control {
+    border-color: var(--brand-blue, #0056A1);
+}
+
+.password-form .input-group:focus-within .form-control {
+    box-shadow: 0 0 0 0.25rem rgba(0, 86, 161, 0.15);
+}
+
+/* Powered By Footer */
+.powered-by {
+    margin-top: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.875rem;
+}
+
+.powered-by-logo {
+    height: 24px;
+    width: auto;
+}
+
+/* Report Header Bar */
+.shared-report-header {
+    background: white;
+    border-bottom: 1px solid #dee2e6;
+    padding: 1rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.header-logo {
+    height: 32px;
+    width: auto;
+    margin-right: 0.75rem;
+}
+
+.header-text {
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Report Content */
+.shared-report-content {
+    padding: 2rem 0;
+}
+
+/* Shared Report Footer */
+.shared-report-footer {
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    padding: 1.5rem 0;
+    margin-top: 2rem;
+}
+
+.footer-logo {
+    height: 24px;
+    width: auto;
+    margin-right: 0.5rem;
+}
+
+.footer-text {
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+
+/* Dark Theme — Shared Report Chrome */
+[data-bs-theme="dark"] .status-card {
+    background: var(--vw-dark-surface-alt);
+}
+
+[data-bs-theme="dark"] .status-title {
+    color: #f8f9fa;
+}
+
+[data-bs-theme="dark"] .status-message {
+    color: #9ca3af;
+}
+
+[data-bs-theme="dark"] .status-icon-error {
+    background: rgba(220, 53, 69, 0.2);
+}
+
+[data-bs-theme="dark"] .status-icon-warning {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+}
+
+[data-bs-theme="dark"] .status-icon-lock {
+    background: rgba(0, 86, 161, 0.2);
+}
+
+[data-bs-theme="dark"] .password-form .form-label {
+    color: #d1d5db;
+}
+
+[data-bs-theme="dark"] .password-form .input-group-text {
+    background: var(--vw-dark-hover);
+    border-color: #4b5563;
+    color: #9ca3af;
+}
+
+[data-bs-theme="dark"] .password-form .form-control {
+    background: var(--vw-dark-surface-alt);
+    border-color: #4b5563;
+    color: #f3f4f6;
+}
+
+[data-bs-theme="dark"] .shared-report-header {
+    background: var(--vw-dark-surface-alt);
+    border-bottom-color: var(--vw-dark-hover);
+}
+
+[data-bs-theme="dark"] .header-text {
+    color: #d1d5db;
+}
+
+[data-bs-theme="dark"] .shared-report-footer {
+    background: #111827;
+    border-top-color: var(--vw-dark-hover);
+}
+
+[data-bs-theme="dark"] .footer-text {
+    color: #9ca3af;
+}
+
+/* ========================================
+   Remediation Roadmap
+   ======================================== */
+
+.roadmap-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .roadmap-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.roadmap-bucket {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--vw-gray-200);
+}
+
+[data-bs-theme="dark"] .roadmap-bucket {
+    border-color: var(--vw-dark-border);
+}
+
+.roadmap-bucket-header {
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.roadmap-bucket-label {
+    font-weight: 700;
+    font-size: 0.95em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.roadmap-bucket-timeframe {
+    font-size: 0.78em;
+    opacity: 0.75;
+    font-weight: 500;
+}
+
+/* Bucket colour themes */
+.roadmap-bucket--immediate .roadmap-bucket-header {
+    background: var(--severity-critical-bg);
+    color: var(--severity-critical);
+}
+
+[data-bs-theme="dark"] .roadmap-bucket--immediate .roadmap-bucket-header {
+    background: var(--severity-critical-bg);
+    color: var(--severity-critical);
+}
+
+.roadmap-bucket--short .roadmap-bucket-header {
+    background: var(--severity-high-bg);
+    color: var(--severity-high);
+}
+
+[data-bs-theme="dark"] .roadmap-bucket--short .roadmap-bucket-header {
+    background: var(--severity-high-bg);
+    color: var(--severity-high);
+}
+
+.roadmap-bucket--medium .roadmap-bucket-header {
+    background: var(--severity-info-bg);
+    color: var(--severity-info);
+}
+
+[data-bs-theme="dark"] .roadmap-bucket--medium .roadmap-bucket-header {
+    background: var(--severity-info-bg);
+    color: var(--severity-info);
+}
+
+.roadmap-items {
+    padding: 10px 12px 12px;
+    background: var(--bs-body-bg, white);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+[data-bs-theme="dark"] .roadmap-items {
+    background: var(--vw-dark-surface);
+}
+
+.roadmap-item {
+    padding: 10px 12px;
+    border-radius: 7px;
+    background: var(--vw-gray-50);
+    border: 1px solid var(--vw-gray-100);
+}
+
+[data-bs-theme="dark"] .roadmap-item {
+    background: #1f2937;
+    border-color: var(--vw-dark-border);
+}
+
+.roadmap-item-title {
+    font-size: 0.88em;
+    font-weight: 600;
+    color: var(--bs-body-color);
+    line-height: 1.4;
+    margin-bottom: 6px;
+}
+
+.roadmap-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.roadmap-asset {
+    font-size: 0.76em;
+    color: var(--vw-gray-500);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+[data-bs-theme="dark"] .roadmap-asset {
+    color: var(--vw-gray-400);
+}
+
+.roadmap-effort {
+    font-size: 0.72em;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    text-transform: capitalize;
+    letter-spacing: 0.02em;
+}
+
+.roadmap-effort--trivial {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.roadmap-effort--small {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.roadmap-effort--medium {
+    background: #fef9c3;
+    color: #854d0e;
+}
+
+.roadmap-effort--large {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+[data-bs-theme="dark"] .roadmap-effort--trivial {
+    background: rgba(34, 197, 94, 0.15);
+    color: #86efac;
+}
+
+[data-bs-theme="dark"] .roadmap-effort--small {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .roadmap-effort--medium {
+    background: rgba(234, 179, 8, 0.15);
+    color: #fde047;
+}
+
+[data-bs-theme="dark"] .roadmap-effort--large {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+}
+
+.roadmap-more {
+    font-size: 0.8em;
+    color: var(--vw-gray-500);
+    text-align: center;
+    padding: 6px 0 2px;
+    font-style: italic;
+}

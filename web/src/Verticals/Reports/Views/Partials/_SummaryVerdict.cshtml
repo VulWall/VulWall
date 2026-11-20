@@ -1,0 +1,116 @@
+@using System.Globalization
+@model VulWall.Dashboard.Reports.Models.SummaryReportViewModel
+@{
+    // Score ring geometry (lifted from Cert.cshtml, sized to 132px)
+    const double radius = 50.0;
+    var circumference = 2 * Math.PI * radius;
+    var offset = circumference - (Model.SecurityScore / 100.0 * circumference);
+    var scoreClass = Model.SecurityScore >= 85 ? "score-excellent"
+        : Model.SecurityScore >= 70 ? "score-good"
+        : Model.SecurityScore >= 50 ? "score-medium"
+        : "score-poor";
+
+    var inv = CultureInfo.InvariantCulture;
+    var circ = circumference.ToString("F2", inv);
+
+    // Lead text: prefer the AI-generated executive summary, fall back to the static overview.
+    var lead = !string.IsNullOrWhiteSpace(Model.AIExecutiveSummary)
+        ? Model.AIExecutiveSummary
+        : Model.Overview;
+
+    // Sparkline geometry
+    var trend = Model.ScoreTrend;
+    var hasTrend = trend.Count >= 2;
+    string sparkPoints = string.Empty;
+    double lastX = 0, lastY = 0;
+    var delta = 0;
+    if (hasTrend)
+    {
+        const double w = 230.0;
+        const double h = 46.0;
+        const double pad = 8.0;
+        var minS = trend.Min(p => p.Score);
+        var maxS = trend.Max(p => p.Score);
+        double range = maxS == minS ? 1 : maxS - minS;
+
+        var coords = trend.Select((p, i) =>
+        {
+            var x = pad + (w - 2 * pad) * i / (trend.Count - 1);
+            var y = h - (h - 2 * pad) * (p.Score - minS) / range - pad;
+            return (x, y);
+        }).ToList();
+
+        sparkPoints = string.Join(" ", coords.Select(c => $"{c.x.ToString("F1", inv)},{c.y.ToString("F1", inv)}"));
+        (lastX, lastY) = coords[^1];
+        delta = trend[^1].Score - trend[0].Score;
+    }
+
+    var deltaUp = delta >= 0;
+    var hasNew = Model.FindingDelta.New > 0;
+    var hasResolved = Model.FindingDelta.Resolved > 0;
+}
+
+<section class="sr-band sr-verdict">
+    <div class="sr-verdict-left">
+        <div class="sr-score-row">
+            <svg class="sr-score-ring" viewBox="0 0 120 120" width="132" height="132" role="img"
+                 aria-label="Security score @Model.SecurityScore out of 100">
+                <circle class="sr-score-ring-bg" cx="60" cy="60" r="@radius.ToString("F0", inv)" />
+                <circle class="sr-score-ring-fill @scoreClass" cx="60" cy="60" r="@radius.ToString("F0", inv)"
+                        stroke-dasharray="@circ @circ"
+                        stroke-dashoffset="@offset.ToString("F2", inv)" />
+                <text class="sr-score-number" x="60" y="56" text-anchor="middle" dominant-baseline="middle">@Model.SecurityScore</text>
+                <text class="sr-score-slash" x="60" y="80" text-anchor="middle">/ 100</text>
+            </svg>
+            <div class="sr-posture-block">
+                <div class="sr-eyebrow">Posture</div>
+                <div class="sr-posture @scoreClass">@Model.SecurityPosture</div>
+            </div>
+        </div>
+
+        @if (hasTrend)
+        {
+            <div class="sr-trend-card">
+                <div class="sr-trend-head">
+                    <span class="sr-eyebrow">Score trend</span>
+                    <span class="sr-trend-delta @(deltaUp ? "sr-trend-up" : "sr-trend-down")">
+                        <i class="fas @(deltaUp ? "fa-arrow-trend-up" : "fa-arrow-trend-down")"></i>
+                        @(deltaUp ? "+" : "")@delta pts
+                    </span>
+                </div>
+                <svg class="sr-sparkline" viewBox="0 0 230 46" width="100%" height="46"
+                     preserveAspectRatio="none" aria-hidden="true">
+                    <polyline points="@sparkPoints" fill="none" stroke-width="2.5"
+                              stroke-linecap="round" stroke-linejoin="round" />
+                    <circle class="sr-spark-dot" cx="@lastX.ToString("F1", inv)" cy="@lastY.ToString("F1", inv)" r="4" />
+                    <circle class="sr-spark-halo" cx="@lastX.ToString("F1", inv)" cy="@lastY.ToString("F1", inv)" r="8" />
+                </svg>
+                <div class="sr-trend-caption">Last @trend.Count scans</div>
+            </div>
+        }
+    </div>
+
+    <div class="sr-verdict-right">
+        <div class="sr-eyebrow">The gist</div>
+        <p class="sr-lead">@lead</p>
+
+        @if (hasNew || hasResolved)
+        {
+            <div class="sr-delta-chips">
+                @if (hasNew)
+                {
+                    var assets = Model.FindingDelta.NewAffectedAssets;
+                    <span class="sr-chip sr-delta-new">
+                        <i class="fas fa-circle-plus"></i>@Model.FindingDelta.New new finding@(Model.FindingDelta.New == 1 ? "" : "s")@(assets > 0 ? $" · {assets} asset{(assets == 1 ? "" : "s")}" : "")
+                    </span>
+                }
+                @if (hasResolved)
+                {
+                    <span class="sr-chip sr-delta-resolved">
+                        <i class="fas fa-circle-check"></i>@Model.FindingDelta.Resolved resolved since last scan
+                    </span>
+                }
+            </div>
+        }
+    </div>
+</section>

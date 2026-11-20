@@ -1,0 +1,32 @@
+@{
+    var scanTriggeredAsset = TempData["ScanTriggered"] as string;
+}
+@if (scanTriggeredAsset != null)
+{
+    <input type="hidden" id="scanTriggeredFlag" />
+    <div class="modal fade" id="scanTriggeredModal" tabindex="-1" aria-labelledby="scanTriggeredModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="scanTriggeredModalLabel">
+                        <i class="fa-solid fa-satellite-dish me-2 text-primary"></i>Scan Initiated
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3"><strong>@scanTriggeredAsset</strong> has been added and a security scan has been triggered.</p>
+                    <div class="alert alert-info mb-0">
+                        <i class="fa-solid fa-circle-info me-1"></i>
+                        The scan is running in the background. Results will appear in the Scans page once complete.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Stay Here</button>
+                    <a href="@Url.Action("Index", "Scans")" class="btn btn-primary">
+                        <i class="fa-solid fa-arrow-right me-1"></i>See Scans
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+}

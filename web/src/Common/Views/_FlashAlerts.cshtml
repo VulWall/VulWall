@@ -1,0 +1,34 @@
+@{
+    var flashError   = TempData["Error"]   as string;
+    var flashInfo    = TempData["Info"]    as string;
+    var flashSuccess = TempData["Success"] as string;
+    var flashWarning = TempData["Warning"] as string;
+}
+@if (flashError != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+        <i class="fas fa-circle-exclamation me-2"></i>@flashError
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (flashInfo != null)
+{
+    <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+        <i class="fas fa-circle-info me-2"></i>@flashInfo
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (flashSuccess != null)
+{
+    <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+        <i class="fas fa-circle-check me-2"></i>@flashSuccess
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (flashWarning != null)
+{
+    <div class="alert alert-warning alert-dismissible fade show mb-3" role="alert">
+        <i class="fas fa-triangle-exclamation me-2"></i>@flashWarning
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}

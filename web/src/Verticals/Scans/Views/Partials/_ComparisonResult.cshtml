@@ -1,0 +1,157 @@
+@model VulWall.Dashboard.Scans.Models.ScanComparisonViewModel
+@using VulWall.Dashboard.Common.Contracts.Enums
+
+@if (Model.NoChange)
+{
+    <div class="compare-no-change text-center py-4">
+        <i class="fas fa-equals fa-2x mb-3 d-block text-muted"></i>
+        <p class="mb-0 text-muted">No change between these two scans</p>
+    </div>
+}
+else
+{
+    <!-- Selector row -->
+    <div class="compare-selector-row mb-3">
+        <div class="compare-scan-card">
+            <div class="compare-scan-label">Baseline</div>
+            <div class="compare-scan-info">
+                <div class="compare-scan-body">
+                    <div class="compare-scan-date">@Model.BaselineDate</div>
+                    <div class="compare-scan-time">@Model.BaselineTime</div>
+                </div>
+                <div class="compare-scan-count">
+                    <span class="compare-count-value">@Model.BaselineTotal</span>
+                    <span class="compare-count-label">issues</span>
+                </div>
+            </div>
+        </div>
+        <div class="compare-arrow-node">
+            <i class="fas fa-arrow-right"></i>
+        </div>
+        <div class="compare-scan-card compare-scan-card--latest">
+            <div class="compare-scan-label compare-scan-label--latest">Compared to · latest</div>
+            <div class="compare-scan-info">
+                <div class="compare-scan-body">
+                    <div class="compare-scan-date">@Model.LatestDate</div>
+                    <div class="compare-scan-time">@Model.LatestTime</div>
+                </div>
+                <div class="compare-scan-count">
+                    <span class="compare-count-value">@Model.LatestTotal</span>
+                    <span class="compare-count-label">issues</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Net-change banner -->
+    <div class="compare-net-banner mb-4">
+        <div class="compare-net-main">
+            <div class="compare-net-label">NET CHANGE</div>
+            <div class="compare-net-value-row">
+                <span class="compare-net-value">@(Model.Improved ? "−" : "+")@Math.Abs(Model.Net)</span>
+                @if (Model.BaselineTotal > 0)
+                {
+                    <span class="compare-net-pct @(Model.Improved ? "compare-pct--improved" : "compare-pct--worsened")">
+                        @Model.PctChange% @(Model.Improved ? "fewer" : "more")
+                    </span>
+                }
+            </div>
+        </div>
+        <div class="compare-bands">
+            @foreach (var band in Model.Bands)
+            {
+                <div class="compare-band-tile">
+                    <div class="compare-band-name">@band.Name</div>
+                    <div class="compare-band-row">
+                        <span class="compare-band-range">@band.From → @band.To</span>
+                        <span class="compare-band-delta @(band.Worsened ? "compare-band-delta--worsened" : "compare-band-delta--improved")">
+                            @(band.Delta > 0 ? "+" : "")@band.Delta
+                        </span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Diff lists -->
+    <div class="compare-diff-grid">
+        <!-- Resolved -->
+        <div class="compare-diff-card">
+            <div class="compare-diff-header">
+                <div class="compare-diff-icon compare-diff-icon--resolved">
+                    <i class="fas fa-circle-check"></i>
+                </div>
+                <span class="compare-diff-title">Resolved</span>
+                <span class="compare-diff-meta ms-auto">since baseline</span>
+            </div>
+            @if (!Model.Resolved.Any())
+            {
+                <div class="compare-diff-empty">No resolved findings</div>
+            }
+            else
+            {
+                @foreach (var f in Model.Resolved)
+                {
+                    <div class="compare-diff-row">
+                        <span class="compare-sev-dot compare-sev-dot--@f.Severity.ToLower()"></span>
+                        <div class="compare-diff-row-body">
+                            <div class="compare-diff-finding-title compare-diff-finding-title--resolved">@f.Title</div>
+                            <div class="compare-diff-finding-meta">
+                                <span class="compare-host">@f.Host</span>
+                                @if (!string.IsNullOrEmpty(f.Host)) { <span> · </span> }
+                                <span>@f.Severity</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+                @if (Model.ResolvedTotal > 6)
+                {
+                    <div class="compare-diff-more">View all @Model.ResolvedTotal resolved</div>
+                }
+            }
+        </div>
+
+        <!-- Newly detected -->
+        <div class="compare-diff-card">
+            <div class="compare-diff-header">
+                <div class="compare-diff-icon compare-diff-icon--new">
+                    <i class="fas fa-circle-plus"></i>
+                </div>
+                <span class="compare-diff-title">Newly detected</span>
+                <span class="compare-diff-meta ms-auto">needs review</span>
+            </div>
+            @if (!Model.Added.Any())
+            {
+                <div class="compare-diff-empty">No new findings</div>
+            }
+            else
+            {
+                @foreach (var f in Model.Added)
+                {
+                    <div class="compare-diff-row">
+                        <span class="compare-sev-dot compare-sev-dot--@f.Severity.ToLower()"></span>
+                        <div class="compare-diff-row-body">
+                            <div class="compare-diff-finding-title">@f.Title</div>
+                            <div class="compare-diff-finding-meta">
+                                <span class="compare-host">@f.Host</span>
+                                @if (!string.IsNullOrEmpty(f.Host)) { <span> · </span> }
+                                <span>@f.Severity</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+                @if (Model.AddedTotal > 6)
+                {
+                    <div class="compare-diff-more">View all @Model.AddedTotal new</div>
+                }
+            }
+            @if (Model.UnchangedCount > 0)
+            {
+                <div class="compare-diff-footer">
+                    <i class="fas fa-clock me-1"></i>
+                    @Model.UnchangedCount finding@(Model.UnchangedCount == 1 ? "" : "s") still open, unchanged
+                </div>
+            }
+        </div>
+    </div>
+}

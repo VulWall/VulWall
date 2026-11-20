@@ -1,0 +1,149 @@
+@using VulWall.Dashboard.Common.Contracts.Enums
+@using VulWall.Dashboard.Common.Utils
+@model (VulWall.Dashboard.Discoveries.Models.DiscoveryItemViewModel Discovery, bool IsChild, bool IsLocked)
+@removeTagHelper Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var d = Model.Discovery;
+    var hasChildren = !Model.IsChild && d.Children.Any();
+    var hasDetail = d.PortsCount > 0 || d.ServicesCount > 0 || d.CountryCode != null || d.CloudProvider != null || d.Isp != null;
+    var totalIssues = d.CriticalIssues + d.HighIssues + d.MediumIssues + d.LowIssues;
+
+    var ownerStyle = d.OwnershipStatus switch
+    {
+        OwnershipStatus.Verified => "border-color: var(--vw-success); color: var(--vw-success);",
+        OwnershipStatus.NotSure => "border-color: var(--severity-medium); color: var(--severity-medium);",
+        OwnershipStatus.NotMine => "border-color: var(--severity-high); color: var(--severity-high);",
+        OwnershipStatus.Ignore => "border-color: var(--vw-gray-400); color: var(--vw-gray-400);",
+        _ => ""
+    };
+
+    var typeBadgeClass = d.Type switch
+    {
+        AssetType.Domain => "badge-primary",
+        AssetType.SubDomain => "badge-secondary",
+        _ => "badge-light"
+    };
+    var typeLabel = d.Type switch
+    {
+        AssetType.Domain => "Domain",
+        AssetType.SubDomain => "Subdomain",
+        AssetType.Ip => "IP",
+        _ => d.Type.ToString()
+    };
+
+    var isTriageAsset = d.OwnershipStatus == OwnershipStatus.NotSure || d.OwnershipStatus == OwnershipStatus.NotMine;
+
+    var rowStatusClass = d.OwnershipStatus switch
+    {
+        OwnershipStatus.NotSure => "status-not-sure",
+        OwnershipStatus.NotMine => "status-not-mine",
+        OwnershipStatus.Ignore  => "status-ignore",
+        _                       => ""
+    };
+}
+
+<div class="disc-row-wrap discovery-row-wrap @rowStatusClass"
+     data-discovery-id="@d.Id"
+     data-discovery-name="@d.Name.ToLowerInvariant()"
+     data-discovery-ip="@(d.IpAddress?.ToLowerInvariant() ?? "")"
+     data-has-issues="@(totalIssues > 0 ? "true" : "false")"
+     data-needs-triage="@(isTriageAsset ? "true" : "false")"
+     data-is-child="@(Model.IsChild ? "true" : "false")"
+     data-parent-id="@(d.ParentId ?? "")">
+
+    <!-- Grid row -->
+    <div class="disc-row-grid @(Model.IsChild ? "child-row" : "domain-row")">
+
+        <!-- 1: Asset name -->
+        <div class="disc-asset-name">
+            @if (hasChildren)
+            {
+                <button type="button" class="expand-btn domain-expand" aria-label="Expand subdomains of @d.Name" aria-expanded="false">
+                    <i class="fas fa-chevron-right chevron-icon"></i>
+                </button>
+            }
+            @if (hasDetail)
+            {
+                <button type="button" class="expand-btn row-expand" data-target="drawer-@d.Id" aria-label="Show details for @d.Name" aria-expanded="false">
+                    <i class="fas fa-circle-plus expand-icon"></i>
+                </button>
+            }
+            @if (!hasChildren && !hasDetail)
+            {
+                <span style="width:20px;display:inline-block;flex-shrink:0;"></span>
+            }
+            <span class="host-name @(Model.IsChild ? "child-indent" : "")">@d.Name</span>
+        </div>
+
+        <!-- 2: Type -->
+        <div>
+            <span class="badge @typeBadgeClass">@typeLabel</span>
+        </div>
+
+        <!-- 3: Hosting (geo) -->
+        <div class="disc-hosting">
+            @if (!string.IsNullOrEmpty(d.CountryCode))
+            {
+                <img class="geo-flag" src="@LogoUrlHelper.GetCountryFlagUrl(d.CountryCode)" alt="@d.CountryCode" title="@d.CountryCode" />
+                <span class="country-code">@d.CountryCode</span>
+            }
+            @if (!string.IsNullOrEmpty(d.CloudProvider) || !string.IsNullOrEmpty(d.Isp))
+            {
+                var providerName = d.CloudProvider ?? d.Isp;
+                <img class="geo-cloud-logo" src="@LogoUrlHelper.GetCloudProviderLogoUrl(providerName)" alt="@providerName" title="@providerName" />
+            }
+        </div>
+
+        <!-- 4: Ports -->
+        <div class="disc-ports">@d.PortsCount</div>
+
+        <!-- 5: Issues -->
+        <div class="disc-issues">
+            @if (totalIssues == 0)
+            {
+                <span class="disc-secure-pill"><i class="fas fa-circle-check"></i> Secure</span>
+            }
+            else
+            {
+                if (d.CriticalIssues > 0) { <span class="sev-badge sev-critical" title="Critical issues">@d.CriticalIssues</span> }
+                if (d.HighIssues > 0) { <span class="sev-badge sev-high" title="High issues">@d.HighIssues</span> }
+                if (d.MediumIssues > 0) { <span class="sev-badge sev-medium" title="Medium issues">@d.MediumIssues</span> }
+                if (d.LowIssues > 0) { <span class="sev-badge sev-low" title="Low issues">@d.LowIssues</span> }
+            }
+        </div>
+
+        <!-- 6: Last seen -->
+        <div class="disc-lastseen">@d.LastSeen.ToRelativeTime()</div>
+
+        <!-- 7: Ownership -->
+        <div>
+            @if (Model.IsLocked)
+            {
+                <a href="/settings#plans" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-lock me-1"></i> Upgrade
+                </a>
+            }
+            else
+            {
+                <form class="status-change-form" data-action="@Url.Action("UpdateOwnershipStatus")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="discoveryId" value="@d.Id" />
+                    <select name="ownershipStatus" class="status-select" style="@ownerStyle"
+                            data-discovery-name="@d.Name"
+                            aria-label="Ownership status for @d.Name">
+                        <option value="0" @(d.OwnershipStatus == OwnershipStatus.Verified ? "selected" : null)>Verified</option>
+                        <option value="1" @(d.OwnershipStatus == OwnershipStatus.NotSure ? "selected" : null)>Not sure</option>
+                        <option value="2" @(d.OwnershipStatus == OwnershipStatus.NotMine ? "selected" : null)>Not mine</option>
+                        <option value="3" @(d.OwnershipStatus == OwnershipStatus.Ignore ? "selected" : null)>Ignore</option>
+                    </select>
+                </form>
+            }
+        </div>
+    </div>
+
+    @if (hasDetail)
+    {
+        <partial name="~/Verticals/Discoveries/Views/Partials/_DiscoveryDrawer.cshtml" model="d" />
+    }
+</div>

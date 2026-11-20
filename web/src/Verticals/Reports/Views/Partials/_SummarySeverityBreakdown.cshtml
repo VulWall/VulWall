@@ -1,0 +1,65 @@
+@model VulWall.Dashboard.Reports.Models.SummaryReportViewModel
+@{
+    var r = Model.RiskSummary;
+    var tiles = new[]
+    {
+        new { Key = "critical", Label = "Critical", Count = r.Critical.Count, Exploitable = r.Critical.Exploitable, IsInfo = false },
+        new { Key = "high",     Label = "High",     Count = r.High.Count,     Exploitable = r.High.Exploitable,     IsInfo = false },
+        new { Key = "medium",   Label = "Medium",   Count = r.Medium.Count,   Exploitable = r.Medium.Exploitable,   IsInfo = false },
+        new { Key = "low",      Label = "Low",      Count = r.Low.Count,      Exploitable = r.Low.Exploitable,      IsInfo = false },
+        new { Key = "info",     Label = "Info",     Count = r.Info.Count,     Exploitable = r.Info.Exploitable,     IsInfo = true }
+    };
+
+    var total = tiles.Sum(t => t.Count);
+}
+
+<section class="sr-band sr-breakdown">
+    <div class="sr-section-head">
+        <h2 class="sr-h2">What we found</h2>
+        <span class="sr-section-caption">@total open issue@(total == 1 ? "" : "s") across your perimeter</span>
+    </div>
+
+    @if (total > 0)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        const double gap = 0.6; // visual gap between segments, in viewBox units
+        double cursor = 0;
+        <div class="sr-dist-bar">
+            <svg viewBox="0 0 100 12" width="100%" height="12" preserveAspectRatio="none" aria-hidden="true">
+                @foreach (var t in tiles.Where(t => t.Count > 0))
+                {
+                    var width = t.Count * 100.0 / total;
+                    var drawW = Math.Max(0, width - gap);
+                    <rect class="sr-dist-seg-@t.Key" x="@cursor.ToString("F2", inv)" y="0"
+                          width="@drawW.ToString("F2", inv)" height="12">
+                        <title>@t.Label</title>
+                    </rect>
+                    cursor += width;
+                }
+            </svg>
+        </div>
+    }
+
+    <div class="sr-sev-tiles">
+        @foreach (var t in tiles)
+        {
+            <div class="sr-sev-tile sr-sev-tile-@t.Key">
+                <div class="sr-sev-head">
+                    <span class="sr-sev-dot"></span>
+                    <span class="sr-sev-label">@t.Label</span>
+                </div>
+                <div class="sr-sev-count">@t.Count</div>
+                @if (t.IsInfo)
+                {
+                    <div class="sr-sev-exploit">Informational</div>
+                }
+                else
+                {
+                    <div class="sr-sev-exploit @(t.Exploitable > 0 ? "sr-sev-exploit-on" : "")">
+                        @t.Exploitable exploitable
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>

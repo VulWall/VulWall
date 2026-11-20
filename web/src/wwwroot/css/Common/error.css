@@ -1,0 +1,175 @@
+/* Error Page Styles */
+
+.error-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 200px);
+    padding: 2rem 1rem;
+}
+
+.error-card {
+    max-width: 700px;
+    width: 100%;
+    box-shadow: var(--card-shadow);
+    border: none;
+}
+
+.error-icon {
+    font-size: 80px;
+    opacity: 0.9;
+}
+
+.error-icon i {
+    display: inline-block;
+    animation: errorIconBounce 1s ease-in-out;
+}
+
+@keyframes errorIconBounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.error-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--bs-body-color);
+}
+
+.error-code {
+    font-size: 1rem;
+}
+
+.error-message {
+    font-size: 1.1rem;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.error-actions {
+    flex-wrap: wrap;
+}
+
+.error-actions .btn {
+    min-width: 140px;
+}
+
+.error-details {
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.request-id-details {
+    cursor: pointer;
+}
+
+.request-id-details summary {
+    list-style: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    background-color: var(--vw-gray-100);
+    transition: background-color 0.2s;
+}
+
+.request-id-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.request-id-details summary::before {
+    content: '\f078';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    margin-right: 0.5rem;
+    transition: transform 0.2s;
+    display: inline-block;
+}
+
+.request-id-details[open] summary::before {
+    transform: rotate(180deg);
+}
+
+.request-id-details summary:hover {
+    background-color: var(--vw-gray-200);
+}
+
+.request-id-details code {
+    background-color: var(--vw-gray-100);
+    color: var(--brand-blue);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.request-id-details pre {
+    background-color: var(--vw-gray-900);
+    color: var(--vw-gray-100);
+    padding: 1rem;
+    border-radius: 0.375rem;
+    overflow-x: auto;
+    max-height: 400px;
+}
+
+.error-details .alert-heading {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+/* Dark theme styles */
+[data-bs-theme="dark"] .error-card {
+    background-color: var(--vw-dark-surface);
+}
+
+[data-bs-theme="dark"] .request-id-details summary {
+    background-color: var(--vw-dark-border);
+}
+
+[data-bs-theme="dark"] .request-id-details summary:hover {
+    background-color: var(--vw-dark-hover);
+}
+
+[data-bs-theme="dark"] .request-id-details code {
+    background-color: var(--vw-dark-border);
+    color: var(--brand-orange);
+}
+
+[data-bs-theme="dark"] .request-id-details pre {
+    background-color: #111827;
+    color: var(--vw-gray-200);
+}
+
+[data-bs-theme="dark"] .alert-warning {
+    background-color: rgba(244, 125, 23, 0.1);
+    border-color: rgba(244, 125, 23, 0.3);
+    color: var(--bs-body-color);
+}
+
+/* Responsive design */
+@media (max-width: 576px) {
+    .error-icon {
+        font-size: 60px;
+    }
+
+    .error-title {
+        font-size: 1.5rem;
+    }
+
+    .error-message {
+        font-size: 1rem;
+    }
+
+    .error-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .error-actions .btn {
+        width: 100%;
+    }
+}

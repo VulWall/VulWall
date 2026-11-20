@@ -1,0 +1,385 @@
+@using System.Globalization
+@model VulWall.Dashboard.Reports.Models.IndexViewModel
+@{
+    ViewData["Title"] = "Reports";
+
+    var inv = CultureInfo.InvariantCulture;
+    var initialScan = Model.Scans.FirstOrDefault();
+    var initialScore = initialScan?.Score ?? 0;
+
+    var hasScans = Model.Scans.Any();
+
+    // Context-strip score ring geometry (matches the radius the JS uses to redraw on scan change).
+    // Color cutoffs align with the score bands (>=70 "Good" green, >=50 "Needs attention" amber).
+    const double ringRadius = 26.0;
+    var ringCirc = 2 * Math.PI * ringRadius;
+    var ringOffset = ringCirc - (initialScore / 100.0 * ringCirc);
+    var ringColor = initialScore >= 70 ? "var(--vw-success)"
+        : initialScore >= 50 ? "var(--severity-medium)"
+        : "var(--severity-high)";
+
+    var meterPct = Model.MaxLinksCount > 0
+        ? Math.Min(100, Model.ActiveLinksCount * 100 / Model.MaxLinksCount)
+        : 0;
+
+    string TypeIcon(string type) => type switch
+    {
+        "Summary" => "fas fa-clipboard-list",
+        "Technical" => "fas fa-code",
+        _ => "fas fa-link"
+    };
+    string TypeSlug(string type) => type.ToLowerInvariant() is "summary" or "technical" ? type.ToLowerInvariant() : "summary";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Reports/index.css" />
+}
+
+@Html.AntiForgeryToken()
+
+<div class="rpt-page">
+    <!-- Page header + scope selector -->
+    <div class="page-header rpt-header">
+        <div class="rpt-header-text">
+            <h1 class="rpt-title">Reports</h1>
+            <p class="rpt-subtitle">Turn a scan into a shareable, password-protected report — branded for stakeholders or detailed for your engineers.</p>
+        </div>
+
+        <div class="rpt-scope">
+            <div class="rpt-eyebrow">Report scope</div>
+            <button type="button" class="rpt-scope-btn" id="rptScopeBtn" aria-haspopup="true" aria-expanded="false">
+                <span class="rpt-scope-icon"><i class="fas fa-satellite-dish"></i></span>
+                <span class="rpt-scope-btn-text" id="rptScopeBtnLabel">
+                    <span class="rpt-scope-name">@(initialScan?.DisplayName ?? "No completed scans")</span>
+                    <span class="rpt-scope-meta">@(initialScan?.FindingsCount ?? 0) findings · @(initialScan?.AssetsCount ?? 0) assets</span>
+                </span>
+                <i class="fas fa-chevron-down rpt-scope-caret"></i>
+            </button>
+            <div class="rpt-scope-menu" id="rptScopeMenu" hidden>
+                @foreach (var scan in Model.Scans)
+                {
+                    var selected = scan.Id == Model.SelectedScanId;
+                    @* Per-option score/severity live in the reports-scan-data JSON island (single
+                       source of truth); only the label fields below are read straight from the DOM. *@
+                    <button type="button"
+                            class="rpt-scope-opt @(selected ? "rpt-scope-opt--selected" : "")"
+                            data-scan-id="@scan.Id"
+                            data-scan-label="@scan.DisplayName"
+                            data-findings="@scan.FindingsCount"
+                            data-assets="@scan.AssetsCount">
+                        <span class="rpt-scope-opt-icon"><i class="fas fa-satellite-dish"></i></span>
+                        <span class="rpt-scope-opt-text">
+                            <span class="rpt-scope-opt-name">@scan.DisplayName</span>
+                            <span class="rpt-scope-opt-meta">@scan.FindingsCount findings · score @scan.Score</span>
+                        </span>
+                        <i class="fas fa-check rpt-scope-opt-check"></i>
+                    </button>
+                }
+            </div>
+            <input type="hidden" id="rptSelectedScanId" value="@Model.SelectedScanId" />
+        </div>
+    </div>
+
+    <!-- Scan context strip -->
+    <div class="rpt-context-strip">
+        <div class="rpt-score-section">
+            <div class="rpt-score-ring-wrap">
+                <svg class="rpt-score-ring-svg" viewBox="0 0 62 62" role="img"
+                     aria-label="Security score @initialScore out of 100">
+                    <circle class="rpt-score-ring-track" cx="31" cy="31" r="@ringRadius.ToString("F0", inv)"></circle>
+                    <circle id="rptScoreRingFill" class="rpt-score-ring-fill" cx="31" cy="31" r="@ringRadius.ToString("F0", inv)"
+                            stroke-dasharray="@ringCirc.ToString("F2", inv)"
+                            stroke-dashoffset="@ringOffset.ToString("F2", inv)"
+                            style="stroke: @ringColor"></circle>
+                </svg>
+                <div class="rpt-score-ring-label">
+                    <span class="rpt-score-num" id="rptScoreValue">@initialScore</span>
+                    <span class="rpt-score-denom">/ 100</span>
+                </div>
+            </div>
+            <div class="rpt-score-meta">
+                <div class="rpt-score-caption">Security score</div>
+                <div class="rpt-score-band" id="rptScoreBand">@(initialScan?.Band ?? "—")</div>
+            </div>
+        </div>
+        <div class="rpt-sev-section">
+            <div class="rpt-eyebrow">Findings in this scan</div>
+            <div class="rpt-sev-chips">
+                <span class="sev-badge sev-critical"><span id="rptSevCritical">@(initialScan?.Critical ?? 0)</span>&nbsp;Critical</span>
+                <span class="sev-badge sev-high"><span id="rptSevHigh">@(initialScan?.High ?? 0)</span>&nbsp;High</span>
+                <span class="sev-badge sev-medium"><span id="rptSevMedium">@(initialScan?.Medium ?? 0)</span>&nbsp;Medium</span>
+                <span class="sev-badge sev-low"><span id="rptSevLow">@(initialScan?.Low ?? 0)</span>&nbsp;Low</span>
+                <span class="sev-badge sev-info"><span id="rptSevInfo">@(initialScan?.Info ?? 0)</span>&nbsp;Info</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report types -->
+    <div class="rpt-eyebrow rpt-eyebrow--section">Choose a report</div>
+    <div class="rpt-type-grid">
+
+        <!-- Summary -->
+        <div class="rpt-type-card report-type-card active" data-type-id="summary">
+            <div class="rpt-type-ring rpt-type-ring--summary"></div>
+            <div class="rpt-type-head">
+                <span class="rpt-type-icon rpt-type-icon--summary"><i class="fas fa-clipboard-list"></i></span>
+                <span class="rpt-type-badge rpt-type-badge--summary">EXEC</span>
+            </div>
+            <div class="rpt-type-title">Summary report</div>
+            <div class="rpt-type-audience scan-date-subtitle-wrap">For execs &amp; stakeholders</div>
+            <ul class="rpt-type-features">
+                <li><i class="fas fa-check"></i> High-level posture &amp; score trend</li>
+                <li><i class="fas fa-check"></i> Severity breakdown</li>
+                <li><i class="fas fa-check"></i> What changed since last scan</li>
+                <li><i class="fas fa-check"></i> Top priorities to fix first</li>
+            </ul>
+            <div class="rpt-type-actions">
+                <button type="button" class="btn btn-sm btn-secondary btn-preview"><i class="fas fa-eye me-1"></i>Preview</button>
+                @if (Model.FeatureAccess.CanShareReports)
+                {
+                    <button type="button" class="btn btn-sm btn-primary btn-generate-link" disabled="@(!hasScans)" title="@(hasScans ? "Generate a shareable link" : "Run a completed scan first")"><i class="fas fa-share-nodes me-1"></i>Share</button>
+                }
+            </div>
+        </div>
+
+        <!-- Technical -->
+        <div class="rpt-type-card report-type-card" data-type-id="technical">
+            <div class="rpt-type-ring rpt-type-ring--technical"></div>
+            <div class="rpt-type-head">
+                <span class="rpt-type-icon rpt-type-icon--technical"><i class="fas fa-code"></i></span>
+                <span class="rpt-type-badge rpt-type-badge--technical">ENG</span>
+            </div>
+            <div class="rpt-type-title">Technical report</div>
+            <div class="rpt-type-audience">For your engineers</div>
+            <ul class="rpt-type-features">
+                <li><i class="fas fa-check"></i> Full finding detail &amp; evidence</li>
+                <li><i class="fas fa-check"></i> CVSS / CWE &amp; remediation steps</li>
+                <li><i class="fas fa-check"></i> Asset-level results</li>
+                <li><i class="fas fa-check"></i> OWASP Top 10 coverage</li>
+            </ul>
+            <div class="rpt-type-actions">
+                <button type="button" class="btn btn-sm btn-secondary btn-preview"><i class="fas fa-eye me-1"></i>Preview</button>
+                @if (Model.FeatureAccess.CanShareReports)
+                {
+                    <button type="button" class="btn btn-sm btn-primary btn-generate-link" disabled="@(!hasScans)" title="@(hasScans ? "Generate a shareable link" : "Run a completed scan first")"><i class="fas fa-share-nodes me-1"></i>Share</button>
+                }
+            </div>
+        </div>
+
+        <!-- Certificate -->
+        <div class="rpt-type-card report-type-card @(!Model.CertVisible ? "disabled" : "")"
+             data-type-id="certificate" id="certificateCard" data-org-id="@Model.OrganizationId">
+            <div class="rpt-type-ring rpt-type-ring--cert"></div>
+            <div class="rpt-type-head">
+                <span class="rpt-type-icon rpt-type-icon--cert"><i class="fas fa-certificate"></i></span>
+                <span class="rpt-type-badge rpt-type-badge--cert">PRO</span>
+            </div>
+            <div class="rpt-type-title">Trust certificate</div>
+            @if (Model.FeatureAccess.CanPublishCertificate)
+            {
+                <div class="rpt-cert-toggle-row">
+                    <input class="form-check-input" type="checkbox" id="certVisibilityToggle" @(Model.CertVisible ? "checked" : "")>
+                    <small class="rpt-cert-toggle-label text-muted">@(Model.CertVisible ? "Public" : "Private")</small>
+                </div>
+            }
+            else
+            {
+                <div class="rpt-type-audience">Internal only</div>
+            }
+            <ul class="rpt-type-features">
+                <li><i class="fas fa-check"></i> Branded trust badge</li>
+                <li><i class="fas fa-check"></i> Security score &amp; rating</li>
+                <li><i class="fas fa-check"></i> Public verification page</li>
+                <li><i class="fas fa-check"></i> Embed on your site</li>
+            </ul>
+            <div class="rpt-type-actions">
+                <button type="button" class="btn btn-sm btn-secondary btn-preview"><i class="fas fa-eye me-1"></i>Preview</button>
+                @if (Model.FeatureAccess.CanPublishCertificate)
+                {
+                    <button type="button" class="btn btn-sm btn-secondary btn-copy-certificate-link" data-certificate-url="/Certs/@Model.OrganizationId"><i class="fas fa-link me-1"></i>Copy link</button>
+                    <button type="button" class="btn btn-sm btn-secondary btn-embed"><i class="fas fa-code me-1"></i>Embed</button>
+                }
+                else
+                {
+                    <a href="/settings#plans" class="btn btn-sm btn-primary"><i class="fas fa-crown me-1"></i>Upgrade to publish</a>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Shared links -->
+    <div class="rpt-links-block">
+        <h2 class="rpt-section-heading">
+            Shared links
+            @if (!Model.FeatureAccess.CanShareReports)
+            {
+                <partial name="~/Common/Views/_ProBadge.cshtml" model='(string?)null' />
+            }
+        </h2>
+
+        @if (!Model.FeatureAccess.CanShareReports)
+        {
+            <partial name="~/Common/Views/_UpgradeCTA.cshtml" model='new VulWall.Dashboard.Common.Contracts.Models.UpgradeCTAModel {
+                Text = "Share security reports with your team and stakeholders",
+                Style = "banner"
+            }' />
+        }
+        else
+        {
+            <div class="rpt-links-card">
+                <div class="rpt-links-header">
+                    <div class="rpt-links-meter">
+                        <span class="rpt-meter-label">@Model.ActiveLinksCount of @Model.MaxLinksCount active</span>
+                        <div class="rpt-meter-bar">
+                            <div class="rpt-meter-fill" style="width: @(meterPct)%"></div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-primary btn-generate-link" disabled="@(!hasScans)" title="@(hasScans ? "Generate a shareable link" : "Run a completed scan first")"><i class="fas fa-plus me-1"></i>New shared link</button>
+                </div>
+                <div class="rpt-links-scroll">
+                    <table class="rpt-links-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Scan</th>
+                                <th>Type</th>
+                                <th>Expires</th>
+                                <th class="rpt-th-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sharedLinksTableBody">
+                            @if (!Model.SharedLinks.Any())
+                            {
+                                <tr class="rpt-links-empty-row">
+                                    <td colspan="5">
+                                        <div class="rpt-links-empty">
+                                            <i class="fas fa-link"></i>
+                                            <span>No shared links yet. Create one to share a report securely.</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            @foreach (var link in Model.SharedLinks)
+                            {
+                                var slug = TypeSlug(link.Type);
+                                var icon = TypeIcon(link.Type);
+                                <tr data-link-id="@link.Id" data-link-token="@link.Token">
+                                    <td>
+                                        <div class="rpt-link-name">
+                                            <span class="rpt-link-icon rpt-link-icon--@slug"><i class="@icon"></i></span>
+                                            <span class="rpt-link-name-text">@link.ReportName</span>
+                                        </div>
+                                    </td>
+                                    <td class="rpt-link-scan">@link.ScanName</td>
+                                    <td>
+                                        <span class="rpt-type-pill rpt-type-pill--@slug"><i class="@icon"></i> @link.Type</span>
+                                    </td>
+                                    <td>
+                                        @if (link.IsRevoked)
+                                        {
+                                            <span class="sev-badge sev-info">Revoked</span>
+                                        }
+                                        else if (link.IsExpired)
+                                        {
+                                            <span class="sev-badge sev-high">Expired</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="rpt-link-expires">@link.Expires</span>
+                                        }
+                                    </td>
+                                    <td class="rpt-td-actions">
+                                        @if (link.IsRevoked)
+                                        {
+                                            <span class="rpt-link-muted">Link revoked</span>
+                                        }
+                                        else if (link.IsExpired)
+                                        {
+                                            <span class="rpt-link-muted">Link expired</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="rpt-row-actions">
+                                                <button type="button" class="rpt-row-btn rpt-row-btn--primary btn-copy-link" title="Copy link">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                                <button type="button" class="rpt-row-btn btn-open-link" title="Open in new tab">
+                                                    <i class="fas fa-arrow-up-right-from-square"></i>
+                                                </button>
+                                                <button type="button" class="rpt-row-btn rpt-row-btn--danger btn-revoke" title="Revoke access" data-report-name="@link.ReportName" data-link-id="@link.Id">
+                                                    <i class="fas fa-ban"></i>
+                                                </button>
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Generate Link Modal -->
+<partial name="~/Verticals/Reports/Views/Partials/_GenerateLinkModal.cshtml" model="Model.CompanyName" />
+
+<!-- Embed Code Modal -->
+<partial name="~/Verticals/Reports/Views/Partials/_EmbedCodeModal.cshtml" />
+
+@{
+    var revokeAccessModalModel = new VulWall.Dashboard.Common.Contracts.Models.ConfirmationModalModel
+    {
+        ModalId = "revokeAccessModal",
+        Title = "Revoke Access",
+        Message = "Are you sure you want to revoke access to this shared link?",
+        MessageBold = true,
+        ConfirmButtonText = "Revoke Access",
+        ConfirmButtonStyle = "danger",
+        ConfirmButtonIcon = "fas fa-ban",
+        HeaderStyle = "danger",
+        Icon = "fas fa-exclamation-circle",
+        Details = new List<string>
+        {
+            "This action cannot be undone",
+            "Anyone with this link will lose access immediately",
+            "You will need to generate a new link to share again"
+        },
+        DetailsTitle = "Important:",
+        DetailsIcon = "fas fa-info-circle",
+        DetailsStyle = "warning",
+        DynamicContentId = "revokeReportContent"
+    };
+}
+
+<partial name="~/Common/Views/_ConfirmationModal.cshtml" model="revokeAccessModalModel" />
+
+@{
+    var certVisibilityModalModel = new VulWall.Dashboard.Common.Contracts.Models.ConfirmationModalModel
+    {
+        ModalId = "certVisibilityModal",
+        Title = "Certificate Visibility",
+        Message = "", // Will be dynamically populated by JavaScript
+        MessageBold = true,
+        ConfirmButtonText = "Confirm",
+        ConfirmButtonStyle = "primary",
+        ConfirmButtonIcon = "fas fa-check",
+        HeaderStyle = "warning",
+        Icon = "fas fa-exclamation-triangle",
+        DetailsTitle = "What this means:",
+        DetailsIcon = "fas fa-info-circle",
+        DetailsStyle = "info",
+        DynamicContentId = "certModalDynamicContent"
+    };
+}
+
+<partial name="~/Common/Views/_ConfirmationModal.cshtml" model="certVisibilityModalModel" />
+
+<script type="application/json" id="reports-scan-data">
+    @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Scans, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }))
+</script>
+
+@section Scripts {
+    <script type="module" src="~/js/Reports/index.js"></script>
+}

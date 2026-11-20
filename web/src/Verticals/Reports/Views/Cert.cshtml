@@ -1,0 +1,125 @@
+@using VulWall.Dashboard.Common.Utils
+@model VulWall.Dashboard.Reports.Models.CertificateViewModel
+@{
+    Layout = null;
+    var isExpired = Model.ValidUntil < DateTime.UtcNow;
+    var scoreClass = Model.SecurityScore >= 90 ? "score-excellent" : Model.SecurityScore >= 70 ? "score-good" : Model.SecurityScore >= 50 ? "score-medium" : Model.SecurityScore >= 30 ? "score-poor" : "score-critical";
+    var scoreLabel = SecurityScoreCalculator.GetScoreLabel(Model.SecurityScore);
+    var circumference = 2 * Math.PI * 42;
+    var offset = circumference - (circumference * Model.SecurityScore / 100.0);
+
+    // Derive a display-safe verification ID from the org ID (no model/service change needed)
+    var verificationId = "VW·" + new string(
+        Model.OrganizationId.Where(c => Uri.IsHexDigit(c) || char.IsLetterOrDigit(c))
+            .Take(14)
+            .ToArray()
+    ).ToUpperInvariant();
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Certificate - @Model.CompanyName</title>
+    <link rel="stylesheet" href="~/css/Common/fonts.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Reports/cert.css" />
+</head>
+<body>
+    <div class="cert-container">
+        @if (isExpired)
+        {
+            <div class="cert-watermark">EXPIRED</div>
+        }
+
+        <!-- Header: Brand gradient with company + score -->
+        <div class="cert-header">
+            <div class="cert-header-left">
+                <div class="cert-label">Security Certificate</div>
+                @if (Model.HasLogo)
+                {
+                    <img src="/certs/@Model.OrganizationId/logo" alt="@Model.CompanyName Logo" class="company-logo">
+                }
+                <h1 class="cert-company">@Model.CompanyName</h1>
+                @if (isExpired)
+                {
+                    <div class="cert-status status-expired">
+                        <span class="status-dot"></span> Expired
+                    </div>
+                }
+                else
+                {
+                    <div class="cert-status">
+                        <span class="status-dot"></span> Verified & Active
+                    </div>
+                }
+            </div>
+            <div class="cert-header-right">
+                <div class="score-ring">
+                    <svg viewBox="0 0 96 96">
+                        <circle class="score-ring-bg" cx="48" cy="48" r="42" />
+                        <circle class="score-ring-fill @scoreClass" cx="48" cy="48" r="42"
+                                stroke-dasharray="@circumference.ToString("F2")"
+                                stroke-dashoffset="@offset.ToString("F2")" />
+                    </svg>
+                    <div class="score-inner">
+                        <div class="score-number">@Model.SecurityScore</div>
+                        <div class="score-label @scoreClass">@scoreLabel</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Body: Metadata -->
+        <div class="cert-body">
+            <div class="cert-metadata">
+                <div class="metadata-item">
+                    <span class="metadata-label">Issued</span>
+                    <span class="metadata-value">@Model.LastVerified.ToString("MMM dd, yyyy")</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Valid Until</span>
+                    <span class="metadata-value">@Model.ValidUntil.ToString("MMM dd, yyyy")</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Last Assessment</span>
+                    <span class="metadata-value">@Model.LastAssessment.ToString("MMM dd, yyyy")</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Next Review</span>
+                    <span class="metadata-value">@Model.NextReview.ToString("MMM dd, yyyy")</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Verification ID + Member since -->
+        <div class="cert-divider"></div>
+        <div class="cert-verification">
+            <div class="metadata-item">
+                <span class="metadata-label">Verification ID</span>
+                <span class="metadata-value verification-id">@verificationId</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Member since</span>
+                <span class="metadata-value">@Model.MemberSince</span>
+            </div>
+        </div>
+
+        <!-- Footer: Seal + Text + QR -->
+        <div class="cert-footer">
+            <a href="https://vulwall.com" target="_blank" rel="noopener" class="seal-link">
+                <div class="seal-circle @(isExpired ? "seal-expired" : "")">
+                    <img src="~/img/VW_Logo.png" alt="VulWall" class="seal-logo">
+                </div>
+            </a>
+            <div class="footer-text">
+                This certificate verifies that the above organization has met VulWall's security compliance standards.
+                <a href="https://vulwall.com/cert" target="_blank" rel="noopener" class="footer-link">Learn more</a>
+            </div>
+            <div class="footer-qr">
+                <div class="qr-code">@Html.Raw(Model.QrCodeSvg)</div>
+                <div class="qr-label">Scan to Verify</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

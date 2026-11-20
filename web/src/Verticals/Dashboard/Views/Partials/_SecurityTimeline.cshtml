@@ -1,0 +1,41 @@
+@model VulWall.Dashboard.Dashboard.Models.IndexViewModel
+
+@{
+    var locked = !Model.FeatureAccess.CanViewTrends;
+}
+
+<div class="overview-card chart-card @(locked ? "chart-locked" : "")" data-tour="timeline">
+    <div class="chart-card-head">
+        <div>
+            <h2>Open issues over time</h2>
+            <div class="chart-card-subtitle">Stacked by severity, per scan</div>
+        </div>
+        <div class="chart-period-group">
+            <button type="button" class="chart-period-btn" data-period="30d">30d</button>
+            <button type="button" class="chart-period-btn" data-period="90d" data-active>90d</button>
+            <button type="button" class="chart-period-btn" data-period="6m">6m</button>
+        </div>
+    </div>
+
+    <div class="chart-legend">
+        <div class="chart-legend-item"><span class="chart-legend-swatch" style="background: var(--severity-critical-solid);"></span>Critical</div>
+        <div class="chart-legend-item"><span class="chart-legend-swatch" style="background: var(--severity-high-solid);"></span>High</div>
+        <div class="chart-legend-item"><span class="chart-legend-swatch" style="background: var(--severity-medium-solid);"></span>Medium</div>
+        <div class="chart-legend-item"><span class="chart-legend-swatch" style="background: var(--severity-low-solid);"></span>Low</div>
+    </div>
+
+    <div class="chart-canvas-wrapper">
+        <canvas id="securityTimelineChart" height="240"></canvas>
+    </div>
+
+    @if (locked)
+    {
+        <a href="/settings#plans" class="chart-locked-overlay">
+            <div class="chart-locked-content">
+                <i class="fas fa-crown"></i>
+                <span>Trends are a Pro feature</span>
+                <span class="pro-badge"><i class="fas fa-crown"></i> Pro</span>
+            </div>
+        </a>
+    }
+</div>

@@ -1,0 +1,183 @@
+/* ========================================
+   Finding Suppression Styles
+   Used in Index (inline dismiss) and Detail (suppress form/undo)
+   ======================================== */
+
+/* Suppress action bar on each affected asset item (index list) */
+.suppress-asset-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.btn-suppress {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+/* Suppression panel on the detail sidebar */
+.suppression-panel {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--vw-gray-200);
+    border-radius: 10px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+[data-bs-theme="dark"] .suppression-panel {
+    background: var(--vw-dark-surface, #1a1f2e);
+    border-color: var(--vw-dark-border, #2d3748);
+}
+
+.suppression-panel h5 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--vw-gray-700);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+[data-bs-theme="dark"] .suppression-panel h5 {
+    color: var(--vw-gray-300);
+}
+
+.suppression-panel .form-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--vw-gray-600);
+}
+
+[data-bs-theme="dark"] .suppression-panel .form-label {
+    color: var(--vw-gray-400);
+}
+
+/* Suppressed badge shown on already-suppressed asset rows */
+.suppressed-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.6rem;
+    background: rgba(107, 114, 128, 0.15);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--vw-gray-600);
+    border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+[data-bs-theme="dark"] .suppressed-badge {
+    background: rgba(107, 114, 128, 0.25);
+    color: var(--vw-gray-400);
+    border-color: rgba(107, 114, 128, 0.4);
+}
+
+.suppressed-badge.false-positive {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    border-color: rgba(99, 102, 241, 0.25);
+}
+
+[data-bs-theme="dark"] .suppressed-badge.false-positive {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.suppressed-badge.accepted-risk {
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+    border-color: rgba(245, 158, 11, 0.25);
+}
+
+[data-bs-theme="dark"] .suppressed-badge.accepted-risk {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--severity-medium-dark);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+/* ── Dismissed/Accepted section (Index page) ────────────────────── */
+.dismissed-section {
+    margin-top: 2rem;
+}
+
+.dismissed-section h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--vw-gray-700);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+[data-bs-theme="dark"] .dismissed-section h4 {
+    color: var(--vw-gray-300);
+}
+
+.dismissed-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--vw-gray-200);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    background: var(--bs-body-bg);
+}
+
+[data-bs-theme="dark"] .dismissed-item {
+    background: var(--vw-dark-surface, #1a1f2e);
+    border-color: var(--vw-dark-border, #2d3748);
+}
+
+.dismissed-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.dismissed-item-target {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--vw-gray-800);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+[data-bs-theme="dark"] .dismissed-item-target {
+    color: var(--vw-gray-200);
+}
+
+.dismissed-item-meta {
+    font-size: 0.78rem;
+    color: var(--vw-gray-500);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+[data-bs-theme="dark"] .dismissed-item-meta {
+    color: var(--vw-gray-400);
+}
+
+.dismissed-item-note {
+    font-size: 0.78rem;
+    color: var(--vw-gray-500);
+    font-style: italic;
+    margin-top: 0.1rem;
+}
+
+[data-bs-theme="dark"] .dismissed-item-note {
+    color: var(--vw-gray-400);
+}

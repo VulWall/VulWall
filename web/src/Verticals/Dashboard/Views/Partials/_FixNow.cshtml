@@ -1,0 +1,79 @@
+@model VulWall.Dashboard.Dashboard.Models.IndexViewModel
+
+<div data-tour="fix-now">
+    <div class="fix-now-head">
+        <div>
+            <h2>Fix these first</h2>
+            <div class="fix-now-subtitle">@Model.CriticalVulnerabilities.Count issues ranked by real-world risk</div>
+        </div>
+        <a href="/Recommendations" class="fix-now-viewall">View all findings &rarr;</a>
+    </div>
+
+    @if (Model.CriticalVulnerabilities.Any())
+    {
+        <div class="finding-list">
+            @for (var i = 0; i < Model.CriticalVulnerabilities.Count; i++)
+            {
+                var item = Model.CriticalVulnerabilities[i];
+                var sev = item.Severity.ToLowerInvariant();
+                <div class="finding-list-card finding-list-card--@sev">
+                    <div class="finding-list-rank">@((i + 1).ToString("D2"))</div>
+                    <div class="finding-list-body">
+                        <div class="finding-list-badges">
+                            <span class="sev-badge sev-@sev">@item.Severity</span>
+                            @if (!string.IsNullOrEmpty(item.FindingType))
+                            {
+                                <span class="mono text-muted fsize-xs">@item.FindingType</span>
+                            }
+                            @if (item.IsExploitable == true)
+                            {
+                                <span class="exploitable-badge"><i class="fas fa-bolt"></i> Exploit available</span>
+                            }
+                        </div>
+                        <h4 class="finding-list-title">@item.Title</h4>
+                        <p class="finding-list-desc">@item.Description</p>
+                        <div class="finding-list-meta">
+                            <span><i class="fas fa-server"></i> @item.AffectedAssetsCount asset@(item.AffectedAssetsCount == 1 ? "" : "s") affected</span>
+                            @if (!string.IsNullOrEmpty(item.EstimatedEffort))
+                            {
+                                <span><i class="fas fa-clock"></i> @item.EstimatedEffort effort</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="finding-list-actions">
+                        <a href="@item.DetailsUrl" class="btn btn-vw-primary btn-sm">How to fix</a>
+
+                        @if (Model.FeatureAccess.CanSuppressFindings)
+                        {
+                            @if (item.CanOneClickMute && !string.IsNullOrEmpty(item.DiscoveryId))
+                            {
+                                <form asp-controller="Recommendations" asp-action="SuppressFinding" method="post">
+                                    <input type="hidden" name="DiscoveryId" value="@item.DiscoveryId" />
+                                    <input type="hidden" name="FindingType" value="@item.FindingType" />
+                                    <input type="hidden" name="Status" value="false_positive" />
+                                    <input type="hidden" name="returnFindingId" value="" />
+                                    <button type="submit" class="btn btn-ghost btn-sm">Mute</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <a href="@item.DetailsUrl" class="btn btn-ghost btn-sm">Mute</a>
+                            }
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-ghost btn-sm" data-feature-gate="suppress">Mute</button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="fix-now-empty">
+            <i class="fas fa-shield-halved"></i>
+            <p class="mb-0 small">No critical or high issues to fix right now.</p>
+        </div>
+    }
+</div>

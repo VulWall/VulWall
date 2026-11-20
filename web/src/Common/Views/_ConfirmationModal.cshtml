@@ -1,0 +1,125 @@
+@*
+    Reusable Confirmation Modal Partial
+
+    Usage:
+    <partial name="~/Common/Views/_ConfirmationModal.cshtml" model='new ConfirmationModalModel {
+        ModalId = "myConfirmModal",
+        Title = "Confirm Action",
+        Message = "Are you sure?",
+        ConfirmButtonText = "Confirm",
+        ConfirmButtonStyle = "danger"
+    }' />
+*@
+
+@model VulWall.Dashboard.Common.Contracts.Models.ConfirmationModalModel
+
+<div class="modal fade" id="@Model.ModalId" tabindex="-1" aria-labelledby="@(Model.ModalId)Label" aria-hidden="true">
+    <div class="modal-dialog @(Model.Size == "large" ? "modal-lg" : Model.Size == "small" ? "modal-sm" : "") @(Model.Centered ? "modal-dialog-centered" : "")">
+        <div class="modal-content">
+            @* Modal Header *@
+            <div class="modal-header @GetHeaderClass()">
+                @if (!string.IsNullOrEmpty(Model.Icon))
+                {
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="@Model.Icon" style="color: @GetIconColor(); font-size: 28px;"></i>
+                        <h5 class="modal-title mb-0" id="@(Model.ModalId)Label" style="color: @GetTitleColor();">@Model.Title</h5>
+                    </div>
+                }
+                else
+                {
+                    <h5 class="modal-title" id="@(Model.ModalId)Label">@Model.Title</h5>
+                }
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            @* Modal Body *@
+            <div class="modal-body">
+                <p class="@(Model.MessageBold ? "fw-semibold" : "") mb-3">@Model.Message</p>
+
+                @if (Model.Details != null && Model.Details.Any())
+                {
+                    <div class="alert alert-@(Model.DetailsStyle ?? "info") mb-3">
+                        <div>
+                            @if (!string.IsNullOrEmpty(Model.DetailsTitle))
+                            {
+                                <p class="fw-semibold mb-2">
+                                    @if (!string.IsNullOrEmpty(Model.DetailsIcon))
+                                    {
+                                        <i class="@Model.DetailsIcon me-2"></i>
+                                    }
+                                    @Model.DetailsTitle
+                                </p>
+                            }
+                            <ul class="mb-0">
+                                @foreach (var detail in Model.Details)
+                                {
+                                    <li>@detail</li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(Model.DynamicContentId))
+                {
+                    <div id="@Model.DynamicContentId"></div>
+                }
+
+                @if (!string.IsNullOrEmpty(Model.FooterMessage))
+                {
+                    <p class="text-muted small mb-0">@Model.FooterMessage</p>
+                }
+            </div>
+
+            @* Modal Footer *@
+            <div class="modal-footer @(Model.BorderlessFooter ? "border-0" : "")">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@(Model.CancelButtonText ?? "Cancel")</button>
+                <button type="button" class="btn btn-@(Model.ConfirmButtonStyle ?? "primary")" id="@(Model.ModalId)Confirm">
+                    @if (!string.IsNullOrEmpty(Model.ConfirmButtonIcon))
+                    {
+                        <i class="@Model.ConfirmButtonIcon me-1"></i>
+                    }
+                    @Model.ConfirmButtonText
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    private string GetHeaderClass()
+    {
+        return Model.HeaderStyle switch
+        {
+            "danger" => "bg-danger bg-opacity-10 border-danger",
+            "warning" => "bg-warning bg-opacity-10 border-warning",
+            "success" => "bg-success bg-opacity-10 border-success",
+            "info" => "bg-info bg-opacity-10 border-info",
+            _ => Model.BorderlessHeader ? "border-0" : ""
+        };
+    }
+
+    private string GetIconColor()
+    {
+        return Model.HeaderStyle switch
+        {
+            "danger" => "var(--vw-danger)",
+            "warning" => "var(--vw-warning)",
+            "success" => "var(--vw-success)",
+            "info" => "var(--vw-info)",
+            _ => "var(--vw-gray-500)"
+        };
+    }
+
+    private string GetTitleColor()
+    {
+        return Model.HeaderStyle switch
+        {
+            "danger" => "#991b1b",
+            "warning" => "#92400e",
+            "success" => "var(--vw-success-dark)",
+            "info" => "var(--vw-info-dark)",
+            _ => "inherit"
+        };
+    }
+}

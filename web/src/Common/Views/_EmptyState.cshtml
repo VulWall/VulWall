@@ -1,0 +1,9 @@
+@model (string IconClass, string Message, string? SubMessage)
+<div class="empty-state">
+    <i class="fas @Model.IconClass"></i>
+    <p>@Model.Message</p>
+    @if (Model.SubMessage != null)
+    {
+        <p class="empty-state-sub">@Model.SubMessage</p>
+    }
+</div>

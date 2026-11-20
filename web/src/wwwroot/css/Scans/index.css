@@ -1,0 +1,394 @@
+.heatmap-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 150px;
+}
+
+.heatmap-wrapper {
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: 0.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--bs-border-color) transparent;
+}
+
+.heatmap-wrapper::-webkit-scrollbar {
+    height: 8px;
+}
+
+.heatmap-wrapper::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 4px;
+}
+
+.heatmap-wrapper::-webkit-scrollbar-thumb {
+    background: var(--bs-border-color);
+    border-radius: 4px;
+}
+
+.heatmap-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--vw-gray-400, #9ca3af);
+}
+
+.heatmap-months-labels {
+    position: relative;
+    height: 20px;
+    margin-left: 38px;
+    margin-bottom: 4px;
+    min-width: fit-content;
+}
+
+.month-label {
+    position: absolute;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--vw-gray-600, #6b7280);
+}
+
+.heatmap-main {
+    display: flex;
+    gap: 8px;
+    min-width: fit-content;
+}
+
+.heatmap-days {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 2px;
+}
+
+.day-label {
+    height: 14px;
+    font-size: 0.7rem;
+    color: var(--vw-gray-600, #6b7280);
+    display: flex;
+    align-items: center;
+    width: 30px;
+    line-height: 14px;
+}
+
+.heatmap-weeks {
+    display: flex;
+    gap: 4px;
+}
+
+.heatmap-week {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.heatmap-cell {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.heatmap-cell:hover:not(.out-of-range) {
+    outline: 2px solid var(--brand-blue);
+    outline-offset: -1px;
+}
+
+.heatmap-cell.out-of-range {
+    background-color: transparent;
+    cursor: default;
+}
+
+.heatmap-cell.no-scan {
+    background-color: var(--vw-gray-200, #e5e7eb);
+}
+
+.heatmap-cell.severity-none {
+    background-color: var(--vw-success, #067647);
+}
+
+/* Use -solid tokens: more vivid fills, better distinction between
+   low (#CA8A04 golden) and medium (#DC6803 amber) at 14×14px */
+.heatmap-cell.severity-low {
+    background-color: var(--severity-low-solid, #CA8A04);
+}
+
+.heatmap-cell.severity-medium {
+    background-color: var(--severity-medium-solid, #DC6803);
+}
+
+.heatmap-cell.severity-high {
+    background-color: var(--severity-high-solid, #D92D20);
+}
+
+.heatmap-cell.severity-critical {
+    background-color: var(--severity-critical-solid, #B42318);
+}
+
+.heatmap-cell.scheduled {
+    background: repeating-linear-gradient(
+        45deg,
+        var(--brand-blue),
+        var(--brand-blue) 2px,
+        transparent 2px,
+        transparent 4px
+    );
+    opacity: 0.6;
+}
+
+[data-bs-theme="dark"] .heatmap-wrapper {
+    scrollbar-color: var(--vw-dark-hover) transparent;
+}
+
+[data-bs-theme="dark"] .heatmap-wrapper::-webkit-scrollbar-thumb {
+    background: var(--vw-dark-hover);
+}
+
+[data-bs-theme="dark"] .heatmap-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--vw-gray-600);
+}
+
+[data-bs-theme="dark"] .month-label,
+[data-bs-theme="dark"] .day-label {
+    color: var(--vw-gray-400, #9ca3af);
+}
+
+[data-bs-theme="dark"] .heatmap-cell.no-scan {
+    background-color: var(--vw-dark-hover);
+}
+
+/* Dark mode: bright/luminous fills so cells are visible on dark bg.
+   Base severity tokens remap to light pastels (patch), which makes
+   critical and high identical. Heatmap needs distinct vivid colors. */
+[data-bs-theme="dark"] .heatmap-cell.severity-none     { background-color: #4ade80; }  /* green-400 */
+[data-bs-theme="dark"] .heatmap-cell.severity-low      { background-color: #fde047; }  /* yellow-300 */
+[data-bs-theme="dark"] .heatmap-cell.severity-medium   { background-color: #fb923c; }  /* orange-400 */
+[data-bs-theme="dark"] .heatmap-cell.severity-high     { background-color: #f87171; }  /* red-400 */
+[data-bs-theme="dark"] .heatmap-cell.severity-critical { background-color: #ef4444; }  /* red-500, darker than high */
+
+[data-bs-theme="dark"] .heatmap-cell.scheduled {
+    background: repeating-linear-gradient(
+        45deg,
+        var(--brand-blue),
+        var(--brand-blue) 2px,
+        transparent 2px,
+        transparent 4px
+    );
+    opacity: 0.5;
+}
+
+[data-bs-theme="dark"] .heatmap-cell:hover:not(.out-of-range) {
+    outline-color: var(--brand-blue);
+}
+
+.heatmap-tooltip {
+    position: fixed;
+    display: none;
+    background-color: var(--bs-body-bg, white);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 6px;
+    padding: 0.75rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1050;
+    min-width: 180px;
+    pointer-events: none;
+    font-size: 0.875rem;
+}
+
+.tooltip-date {
+    font-weight: 600;
+    color: var(--bs-body-color);
+    margin-bottom: 0.375rem;
+    font-size: 0.875rem;
+}
+
+.tooltip-scans {
+    color: var(--vw-gray-600, #6b7280);
+    font-size: 0.8125rem;
+    margin-bottom: 0.5rem;
+}
+
+.tooltip-severities {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--bs-border-color);
+}
+
+.severity-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--bs-body-color);
+}
+
+.severity-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.severity-dot.severity-critical {
+    background-color: var(--severity-critical, #911D14);
+}
+
+.severity-dot.severity-high {
+    background-color: var(--severity-high, #D92D20);
+}
+
+.severity-dot.severity-medium {
+    background-color: var(--severity-medium, #B54708);
+}
+
+.severity-dot.severity-low {
+    background-color: var(--severity-low, #A16207);
+}
+
+.tooltip-no-issues {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--bs-border-color);
+    color: var(--vw-success, #067647);
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.tooltip-scheduled {
+    margin-top: 0.375rem;
+    color: var(--brand-blue);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.tooltip-scan-type {
+    margin-top: 0.25rem;
+    color: var(--vw-gray-500, #6b7280);
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+[data-bs-theme="dark"] .tooltip-scan-type {
+    color: var(--vw-gray-400, #9ca3af);
+}
+
+[data-bs-theme="dark"] .heatmap-tooltip {
+    background-color: var(--vw-dark-surface-alt);
+    border-color: var(--vw-dark-hover);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+[data-bs-theme="dark"] .tooltip-scans {
+    color: var(--vw-gray-400, #9ca3af);
+}
+
+[data-bs-theme="dark"] .tooltip-severities,
+[data-bs-theme="dark"] .tooltip-no-issues {
+    border-top-color: var(--vw-dark-hover);
+}
+
+
+/* ==========================================================================
+   Scans Compare redesign
+   ========================================================================== */
+
+/* Page header — base layout from shared .page-header (sections.css); deltas only */
+.scans-header { align-items: flex-end; gap: 20px; }
+.scans-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--vw-gray-400); margin-bottom: 4px; }
+.scans-title { font-size: 29px; font-weight: 700; color: var(--brand-dark-blue); letter-spacing: -.02em; margin: 0; }
+.scans-subtitle { font-size: 14px; color: var(--vw-gray-500); margin-top: 4px; margin-bottom: 0; }
+.scans-header-actions { display: flex; gap: 10px; }
+
+/* Heatmap selection pill */
+.heatmap-selection-pill { font-size: 12px; font-weight: 600; color: var(--brand-blue); background: var(--vw-info-bg); border: 1px solid var(--vw-info-border); border-radius: 999px; padding: 5px 12px; }
+.heatmap-subtitle { font-size: 12px; color: var(--vw-gray-400); }
+
+/* Heatmap cell selection state */
+.heatmap-cell.selected { outline: 2px solid var(--brand-blue); outline-offset: 1px; }
+
+/* Selector row */
+.compare-selector-row { display: flex; align-items: stretch; gap: 14px; margin-bottom: 18px; }
+.compare-scan-card { flex: 1; background: var(--bs-body-bg, #fff); border: 1px solid var(--vw-gray-200); border-radius: 14px; box-shadow: var(--card-shadow); padding: 16px 20px; }
+.compare-scan-card--latest { border: 2px solid var(--brand-blue); box-shadow: 0 8px 24px rgba(0,86,161,.10); }
+.compare-scan-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--vw-gray-400); margin-bottom: 8px; }
+.compare-scan-label--latest { color: var(--brand-blue); }
+.compare-scan-info { display: flex; align-items: center; justify-content: space-between; }
+.compare-scan-date { font-size: 17px; font-weight: 600; color: var(--brand-dark-blue); }
+.compare-scan-time { font-family: var(--font-mono); font-size: 12px; color: var(--vw-gray-400); margin-top: 2px; }
+.compare-count-value { font-size: 24px; font-weight: 700; color: var(--brand-dark-blue); display: block; text-align: right; }
+.compare-count-label { font-size: 12px; color: var(--vw-gray-400); }
+.compare-arrow-node { flex-shrink: 0; width: 38px; height: 38px; background: var(--bs-body-bg, #fff); border: 1px solid var(--vw-gray-300); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--vw-gray-500); align-self: center; }
+
+/* Net-change banner */
+.compare-net-banner { background: var(--brand-gradient); border-radius: 14px; padding: 20px 24px; display: flex; align-items: center; gap: 28px; }
+.compare-net-label { font-size: 12px; font-weight: 500; color: rgba(251,251,253,.7); letter-spacing: .04em; }
+.compare-net-value-row { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
+.compare-net-value { font-size: 34px; font-weight: 700; color: var(--brand-on); font-family: var(--font-mono); }
+.compare-pct--improved { font-size: 14px; font-weight: 600; color: #7CEFB4; }
+.compare-pct--worsened { font-size: 14px; font-weight: 600; color: #FDA29B; }
+.compare-bands { flex: 1; display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+.compare-band-tile { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 11px 14px; }
+.compare-band-name { font-size: 12px; font-weight: 600; color: rgba(251,251,253,.78); margin-bottom: 6px; }
+.compare-band-row { display: flex; align-items: center; gap: 8px; }
+.compare-band-range { font-family: var(--font-mono); font-size: 13px; color: rgba(251,251,253,.6); }
+.compare-band-delta--improved { font-size: 13px; font-weight: 700; color: #7CEFB4; }
+.compare-band-delta--worsened { font-size: 13px; font-weight: 700; color: #FDA29B; }
+
+/* Diff grid */
+.compare-diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.compare-diff-card { background: var(--bs-body-bg, #fff); border: 1px solid var(--vw-gray-200); border-radius: 14px; box-shadow: var(--card-shadow); overflow: hidden; }
+.compare-diff-header { padding: 15px 20px; border-bottom: 1px solid var(--vw-gray-100); display: flex; align-items: center; gap: 9px; }
+.compare-diff-icon { width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+.compare-diff-icon--resolved { background: var(--vw-success-light); color: var(--vw-success); }
+.compare-diff-icon--new { background: var(--severity-high-bg); color: var(--severity-high); }
+.compare-diff-title { font-size: 14px; font-weight: 600; color: var(--brand-dark-blue); }
+.compare-diff-meta { font-size: 12px; color: var(--vw-gray-400); }
+.compare-diff-row { padding: 13px 20px; border-bottom: 1px solid var(--vw-gray-50); display: flex; gap: 12px; align-items: flex-start; }
+.compare-sev-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+.compare-sev-dot--critical { background: var(--severity-critical, #911D14); }
+.compare-sev-dot--high     { background: var(--severity-high,     #D92D20); }
+.compare-sev-dot--medium   { background: var(--severity-medium,   #B54708); }
+.compare-sev-dot--low      { background: var(--severity-low,      #A16207); }
+.compare-sev-dot--info     { background: var(--severity-info,     #475569); }
+.compare-diff-finding-title { font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--brand-dark-blue); }
+.compare-diff-finding-title--resolved { text-decoration: line-through; text-decoration-color: var(--vw-gray-300); color: var(--vw-gray-700); }
+.compare-diff-finding-meta { font-family: var(--font-mono); font-size: 11px; color: var(--vw-gray-400); margin-top: 3px; }
+.compare-diff-footer { padding: 14px 20px; font-size: 13px; color: var(--vw-gray-500); border-top: 1px solid var(--vw-gray-50); }
+.compare-diff-more { padding: 12px 20px; font-size: 13px; color: var(--brand-blue); text-align: center; border-top: 1px solid var(--vw-gray-50); }
+.compare-diff-empty { padding: 24px 20px; text-align: center; color: var(--vw-gray-400); font-size: 13px; }
+.compare-empty-state { color: var(--vw-gray-400); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .compare-diff-grid { grid-template-columns: 1fr; }
+  .compare-bands { grid-template-columns: repeat(2,1fr); }
+  .compare-selector-row { flex-direction: column; }
+  .compare-arrow-node { align-self: center; transform: rotate(90deg); }
+  .scans-header { flex-direction: column; align-items: flex-start; }
+}
+
+/* Dark theme */
+[data-bs-theme="dark"] .scans-title { color: var(--vw-gray-700); }
+[data-bs-theme="dark"] .scans-subtitle { color: var(--vw-gray-500); }
+[data-bs-theme="dark"] .compare-scan-card { background: var(--vw-dark-surface); border-color: var(--vw-dark-border); }
+[data-bs-theme="dark"] .compare-scan-card--latest { border-color: var(--brand-blue); }
+[data-bs-theme="dark"] .compare-scan-date { color: var(--vw-gray-700); }
+[data-bs-theme="dark"] .compare-count-value { color: var(--vw-gray-700); }
+[data-bs-theme="dark"] .compare-arrow-node { background: var(--vw-dark-surface); border-color: var(--vw-dark-hover); }
+[data-bs-theme="dark"] .compare-diff-card { background: var(--vw-dark-surface); border-color: var(--vw-dark-border); }
+[data-bs-theme="dark"] .compare-diff-header { border-bottom-color: var(--vw-dark-border); }
+[data-bs-theme="dark"] .compare-diff-title { color: var(--vw-gray-700); }
+[data-bs-theme="dark"] .compare-diff-row { border-bottom-color: var(--vw-dark-surface-alt); }
+[data-bs-theme="dark"] .compare-diff-finding-title { color: var(--vw-gray-700); }
+[data-bs-theme="dark"] .compare-diff-finding-title--resolved { color: var(--vw-gray-500); }
+[data-bs-theme="dark"] .compare-diff-footer { border-top-color: var(--vw-dark-surface-alt); }
+[data-bs-theme="dark"] .compare-diff-more { border-top-color: var(--vw-dark-surface-alt); }
+[data-bs-theme="dark"] .heatmap-selection-pill { background: var(--vw-info-bg); border-color: var(--vw-info-border); }

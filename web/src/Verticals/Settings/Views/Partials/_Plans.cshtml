@@ -1,0 +1,273 @@
+@model VulWall.Dashboard.Settings.Models.PlansDataViewModel
+
+<script id="plans-data" type="application/json">
+    @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new
+    {
+        plans = Model.AvailablePlans.Select(p => new
+        {
+            name = p.Name,
+            displayName = p.DisplayName,
+            price = p.Price,
+            annualPrice = p.AnnualPrice,
+            currency = p.Currency,
+            billingPeriod = p.BillingPeriod
+        }),
+        currentPlanName = Model.CurrentPlan?.Name,
+        currentBillingInterval = Model.BillingInterval
+    }))
+</script>
+
+<div class="plans-container">
+    <div class="d-flex align-items-end justify-content-between gap-3 mb-4 flex-wrap">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <i class="fa-solid fa-layer-group" style="color: var(--vw-primary);"></i>
+                <h5 class="mb-0 fw-semibold" style="color: var(--text-heading);">Choose your plan</h5>
+            </div>
+            <p class="text-muted mb-0" style="font-size: 14px;">Changes take effect at the end of your current billing period.</p>
+        </div>
+        <div class="vw-interval-toggle" role="group" id="billing-interval-toggle">
+            <button type="button" class="btn btn-primary active" data-interval="month">Monthly</button>
+            <button type="button" class="btn btn-outline-primary" data-interval="year">
+                Annual <span class="badge bg-success ms-1" style="font-size: 11px;">2 months free</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        @foreach (var plan in Model.AvailablePlans)
+        {
+            var isCurrentPlan = plan.Name.Equals(Model.CurrentPlan?.Name, StringComparison.OrdinalIgnoreCase);
+            var isPendingPlan = Model.SubscriptionStatus.IsIncomplete() && plan.Name.Equals(Model.PendingSubscriptionPlanInfo?.Name, StringComparison.OrdinalIgnoreCase);
+            var isFree = plan.Name == "Free";
+            var isOnFreePlan = Model.CurrentPlan?.Name == "Free";
+            var isHighlighted = !isFree && plan.Name == "Pro";
+
+            <div class="col-lg-4">
+                <div class="card h-100 vw-plan-card @(isCurrentPlan && !Model.CancelAtPeriodEnd && !Model.SubscriptionStatus.IsIncomplete() ? "border-success" : "") @(isCurrentPlan && Model.CancelAtPeriodEnd ? "border-warning" : "") @(isPendingPlan ? "border-warning" : "") @(isHighlighted && !isCurrentPlan ? "border-primary shadow" : "")">
+                    @if (isPendingPlan)
+                    {
+                        <div class="card-header">
+                            <i class="fa-solid fa-clock me-1" style="color: var(--vw-warning);"></i>
+                            <span>Payment Pending</span>
+                        </div>
+                    }
+                    else if (isCurrentPlan)
+                    {
+                        @if (Model.CancelAtPeriodEnd)
+                        {
+                            <div class="card-header bg-warning text-dark">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <i class="fa-solid fa-exclamation-triangle me-1"></i>
+                                        <span>Current Plan — Ending @Model.SubscriptionPeriodEnd?.ToString("MMM dd")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else if (!Model.SubscriptionStatus.IsIncomplete())
+                        {
+                            <div class="card-header bg-primary text-white">
+                                <i class="fa-solid fa-check-circle me-1"></i>Current Plan
+                            </div>
+                        }
+                    }
+
+                    @if (isHighlighted && !isCurrentPlan)
+                    {
+                        <div class="text-center" style="margin-top: -11px; position: relative; z-index: 1;">
+                            <span class="badge" style="background: var(--vw-primary); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border-radius: var(--radius-pill); padding: 4px 14px;">Recommended</span>
+                        </div>
+                    }
+
+                    <div class="card-body d-flex flex-column">
+                        <div class="mb-3">
+                            <h4 class="card-title mb-2">@plan.DisplayName</h4>
+                            <p class="text-muted mb-3">@plan.Description</p>
+                            <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                                @if (plan.Price > 0)
+                                {
+                                    <span class="plan-price" data-monthly-price="@plan.Price" data-annual-price="@plan.AnnualPrice">
+                                        <del class="plan-price-original text-muted" style="display:none; font-size: 1rem; font-weight: 500;">€@(plan.Price * 12)</del>
+                                        <h2 class="mb-0 d-inline plan-price-amount">€@plan.Price</h2>
+                                        <span class="text-muted ms-2 plan-price-period">/@plan.BillingPeriod</span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <h2 class="mb-0">Free</h2>
+                                }
+                            </div>
+                            @if (plan.Price > 0)
+                            {
+                                <div class="plan-price-annual-note text-muted mt-1" style="display:none; font-size: 12px;">
+                                    Billed annually as <strong>€@plan.AnnualPrice</strong>
+                                </div>
+                            }
+                        </div>
+
+                        <ul class="list-unstyled mb-4 flex-grow-1">
+                            @foreach (var feature in plan.Features)
+                            {
+                                <li class="mb-2">
+                                    <i class="fa-solid fa-check text-success me-2"></i>@feature
+                                </li>
+                            }
+                        </ul>
+
+                        @if (isPendingPlan)
+                        {
+                            <form id="complete-payment-form-plan" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="button" id="complete-payment-btn-plan" class="btn btn-secondary btn-lg w-100">
+                                    <i class="fa-solid fa-credit-card me-2"></i>Complete Payment
+                                </button>
+                            </form>
+                        }
+                        else if (isCurrentPlan)
+                        {
+                            @if (Model.CancelAtPeriodEnd)
+                            {
+                                <button type="button" class="btn btn-warning btn-lg w-100" disabled>
+                                    <i class="fa-solid fa-exclamation-triangle me-2"></i>Ending @Model.SubscriptionPeriodEnd?.ToString("MMM dd")
+                                </button>
+                                <small class="text-muted d-block mt-2 text-center">
+                                    <i class="fa-solid fa-info-circle me-1"></i>Will switch to Free plan after this date
+                                </small>
+                                <form id="reactivate-subscription-form-plans" method="post" action="/Payments/ReactivateSubscription" class="mt-3">
+                                    @Html.AntiForgeryToken()
+                                    <button type="button" id="reactivate-subscription-btn-plans" class="btn btn-primary btn-lg w-100">
+                                        <i class="fa-solid fa-rotate-right me-2"></i>Reactivate Subscription
+                                    </button>
+                                </form>
+                            }
+                            else if (Model.SubscriptionStatus.IsIncomplete())
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-lg w-100" disabled>
+                                    Current Plan
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-lg w-100" disabled>
+                                    <i class="fa-solid fa-check-circle me-2"></i>Current Plan
+                                </button>
+                                @if (Model.CurrentPlan?.Price > 0)
+                                {
+                                    <form id="cancel-subscription-form-plans" method="post" action="/Payments/CancelSubscription" class="mt-2 text-center">
+                                        @Html.AntiForgeryToken()
+                                        <button type="button" id="cancel-subscription-btn-plans" class="btn btn-link btn-sm text-muted text-decoration-none p-0">
+                                            Cancel subscription
+                                        </button>
+                                    </form>
+                                }
+                            }
+                        }
+                        else if (isFree)
+                        {
+                            @if (Model.SubscriptionStatus.IsIncomplete())
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-lg w-100" disabled>
+                                    <i class="fa-solid fa-check-circle me-2"></i>Current Plan
+                                </button>
+                            }
+                            else if (Model.SubscriptionStatus.IsActive())
+                            {
+                                <form class="change-plan-form" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="planName" value="@plan.Name"/>
+                                    <button type="button" class="btn btn-outline-danger btn-lg w-100 change-plan-btn" data-plan="@plan.Name">
+                                        <i class="fa-solid fa-arrow-down me-2"></i>Downgrade to Free
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-lg w-100" disabled>
+                                    Current Plan
+                                </button>
+                            }
+                        }
+                        else
+                        {
+                            @if (Model.SubscriptionStatus.IsIncomplete())
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-lg w-100" disabled
+                                        title="Complete your pending @Model.PendingSubscriptionPlanInfo?.DisplayName subscription first">
+                                    <i class="fa-solid fa-lock me-2"></i>Unavailable
+                                </button>
+                                <small class="text-muted d-block mt-2 text-center">Complete pending payment first</small>
+                            }
+                            else if (isOnFreePlan)
+                            {
+                                <form class="subscribe-form" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="planName" value="@plan.Name"/>
+                                    <button type="button" class="btn btn-primary btn-lg w-100 subscribe-btn" data-plan="@plan.Name">
+                                        <i class="fa-solid fa-credit-card me-2"></i>Subscribe Now
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form class="change-plan-form" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="planName" value="@plan.Name"/>
+                                    <button type="button" class="btn btn-primary btn-lg w-100 change-plan-btn" data-plan="@plan.Name">
+                                        <i class="fa-solid fa-arrow-up me-2"></i>Switch to @plan.DisplayName
+                                    </button>
+                                </form>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <div class="mb-3">
+                        <h4 class="card-title mb-2">Enterprise Plan</h4>
+                        <p class="text-muted mb-3">Custom security engagements and manual testing</p>
+                        <div class="d-flex align-items-baseline">
+                            <h2 class="mb-0">Custom</h2>
+                        </div>
+                    </div>
+                    <ul class="list-unstyled mb-4 flex-grow-1">
+                        <li class="mb-2"><i class="fa-solid fa-check text-success me-2"></i>Manual penetration testing by security experts</li>
+                        <li class="mb-2"><i class="fa-solid fa-check text-success me-2"></i>Scheduled engagements: quarterly, bi-annual, or annual</li>
+                        <li class="mb-2"><i class="fa-solid fa-check text-success me-2"></i>Custom scope per engagement</li>
+                        <li class="mb-2"><i class="fa-solid fa-check text-success me-2"></i>Human-reviewed findings and remediation advice</li>
+                        <li class="mb-2"><i class="fa-solid fa-check text-success me-2"></i>Compliance-ready reporting</li>
+                    </ul>
+                    <a href="mailto:contact@example.com" class="btn btn-outline-primary btn-lg w-100">
+                        <i class="fa-solid fa-envelope me-2"></i>Contact Us
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="payment-section" class="mt-5" style="display: none;">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fa-solid fa-credit-card me-2"></i>Payment Details</h5>
+        </div>
+        <div class="card-body">
+            <p id="payment-description" class="mb-4"></p>
+            <form id="payment-form">
+                <div id="payment-element"></div>
+                <div id="payment-message" class="alert mt-3" style="display: none;"></div>
+                <div class="d-flex gap-3 mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg flex-grow-1" id="submit-payment">
+                        <span id="button-text">Pay Now</span>
+                        <span id="spinner" class="spinner-border spinner-border-sm ms-2" style="display: none;"></span>
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-lg" id="cancel-payment">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

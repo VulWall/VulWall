@@ -1,0 +1,456 @@
+/* ==========================================================================
+   Add Asset page
+   ========================================================================== */
+
+.add-asset-page {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 40px 24px 64px;
+}
+
+.add-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted, var(--vw-gray-500, #6b7280));
+    text-decoration: none;
+    margin-bottom: 20px;
+    transition: color 0.2s ease;
+}
+
+.add-back-link:hover {
+    color: var(--brand-blue);
+}
+
+.add-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted, var(--vw-gray-500, #6b7280));
+    margin-bottom: 8px;
+}
+
+.add-hero-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-heading, var(--brand-dark-blue));
+    margin: 0 0 10px;
+}
+
+.add-lead {
+    max-width: 56ch;
+    color: var(--text-muted, var(--vw-gray-500, #6b7280));
+    margin-bottom: 28px;
+}
+
+.add-asset-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+
+@media (max-width: 768px) {
+    .add-asset-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ----- Quick-add (verified domain) ---------------------------------------- */
+/* Confident "you're already verified" affordance. Brand cobalt accent (the
+   interactive color) — deliberately NOT a severity or success ramp. */
+
+.add-quickadd {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    background: rgba(0, 86, 161, 0.05);
+    border: 1px solid rgba(0, 86, 161, 0.25);
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 640px) {
+    .add-quickadd {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+.add-quickadd__mark {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(0, 86, 161, 0.1);
+    color: var(--brand-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.add-quickadd__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.add-quickadd__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--brand-blue);
+    margin-bottom: 6px;
+}
+
+.add-quickadd__lead {
+    font-size: 14px;
+    color: var(--bs-body-color);
+    margin: 0;
+}
+
+.add-quickadd__domain {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-weight: 600;
+    color: var(--text-heading, var(--brand-dark-blue));
+}
+
+.add-quickadd__action {
+    flex-shrink: 0;
+    margin: 0;
+}
+
+/* ----- Form card ---------------------------------------------------------- */
+
+.add-form-card {
+    background: var(--bs-card-bg, #fff);
+    border: 1px solid var(--bs-border-color, var(--vw-gray-200));
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    padding: 28px;
+}
+
+.add-section-prompt {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--bs-body-color);
+    margin-bottom: 12px;
+}
+
+/* ----- Tile picker -------------------------------------------------------- */
+
+.asset-type-picker {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.asset-type-tile-wrap {
+    position: relative;
+}
+
+.asset-type-radio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.asset-type-tile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1.5px solid var(--bs-border-color, var(--vw-gray-200));
+    border-radius: 10px;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.asset-type-tile:hover {
+    border-color: var(--brand-blue);
+}
+
+.tile-check {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--brand-blue);
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: #fff;
+}
+
+.tile-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--vw-gray-100, #f3f4f6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--vw-gray-400, #9ca3af);
+    transition: background 0.2s, color 0.2s;
+    flex-shrink: 0;
+}
+
+.tile-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--bs-body-color);
+}
+
+.tile-sub {
+    font-size: 12px;
+    color: var(--text-muted, var(--vw-gray-500, #6b7280));
+}
+
+/* selected state — sibling CSS trick */
+.asset-type-radio:checked + .asset-type-tile {
+    border-color: var(--brand-blue);
+    background: rgba(0, 86, 161, 0.05);
+}
+
+.asset-type-radio:checked + .asset-type-tile .tile-check {
+    display: flex;
+}
+
+.asset-type-radio:checked + .asset-type-tile .tile-icon {
+    background: rgba(0, 86, 161, 0.1);
+    color: var(--brand-blue);
+}
+
+.asset-type-radio:focus-visible + .asset-type-tile {
+    outline: 2px solid var(--brand-blue);
+    outline-offset: 2px;
+}
+
+/* ----- Input + validity icons --------------------------------------------- */
+
+.asset-input-group {
+    margin-bottom: 4px;
+}
+
+.add-input-wrap {
+    position: relative;
+}
+
+.add-mono-input {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 14px;
+    padding-right: 36px;
+}
+
+.input-validity-icon {
+    display: none;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 15px;
+    pointer-events: none;
+}
+
+.input-validity-icon.visible {
+    display: block;
+}
+
+.add-helper-text {
+    font-size: 12px;
+    color: var(--text-muted, var(--vw-gray-500, #6b7280));
+    margin-top: 4px;
+}
+
+.add-helper-valid {
+    color: var(--vw-success, #067647);
+}
+
+.add-helper-invalid {
+    color: var(--vw-danger, #d92d20);
+}
+
+/* ----- Right rail --------------------------------------------------------- */
+
+.add-context-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.add-rail-card {
+    background: var(--bs-card-bg, #fff);
+    border: 1px solid var(--bs-border-color, var(--vw-gray-200));
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    padding: 20px;
+}
+
+.add-rail-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted, var(--vw-gray-500));
+    margin-bottom: 10px;
+}
+
+.add-plan-count {
+    font-family: var(--font-mono, monospace);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--bs-body-color);
+    margin-bottom: 8px;
+}
+
+.add-plan-sep {
+    color: var(--vw-gray-400, #9ca3af);
+}
+
+.add-plan-bar-track {
+    height: 6px;
+    border-radius: 100px;
+    background: var(--vw-gray-100, #f3f4f6);
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.add-plan-bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    background: var(--brand-blue);
+    transition: width 0.3s ease;
+}
+
+.add-plan-bar-fill.add-plan-bar-full {
+    background: var(--brand-orange);
+}
+
+.add-plan-note {
+    font-size: 12px;
+    color: var(--text-muted, var(--vw-gray-500));
+}
+
+.add-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.add-step {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.add-step-num {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0, 86, 161, 0.1);
+    color: var(--brand-blue);
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.add-step-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bs-body-color);
+}
+
+.add-step-desc {
+    font-size: 12px;
+    color: var(--text-muted, var(--vw-gray-500));
+}
+
+.add-tip-strip {
+    background: var(--vw-gray-50, #f9fafb);
+    border: 1px solid var(--bs-border-color, var(--vw-gray-200));
+    border-radius: 20px;
+    padding: 10px 16px;
+    font-size: 12px;
+    color: var(--text-muted, var(--vw-gray-500));
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ----- Dark mode ---------------------------------------------------------- */
+
+[data-bs-theme="dark"] .add-hero-title {
+    color: var(--bs-emphasis-color, #f7fafc);
+}
+
+[data-bs-theme="dark"] .add-form-card,
+[data-bs-theme="dark"] .add-rail-card {
+    background: #1a1f2e;
+    border-color: #2d3748;
+}
+
+[data-bs-theme="dark"] .add-quickadd {
+    background: rgba(0, 86, 161, 0.15);
+    border-color: rgba(0, 86, 161, 0.4);
+}
+
+[data-bs-theme="dark"] .add-quickadd__mark {
+    background: rgba(0, 86, 161, 0.25);
+}
+
+[data-bs-theme="dark"] .add-quickadd__domain {
+    color: var(--bs-emphasis-color, #f7fafc);
+}
+
+[data-bs-theme="dark"] .asset-type-tile {
+    border-color: #2d3748;
+}
+
+[data-bs-theme="dark"] .asset-type-radio:checked + .asset-type-tile {
+    background: rgba(0, 86, 161, 0.15);
+}
+
+[data-bs-theme="dark"] .tile-icon {
+    background: #1f2937;
+    color: #6b7280;
+}
+
+[data-bs-theme="dark"] .asset-type-radio:checked + .asset-type-tile .tile-icon {
+    background: rgba(0, 86, 161, 0.2);
+    color: var(--brand-blue);
+}
+
+[data-bs-theme="dark"] .add-plan-bar-track {
+    background: #2d3748;
+}
+
+[data-bs-theme="dark"] .add-step-num {
+    background: rgba(0, 86, 161, 0.2);
+}
+
+[data-bs-theme="dark"] .add-tip-strip {
+    background: #1f2937;
+    border-color: #2d3748;
+}

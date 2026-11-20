@@ -1,0 +1,106 @@
+@using VulWall.Dashboard.Common.Contracts.Enums
+@model VulWall.Dashboard.Discoveries.Models.DiscoveryItemViewModel
+
+@{
+    var hasHosting = !string.IsNullOrEmpty(Model.CountryCode)
+                     || !string.IsNullOrEmpty(Model.CloudProvider)
+                     || !string.IsNullOrEmpty(Model.Isp);
+}
+
+<div class="disc-drawer" id="drawer-@Model.Id">
+    <!-- Location & hosting -->
+    @if (hasHosting)
+    {
+        <div class="disc-drawer-section">
+            <h6>Location &amp; hosting</h6>
+            @if (!string.IsNullOrEmpty(Model.IpAddress))
+            {
+                <div class="disc-drawer-row">
+                    <span class="label">IP</span>
+                    <span class="value">@Model.IpAddress</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.CountryCode))
+            {
+                <div class="disc-drawer-row">
+                    <span class="label">Country</span>
+                    <span class="value">@Model.CountryCode@(string.IsNullOrEmpty(Model.Continent) ? "" : $" · {Model.Continent}")</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.CloudProvider))
+            {
+                <div class="disc-drawer-row">
+                    <span class="label">Cloud</span>
+                    <span class="value">@Model.CloudProvider@(string.IsNullOrEmpty(Model.CloudRegion) ? "" : $" · {Model.CloudRegion}")</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.Isp))
+            {
+                <div class="disc-drawer-row">
+                    <span class="label">ISP</span>
+                    <span class="value">@Model.Isp</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.Waf))
+            {
+                <div class="disc-drawer-row">
+                    <span class="label">WAF</span>
+                    <span class="value">@Model.Waf</span>
+                </div>
+            }
+            <div class="disc-drawer-row mt-2">
+                <span class="label">First seen</span>
+                <span class="value">@Model.FirstSeen.ToString("MMM dd, yyyy")</span>
+            </div>
+            <div class="disc-drawer-row">
+                <span class="label">Last seen</span>
+                <span class="value">@Model.LastSeen.ToString("MMM dd, yyyy")</span>
+            </div>
+        </div>
+    }
+
+    <!-- Open ports -->
+    @if (Model.Ports.Any())
+    {
+        <div class="disc-drawer-section">
+            <h6>Open ports · <span style="font-family:var(--font-mono)">@Model.PortsCount</span></h6>
+            <div>
+                @foreach (var port in Model.Ports.OrderBy(p => p.PortNumber))
+                {
+                    <div class="disc-port-pill">
+                        <span class="port-num">@port.Protocol/@port.PortNumber</span>
+                        @if (!string.IsNullOrEmpty(port.Service) && port.Service != "unknown")
+                        {
+                            <span class="port-service">@port.Service</span>
+                        }
+                        <span class="port-open">open</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Services -->
+    @if (Model.GroupedServices.Any())
+    {
+        <div class="disc-drawer-section">
+            <h6>Services · <span style="font-family:var(--font-mono)">@Model.ServicesCount</span></h6>
+            <div>
+                @foreach (var svc in Model.GroupedServices)
+                {
+                    <div class="disc-service-chip">
+                        <span>@svc.ServiceName</span>
+                        <span class="svc-ports">@svc.Ports</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (!hasHosting && !Model.Ports.Any() && !Model.GroupedServices.Any())
+    {
+        <div class="disc-drawer-section">
+            <span style="font-size:0.8125rem; color:var(--vw-gray-500)">No additional details available.</span>
+        </div>
+    }
+</div>

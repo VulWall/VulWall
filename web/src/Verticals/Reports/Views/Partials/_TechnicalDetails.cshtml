@@ -1,0 +1,58 @@
+@model VulWall.Dashboard.Reports.Models.TechnicalScanDetails
+@{
+    var scanStart   = Model.Active.Start;
+    var scanEnd     = Model.Active.End;
+    var duration    = scanEnd > scanStart ? (scanEnd - scanStart) : TimeSpan.Zero;
+    var durationStr = duration.TotalMinutes >= 60
+        ? $"{(int)duration.TotalHours}h {duration.Minutes:D2}m"
+        : $"{(int)duration.TotalMinutes}m";
+    var windowStr   = $"{scanStart:HH:mm} → {scanEnd:HH:mm} UTC · {durationStr}";
+}
+
+<section class="tr-band" id="methodology">
+    <p class="tr-eyebrow">METHODOLOGY</p>
+    <h2 class="tr-h2">How this scan ran</h2>
+    <div class="tr-method-grid">
+
+        <div class="tr-method-card">
+            <div class="tr-method-card-head">
+                <i class="fas fa-satellite-dish tr-method-icon"></i>
+                <span class="tr-method-title">Passive discovery</span>
+            </div>
+            <div class="tr-mono tr-method-window">@windowStr</div>
+            <div class="tr-method-techniques">
+                @foreach (var t in Model.Passive.Techniques)
+                {
+                    <span class="tr-technique-chip">@t</span>
+                }
+            </div>
+            <div class="tr-method-results">
+                <span class="tr-mono">@Model.Passive.Results.Subdomains subdomains</span>
+                <span class="tr-mono">/ @Model.Passive.Results.IPs IPs</span>
+                @if (Model.Passive.Results.CloudServices > 0)
+                {
+                    <span class="tr-mono">/ @Model.Passive.Results.CloudServices cloud</span>
+                }
+            </div>
+        </div>
+
+        <div class="tr-method-card">
+            <div class="tr-method-card-head">
+                <i class="fas fa-satellite-dish tr-method-icon"></i>
+                <span class="tr-method-title">Active scanning</span>
+                <span class="tr-continuous-pill">@Model.Active.Frequency</span>
+            </div>
+            <div class="tr-mono tr-method-window">@windowStr</div>
+            <div class="tr-tools-list">
+                @foreach (var tool in Model.Active.Tools)
+                {
+                    <div class="tr-tool-row">
+                        <span class="tr-mono tr-tool-name">@tool.Name</span>
+                        <span class="tr-tool-detail">@tool.Purpose · @tool.Results</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+    </div>
+</section>

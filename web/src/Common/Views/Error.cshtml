@@ -1,0 +1,81 @@
+﻿@model VulWall.Dashboard.Common.Contracts.Models.ErrorViewModel
+@{
+    ViewData["Title"] = Model.Title;
+
+    var iconClass = Model.StatusCode switch
+    {
+        404 => "fa-search",
+        403 => "fa-lock",
+        401 => "fa-user-lock",
+        500 => "fa-server",
+        _ => "fa-exclamation-triangle"
+    };
+
+    var colorClass = Model.StatusCode switch
+    {
+        404 => "text-primary",
+        403 => "text-danger",
+        401 => "text-warning",
+        500 => "text-danger",
+        _ => "text-warning"
+    };
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Common/error.css" />
+}
+
+<div class="error-container">
+    <div class="error-card card">
+        <div class="card-body text-center py-5">
+            <div class="error-icon mb-4">
+                <i class="fas @iconClass @colorClass"></i>
+            </div>
+
+            <h1 class="error-title mb-3">@Model.Title</h1>
+
+            <p class="error-message text-muted mb-4">
+                @Model.Message
+            </p>
+
+            <div class="error-actions d-flex gap-3 justify-content-center mb-4">
+                <a href="/" class="btn btn-primary">
+                    <i class="fas fa-home me-2"></i>Back to Home
+                </a>
+            </div>
+
+            @if (Model.IsDevelopment)
+            {
+                <div class="error-details mt-4">
+                    <details class="request-id-details">
+                        <summary class="text-muted small">
+                            <i class="fas fa-info-circle me-1"></i>Technical Details
+                        </summary>
+                        <div class="mt-3">
+                            <p class="mb-2">
+                                <strong>Request ID:</strong>
+                                <code class="ms-2">@Model.RequestId</code>
+                            </p>
+                            @if (!string.IsNullOrEmpty(Model.Details))
+                            {
+                                <div class="alert alert-warning mt-3 text-start">
+                                    <h6 class="alert-heading">
+                                        <i class="fas fa-code me-2"></i>Exception Details
+                                    </h6>
+                                    <hr />
+                                    <pre class="mb-0 small">@Model.Details</pre>
+                                </div>
+                            }
+                        </div>
+                    </details>
+                </div>
+            }
+            else
+            {
+                <p class="text-muted small mt-4">
+                    If the problem persists, please <a href="mailto:contact@example.com" onclick="window.open(this.href); return false;">contact support</a>.
+                </p>
+            }
+        </div>
+    </div>
+</div>

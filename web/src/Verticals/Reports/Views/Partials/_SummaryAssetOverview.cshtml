@@ -1,0 +1,36 @@
+@model VulWall.Dashboard.Reports.Models.SummaryReportViewModel
+@{
+    var a = Model.AssetStats;
+    var tiles = new[]
+    {
+        new { Icon = "fa-globe",       Value = a.Domains,    Label = "Root domain",  New = a.NewDomains },
+        new { Icon = "fa-sitemap",     Value = a.Subdomains, Label = "Subdomains",   New = a.NewSubdomains },
+        new { Icon = "fa-server",      Value = a.IPs,        Label = "IP addresses", New = a.NewIPs },
+        new { Icon = "fa-ethernet",    Value = a.Ports,      Label = "Open ports",   New = a.NewPorts },
+        new { Icon = "fa-layer-group", Value = a.Services,   Label = "Services",     New = a.NewServices }
+    };
+}
+
+<section class="sr-band sr-assets">
+    <div class="sr-section-head">
+        <h2 class="sr-h2">Your attack surface</h2>
+        <span class="sr-section-caption">Everything we can see from the public internet</span>
+    </div>
+
+    <div class="sr-asset-tiles">
+        @foreach (var t in tiles)
+        {
+            <div class="sr-asset-tile">
+                <i class="fas @t.Icon sr-asset-icon"></i>
+                <div class="sr-asset-value-row">
+                    <span class="sr-asset-value">@t.Value</span>
+                    @if (t.New > 0)
+                    {
+                        <span class="sr-asset-new-pill">+@t.New new</span>
+                    }
+                </div>
+                <div class="sr-asset-label">@t.Label</div>
+            </div>
+        }
+    </div>
+</section>

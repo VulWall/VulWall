@@ -1,0 +1,7 @@
+@model (string Slug, string Label, int Count)
+<div class="severity-section-header" data-sev-header="@Model.Slug">
+    <span class="sev-dot sev-dot--@Model.Slug"></span>
+    <span class="sev-label">@Model.Label</span>
+    <span class="sev-count">@Model.Count</span>
+    <span class="sev-rule"></span>
+</div>

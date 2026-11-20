@@ -1,0 +1,30 @@
+<div class="modal fade" id="otpVerificationModal" tabindex="-1" aria-labelledby="otpVerificationModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger bg-opacity-10 border-danger">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-shield-halved" style="color: var(--vw-danger); font-size: 28px;"></i>
+                    <h5 class="modal-title mb-0" id="otpVerificationModalLabel" style="color: var(--vw-danger);">Enter Verification Code</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="otpModalCloseBtn"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">A 6-digit verification code has been sent to your account email address. Enter it below to permanently delete your account.</p>
+                <div class="mb-3">
+                    <label for="otpInput" class="form-label fw-semibold">Verification Code</label>
+                    <input type="text" id="otpInput" class="form-control form-control-lg text-center"
+                           maxlength="6" placeholder="000000" autocomplete="one-time-code"
+                           inputmode="numeric" pattern="[0-9]{6}" />
+                </div>
+                <div id="otpError" class="alert alert-danger d-none" role="alert"></div>
+                <p class="text-muted small mb-0">The code expires in 10 minutes. If you did not receive it, close this modal and try again.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="applyOtpBtn">
+                    <i class="fa-solid fa-trash me-1"></i>Delete My Account
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

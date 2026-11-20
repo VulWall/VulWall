@@ -1,0 +1,384 @@
+/* ──────────────────────────────────────────
+   Live Scan Status — Compare Scans page
+   ────────────────────────────────────────── */
+
+/* Row */
+.live-row {
+    display: flex;
+    align-items: stretch;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.flex-2 { flex: 2; }
+.flex-1 { flex: 1; }
+
+/* ── Card base ── */
+.live-card {
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--vw-gray-200, #E4E9F0);
+    border-radius: 14px;
+    box-shadow: var(--card-shadow, 0 8px 24px rgba(16,24,40,0.06));
+    padding: 17px 22px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* ── Card A — active (scanning) ── */
+.live-card--active {
+    border-color: var(--vw-info-border, #99C2E3);
+    box-shadow: 0 8px 24px rgba(0,86,161,0.07);
+}
+
+/* Left cobalt accent bar */
+.live-card__bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--brand-blue, #0056A1);
+    border-radius: 14px 0 0 14px;
+}
+
+/* ── Card A — idle ── */
+.live-card--idle {
+    border-color: var(--vw-gray-200, #E4E9F0);
+}
+
+/* ── Card B — runs ── */
+.live-card--runs {
+    padding: 15px 20px;
+}
+
+/* ── Top row ── */
+.live-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+/* ── Icon chip ── */
+.live-icon-chip {
+    width: 38px; height: 38px;
+    border-radius: 11px;
+    background: var(--vw-info-bg, #E6F0F9);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--brand-blue, #0056A1);
+    font-size: 17px;
+    flex-shrink: 0;
+}
+
+.live-icon-chip--idle {
+    background: var(--vw-gray-100, #F8FAFC);
+    color: var(--vw-gray-400, #94A3B8);
+}
+
+/* ── Card title ── */
+.live-card__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--brand-dark-blue, #212C5E);
+    line-height: 1.3;
+}
+
+/* ── Meta line ── */
+.live-card__meta {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--vw-gray-400, #94A3B8);
+}
+
+/* ── Right side ── */
+.live-card__right {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.live-card__scanning-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vw-gray-500, #475569);
+    font-family: var(--font-mono);
+}
+
+/* ── Scanning pill ── */
+.live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 3px 10px;
+}
+
+.live-pill--scanning {
+    color: var(--brand-blue, #0056A1);
+    background: var(--vw-info-bg, #E6F0F9);
+    border: 1px solid var(--vw-info-border, #99C2E3);
+}
+
+.live-pill__dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--brand-blue, #0056A1);
+    animation: vw-pulse 1.8s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+/* ── Progress bar ── */
+.live-prog__track {
+    height: 8px;
+    width: 100%;
+    border-radius: 999px;
+    background: var(--vw-gray-100, #F1F4F9);
+    overflow: hidden;
+}
+
+.live-prog__fill {
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.18) 0,
+        rgba(255,255,255,0.18) 8px,
+        transparent 8px,
+        transparent 16px
+    ), linear-gradient(90deg, var(--brand-blue, #0056A1), #0066bf);
+    background-size: 32px 32px;
+    animation: vw-prog 0.8s linear infinite;
+}
+
+/* ── Phase chips ── */
+.live-phases {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.live-phase {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 999px;
+    padding: 3px 10px;
+}
+
+.live-phase--pending {
+    color: var(--vw-gray-400, #94A3B8);
+    background: var(--vw-gray-50, #F8FAFC);
+    border: 1px solid var(--vw-gray-200, #E4E9F0);
+}
+
+.live-phase--pending i { font-size: 9px; }
+
+/* ── Recent runs (Card B) ── */
+.live-runs__label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--vw-gray-400, #94A3B8);
+    text-transform: uppercase;
+}
+
+.live-runs__viewall {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--brand-blue, #0056A1);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.live-runs__viewall:hover {
+    text-decoration: underline;
+}
+
+.live-runs__empty {
+    font-size: 12px;
+    color: var(--vw-gray-400, #94A3B8);
+}
+
+.live-runs__list {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.live-run-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ── Status dots ── */
+.live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.live-dot--scanning  { background: var(--brand-blue, #0056A1); }
+.live-dot--completed { background: var(--vw-success, #067647); }
+.live-dot--failed    { background: var(--vw-danger, #DC2626); }
+.live-dot--pending   { background: var(--vw-gray-300, #CBD5E1); }
+
+.live-dot--live {
+    animation: vw-pulse 1.8s ease-in-out infinite;
+}
+
+.live-run__date {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--vw-gray-500, #475569);
+    width: 54px;
+    flex-shrink: 0;
+}
+
+.live-run__type {
+    font-size: 12px;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.live-run__type-icon {
+    font-size: 11px;
+    color: #94A3B8;
+    width: 13px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.live-run__meta {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--vw-gray-400, #94A3B8);
+}
+
+.live-run__meta--scanning { color: var(--brand-blue, #0056A1); font-weight: 600; }
+.live-run__meta--failed   { color: #D92D20; font-weight: 600; }
+
+/* ── Keyframes ── */
+@keyframes vw-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+}
+
+@keyframes vw-prog {
+    0%   { background-position: 0 0; }
+    100% { background-position: 32px 0; }
+}
+
+/* ── Reduced motion ── */
+/* Global site.css catch-all already covers this; targeted rule follows project convention */
+@media (prefers-reduced-motion: reduce) {
+    .live-pill__dot,
+    .live-dot--live { animation: none; }
+    .live-prog__fill { animation: none; }
+}
+
+/* ── Dark theme ── */
+[data-bs-theme="dark"] .live-card {
+    background: #1e2535;
+    border-color: #2d3748;
+}
+
+[data-bs-theme="dark"] .live-card--active {
+    border-color: #1e4a72;
+    box-shadow: 0 8px 24px rgba(0,86,161,0.15);
+}
+
+[data-bs-theme="dark"] .live-card__bar {
+    background: #58a6ff;
+}
+
+[data-bs-theme="dark"] .live-icon-chip {
+    background: #1a2f44;
+    color: #58a6ff;
+}
+
+[data-bs-theme="dark"] .live-icon-chip--idle {
+    background: #2d3748;
+    color: var(--vw-gray-400);
+}
+
+[data-bs-theme="dark"] .live-card__title {
+    color: #e2e8f0;
+}
+
+[data-bs-theme="dark"] .live-pill--scanning {
+    color: #58a6ff;
+    background: #1a2f44;
+    border-color: #1e4a72;
+}
+
+[data-bs-theme="dark"] .live-pill__dot,
+[data-bs-theme="dark"] .live-dot--scanning {
+    background: #58a6ff;
+}
+
+[data-bs-theme="dark"] .live-prog__track {
+    background: #2d3748;
+}
+
+[data-bs-theme="dark"] .live-prog__fill {
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.12) 0,
+        rgba(255,255,255,0.12) 8px,
+        transparent 8px,
+        transparent 16px
+    ), linear-gradient(90deg, #1d4ed8, #2563eb);
+    background-size: 32px 32px;
+}
+
+[data-bs-theme="dark"] .live-phase--pending {
+    color: var(--vw-gray-400);
+    background: #1e2535;
+    border-color: #2d3748;
+}
+
+[data-bs-theme="dark"] .live-runs__label {
+    color: var(--vw-gray-400);
+}
+
+[data-bs-theme="dark"] .live-runs__viewall {
+    color: #58a6ff;
+}
+
+[data-bs-theme="dark"] .live-run__date,
+[data-bs-theme="dark"] .live-run__meta,
+[data-bs-theme="dark"] .live-card__meta,
+[data-bs-theme="dark"] .live-card__scanning-label {
+    color: var(--vw-gray-400);
+}
+
+[data-bs-theme="dark"] .live-dot--completed { background: #22c55e; }
+[data-bs-theme="dark"] .live-dot--pending { background: #475569; }
+
+[data-bs-theme="dark"] .live-run__type { color: #94a3b8; }
+[data-bs-theme="dark"] .live-run__meta--scanning { color: #58a6ff; }
+[data-bs-theme="dark"] .live-run__meta--failed   { color: #f87171; }
+
+.live-cooldown-hint {
+    font-size: 11px;
+    color: var(--vw-gray-500);
+    white-space: nowrap;
+}
+
+[data-bs-theme="dark"] .live-cooldown-hint { color: var(--vw-gray-400); }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .live-row {
+        flex-direction: column;
+    }
+    .flex-2, .flex-1 {
+        flex: unset;
+        width: 100%;
+    }
+}

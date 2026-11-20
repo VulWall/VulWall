@@ -1,0 +1,70 @@
+@model VulWall.Dashboard.Reports.Models.TechnicalReportViewModel
+
+<section id="executive-summary" class="section active">
+    <h2>Executive Summary</h2>
+
+    <div class="overview-card">
+        <h3>Overview</h3>
+        <p>@Model.Overview</p>
+    </div>
+
+    <div class="risk-summary">
+        <h3>Risk Summary</h3>
+
+        <div class="vulnerability-stats">
+            <div class="stat-card critical">
+                <div class="stat-header">
+                    <span class="severity-label">Critical</span>
+                </div>
+                <div class="stat-number">@Model.RiskSummary.Critical.Count</div>
+                <div class="stat-exploitable">@Model.RiskSummary.Critical.Exploitable with known exploits</div>
+            </div>
+
+            <div class="stat-card high">
+                <div class="stat-header">
+                    <span class="severity-label">High</span>
+                </div>
+                <div class="stat-number">@Model.RiskSummary.High.Count</div>
+                <div class="stat-exploitable">@Model.RiskSummary.High.Exploitable with known exploits</div>
+            </div>
+
+            <div class="stat-card medium">
+                <div class="stat-header">
+                    <span class="severity-label">Medium</span>
+                </div>
+                <div class="stat-number">@Model.RiskSummary.Medium.Count</div>
+                <div class="stat-exploitable">@Model.RiskSummary.Medium.Exploitable with known exploits</div>
+            </div>
+
+            <div class="stat-card low">
+                <div class="stat-header">
+                    <span class="severity-label">Low</span>
+                </div>
+                <div class="stat-number">@Model.RiskSummary.Low.Count</div>
+                <div class="stat-exploitable">@Model.RiskSummary.Low.Exploitable with known exploits</div>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.ImmediateActions.Any())
+    {
+        <div class="immediate-action">
+            <h3>Immediate Action Required</h3>
+            <div class="action-callout">
+                <div class="action-callout-header">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Critical and High Priority Issues</span>
+                </div>
+                <ul class="action-callout-list">
+                    @foreach (var action in Model.ImmediateActions)
+                    {
+                        <li>
+                            <strong>@action.Title</strong>
+                            <span class="asset-info">Affected Asset: @action.AffectedAsset</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    }
+</section>

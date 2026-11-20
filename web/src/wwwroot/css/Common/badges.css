@@ -1,0 +1,152 @@
+/* ========================================
+   Common Badge Styles
+   Shared across Dashboard, Recommendations
+   ======================================== */
+
+/* Findings Count Badge */
+.findings-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: rgba(0, 86, 161, 0.1);
+    color: var(--brand-blue);
+}
+
+[data-bs-theme="dark"] .findings-count-badge {
+    background-color: rgba(96, 165, 250, 0.2);
+    color: var(--vw-link-dark);
+}
+
+/* Effort Badge (base) */
+.effort-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.effort-small {
+    background-color: rgba(6, 118, 71, 0.1);
+    color: var(--vw-success);
+}
+
+[data-bs-theme="dark"] .effort-small {
+    background-color: rgba(6, 118, 71, 0.2);
+    color: var(--vw-success-dark);
+}
+
+.effort-medium {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: var(--severity-medium);
+}
+
+[data-bs-theme="dark"] .effort-medium {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: var(--severity-medium-dark);
+}
+
+.effort-large {
+    background-color: rgba(197, 48, 48, 0.1);
+    color: var(--severity-high);
+}
+
+[data-bs-theme="dark"] .effort-large {
+    background-color: rgba(197, 48, 48, 0.2);
+    color: var(--severity-high-dark);
+}
+
+/* New / Recurring Badges */
+.new-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: rgba(6, 118, 71, 0.1);
+    color: var(--vw-success);
+}
+
+[data-bs-theme="dark"] .new-badge {
+    background-color: rgba(6, 118, 71, 0.2);
+    color: var(--vw-success-dark);
+}
+
+.recurring-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: var(--vw-gray-100);
+    color: var(--vw-gray-600);
+}
+
+[data-bs-theme="dark"] .recurring-badge {
+    background-color: rgba(107, 114, 128, 0.3);
+    color: #9ca3af;
+}
+
+/* Exploitable Badge */
+.exploitable-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: var(--severity-critical-bg);
+    color: var(--severity-critical);
+}
+
+[data-bs-theme="dark"] .exploitable-badge {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: var(--severity-critical-dark);
+}
+
+/* Finding Type Badge */
+.finding-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: var(--vw-gray-100);
+    color: var(--vw-gray-700);
+}
+
+[data-bs-theme="dark"] .finding-type-badge {
+    background-color: rgba(107, 114, 128, 0.3);
+    color: #d1d5db;
+}
+
+/* OWASP Badge */
+.owasp-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: rgba(33, 44, 94, 0.1);
+    color: var(--brand-dark-blue);
+}
+
+[data-bs-theme="dark"] .owasp-badge {
+    background-color: rgba(96, 165, 250, 0.15);
+    color: var(--vw-link-hover-dark);
+}

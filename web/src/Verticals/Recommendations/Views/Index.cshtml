@@ -1,0 +1,164 @@
+@model VulWall.Dashboard.Recommendations.Models.RecommendationsIndexViewModel
+@{
+    ViewData["Title"] = "AI Recommendations";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Common/badges.css" />
+    <link rel="stylesheet" href="~/css/Recommendations/shared.css" />
+    <link rel="stylesheet" href="~/css/Recommendations/index.css" />
+    <link rel="stylesheet" href="~/css/Recommendations/suppression.css" />
+}
+
+@section Scripts {
+    <script type="module" src="~/js/Recommendations/index.js"></script>
+    <script type="module" src="~/js/Recommendations/suppression.js"></script>
+}
+
+@if (Model.TotalFindings == 0)
+{
+    <div class="empty-state-card card text-center py-5">
+        <i class="fas fa-circle-check" style="font-size:2rem;color:var(--vw-success)"></i>
+        <h5 class="mt-3 mb-1">Nothing to fix here</h5>
+        <p class="text-muted small mb-0">You have no open recommendations.</p>
+    </div>
+}
+else
+{
+    <div class="page-header page-header--stacked fixplan-header">
+        <p class="fixplan-eyebrow">FIX PLAN</p>
+        <h1 class="fixplan-title mb-0">Recommendations</h1>
+        <p class="fixplan-subtitle">
+            @Model.TotalFindings open
+            · @Model.ExploitableCount exploitable now
+            @if (Model.LastScanAt.HasValue)
+            {
+                <span>· last scan @HumanizeAge(Model.LastScanAt.Value)</span>
+            }
+        </p>
+    </div>
+
+    <div class="summary-grid mb-4">
+        <div class="summary-card summary-card--wide">
+            <div class="summary-card__number">@Model.TotalFindings</div>
+            <div class="summary-card__label">open recommendations across @Model.TotalAffectedAssets assets</div>
+            <div class="severity-bar mt-3">
+                @if (Model.CriticalFindings.Any())
+                {
+                    <div class="severity-bar__seg" style="flex-grow:@Model.CriticalFindings.Count;background:var(--severity-critical-solid)"></div>
+                }
+                @if (Model.HighFindings.Any())
+                {
+                    <div class="severity-bar__seg" style="flex-grow:@Model.HighFindings.Count;background:var(--severity-high-solid)"></div>
+                }
+                @if (Model.MediumFindings.Any())
+                {
+                    <div class="severity-bar__seg" style="flex-grow:@Model.MediumFindings.Count;background:var(--severity-medium-solid)"></div>
+                }
+                @if (Model.LowFindings.Any())
+                {
+                    <div class="severity-bar__seg" style="flex-grow:@Model.LowFindings.Count;background:var(--severity-low-solid)"></div>
+                }
+            </div>
+            <p class="severity-bar__caption">Ranked by what attackers can reach first</p>
+        </div>
+
+        <div class="summary-card metric-card">
+            <div class="metric-card__row">
+                <span class="metric-card__number" style="color:var(--severity-critical-solid)">@Model.ExploitableCount</span>
+                <i class="fas fa-bolt metric-card__icon" style="color:var(--severity-critical-solid)"></i>
+            </div>
+            <div class="metric-card__label">Exploitable now</div>
+        </div>
+
+        <div class="summary-card metric-card">
+            <div class="metric-card__row">
+                <span class="metric-card__number" style="color:var(--severity-low-solid)">@Model.QuickWinCount</span>
+                <i class="fas fa-gauge-high metric-card__icon" style="color:var(--severity-low-solid)"></i>
+            </div>
+            <div class="metric-card__label">Quick wins (low effort)</div>
+        </div>
+
+        <div class="summary-card metric-card">
+            <div class="metric-card__row">
+                <span class="metric-card__number" style="color:var(--vw-success)">@Model.AiReadyCount</span>
+                <i class="fas fa-wand-magic metric-card__icon" style="color:var(--vw-success)"></i>
+            </div>
+            <div class="metric-card__label">AI fixes ready</div>
+        </div>
+    </div>
+
+    <div class="controls-row mb-3">
+        <div class="filter-chips" id="filterChips">
+            <button class="filter-chip is-active" data-filter="all" aria-pressed="true">All <span class="filter-chip__count">@Model.TotalFindings</span></button>
+            @if (Model.CriticalFindings.Any())
+            {
+                <button class="filter-chip" data-filter="critical" aria-pressed="false">Critical <span class="filter-chip__count">@Model.CriticalFindings.Count</span></button>
+            }
+            @if (Model.HighFindings.Any())
+            {
+                <button class="filter-chip" data-filter="high" aria-pressed="false">High <span class="filter-chip__count">@Model.HighFindings.Count</span></button>
+            }
+            @if (Model.MediumFindings.Any())
+            {
+                <button class="filter-chip" data-filter="medium" aria-pressed="false">Medium <span class="filter-chip__count">@Model.MediumFindings.Count</span></button>
+            }
+            @if (Model.LowFindings.Any())
+            {
+                <button class="filter-chip" data-filter="low" aria-pressed="false">Low <span class="filter-chip__count">@Model.LowFindings.Count</span></button>
+            }
+        </div>
+        <div class="sort-control">
+            <span class="sort-control__label">Sort</span>
+            <div class="sort-control__track" id="sortControl">
+                <button class="sort-btn is-active" data-sort="priority" aria-pressed="true">Priority</button>
+                <button class="sort-btn" data-sort="effort" aria-pressed="false">Quickest win</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="findings-stream" id="findingsStream">
+        @if (Model.CriticalFindings.Any())
+        {
+            <partial name="~/Verticals/Recommendations/Views/Partials/_SeverityDivider.cshtml" model='("critical", "Critical", Model.CriticalFindings.Count)' />
+            <partial name="~/Verticals/Recommendations/Views/Partials/_FindingsList.cshtml"
+                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.CriticalFindings, FeatureAccess = Model.FeatureAccess }' />
+        }
+        @if (Model.HighFindings.Any())
+        {
+            <partial name="~/Verticals/Recommendations/Views/Partials/_SeverityDivider.cshtml" model='("high", "High", Model.HighFindings.Count)' />
+            <partial name="~/Verticals/Recommendations/Views/Partials/_FindingsList.cshtml"
+                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.HighFindings, FeatureAccess = Model.FeatureAccess }' />
+        }
+        @if (Model.MediumFindings.Any())
+        {
+            <partial name="~/Verticals/Recommendations/Views/Partials/_SeverityDivider.cshtml" model='("medium", "Medium", Model.MediumFindings.Count)' />
+            <partial name="~/Verticals/Recommendations/Views/Partials/_FindingsList.cshtml"
+                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.MediumFindings, FeatureAccess = Model.FeatureAccess }' />
+        }
+        @if (Model.LowFindings.Any())
+        {
+            <partial name="~/Verticals/Recommendations/Views/Partials/_SeverityDivider.cshtml" model='("low", "Low", Model.LowFindings.Count)' />
+            <partial name="~/Verticals/Recommendations/Views/Partials/_FindingsList.cshtml"
+                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.LowFindings, FeatureAccess = Model.FeatureAccess }' />
+        }
+    </div>
+}
+
+@* Dismissed / Accepted Risk archive — always visible regardless of open findings *@
+@if (Model.DismissedFindings.Any())
+{
+    <partial name="~/Verticals/Recommendations/Views/Partials/_DismissedList.cshtml"
+             model="Model.DismissedFindings" />
+}
+
+@functions {
+    string HumanizeAge(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt.ToUniversalTime();
+        if (diff.TotalSeconds < 60) return "just now";
+        if (diff.TotalMinutes < 60) return $"{Math.Max(1, (int)diff.TotalMinutes)} minutes ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} hours ago";
+        return $"{(int)diff.TotalDays} days ago";
+    }
+}

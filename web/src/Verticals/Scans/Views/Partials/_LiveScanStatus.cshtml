@@ -1,0 +1,136 @@
+@using VulWall.Dashboard.Scans.Models
+@model LiveScanStatusViewModel
+
+<div class="live-row">
+
+    @* Card A — in-progress or idle *@
+    @if (Model.IsScanning)
+    {
+        <div class="live-card live-card--active flex-2">
+            <span class="live-card__bar"></span>
+            <div class="live-card__top">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="live-icon-chip">
+                        <i class="fas fa-satellite-dish"></i>
+                    </div>
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="live-card__title">Scan in progress</span>
+                            <span class="live-pill live-pill--scanning">
+                                <span class="live-pill__dot"></span>
+                                Scanning
+                            </span>
+                        </div>
+                        <div class="live-card__meta">Started @Model.StartedTime &middot; @Model.Trigger</div>
+                    </div>
+                </div>
+                <div class="live-card__right">
+                    <span class="live-card__scanning-label">Scanning&hellip;</span>
+                </div>
+            </div>
+
+            <div class="live-prog__track mt-3" role="progressbar" aria-busy="true" aria-label="Scan in progress">
+                <div class="live-prog__fill"></div>
+            </div>
+
+            <div class="live-phases mt-2">
+                @{
+                    var phases = new[] { "Discovery", "Ports", "Vuln scan", "Email", "AI enrichment" };
+                }
+                @foreach (var phase in phases)
+                {
+                    <span class="live-phase live-phase--pending">
+                        <i class="fas fa-clock"></i>@phase
+                    </span>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="live-card live-card--idle flex-2">
+            <div class="live-card__top">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="live-icon-chip live-icon-chip--idle">
+                        <i class="fas fa-satellite-dish"></i>
+                    </div>
+                    <div>
+                        <div class="live-card__title mb-1">No scan running</div>
+                        <div class="live-card__meta">
+                            @if (!string.IsNullOrEmpty(Model.NextScanCountdown))
+                            {
+                                <span>Next automated scan in @Model.NextScanCountdown</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="live-card__right">
+                    @switch (Model.ScanNowState)
+                    {
+                        case ScanNowState.Allowed:
+                            <form asp-controller="Scans" asp-action="TriggerScan" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-bolt me-1"></i>Scan Now
+                                </button>
+                            </form>
+                            break;
+
+                        case ScanNowState.ProRequired:
+                            <a asp-controller="Settings" asp-action="Index" asp-fragment="billing"
+                               class="btn btn-accent btn-sm"
+                               title="Upgrade to Pro to trigger on-demand scans anytime.">
+                                <i class="fas fa-lock me-1"></i>Scan Now <span class="badge badge-secondary ms-1">Pro</span>
+                            </a>
+                            break;
+
+                        case ScanNowState.InProgress:
+                            <button class="btn btn-primary btn-sm" disabled
+                                    title="A scan is already running.">
+                                <i class="fas fa-spinner fa-spin me-1"></i>Scanning…
+                            </button>
+                            break;
+
+                        case ScanNowState.Cooldown:
+                            <div class="d-flex flex-column align-items-end gap-1">
+                                <button class="btn btn-primary btn-sm" disabled>
+                                    <i class="fas fa-clock me-1"></i>Scan Now
+                                </button>
+                                <span class="live-cooldown-hint">Next scan available after midnight UTC</span>
+                            </div>
+                            break;
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Card B — recent runs *@
+    <div class="live-card live-card--runs flex-1">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="live-runs__label">RECENT RUNS</span>
+            @* Pass 2: View all → scan history page *@
+            <a href="#" class="live-runs__viewall">View all</a>
+        </div>
+        @if (Model.RecentRuns.Count == 0)
+        {
+            <div class="live-runs__empty">No scans yet</div>
+        }
+        else
+        {
+            <div class="live-runs__list">
+                @foreach (var run in Model.RecentRuns)
+                {
+                    <div class="live-run-row">
+                        <span class="live-dot live-dot--@run.StatusTone @(run.IsLive ? "live-dot--live" : "")"></span>
+                        <span class="live-run__date">@run.Date</span>
+                        <span class="live-run__type"><i class="fas @run.ScanTypeIcon live-run__type-icon"></i>@run.ScanTypeLabel</span>
+                        <span class="live-run__meta live-run__meta--@run.StatusTone ms-auto">@run.Meta</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+</div>
+
+@* Pass 2: real phase active-state + progress %; failed rows clickable; View all → scan history *@

@@ -1,0 +1,26 @@
+@model VulWall.Dashboard.Reports.Models.TechnicalReportViewModel
+
+<section class="tr-band" id="owasp">
+    <div class="tr-section-head">
+        <div>
+            <p class="tr-eyebrow">COVERAGE</p>
+            <h2 class="tr-h2">OWASP Top 10 (2021)</h2>
+        </div>
+    </div>
+
+    @if (Model.OwaspCompliance.Categories.Any())
+    {
+        <div class="tr-owasp-grid">
+            @foreach (var cat in Model.OwaspCompliance.Categories)
+            {
+                var statusSlug = cat.Status.ToLower().Replace(" ", "-");
+                <div class="tr-owasp-row">
+                    <span class="tr-mono tr-owasp-id">@cat.Id</span>
+                    <span class="tr-owasp-name">@cat.Name</span>
+                    <span class="tr-mono tr-owasp-count">@cat.Count</span>
+                    <span class="tr-owasp-pill tr-owasp-pill--@statusSlug">@cat.Status</span>
+                </div>
+            }
+        </div>
+    }
+</section>

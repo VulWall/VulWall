@@ -1,0 +1,21 @@
+@model VulWall.Dashboard.Reports.Models.SummaryReportViewModel
+@{
+    ViewData["Title"] = "Summary Report";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Common/findings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Reports/shared.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Reports/Summary/index.css" asp-append-version="true" />
+}
+
+<div class="sr-page-wrapper">
+    <div class="sr-document">
+        <partial name="~/Verticals/Reports/Views/Partials/_SummaryHeader.cshtml" model="Model" />
+        <partial name="~/Verticals/Reports/Views/Partials/_SummaryVerdict.cshtml" model="Model" />
+        <partial name="~/Verticals/Reports/Views/Partials/_SummarySeverityBreakdown.cshtml" model="Model" />
+        <partial name="~/Verticals/Reports/Views/Partials/_SummaryAssetOverview.cshtml" model="Model" />
+        <partial name="~/Verticals/Reports/Views/Partials/_SummaryTopFindings.cshtml" model="Model" />
+        <partial name="~/Verticals/Reports/Views/Partials/_SummaryFooter.cshtml" model="Model" />
+    </div>
+</div>

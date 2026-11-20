@@ -1,0 +1,35 @@
+@model VulWall.Dashboard.Reports.Models.SummaryReportViewModel
+@{
+    var rootDomain = Model.RootDomains.FirstOrDefault();
+    var scanned = Model.ScanDate;
+}
+
+<header class="sr-band sr-header">
+    <div class="sr-header-top">
+        <div class="sr-brand">
+            <img src="~/img/VW_Logo.png" alt="VulWall" class="sr-logomark" />
+            <span class="sr-wordmark">VULWALL</span>
+        </div>
+        <div class="sr-report-id">
+            <div class="sr-eyebrow sr-eyebrow-light">Report</div>
+            <div class="sr-report-id-value">@Model.ReportId</div>
+        </div>
+    </div>
+
+    <div class="sr-header-title">
+        @if (!string.IsNullOrEmpty(Model.LogoBase64))
+        {
+            <img src="data:image/png;base64,@Model.LogoBase64" alt="@Model.OrganizationName" class="sr-org-logo" />
+        }
+        <div class="sr-eyebrow sr-eyebrow-light">External security assessment</div>
+        <h1 class="sr-org-name">@Model.OrganizationName</h1>
+        <div class="sr-header-meta">
+            @if (!string.IsNullOrEmpty(rootDomain))
+            {
+                <span class="sr-mono">@rootDomain</span>
+                <span class="sr-meta-sep">·</span>
+            }
+            <span>Scanned @scanned.ToString("MMM dd, yyyy") · @scanned.ToString("HH:mm") UTC</span>
+        </div>
+    </div>
+</header>

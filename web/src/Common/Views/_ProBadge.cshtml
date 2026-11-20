@@ -1,0 +1,15 @@
+@*
+    Pro Badge Partial - Small badge indicating Pro-only features
+
+    Usage:
+    <partial name="~/Common/Views/_ProBadge.cshtml" />
+
+    Or with tooltip:
+    <partial name="~/Common/Views/_ProBadge.cshtml" model='"Upgrade to access this feature"' />
+*@
+
+@model string?
+
+<span class="pro-badge" @if (!string.IsNullOrEmpty(Model)) { <text>title="@Model" data-bs-toggle="tooltip"</text> }>
+    <i class="fas fa-crown me-1"></i>Pro
+</span>

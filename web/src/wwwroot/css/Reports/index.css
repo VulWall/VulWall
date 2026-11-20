@@ -1,0 +1,714 @@
+/* ============================================================
+   Reports — Report center (index)
+   Tokens are mapped to the globally-available dashboard tokens
+   (site.css). Page-scoped tints are defined locally below so we
+   never depend on tokens that aren't global.
+   ============================================================ */
+
+.rpt-page {
+    --rpt-card-bg: #fff;
+    --rpt-border: var(--vw-gray-200);
+    --rpt-text: var(--brand-dark-blue);
+    --rpt-muted: var(--vw-gray-500);
+    --rpt-faint: var(--vw-gray-400);
+    --rpt-hover: var(--vw-gray-50);
+    --rpt-menu-shadow: 0 8px 24px rgba(16, 24, 40, .12);
+    --rpt-card-hover-shadow: 0 8px 24px rgba(16, 24, 40, .1);
+    --rpt-cert-tint: rgba(6, 118, 71, .1);
+    --rpt-danger-tint: #fef3f2;
+}
+
+[data-bs-theme="dark"] .rpt-page {
+    --rpt-card-bg: var(--vw-dark-surface);
+    --rpt-border: var(--vw-dark-border);
+    --rpt-text: #f3f4f6;
+    --rpt-muted: #9ca3af;
+    --rpt-faint: #718096;
+    --rpt-hover: #2d3748;
+    --rpt-menu-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+    --rpt-card-hover-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+    --rpt-cert-tint: rgba(6, 118, 71, .2);
+    --rpt-danger-tint: rgba(217, 45, 32, .15);
+}
+
+/* -------- Header -------- */
+/* Base layout from shared .page-header (sections.css); deltas only */
+.rpt-header {
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 26px;
+}
+
+.rpt-title {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--rpt-text);
+    letter-spacing: -0.02em;
+}
+
+.rpt-subtitle {
+    margin: 6px 0 0;
+    font-size: 14px;
+    color: var(--rpt-muted);
+    max-width: 520px;
+    line-height: 1.55;
+}
+
+.rpt-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--rpt-faint);
+    margin-bottom: 6px;
+}
+
+.rpt-eyebrow--section {
+    margin-bottom: 14px;
+}
+
+/* -------- Scope dropdown -------- */
+.rpt-scope {
+    position: relative;
+}
+
+.rpt-scope-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    background: var(--rpt-card-bg);
+    border: 1px solid var(--vw-gray-300);
+    border-radius: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    min-width: 300px;
+    box-shadow: var(--card-shadow);
+    transition: border-color .2s ease;
+}
+
+.rpt-scope-btn:hover {
+    border-color: var(--vw-gray-400);
+}
+
+[data-bs-theme="dark"] .rpt-scope-btn {
+    border-color: var(--vw-dark-border);
+}
+
+.rpt-scope-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--vw-info-bg);
+    color: var(--vw-primary);
+    flex-shrink: 0;
+}
+
+.rpt-scope-btn-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.rpt-scope-name {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--rpt-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rpt-scope-meta {
+    display: block;
+    font-size: 12px;
+    color: var(--rpt-muted);
+}
+
+.rpt-scope-caret {
+    color: var(--rpt-faint);
+    font-size: 12px;
+}
+
+.rpt-scope-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 340px;
+    background: var(--rpt-card-bg);
+    border: 1px solid var(--rpt-border);
+    border-radius: 12px;
+    box-shadow: var(--rpt-menu-shadow);
+    padding: 6px;
+    z-index: 1000;
+}
+
+.rpt-scope-menu[hidden] {
+    display: none;
+}
+
+.rpt-scope-opt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 10px 11px;
+    border-radius: 8px;
+    transition: background .15s ease;
+}
+
+.rpt-scope-opt:hover {
+    background: var(--rpt-hover);
+}
+
+.rpt-scope-opt--selected {
+    background: var(--vw-info-bg);
+}
+
+.rpt-scope-opt-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--vw-gray-100);
+    color: var(--rpt-muted);
+    flex-shrink: 0;
+    font-size: 12px;
+}
+
+.rpt-scope-opt-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.rpt-scope-opt-name {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--rpt-text);
+}
+
+.rpt-scope-opt-meta {
+    display: block;
+    font-size: 12px;
+    color: var(--rpt-muted);
+}
+
+.rpt-scope-opt-check {
+    color: var(--vw-primary);
+    font-size: 12px;
+    visibility: hidden;
+}
+
+.rpt-scope-opt--selected .rpt-scope-opt-check {
+    visibility: visible;
+}
+
+/* -------- Context strip -------- */
+.rpt-context-strip {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    background: var(--rpt-card-bg);
+    border: 1px solid var(--rpt-border);
+    border-radius: 14px;
+    box-shadow: var(--card-shadow);
+    padding: 18px 22px;
+    margin-bottom: 30px;
+}
+
+.rpt-score-section {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-right: 24px;
+    border-right: 1px solid var(--rpt-border);
+}
+
+.rpt-score-ring-wrap {
+    position: relative;
+    width: 62px;
+    height: 62px;
+    flex-shrink: 0;
+}
+
+.rpt-score-ring-svg {
+    width: 62px;
+    height: 62px;
+    transform: rotate(-90deg);
+}
+
+.rpt-score-ring-track {
+    fill: none;
+    stroke: var(--vw-gray-200);
+    stroke-width: 6;
+}
+
+[data-bs-theme="dark"] .rpt-score-ring-track {
+    stroke: #2d3748;
+}
+
+.rpt-score-ring-fill {
+    fill: none;
+    stroke-width: 6;
+    stroke-linecap: round;
+    transition: stroke-dasharray .4s ease, stroke-dashoffset .4s ease, stroke .4s ease;
+}
+
+.rpt-score-ring-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.rpt-score-num {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--rpt-text);
+    line-height: 1;
+}
+
+.rpt-score-denom {
+    font-size: 10px;
+    color: var(--rpt-faint);
+}
+
+.rpt-score-caption {
+    font-size: 12px;
+    color: var(--rpt-muted);
+}
+
+.rpt-score-band {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--rpt-text);
+    margin-top: 2px;
+}
+
+.rpt-sev-section {
+    flex: 1;
+    min-width: 280px;
+}
+
+.rpt-sev-chips {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* -------- Report type cards -------- */
+.rpt-type-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 34px;
+}
+
+.rpt-type-card {
+    position: relative;
+    background: var(--rpt-card-bg);
+    border: 1px solid var(--rpt-border);
+    border-radius: 14px;
+    box-shadow: var(--card-shadow);
+    padding: 20px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.rpt-type-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--rpt-card-hover-shadow);
+}
+
+.rpt-type-card.disabled {
+    opacity: .55;
+}
+
+.rpt-type-ring {
+    display: none;
+    position: absolute;
+    inset: -1px;
+    border-radius: 15px;
+    pointer-events: none;
+    border-width: 2px;
+    border-style: solid;
+}
+
+.rpt-type-card.active .rpt-type-ring {
+    display: block;
+}
+
+.rpt-type-ring--summary { border-color: var(--brand-blue); }
+.rpt-type-ring--technical { border-color: var(--brand-dark-blue); }
+.rpt-type-ring--cert { border-color: var(--vw-success); }
+
+[data-bs-theme="dark"] .rpt-type-ring--technical { border-color: #6b8afd; }
+
+.rpt-type-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.rpt-type-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+    font-size: 18px;
+}
+
+.rpt-type-icon--summary { background: var(--vw-info-bg); color: var(--brand-blue); }
+.rpt-type-icon--technical { background: var(--vw-gray-200); color: var(--brand-dark-blue); }
+.rpt-type-icon--cert { background: var(--rpt-cert-tint); color: var(--vw-success); }
+
+[data-bs-theme="dark"] .rpt-type-icon--technical { background: #2d3748; color: #a5b4fc; }
+
+.rpt-type-badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    padding: 4px 9px;
+    border-radius: 999px;
+}
+
+.rpt-type-badge--summary { color: var(--brand-blue); background: var(--vw-info-bg); }
+.rpt-type-badge--technical { color: var(--vw-gray-700); background: var(--vw-gray-200); }
+.rpt-type-badge--cert { color: var(--accent-orange-text); background: var(--accent-orange-bg); }
+
+[data-bs-theme="dark"] .rpt-type-badge--technical { background: #2d3748; color: #cbd5e1; }
+
+.rpt-type-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--rpt-text);
+}
+
+.rpt-type-audience {
+    font-size: 12.5px;
+    color: var(--rpt-muted);
+    margin-top: 3px;
+    margin-bottom: 14px;
+}
+
+.rpt-cert-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+    margin-bottom: 14px;
+}
+
+.rpt-cert-toggle-row .form-check-input {
+    width: 2.4rem;
+    height: 1.25rem;
+    margin: 0;
+    cursor: pointer;
+}
+
+.rpt-cert-toggle-row .form-check-input:checked {
+    background-color: var(--vw-success);
+    border-color: var(--vw-success);
+}
+
+.rpt-cert-toggle-row .form-check-input:focus {
+    border-color: var(--vw-success);
+    box-shadow: 0 0 0 0.2rem rgba(6, 118, 71, .25);
+}
+
+.rpt-cert-toggle-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--rpt-muted);
+}
+
+.rpt-type-features {
+    list-style: none;
+    margin: 0 0 18px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.rpt-type-features li {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    font-size: 13px;
+    color: var(--vw-gray-700);
+}
+
+[data-bs-theme="dark"] .rpt-type-features li {
+    color: #cbd5e1;
+}
+
+.rpt-type-features li i {
+    font-size: 11px;
+    margin-top: 3px;
+}
+
+.rpt-type-card[data-type-id="summary"] .rpt-type-features li i { color: var(--brand-blue); }
+.rpt-type-card[data-type-id="technical"] .rpt-type-features li i { color: var(--brand-dark-blue); }
+.rpt-type-card[data-type-id="certificate"] .rpt-type-features li i { color: var(--vw-success); }
+
+[data-bs-theme="dark"] .rpt-type-card[data-type-id="technical"] .rpt-type-features li i { color: #c7d2fe; }
+
+.rpt-type-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: auto;
+}
+
+/* -------- Shared links -------- */
+.rpt-links-block {
+    margin-bottom: 8px;
+}
+
+.rpt-section-heading {
+    margin: 0 0 14px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--rpt-text);
+}
+
+.rpt-links-card {
+    background: var(--rpt-card-bg);
+    border: 1px solid var(--rpt-border);
+    border-radius: 14px;
+    box-shadow: var(--card-shadow);
+    overflow: hidden;
+}
+
+.rpt-links-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--rpt-border);
+}
+
+.rpt-links-meter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rpt-meter-label {
+    font-size: 12px;
+    color: var(--rpt-muted);
+}
+
+.rpt-meter-bar {
+    width: 110px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--vw-gray-200);
+    overflow: hidden;
+}
+
+[data-bs-theme="dark"] .rpt-meter-bar {
+    background: #2d3748;
+}
+
+.rpt-meter-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--brand-blue);
+}
+
+.rpt-links-scroll {
+    overflow-x: auto;
+}
+
+.rpt-links-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+}
+
+.rpt-links-table th {
+    text-align: left;
+    padding: 12px 22px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--rpt-faint);
+    border-bottom: 1px solid var(--rpt-border);
+}
+
+.rpt-links-table th.rpt-th-actions {
+    text-align: right;
+}
+
+.rpt-links-table td {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--rpt-border);
+    vertical-align: middle;
+}
+
+.rpt-links-table tr:last-child td {
+    border-bottom: none;
+}
+
+.rpt-link-name {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.rpt-link-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    font-size: 13px;
+}
+
+.rpt-link-icon--summary { background: var(--vw-info-bg); color: var(--brand-blue); }
+.rpt-link-icon--technical { background: var(--vw-gray-100); color: var(--brand-dark-blue); }
+
+[data-bs-theme="dark"] .rpt-link-icon--technical { color: #c7d2fe; }
+
+.rpt-link-name-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--rpt-text);
+}
+
+.rpt-link-scan {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--rpt-muted);
+    white-space: nowrap;
+}
+
+.rpt-link-expires {
+    font-size: 13px;
+    color: var(--rpt-muted);
+}
+
+.rpt-link-muted {
+    font-size: 12.5px;
+    color: var(--rpt-faint);
+}
+
+.rpt-type-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+
+.rpt-type-pill--summary { color: var(--brand-blue); background: var(--vw-info-bg); }
+.rpt-type-pill--technical { color: var(--brand-dark-blue); background: var(--vw-gray-100); }
+
+[data-bs-theme="dark"] .rpt-type-pill--technical { color: #c7d2fe; }
+
+.rpt-td-actions {
+    text-align: right;
+}
+
+.rpt-row-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.rpt-row-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--rpt-border);
+    background: var(--rpt-card-bg);
+    cursor: pointer;
+    transition: all .15s ease;
+    color: var(--rpt-muted);
+}
+
+.rpt-row-btn:hover {
+    background: var(--rpt-hover);
+}
+
+.rpt-row-btn--primary:hover {
+    background: var(--vw-info-bg);
+    color: var(--brand-blue);
+}
+
+.rpt-row-btn--danger:hover {
+    background: var(--rpt-danger-tint);
+    color: var(--vw-danger);
+}
+
+.rpt-links-empty-row td {
+    padding: 0;
+}
+
+.rpt-links-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 34px 22px;
+    color: var(--rpt-faint);
+    font-size: 13.5px;
+}
+
+/* -------- Responsive -------- */
+@media (max-width: 768px) {
+    .rpt-type-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .rpt-score-section {
+        border-right: none;
+        padding-right: 0;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--rpt-border);
+        width: 100%;
+    }
+
+    .rpt-scope-btn {
+        min-width: 0;
+    }
+
+    .rpt-scope-menu {
+        min-width: 0;
+        width: 100%;
+    }
+}

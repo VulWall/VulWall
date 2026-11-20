@@ -1,0 +1,157 @@
+@model VulWall.Dashboard.Settings.Models.AccountUserViewModel
+
+@{
+    var isCompanySet = !string.IsNullOrEmpty(Model.Company);
+}
+
+<div class="vw-section-card">
+    <div class="vw-section-header">
+        <i class="fa-solid fa-building"></i>
+        <h2>Company information</h2>
+    </div>
+    <p class="vw-section-desc">
+        @if (isCompanySet)
+        {
+            <text>Company information can only be changed once. Contact support to update it later.</text>
+        }
+        else
+        {
+            <text>Used across your reports and certificates. This can only be set once — contact support to change it later.</text>
+        }
+    </p>
+
+    @if (isCompanySet)
+    {
+        <div class="alert alert-info py-2 mb-4">
+            <i class="fa-solid fa-info-circle me-2"></i>
+            Company information can only be changed once. If you need to update it, please contact support.
+        </div>
+    }
+
+    <form asp-controller="Settings" asp-action="UpdateCompanyInfo" method="post" id="companyForm">
+        <div class="vw-fld-grid">
+            <label class="vw-fld-label">
+                <span class="vw-fld-label-text">Company name</span>
+                <input type="text" name="companyName" class="vw-fld" value="@Model.Company"
+                       placeholder="Enter company name" required @(isCompanySet ? "disabled" : "") />
+            </label>
+            <label class="vw-fld-label">
+                <span class="vw-fld-label-text">Industry</span>
+                <select name="industry" class="vw-fld" @(isCompanySet ? "disabled" : "")>
+                    <option value="">Select industry</option>
+                    <option value="technology" selected="@(Model.Industry == "technology")">Technology</option>
+                    <option value="finance"    selected="@(Model.Industry == "finance")">Finance</option>
+                    <option value="fintech"    selected="@(Model.Industry == "fintech")">Fintech</option>
+                    <option value="healthcare" selected="@(Model.Industry == "healthcare")">Healthcare</option>
+                    <option value="retail"     selected="@(Model.Industry == "retail")">Retail</option>
+                    <option value="other"      selected="@(Model.Industry == "other")">Other</option>
+                </select>
+                @if (isCompanySet)
+                {
+                    <input type="hidden" name="industry" value="@Model.Industry" />
+                }
+            </label>
+            <label class="vw-fld-label">
+                <span class="vw-fld-label-text">Website</span>
+                <input type="url" name="website" class="vw-fld" value="@Model.Website"
+                       placeholder="https://example.com" @(isCompanySet ? "disabled" : "") />
+            </label>
+            <label class="vw-fld-label">
+                <span class="vw-fld-label-text">
+                    Owner email
+                    <span class="vw-badge-readonly">Read-only</span>
+                </span>
+                <input type="email" class="vw-fld" value="@Model.OwnerEmail" disabled />
+            </label>
+        </div>
+
+        @if (!isCompanySet)
+        {
+            <div class="d-flex justify-content-end mt-4">
+                <button type="button" class="btn btn-primary" id="saveCompanyBtn">
+                    <i class="fa-solid fa-floppy-disk me-2"></i>Save company information
+                </button>
+            </div>
+        }
+    </form>
+</div>
+
+<div class="vw-section-card">
+    <div class="vw-section-header">
+        <i class="fa-solid fa-image"></i>
+        <h2>Company logo</h2>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+        <div class="logo-preview-container">
+            @if (Model.HasLogo)
+            {
+                <img id="logoPreview" src="@Url.Action("GetLogo", "Settings")" alt="Company Logo" class="logo-preview" />
+            }
+            else
+            {
+                <div id="logoPreview" class="logo-preview-placeholder">
+                    <i class="fa-solid fa-image"></i>
+                    <span>No logo</span>
+                </div>
+            }
+        </div>
+        <div class="flex-grow-1">
+            <form asp-controller="Settings" asp-action="UploadLogo" method="post"
+                  enctype="multipart/form-data" id="logoUploadForm" class="mb-2">
+                <input type="file" name="logo" id="logoInput" accept="image/png,image/jpeg"
+                       class="form-control mb-2" required />
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fa-solid fa-upload me-1"></i>Upload
+                    </button>
+                    @if (Model.HasLogo)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="removeLogoBtn">
+                            <i class="fa-solid fa-trash me-1"></i>Remove
+                        </button>
+                    }
+                </div>
+            </form>
+            <form asp-controller="Settings" asp-action="RemoveLogo" method="post" id="removeLogoForm" style="display:none;"></form>
+            <p class="vw-logo-meta mb-0">PNG or JPG · max 500 KB</p>
+        </div>
+    </div>
+</div>
+
+@{
+    var confirmCompanyModalModel = new ConfirmationModalModel
+    {
+        ModalId = "confirmCompanyModal",
+        Title = "Confirm Company Information",
+        Message = "This company information will be used in reports and certificates.",
+        MessageBold = true,
+        ConfirmButtonText = "Yes, Save Information",
+        ConfirmButtonStyle = "primary",
+        ConfirmButtonIcon = "fa-solid fa-check",
+        HeaderStyle = "warning",
+        Icon = "fas fa-exclamation-triangle",
+        Details = ["Company information can only be set once", "Cannot be changed later through the dashboard", "You will need to contact support team for future updates"],
+        DetailsTitle = "Important:",
+        DetailsIcon = "fas fa-info-circle",
+        DetailsStyle = "warning",
+        FooterMessage = "Are you sure you want to save this company information?"
+    };
+
+    var confirmRemoveLogoModalModel = new ConfirmationModalModel
+    {
+        ModalId = "confirmRemoveLogoModal",
+        Title = "Remove Company Logo",
+        Message = "Are you sure you want to remove your company logo?",
+        MessageBold = true,
+        ConfirmButtonText = "Yes, Remove Logo",
+        ConfirmButtonStyle = "danger",
+        ConfirmButtonIcon = "fa-solid fa-trash",
+        HeaderStyle = "danger",
+        Icon = "fas fa-exclamation-triangle",
+        FooterMessage = "You can upload a new logo at any time."
+    };
+
+}
+
+<partial name="~/Common/Views/_ConfirmationModal.cshtml" model="confirmCompanyModalModel" />
+<partial name="~/Common/Views/_ConfirmationModal.cshtml" model="confirmRemoveLogoModalModel" />

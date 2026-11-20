@@ -1,0 +1,230 @@
+@using VulWall.Dashboard.Common.Contracts.Enums
+@model VulWall.Dashboard.Assets.Models.IndexViewModel
+@{
+    ViewData["Title"] = "Assets";
+    var usagePct = Model.MaxAssets > 0 ? Math.Min(100, Model.TotalAssets * 100 / Model.MaxAssets) : 0;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Assets/index.css" />
+}
+
+<div class="assets-page">
+
+    @* Header *@
+    <div class="page-header assets-header">
+        <div>
+            <h1 class="assets-title">Assets</h1>
+            <p class="assets-subtitle">The domains and IPs NightWatch keeps watch over</p>
+        </div>
+        @if (Model.CanAddAsset)
+        {
+            <a href="@Url.Action("Add")" class="btn btn-primary">
+                <i class="fa-solid fa-plus me-1"></i>Add Asset
+            </a>
+        }
+        else if (Model.IsPro)
+        {
+            <button class="btn btn-outline-secondary" disabled title="You've reached the asset limit for your plan">
+                <i class="fa-solid fa-layer-group me-1"></i>Asset limit reached
+            </button>
+        }
+        else
+        {
+            <a href="@Url.Action("Index", "Settings")" class="btn btn-primary">
+                <i class="fa-solid fa-arrow-up me-1"></i>Upgrade Plan
+            </a>
+        }
+    </div>
+
+    @* Stat strip *@
+    <div class="assets-stats">
+        @* Total *@
+        <div class="assets-stat-card">
+            <div class="assets-stat-eyebrow">
+                <span>Total assets</span>
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <div class="assets-stat-number">
+                <span id="totalAssetsCount">@Model.TotalAssets</span><span style="font-size:18px; font-weight:500; color:var(--bs-tertiary-color);">/@Model.MaxAssets</span>
+            </div>
+            <div class="assets-usage-bar">
+                <div class="assets-usage-fill" id="usageFill" style="width:@(usagePct)%"></div>
+            </div>
+        </div>
+        @* Active *@
+        <div class="assets-stat-card">
+            <div class="assets-stat-eyebrow">
+                <span>Active</span>
+                <i class="fas fa-circle-check" style="color:var(--vw-success)"></i>
+            </div>
+            <div class="assets-stat-number is-success" id="activeAssetsCount">@Model.ActiveAssets</div>
+            <div class="assets-stat-sub">Scanned every cycle</div>
+        </div>
+        @* Needs verification *@
+        <div class="assets-stat-card">
+            <div class="assets-stat-eyebrow">
+                <span>Needs verification</span>
+                <i class="fas fa-shield-halved" style="color:var(--severity-medium-solid)"></i>
+            </div>
+            <div class="assets-stat-number is-pending" id="pendingAssetsCount">@Model.PendingAssets</div>
+            <div class="assets-stat-sub">Awaiting DNS proof</div>
+        </div>
+        @* Inactive *@
+        <div class="assets-stat-card">
+            <div class="assets-stat-eyebrow">
+                <span>Inactive</span>
+                <i class="fas fa-circle-pause"></i>
+            </div>
+            <div class="assets-stat-number is-muted" id="inactiveAssetsCount">@(Model.InactiveAssets - Model.PendingAssets)</div>
+            <div class="assets-stat-sub">Paused, not scanned</div>
+        </div>
+    </div>
+
+    @* Toolbar *@
+    <div class="assets-toolbar">
+        <div class="assets-search">
+            <i class="fas fa-magnifying-glass"></i>
+            <input type="text" id="search" placeholder="Search by domain or IP..." autocomplete="off" />
+        </div>
+        <div class="assets-seg" id="typeFilterGroup">
+            <button class="assets-seg-btn is-active" data-filter-type="all">All</button>
+            <button class="assets-seg-btn" data-filter-type="domain">Domains</button>
+            <button class="assets-seg-btn" data-filter-type="ip">IPs</button>
+        </div>
+        <div class="assets-seg" id="statusFilterGroup">
+            <button class="assets-seg-btn is-active" data-filter-status="all">All</button>
+            <button class="assets-seg-btn" data-filter-status="active">Active</button>
+            <button class="assets-seg-btn" data-filter-status="pending">Pending</button>
+            <button class="assets-seg-btn" data-filter-status="inactive">Inactive</button>
+        </div>
+    </div>
+
+    @* Asset list *@
+    <div class="assets-list">
+        <div class="assets-grid assets-grid-head">
+            <span>Asset</span>
+            <span class="type-col">Type</span>
+            <span>Status</span>
+            <span>Added</span>
+            <span class="actions-col">Actions</span>
+        </div>
+
+        <div id="assets-tbody">
+            @if (!Model.Assets.Any())
+            {
+                <div class="assets-empty" id="no-results-row">
+                    <i class="fas fa-inbox"></i>
+                    <p>No assets yet. Click "Add Asset" to get started.</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var asset in Model.Assets)
+                {
+                    var isPending = asset.Type == AssetType.Domain && asset.DnsVerifiedAt == null;
+                    var statusClass = isPending ? "is-pending" : (asset.Enabled ? "is-active" : "is-inactive");
+                    var statusLabel = isPending ? "Pending" : (asset.Enabled ? "Active" : "Inactive");
+                    var assetTypeStr = asset.Type == AssetType.Domain ? "domain" : "ip";
+                    var assetIcon = asset.Type == AssetType.Domain ? "fas fa-globe" : "fas fa-server";
+                    var typeLabel = asset.Type == AssetType.Domain ? "Domain" : "IP address";
+
+                    <div class="assets-grid asset-row"
+                         data-asset-name="@asset.Name?.ToLowerInvariant()"
+                         data-asset-type="@assetTypeStr"
+                         data-asset-status="@statusClass.Replace("is-", "")">
+                        @* Asset *@
+                        <div class="asset-cell">
+                            <span class="asset-avatar"><i class="@assetIcon"></i></span>
+                            <span class="asset-name">@asset.Name</span>
+                        </div>
+                        @* Type *@
+                        <span class="asset-type-label type-col">@typeLabel</span>
+                        @* Status *@
+                        <div>
+                            <span class="asset-status @statusClass">
+                                <span class="asset-status-dot"></span>@statusLabel
+                            </span>
+                        </div>
+                        @* Added *@
+                        <span class="asset-date">@asset.AddedOn.ToString("MMM dd, yyyy")</span>
+                        @* Actions *@
+                        <div class="asset-actions">
+                            @if (isPending)
+                            {
+                                <a href="@Url.Action("Verify", new { id = asset.Id })" class="asset-verify-btn">
+                                    <i class="fas fa-check"></i>Verify
+                                </a>
+                            }
+                            <form data-action="@Url.Action("UpdateAssetStatus")">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="assetId" value="@asset.Id" />
+                                <input type="hidden" name="enabled" value="@asset.Enabled.ToString().ToLower()" />
+                                <div class="form-check form-switch toggle-fixed mb-0">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           @(asset.Enabled ? "checked" : null)
+                                           @(isPending ? "disabled" : null)
+                                           title="@(isPending ? "Verify the domain first" : (asset.Enabled ? "Disable scanning" : "Enable scanning"))" />
+                                </div>
+                            </form>
+                            <form class="delete-asset-form" data-action="@Url.Action("Delete")">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@asset.Id" />
+                                <button type="button"
+                                        class="asset-icon-btn is-danger delete-asset-btn"
+                                        data-asset-id="@asset.Id"
+                                        data-asset-name="@asset.Name"
+                                        title="Delete asset">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <p class="assets-footer">Showing <span id="assets-shown">@Model.Assets.Count</span> of <span id="assets-total">@Model.TotalAssets</span> assets</p>
+
+</div>
+
+@* Scan triggered modal *@
+<partial name="~/Verticals/Assets/Views/Partials/_ScanTriggeredModal.cshtml" />
+
+@* Confirmation modal for delete *@
+@{
+    var confirmDeleteModalModel = new VulWall.Dashboard.Common.Contracts.Models.ConfirmationModalModel
+    {
+        ModalId = "confirmDeleteModal",
+        Title = "Delete Asset",
+        Message = "Are you sure you want to delete this asset?",
+        ConfirmButtonText = "Delete Asset",
+        ConfirmButtonStyle = "danger",
+        ConfirmButtonIcon = "fa-solid fa-trash",
+        FooterMessage = "This action cannot be undone.",
+        DynamicContentId = "assetDeleteContent"
+    };
+}
+<partial name="~/Common/Views/_ConfirmationModal.cshtml" model="confirmDeleteModalModel" />
+
+@* Confirmation modal for enable/disable *@
+@{
+    var confirmToggleModalModel = new VulWall.Dashboard.Common.Contracts.Models.ConfirmationModalModel
+    {
+        ModalId = "confirmToggleModal",
+        Title = "Change Asset Status",
+        Message = "Are you sure you want to change this asset's status?",
+        ConfirmButtonText = "Confirm",
+        ConfirmButtonStyle = "primary",
+        ConfirmButtonIcon = "fa-solid fa-check",
+        DynamicContentId = "assetToggleContent"
+    };
+}
+<partial name="~/Common/Views/_ConfirmationModal.cshtml" model="confirmToggleModalModel" />
+
+@section Scripts {
+    <script src="~/js/Assets/filters.js"></script>
+    <script src="~/js/Assets/index.js"></script>
+}

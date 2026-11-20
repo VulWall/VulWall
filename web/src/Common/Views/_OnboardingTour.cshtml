@@ -1,0 +1,20 @@
+@using VulWall.Dashboard.Common.Services.Organization
+@inject IOrganizationContext OrganizationContext
+
+@{
+    var tourCompleted = false;
+    var planType = "Free";
+
+    if (User.Identity?.IsAuthenticated == true)
+    {
+        var organization = await OrganizationContext.GetCurrentOrganizationAsync();
+        tourCompleted = organization.TourCompleted;
+        planType = organization.Plan?.IsActive == true
+            ? organization.Plan.SubscriptionPlan ?? "Free"
+            : "Free";
+    }
+}
+
+@Html.AntiForgeryToken()
+
+<script id="tour-config" type="application/json">{"tourCompleted": @tourCompleted.ToString().ToLower(), "planType": "@planType"}</script>

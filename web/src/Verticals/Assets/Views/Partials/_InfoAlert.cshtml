@@ -1,0 +1,22 @@
+@model (string Title, string Message, string AlertType)
+
+@{
+    var alertClass = Model.AlertType ?? "info";
+
+    var iconClass = Model.AlertType switch
+    {
+        "info" => "fa-circle-info",
+        "warning" => "fa-triangle-exclamation",
+        "danger" => "fa-circle-exclamation",
+        "success" => "fa-circle-check",
+        _ => "fa-circle-info"
+    };
+}
+
+<div class="alert alert-@alertClass" role="alert">
+    <i class="fa-solid @iconClass" style="font-size: 20px;"></i>
+    <div>
+        <strong>@Model.Title</strong>
+        <p class="mb-0">@Model.Message</p>
+    </div>
+</div>

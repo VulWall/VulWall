@@ -1,0 +1,116 @@
+@using VulWall.Dashboard.Recommendations.Constants
+@model VulWall.Dashboard.Recommendations.Models.FindingsListModel
+
+@foreach (var finding in Model.Findings)
+{
+    var sevSlug = finding.Severity.ToString().ToLower();
+    <div class="finding-card"
+         data-severity="@sevSlug"
+         data-effort="@(finding.EstimatedEffort?.ToLower() ?? "unknown")"
+         style="border-left:4px solid var(--severity-@(sevSlug)-solid)">
+
+        <a href="@Url.Action("Detail", "Recommendations", new { id = finding.PrimaryFindingId })" class="finding-card__link">
+            <div class="finding-badges mb-2">
+                <span class="sev-badge sev-@sevSlug">@finding.Severity</span>
+                @if (finding.IsExploitable == true)
+                {
+                    <span class="exploitable-badge"><i class="fas fa-bolt"></i> Exploitable</span>
+                }
+                @if (finding.IsNew)
+                {
+                    <span class="new-badge"><i class="fas fa-star"></i> New</span>
+                }
+                else
+                {
+                    <span class="recurring-badge"><i class="fas fa-rotate"></i> Recurring</span>
+                }
+            </div>
+
+            <h3 class="finding-card__title">@finding.Title</h3>
+
+            <p class="finding-card__impact">
+                @(string.IsNullOrEmpty(finding.BusinessImpact) ? finding.Description : finding.BusinessImpact)
+            </p>
+
+            @if (!string.IsNullOrEmpty(finding.FindingType) || !string.IsNullOrEmpty(finding.OwaspCategory))
+            {
+                <div class="finding-card__meta mb-3">
+                    @if (!string.IsNullOrEmpty(finding.FindingType))
+                    {
+                        <span class="meta-tag">@finding.FindingType</span>
+                    }
+                    @if (!string.IsNullOrEmpty(finding.OwaspCategory))
+                    {
+                        <span class="meta-tag meta-tag--mono">@finding.OwaspCategory</span>
+                    }
+                </div>
+            }
+
+            @if (finding.AffectedAssets.Any())
+            {
+                <div class="affected-assets mb-3">
+                    @foreach (var asset in finding.AffectedAssets.Take(3))
+                    {
+                        <span class="asset-pill">
+                            <i class="fas fa-globe"></i>
+                            @asset.Target@(asset.Port.HasValue ? $":{asset.Port}" : "")
+                        </span>
+                    }
+                    @if (finding.AffectedAssets.Count > 3)
+                    {
+                        <span class="asset-overflow">+@(finding.AffectedAssets.Count - 3) more</span>
+                    }
+                </div>
+            }
+        </a>
+
+        <div class="finding-card__footer">
+            <div class="finding-card__footer-meta">
+                @if (!string.IsNullOrEmpty(finding.EstimatedEffort))
+                {
+                    <span class="footer-meta-item"><i class="fas fa-clock"></i> @finding.EstimatedEffort effort</span>
+                }
+                <span class="footer-meta-item"><i class="fas fa-calendar"></i> Last seen @finding.LastDetected.ToString("MMM dd, yyyy")</span>
+                @if (finding.HasAIRecommendation)
+                {
+                    <span class="footer-meta-item footer-meta-item--ai"><i class="fas fa-wand-magic"></i> AI fix ready</span>
+                }
+            </div>
+            <div class="finding-card__footer-actions">
+                @if (Model.FeatureAccess.CanSuppressFindings && !string.IsNullOrEmpty(finding.FindingType))
+                {
+                    var dismissibleAssets = finding.AffectedAssets
+                        .Where(a => !string.IsNullOrEmpty(a.DiscoveryId))
+                        .ToList();
+
+                    @if (dismissibleAssets.Any())
+                    {
+                        <form method="post"
+                              action="@Url.Action("SuppressFinding", "Recommendations")"
+                              class="d-inline"
+                              data-suppress-form>
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="DiscoveryId" value="@dismissibleAssets[0].DiscoveryId" />
+                            <input type="hidden" name="FindingType" value="@finding.FindingType" />
+                            <input type="hidden" name="Status" value="@SuppressionStatus.FalsePositive" />
+                            <button type="submit" class="btn btn-sm btn-ghost-primary">
+                                <i class="fas fa-ban"></i> Dismiss
+                            </button>
+                        </form>
+                    }
+                }
+                <a href="@Url.Action("Detail", "Recommendations", new { id = finding.PrimaryFindingId })"
+                   class="btn btn-sm btn-primary">
+                    @if (finding.HasAIRecommendation)
+                    {
+                        <i class="fas fa-wrench"></i> <span>How to fix</span>
+                    }
+                    else
+                    {
+                        <i class="fas fa-wand-magic"></i> <span>Get recommendation</span>
+                    }
+                </a>
+            </div>
+        </div>
+    </div>
+}

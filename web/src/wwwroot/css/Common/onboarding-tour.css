@@ -1,0 +1,489 @@
+/* ========================================
+   ONBOARDING TOUR STYLES
+   ======================================== */
+
+/* Tour overlay with spotlight cutout */
+.tour-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.tour-overlay.active {
+    pointer-events: auto;
+}
+
+/* Spotlight backdrop using CSS clip-path for cutout effect */
+.tour-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 9998;
+    transition: clip-path 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
+}
+
+.tour-backdrop.active {
+    opacity: 1;
+}
+
+/* Highlighted element gets elevated z-index */
+[data-tour-highlight] {
+    position: relative;
+    z-index: 9999 !important;
+    box-shadow: 0 0 0 4px var(--brand-orange), 0 0 24px rgba(244, 125, 23, 0.4) !important;
+    border-radius: 8px;
+}
+
+/* Tour tooltip */
+.tour-tooltip {
+    position: fixed;
+    z-index: 10000;
+    background: var(--bs-body-bg, #fff);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1);
+    max-width: 360px;
+    width: calc(100vw - 32px);
+    animation: tourFadeIn 0.3s ease;
+    border: 1px solid var(--vw-gray-200);
+}
+
+@keyframes tourFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Tooltip arrow */
+.tour-tooltip::before {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--vw-gray-200);
+    transform: rotate(45deg);
+    z-index: -1;
+}
+
+.tour-tooltip[data-position="top"]::before {
+    bottom: -7px;
+    left: 50%;
+    margin-left: -6px;
+    border-top: none;
+    border-left: none;
+}
+
+.tour-tooltip[data-position="bottom"]::before {
+    top: -7px;
+    left: 50%;
+    margin-left: -6px;
+    border-bottom: none;
+    border-right: none;
+}
+
+.tour-tooltip[data-position="left"]::before {
+    right: -7px;
+    top: 50%;
+    margin-top: -6px;
+    border-top: none;
+    border-right: none;
+}
+
+.tour-tooltip[data-position="right"]::before {
+    left: -7px;
+    top: 50%;
+    margin-top: -6px;
+    border-bottom: none;
+    border-left: none;
+}
+
+/* Tooltip header */
+.tour-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--vw-gray-200);
+}
+
+.tour-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--bs-body-color, #1f2937);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tour-title i {
+    color: #B45309;
+}
+
+/* Tooltip content */
+.tour-content {
+    padding: 16px 20px;
+}
+
+.tour-description {
+    font-size: 0.875rem;
+    color: var(--vw-gray-600);
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Pro badge in tour */
+.tour-pro-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: linear-gradient(135deg, rgba(244, 125, 23, 0.15), rgba(244, 125, 23, 0.08));
+    color: #B45309;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+}
+
+.tour-pro-badge i {
+    font-size: 0.6rem;
+}
+
+/* Tooltip footer */
+.tour-footer {
+    padding: 12px 20px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+/* Progress dots */
+.tour-progress {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.tour-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--vw-gray-300);
+    transition: all 0.2s ease;
+}
+
+.tour-dot.active {
+    background: var(--brand-orange);
+    transform: scale(1.2);
+}
+
+.tour-dot.completed {
+    background: var(--vw-success);
+}
+
+/* Tour navigation buttons */
+.tour-nav {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.tour-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.tour-btn-skip {
+    background: transparent;
+    color: var(--vw-gray-500);
+}
+
+.tour-btn-skip:hover {
+    color: var(--vw-gray-700);
+    background: var(--vw-gray-100);
+}
+
+.tour-btn-prev {
+    background: var(--vw-gray-100);
+    color: var(--vw-gray-700);
+}
+
+.tour-btn-prev:hover {
+    background: var(--vw-gray-200);
+}
+
+.tour-btn-next {
+    background: var(--brand-blue);
+    color: white;
+}
+
+.tour-btn-next:hover {
+    background: var(--vw-primary-hover);
+}
+
+.tour-btn-finish {
+    background: var(--vw-success);
+    color: white;
+}
+
+.tour-btn-finish:hover {
+    background: var(--vw-success-hover);
+}
+
+/* Welcome modal (first step) */
+.tour-welcome-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10000;
+    background: var(--bs-body-bg, #fff);
+    border-radius: 16px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
+    max-width: 420px;
+    width: calc(100vw - 32px);
+    animation: tourModalIn 0.4s ease;
+    border: 1px solid var(--vw-gray-200);
+    overflow: hidden;
+}
+
+@keyframes tourModalIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.tour-welcome-header {
+    background: linear-gradient(135deg, var(--brand-dark-blue), var(--brand-blue));
+    padding: 32px 24px;
+    text-align: center;
+    color: white;
+}
+
+.tour-welcome-icon {
+    width: 64px;
+    height: 64px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    font-size: 1.75rem;
+}
+
+.tour-welcome-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+}
+
+.tour-welcome-subtitle {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    margin: 0;
+}
+
+.tour-welcome-content {
+    padding: 24px;
+}
+
+.tour-welcome-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 24px;
+}
+
+.tour-welcome-features li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    font-size: 0.875rem;
+    color: var(--vw-gray-700);
+}
+
+.tour-welcome-features li i {
+    color: var(--vw-success);
+    font-size: 0.875rem;
+}
+
+.tour-welcome-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.tour-welcome-actions .tour-btn {
+    flex: 1;
+    padding: 12px 20px;
+    font-size: 0.875rem;
+}
+
+/* Step counter text */
+.tour-step-counter {
+    font-size: 0.75rem;
+    color: var(--vw-gray-500);
+    white-space: nowrap;
+}
+
+/* ========================================
+   DARK THEME OVERRIDES
+   ======================================== */
+
+[data-bs-theme="dark"] .tour-backdrop {
+    background: rgba(0, 0, 0, 0.85);
+}
+
+[data-bs-theme="dark"] [data-tour-highlight] {
+    box-shadow: 0 0 0 4px var(--brand-orange), 0 0 32px rgba(244, 125, 23, 0.5) !important;
+}
+
+[data-bs-theme="dark"] .tour-tooltip {
+    background: var(--vw-dark-surface);
+    border-color: var(--vw-dark-border);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-bs-theme="dark"] .tour-tooltip::before {
+    background: var(--vw-dark-surface);
+    border-color: var(--vw-dark-border);
+}
+
+[data-bs-theme="dark"] .tour-header {
+    border-bottom-color: var(--vw-dark-border);
+}
+
+[data-bs-theme="dark"] .tour-title {
+    color: #e5e7eb;
+}
+
+[data-bs-theme="dark"] .tour-description {
+    color: #9ca3af;
+}
+
+[data-bs-theme="dark"] .tour-dot {
+    background: #4b5563;
+}
+
+[data-bs-theme="dark"] .tour-btn-skip {
+    color: #9ca3af;
+}
+
+[data-bs-theme="dark"] .tour-btn-skip:hover {
+    color: #e5e7eb;
+    background: var(--vw-dark-hover);
+}
+
+[data-bs-theme="dark"] .tour-btn-prev {
+    background: var(--vw-dark-hover);
+    color: #e5e7eb;
+}
+
+[data-bs-theme="dark"] .tour-btn-prev:hover {
+    background: #4b5563;
+}
+
+[data-bs-theme="dark"] .tour-welcome-modal {
+    background: var(--vw-dark-surface);
+    border-color: var(--vw-dark-border);
+}
+
+[data-bs-theme="dark"] .tour-welcome-content {
+    background: var(--vw-dark-surface);
+}
+
+[data-bs-theme="dark"] .tour-welcome-features li {
+    color: #d1d5db;
+}
+
+/* ========================================
+   RESPONSIVE - Mobile bottom sheet
+   ======================================== */
+
+@media (max-width: 576px) {
+    .tour-tooltip {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
+        max-width: none;
+        width: 100%;
+        border-radius: 16px 16px 0 0;
+        animation: tourSlideUp 0.3s ease;
+    }
+
+    @keyframes tourSlideUp {
+        from {
+            transform: translateY(100%);
+        }
+        to {
+            transform: translateY(0);
+        }
+    }
+
+    .tour-tooltip::before {
+        display: none;
+    }
+
+    .tour-welcome-modal {
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
+        transform: translateX(0);
+        max-width: none;
+        width: 100%;
+        border-radius: 16px 16px 0 0;
+        animation: tourSlideUp 0.4s ease;
+    }
+
+    .tour-footer {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .tour-progress {
+        order: 1;
+    }
+
+    .tour-nav {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .tour-btn {
+        padding: 12px 20px;
+    }
+}
+
+/* ========================================
+   REDUCED MOTION
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .tour-tooltip,
+    .tour-welcome-modal,
+    .tour-backdrop,
+    [data-tour-highlight] {
+        animation: none !important;
+        transition: none !important;
+    }
+}

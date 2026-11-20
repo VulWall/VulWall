@@ -1,0 +1,40 @@
+@*
+    Locked Content Partial - Shows blurred overlay with upgrade CTA
+
+    Usage:
+    <partial name="~/Common/Views/_LockedContent.cshtml" model='new LockedContentModel {
+        Headline = "See step-by-step remediation",
+        Subtext = "Fix this issue and prevent downtime",
+        MinHeight = "200px"
+    }' />
+
+    Or wrap content that should appear blurred:
+    <div class="locked-content-wrapper">
+        <div class="locked-content-preview">
+            <!-- Your content here (will be blurred) -->
+        </div>
+        <partial name="~/Common/Views/_LockedContent.cshtml" model='...' />
+    </div>
+*@
+
+@model VulWall.Dashboard.Common.Contracts.Models.LockedContentModel
+
+<div class="locked-content-overlay @(Model.Compact ? "locked-content-compact" : "") @Model.ContainerClass"
+     @if (!string.IsNullOrEmpty(Model.MinHeight)) { <text>style="min-height: @Model.MinHeight"</text> }>
+    <div class="locked-content-inner">
+        <div class="locked-content-icon">
+            <i class="@Model.LockIcon"></i>
+        </div>
+        <div class="locked-content-text">
+            <h5 class="locked-content-headline">@Model.Headline</h5>
+            @if (!string.IsNullOrEmpty(Model.Subtext))
+            {
+                <p class="locked-content-subtext">@Model.Subtext</p>
+            }
+        </div>
+        <a href="/settings#plans" class="btn btn-primary locked-content-btn">
+            <i class="@Model.ButtonIcon me-2"></i>
+            @Model.ButtonText
+        </a>
+    </div>
+</div>

@@ -1,0 +1,457 @@
+/* ========================================
+   FEATURE GATING STYLES
+   ======================================== */
+
+/* -------- Locked Content Wrapper -------- */
+.locked-content-wrapper {
+    position: relative;
+    overflow: hidden;
+}
+
+.locked-content-preview {
+    filter: blur(4px);
+    opacity: 0.6;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* -------- Locked Content Overlay -------- */
+.locked-content-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(2px);
+    border-radius: 0.75rem;
+    z-index: 10;
+}
+
+.locked-content-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    max-width: 400px;
+}
+
+.locked-content-icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--brand-dark-blue) 0%, var(--brand-blue) 100%);
+    border-radius: 50%;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 16px rgba(0, 86, 161, 0.2);
+}
+
+.locked-content-icon i {
+    font-size: 1.5rem;
+    color: white;
+}
+
+.locked-content-headline {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--vw-gray-900);
+    margin-bottom: 0.5rem;
+}
+
+.locked-content-subtext {
+    font-size: 0.875rem;
+    color: var(--vw-gray-600);
+    margin-bottom: 1.25rem;
+}
+
+.locked-content-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.625rem 1.25rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 86, 161, 0.2);
+    transition: all 0.2s ease;
+}
+
+.locked-content-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 86, 161, 0.3);
+}
+
+/* Compact variant */
+.locked-content-compact .locked-content-inner {
+    padding: 1rem;
+}
+
+.locked-content-compact .locked-content-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0.75rem;
+}
+
+.locked-content-compact .locked-content-icon i {
+    font-size: 1rem;
+}
+
+.locked-content-compact .locked-content-headline {
+    font-size: 0.9375rem;
+    margin-bottom: 0.375rem;
+}
+
+.locked-content-compact .locked-content-subtext {
+    font-size: 0.8125rem;
+    margin-bottom: 1rem;
+}
+
+.locked-content-compact .locked-content-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+/* -------- Pro Badge -------- */
+.pro-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--brand-orange);
+    background: rgba(244, 125, 23, 0.1);
+    border: 1px solid rgba(244, 125, 23, 0.2);
+    border-radius: 9999px;
+    white-space: nowrap;
+}
+
+.pro-badge i {
+    font-size: 0.625rem;
+}
+
+/* -------- Upgrade CTA Inline -------- */
+.upgrade-cta-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.upgrade-cta-text {
+    color: var(--vw-gray-600);
+}
+
+.upgrade-cta-link {
+    display: inline-flex;
+    align-items: center;
+    color: var(--vw-primary);
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.upgrade-cta-link:hover {
+    color: var(--vw-primary-hover);
+}
+
+.upgrade-cta-link i {
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+}
+
+.upgrade-cta-link:hover i {
+    transform: translateX(2px);
+}
+
+/* -------- Upgrade CTA Banner -------- */
+.upgrade-cta-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, rgba(33, 44, 94, 0.05) 0%, rgba(0, 86, 161, 0.05) 100%);
+    border: 1px solid rgba(0, 86, 161, 0.1);
+    border-radius: 0.75rem;
+}
+
+.upgrade-cta-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.upgrade-cta-banner .upgrade-cta-text {
+    color: var(--vw-gray-700);
+    font-weight: 500;
+}
+
+/* -------- Upgrade CTA Card -------- */
+.upgrade-cta-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, rgba(33, 44, 94, 0.03) 0%, rgba(0, 86, 161, 0.03) 100%);
+    border: 1px solid var(--vw-gray-200);
+    border-radius: 1rem;
+}
+
+.upgrade-cta-card-icon {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--brand-orange) 0%, #E56D07 100%);
+    border-radius: 50%;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 4px 16px rgba(244, 125, 23, 0.3);
+}
+
+.upgrade-cta-card-icon i {
+    font-size: 1.75rem;
+    color: #101827;
+}
+
+.upgrade-cta-card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--vw-gray-900);
+    margin-bottom: 0.5rem;
+}
+
+.upgrade-cta-card-text {
+    font-size: 0.9375rem;
+    color: var(--vw-gray-600);
+    margin-bottom: 1.5rem;
+    max-width: 300px;
+}
+
+/* ========================================
+   DARK THEME OVERRIDES
+   ======================================== */
+
+[data-bs-theme="dark"] .locked-content-overlay {
+    background: rgba(15, 20, 25, 0.9);
+}
+
+[data-bs-theme="dark"] .locked-content-headline {
+    color: white;
+}
+
+[data-bs-theme="dark"] .locked-content-subtext {
+    color: var(--vw-gray-300);
+}
+
+[data-bs-theme="dark"] .locked-content-preview {
+    opacity: 0.4;
+}
+
+[data-bs-theme="dark"] .pro-badge {
+    background: rgba(244, 125, 23, 0.15);
+    border-color: rgba(244, 125, 23, 0.3);
+}
+
+[data-bs-theme="dark"] .upgrade-cta-text {
+    color: var(--vw-gray-400);
+}
+
+[data-bs-theme="dark"] .upgrade-cta-banner {
+    background: linear-gradient(135deg, rgba(33, 44, 94, 0.15) 0%, rgba(0, 86, 161, 0.15) 100%);
+    border-color: rgba(0, 86, 161, 0.2);
+}
+
+[data-bs-theme="dark"] .upgrade-cta-banner .upgrade-cta-text {
+    color: var(--vw-gray-300);
+}
+
+[data-bs-theme="dark"] .upgrade-cta-card {
+    background: linear-gradient(135deg, rgba(33, 44, 94, 0.1) 0%, rgba(0, 86, 161, 0.1) 100%);
+    border-color: var(--vw-gray-300);
+}
+
+[data-bs-theme="dark"] .upgrade-cta-card-title {
+    color: var(--vw-gray-100);
+}
+
+[data-bs-theme="dark"] .upgrade-cta-card-text {
+    color: var(--vw-gray-400);
+}
+
+/* -------- Subscription Status Banners -------- */
+.subscription-expired-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.875rem 1.25rem;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, rgba(244, 125, 23, 0.08) 0%, rgba(244, 125, 23, 0.03) 100%);
+    border: 1px solid rgba(244, 125, 23, 0.2);
+    border-radius: 0.5rem;
+}
+
+.subscription-expired-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.subscription-expired-banner-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: rgba(244, 125, 23, 0.1);
+    border-radius: 50%;
+    color: var(--brand-orange);
+    flex-shrink: 0;
+}
+
+.subscription-expired-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.subscription-expired-banner-message {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--vw-gray-900);
+    line-height: 1.4;
+}
+
+.subscription-expired-banner-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #101827;
+    background: var(--brand-orange);
+    border: none;
+    border-radius: 0.375rem;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.2s ease;
+}
+
+.subscription-expired-banner-action:hover {
+    background: var(--accent-orange-hover);
+    color: #101827;
+}
+
+.subscription-past-due-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.875rem 1.25rem;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.03) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 0.5rem;
+}
+
+.subscription-past-due-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.subscription-past-due-banner-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: rgba(245, 158, 11, 0.1);
+    border-radius: 50%;
+    color: var(--vw-warning);
+    flex-shrink: 0;
+}
+
+.subscription-past-due-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.subscription-past-due-banner-message {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--vw-gray-900);
+    line-height: 1.4;
+}
+
+.subscription-past-due-banner-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #101827;
+    background: var(--vw-warning);
+    border: none;
+    border-radius: 0.375rem;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.2s ease;
+}
+
+.subscription-past-due-banner-action:hover {
+    background: var(--vw-warning-hover);
+    color: #101827;
+}
+
+/* Responsive layout for mobile */
+@media (max-width: 767.98px) {
+    .subscription-expired-banner,
+    .subscription-past-due-banner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    .subscription-expired-banner-action,
+    .subscription-past-due-banner-action {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* -------- Dark Theme Overrides for Subscription Banners -------- */
+
+[data-bs-theme="dark"] .subscription-expired-banner {
+    background: var(--vw-dark-surface);
+    border-color: rgba(244, 125, 23, 0.3);
+}
+
+[data-bs-theme="dark"] .subscription-expired-banner-icon {
+    background: rgba(244, 125, 23, 0.15);
+}
+
+[data-bs-theme="dark"] .subscription-expired-banner-message {
+    color: var(--brand-on);
+}
+
+[data-bs-theme="dark"] .subscription-past-due-banner {
+    background: var(--vw-dark-surface);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+[data-bs-theme="dark"] .subscription-past-due-banner-icon {
+    background: rgba(245, 158, 11, 0.15);
+}
+
+[data-bs-theme="dark"] .subscription-past-due-banner-message {
+    color: var(--brand-on);
+}

@@ -1,0 +1,143 @@
+@using VulWall.Dashboard.Common.Contracts.Enums
+@model VulWall.Dashboard.Assets.Models.AddAssetInput
+@{
+    ViewData["Title"] = "Add New Asset";
+}
+
+<div class="add-asset-page">
+    <a href="@Url.Action("Index")" class="add-back-link">
+        <i class="fas fa-arrow-left"></i> Back to assets
+    </a>
+
+    <div class="add-eyebrow">ADD ASSET</div>
+    <h1 class="add-hero-title">Monitor a new asset</h1>
+    <p class="add-lead">
+        Add a domain and we'll start watching its external attack surface —
+        discovering exposures and ranking what actually matters.
+    </p>
+
+    @if (ViewBag.QuickAddDomain is string qd)
+    {
+        <div class="add-quickadd">
+            <div class="add-quickadd__mark">
+                <i class="fas fa-shield-halved"></i>
+            </div>
+            <div class="add-quickadd__body">
+                <div class="add-quickadd__eyebrow">
+                    <i class="fas fa-circle-check"></i> Verified — no DNS setup needed
+                </div>
+                <p class="add-quickadd__lead">
+                    Your email confirms you own <span class="add-quickadd__domain">@qd</span>.
+                    Add it and start scanning its external attack surface right now.
+                </p>
+            </div>
+            <form method="post" asp-action="QuickAdd" class="add-quickadd__action">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-bolt"></i> Scan @qd now
+                </button>
+            </form>
+        </div>
+    }
+
+    <div class="add-asset-grid">
+        <div class="add-form-card">
+            <form method="post" asp-action="Add" id="addAssetForm">
+                @* IP assets are temporarily disabled (ownership verification deferred), so domain is the only type.
+                   Plain name= (not asp-for) submits the literal Domain value regardless of model state. *@
+                <input type="hidden" name="AssetType" value="@((int)AssetType.Domain)" />
+
+                <div id="domainFields" class="asset-input-group">
+                    <label asp-for="DomainName" class="form-label">Domain name</label>
+                    <div class="add-input-wrap">
+                        <input asp-for="DomainName" type="text" class="form-control add-mono-input"
+                               placeholder="example.com" autocomplete="off" spellcheck="false" id="domainInput" />
+                        <span class="input-validity-icon" id="domainValidIcon">
+                            <i class="fas fa-circle-check text-success"></i>
+                        </span>
+                        <span class="input-validity-icon" id="domainInvalidIcon">
+                            <i class="fas fa-circle-exclamation text-danger"></i>
+                        </span>
+                    </div>
+                    <div class="add-helper-text" id="domainHelper">
+                        <i class="fas fa-circle-info"></i> No http:// or paths — just the bare domain.
+                    </div>
+                    <span asp-validation-for="DomainName" class="text-danger small"></span>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                    <a href="@Url.Action("Index")" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary" id="addSubmitBtn">
+                        Add asset
+                        <i class="fas fa-arrow-right ms-1"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="add-context-rail">
+            <div class="add-rail-card">
+                <div class="add-rail-eyebrow">ASSET USAGE</div>
+                @{
+                    int used = ViewBag.AssetsUsed ?? 0;
+                    int max = ViewBag.AssetsMax ?? 0;
+                    bool isFull = used >= max;
+                    double pct = max > 0 ? Math.Min(100.0, (double)used / max * 100) : 0;
+                    int remaining = Math.Max(0, max - used);
+                }
+                <div class="add-plan-count">@used <span class="add-plan-sep">/</span> @max</div>
+                <div class="add-plan-bar-track">
+                    <div class="add-plan-bar-fill @(isFull ? "add-plan-bar-full" : "")"
+                         style="width: @pct.ToString("F0")%"></div>
+                </div>
+                <div class="add-plan-note">
+                    @if (isFull)
+                    {
+                        <span class="text-warning"><i class="fas fa-circle-exclamation"></i> Limit reached</span>
+                    }
+                    else
+                    {
+                        <span>@remaining asset slot@(remaining == 1 ? "" : "s") remaining on your plan.</span>
+                    }
+                </div>
+            </div>
+
+            <div class="add-rail-card">
+                <div class="add-rail-eyebrow">WHAT HAPPENS NEXT</div>
+                <div id="stepsForDomain" class="add-steps">
+                    @{
+                        var domainSteps = new[]
+                        {
+                            ("Verify ownership", "Add one DNS TXT record so we know the domain is yours."),
+                            ("Discover", "We map subdomains, open ports and services automatically."),
+                            ("Scan", "NightWatch runs its scanners across your perimeter."),
+                            ("See findings", "Plain-English results, ranked by what actually matters.")
+                        };
+                    }
+                    @foreach (var (i, step) in domainSteps.Select((s, i) => (i + 1, s)))
+                    {
+                        <div class="add-step">
+                            <span class="add-step-num">@i</span>
+                            <div>
+                                <div class="add-step-title">@step.Item1</div>
+                                <div class="add-step-desc">@step.Item2</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="add-tip-strip">
+                <i class="fas fa-bolt" style="color: var(--brand-orange);"></i>
+                Get notified the moment a new exposure is found.
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Assets/add.css" />
+}
+
+@section Scripts {
+    <script src="~/js/Assets/add.js" type="module"></script>
+}

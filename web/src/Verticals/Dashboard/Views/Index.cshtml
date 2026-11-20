@@ -1,0 +1,193 @@
+@using System.Text.Json
+@using VulWall.Dashboard.Scans.Models
+@model VulWall.Dashboard.Dashboard.Models.IndexViewModel
+@{
+    ViewData["Title"] = "Overview";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Common/badges.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Common/audit-activity.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Dashboard/index.css" asp-append-version="true" />
+}
+
+<div class="overview-page">
+
+    <!-- HEADER -->
+    <div class="overview-header">
+        <div class="overview-header-meta">
+            <div class="overview-header-eyebrow">Perimeter overview</div>
+            <h1 class="overview-domain">@Model.PrimaryDomain</h1>
+            <div class="overview-header-sub">
+                <span class="status-pill status-pill--monitored">
+                    <span class="status-pill-dot"></span>Monitored
+                </span>
+                <span class="overview-header-scanmeta">
+                    Last scan <span class="mono">@Model.LastScanTimeAgo</span> &middot; <span class="mono">@Model.TotalAssets</span> assets
+                </span>
+            </div>
+        </div>
+        <div class="overview-header-actions">
+            @if (Model.ScanNowState == ScanNowState.Allowed)
+            {
+                <form asp-controller="Scans" asp-action="TriggerScan" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-vw-primary btn-sm overview-rescan-btn">
+                        <i class="fas fa-bolt me-1"></i>Rescan now
+                    </button>
+                </form>
+            }
+            else if (Model.ScanNowState == ScanNowState.InProgress)
+            {
+                <button class="btn btn-vw-primary btn-sm overview-rescan-btn" disabled
+                        title="A scan is already running.">
+                    <i class="fas fa-spinner fa-spin me-1"></i>Scanning…
+                </button>
+            }
+            else if (Model.ScanNowState == ScanNowState.Cooldown)
+            {
+                <div class="d-flex flex-column align-items-end gap-1">
+                    <button class="btn btn-vw-primary btn-sm overview-rescan-btn" disabled>
+                        <i class="fas fa-clock me-1"></i>Rescan now
+                    </button>
+                    <span class="overview-cooldown-hint">Next scan after midnight UTC</span>
+                </div>
+            }
+            else
+            {
+                <a asp-controller="Settings" asp-action="Index" asp-fragment="billing"
+                   class="btn btn-accent btn-sm overview-rescan-btn"
+                   title="Upgrade to Pro to trigger on-demand scans anytime.">
+                    <i class="fas fa-lock me-1"></i>Rescan now <span class="badge badge-secondary ms-1">Pro</span>
+                </a>
+            }
+        </div>
+    </div>
+
+    <!-- HERO: SCORE + TREND CHART -->
+    <div class="overview-hero-grid">
+        <partial name="Partials/_ScorePanel" model="Model" />
+        <partial name="Partials/_SecurityTimeline" model="Model" />
+    </div>
+
+    <!-- METRIC TILES -->
+    <partial name="Partials/_StatsCards" model="Model" />
+
+    <!-- FIX THESE FIRST -->
+    <partial name="Partials/_FixNow" model="Model" />
+
+    <!-- BOTTOM: RECENT SCANS + ACTIVITY -->
+    <div class="overview-bottom-grid">
+
+        <div class="recent-section" data-tour="recent-scans">
+            <div class="recent-section-head">
+                <h2>Recent scans</h2>
+                <a href="/Scans" class="recent-section-link">View all</a>
+            </div>
+            @if (Model.RecentScans.Any())
+            {
+                @foreach (var scan in Model.RecentScans)
+                {
+                    var sevLower = scan.Severity.ToLowerInvariant();
+                    <div class="scan-list-row">
+                        <i class="fas fa-globe scan-row-glyph"></i>
+                        <div class="scan-row-main">
+                            <div class="scan-row-name">@scan.AssetName</div>
+                            <div class="scan-row-meta">@scan.TimeAgo &middot; @scan.Summary</div>
+                        </div>
+                        <div class="scan-row-badges">
+                            @if (sevLower == "clean")
+                            {
+                                <span class="scan-clean-badge"><span class="status-pill-dot"></span>Clean</span>
+                            }
+                            else
+                            {
+                                <span class="sev-badge sev-@sevLower">@scan.Severity</span>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="recent-empty">
+                    <i class="fas fa-wifi d-block"></i>
+                    <p class="mb-0 small">No recent scans</p>
+                </div>
+            }
+        </div>
+
+        <div class="recent-section" data-tour="recent-activity">
+            <div class="recent-section-head">
+                <h2>Recent activity</h2>
+            </div>
+            @if (Model.RecentActivities.Any())
+            {
+                @foreach (var activity in Model.RecentActivities)
+                {
+                    var message = $"{activity.UserName} {activity.Action.ToLower()}";
+                    if (!string.IsNullOrEmpty(activity.AdditionalInfo))
+                    {
+                        message += $" {activity.AdditionalInfo}";
+                    }
+                    <div class="activity-list-row">
+                        <div class="activity-row-icon" style="color: @GetIconColor(activity.Action);">
+                            <i class="fas fa-@GetIconClass(activity.Action)"></i>
+                        </div>
+                        <div class="activity-row-main">
+                            <div class="activity-row-title">@message</div>
+                            <div class="activity-row-meta">@activity.TimeAgo</div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="recent-empty">
+                    <i class="fas fa-inbox d-block"></i>
+                    <p class="mb-0 small">No recent activity</p>
+                </div>
+            }
+        </div>
+
+    </div>
+</div>
+
+@section Scripts {
+    <script id="chart-data" type="application/json">@Html.Raw(JsonSerializer.Serialize(Model.ChartData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script type="module" src="~/js/Dashboard/index.js" asp-append-version="true"></script>
+}
+
+@functions {
+    private static string GetIconClass(string action)
+    {
+        var a = action.ToLower();
+        if (a.Contains("generated") || a.Contains("created")) return "file-alt";
+        if (a.Contains("shared")) return "link";
+        if (a.Contains("downloaded") || a.Contains("exported")) return "file-arrow-down";
+        if (a.Contains("revoked")) return "ban";
+        if (a.Contains("added")) return "plus";
+        if (a.Contains("verified")) return "check-circle";
+        if (a.Contains("deleted")) return "trash";
+        if (a.Contains("logged in")) return "sign-in-alt";
+        if (a.Contains("logged out")) return "sign-out-alt";
+        if (a.Contains("muted") || a.Contains("suppressed") || a.Contains("dismissed")) return "volume-xmark";
+        if (a.Contains("scan")) return "radar";
+        if (a.Contains("discovered") || a.Contains("subdomain")) return "sitemap";
+        if (a.Contains("updated")) return "edit";
+        return "circle";
+    }
+
+    private static string GetIconColor(string action)
+    {
+        var a = action.ToLower();
+        if (a.Contains("verified") || a.Contains("logged in") || a.Contains("shared") ||
+            a.Contains("added") || a.Contains("created") || a.Contains("generated"))
+            return "var(--vw-success)";
+        if (a.Contains("updated") || a.Contains("downloaded") || a.Contains("exported"))
+            return "var(--vw-warning)";
+        if (a.Contains("deleted") || a.Contains("revoked") || a.Contains("logged out"))
+            return "var(--vw-danger)";
+        return "var(--vw-primary)";
+    }
+}

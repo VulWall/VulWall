@@ -1,0 +1,255 @@
+@using System.Security.Claims
+@using System.Text.Json
+@using VulWall.Dashboard.Common.Services.Organization
+@using VulWall.Dashboard.Common.Services.ScanSchedule
+@inject IOrganizationContext OrganizationContext
+@{
+    var email = User.FindFirst(ClaimTypes.Email)?.Value ?? User.FindFirst("email")?.Value ?? "user@example.com";
+
+    var plan = "Free";
+    var organizationName = "My Organization";
+    var isActive = true;
+    var currentOrgId = string.Empty;
+    var allOrgs = new List<VulWall.Dashboard.Data.Entities.Organization.Organization>();
+
+    VulWall.Dashboard.Common.Services.ScanSchedule.NextScanCalculator.NextScan? nextScan = null;
+
+    if (User.Identity?.IsAuthenticated == true)
+    {
+        var organization = await OrganizationContext.GetCurrentOrganizationAsync();
+        plan = organization.Plan?.SubscriptionPlan ?? "Free";
+        organizationName = organization.CompanyName ?? "My Organization";
+        isActive = organization.Plan?.IsActive ?? true;
+        currentOrgId = organization.Id;
+        allOrgs = (await OrganizationContext.GetUserOrganizationsAsync()).ToList();
+        nextScan = NextScanCalculator.Compute(organization.SubscriptionSettings?.ScanCron);
+    }
+
+    var ctrl = (ViewContext.RouteData.Values["controller"]?.ToString() ?? "").ToLowerInvariant();
+    bool IsActive(string c) => ctrl == c.ToLowerInvariant();
+
+    // Dynamic upgrade CTA - same card, different message per page
+    var upgradeMessages = new Dictionary<string, string>
+    {
+        ["dashboard"] = "Fix critical risks with AI remediation",
+        ["assets"] = "Understand which assets increase your risk",
+        ["scans"] = "See what changed between scans",
+        ["discoveries"] = "Reveal your full attack surface",
+        ["recommendations"] = "Unlock step by step remediation guidance",
+        ["reports"] = "Publish shareable security reports and trust certificates",
+        ["settings"] = "Unlock full security capabilities",
+    };
+    var isFreeUser = plan.Equals("Free", StringComparison.OrdinalIgnoreCase);
+    var upgradeMessage = upgradeMessages.GetValueOrDefault(ctrl, "Unlock advanced security features");
+    var hasMultipleOrgs = allOrgs.Count > 1;
+}
+
+<aside class="sidebar d-flex flex-column p-3" role="region" aria-label="Primary" data-tour="sidebar">
+    <!-- Brand -->
+    <div class="brand d-flex align-items-center justify-content-center mb-4">
+        <img src="~/img/VW_Brand.png" alt="VulWall Logo" width="180" height="40" />
+    </div>
+
+    <!-- Main -->
+    <ul class="nav nav-pills flex-column gap-1">
+        <li class="nav-item">
+            <a class="nav-link d-flex align-items-center gap-2 @(IsActive("Dashboard") ? "active" : "")"
+               asp-controller="Dashboard" asp-action="Index"
+               aria-current="@(IsActive("Dashboard") ? "page" : null)">
+                <i class="fa-solid fa-home" style="width: 20px;"></i>
+                <span>Overview</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link d-flex align-items-center gap-2 @(IsActive("Assets") ? "active" : "")"
+               asp-controller="Assets" asp-action="Index"
+               aria-current="@(IsActive("Assets") ? "page" : null)">
+                <i class="fa-solid fa-briefcase" style="width: 20px;"></i>
+                <span>Assets</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link d-flex align-items-center gap-2 @(IsActive("Scans") ? "active" : "")"
+               asp-controller="Scans" asp-action="Index"
+               aria-current="@(IsActive("Scans") ? "page" : null)">
+                <i class="fa-solid fa-magnifying-glass" style="width: 20px;"></i>
+                <span>Scans</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link d-flex align-items-center gap-2 @(IsActive("Discoveries") ? "active" : "")"
+               asp-controller="Discoveries" asp-action="Index"
+               aria-current="@(IsActive("Discoveries") ? "page" : null)">
+                <i class="fa-solid fa-database" style="width: 20px;"></i>
+                <span>Discoveries</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link d-flex align-items-center gap-2 @(IsActive("Recommendations") ? "active" : "")"
+               asp-controller="Recommendations" asp-action="Index"
+               aria-current="@(IsActive("Recommendations") ? "page" : null)">
+                <i class="fa-solid fa-list-check" style="width: 20px;"></i>
+                <span>Recommendations</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link d-flex align-items-center gap-2 @(IsActive("Reports") ? "active" : "")"
+               asp-controller="Reports" asp-action="Index"
+               aria-current="@(IsActive("Reports") ? "page" : null)">
+                <i class="fa-solid fa-file-lines" style="width: 20px;"></i>
+                <span>Reports</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link d-flex align-items-center gap-2 @(IsActive("Settings") ? "active" : "")"
+               asp-controller="Settings" asp-action="Index"
+               aria-current="@(IsActive("Settings") ? "page" : null)">
+                <i class="fa-solid fa-gear" style="width: 20px;"></i>
+                <span>Settings</span>
+            </a>
+        </li>
+    </ul>
+    <div class="mt-auto pt-3">
+        @if (nextScan is not null)
+        {
+            <!-- Next-scan countdown widget — data passed CSP-safe via JSON block -->
+            <script id="next-scan-data" type="application/json">@Html.Raw(JsonSerializer.Serialize(new {
+                nextUtc = nextScan.NextUtc.ToString("o"),
+                periodStartUtc = nextScan.PeriodStartUtc.ToString("o")
+            }))</script>
+            <div class="next-scan mb-3">
+                <div class="next-scan__label">
+                    <span class="next-scan__dot" aria-hidden="true"></span>
+                    <span>Next scan</span>
+                </div>
+                <div class="next-scan__time" data-next-scan-countdown>—</div>
+                <div class="next-scan__sub">Scheduled for <span data-next-scan-clock>—</span></div>
+                <div class="next-scan__bar" role="progressbar" aria-label="Time elapsed since last scan">
+                    <div class="next-scan__fill" data-next-scan-fill></div>
+                </div>
+            </div>
+        }
+
+        @if (isFreeUser)
+        {
+            <!-- Upgrade CTA - same card, dynamic message -->
+            <div class="sidebar-upgrade-prompt mb-3 p-3 rounded-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="fas fa-crown sidebar-upgrade-icon"></i>
+                    <span class="text-white fw-semibold" style="font-size: 0.8rem;">Unlock Pro</span>
+                </div>
+                <p class="text-white-50 mb-2" style="font-size: 0.7rem; line-height: 1.3;">
+                    @upgradeMessage
+                </p>
+                <a href="/settings#plans" class="btn btn-sm sidebar-upgrade-btn w-100">
+                    <i class="fas fa-rocket me-1"></i> Upgrade Now
+                </a>
+            </div>
+        }
+
+        <!-- Organization & User Info -->
+        <div class="text-center mb-3" style="font-size: 0.75rem;">
+            @if (hasMultipleOrgs)
+            {
+                <!-- Org switcher dropdown for multi-org users -->
+                <div class="dropdown mb-1">
+                    <button class="btn btn-sm sidebar-org-switcher dropdown-toggle w-100 d-flex align-items-center justify-content-center gap-1"
+                            type="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                            title="Switch organization">
+                        <i class="fas fa-building" style="font-size: 0.7rem; opacity: 0.8;"></i>
+                        <span class="text-truncate" style="max-width: 110px; font-size: 0.8rem; font-weight: 600;">@organizationName</span>
+                        @if (plan.Equals("Pro", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (isActive)
+                            {
+                                <span class="badge rounded-pill ms-1 sidebar-badge-muted">Pro</span>
+                            }
+                            else
+                            {
+                                <span class="badge rounded-pill ms-1 sidebar-badge-expired">Expired</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="badge rounded-pill ms-1 sidebar-badge-muted">@plan</span>
+                        }
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end sidebar-org-dropdown">
+                        @foreach (var org in allOrgs)
+                        {
+                            var orgDisplayName = org.CompanyName ?? "Unnamed Organization";
+                            var isCurrentOrg = org.Id == currentOrgId;
+                            <li>
+                                <form method="post" asp-controller="Settings" asp-action="SwitchOrg">
+                                    <input type="hidden" name="orgId" value="@org.Id" />
+                                    <button type="submit"
+                                            class="dropdown-item sidebar-org-item @(isCurrentOrg ? "active" : "")"
+                                            @(isCurrentOrg ? "disabled" : "")>
+                                        <i class="fas fa-check me-2 @(isCurrentOrg ? "" : "invisible")" style="font-size: 0.7rem;"></i>
+                                        <span class="text-truncate" style="max-width: 140px;" title="@orgDisplayName">@orgDisplayName</span>
+                                    </button>
+                                </form>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+            else
+            {
+                <!-- Single org: static display -->
+                <div class="text-white fw-semibold mb-1 d-flex align-items-center justify-content-center gap-2" style="font-size: 0.8rem;">
+                    <span class="text-truncate" style="max-width: 120px;" title="@organizationName">@organizationName</span>
+                    @if (plan.Equals("Pro", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (isActive)
+                        {
+                            <span class="badge rounded-pill sidebar-badge-muted">Pro</span>
+                        }
+                        else
+                        {
+                            <span class="badge rounded-pill sidebar-badge-expired">Expired</span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="badge rounded-pill sidebar-badge-muted">@plan</span>
+                    }
+                </div>
+            }
+            <div class="text-white-50" style="font-size: 0.75rem;">
+                <span class="text-truncate d-inline-block" style="max-width: 180px;" title="@email">@email</span>
+            </div>
+        </div>
+
+        <hr class="mb-3" style="border-top: 1px solid rgba(251, 251, 253, 0.15); opacity: 1;" />
+
+        <!-- Theme Toggle & Logout -->
+        <div class="d-flex gap-2 justify-content-center">
+            <button id="themeToggle"
+                    class="btn btn-icon rounded-3"
+                    type="button"
+                    aria-pressed="false"
+                    aria-label="Toggle color theme"
+                    title="Toggle color theme"
+                    style="width: 2.5rem; height: 2.5rem; border:1px solid rgba(251,251,253,0.1);">
+                <i class="fa-solid fa-sun theme-icon-light d-none" style="font-size: 0.875rem;"></i>
+                <i class="fa-solid fa-moon theme-icon-dark" style="font-size: 0.875rem;"></i>
+            </button>
+            <a class="btn btn-icon rounded-3 d-flex align-items-center justify-content-center"
+               asp-controller="Settings"
+               asp-action="Logout"
+               aria-label="Log out"
+               title="Log out"
+               style="width: 2.5rem; height: 2.5rem; border:1px solid rgba(251,251,253,0.1); color: inherit;">
+                <i class="fa-solid fa-right-from-bracket" style="font-size: 0.875rem;"></i>
+            </a>
+        </div>
+
+        <!-- Built with love -->
+        <div class="text-center text-white-50 small mt-3" style="font-size: 0.75rem;">
+            &copy; @DateTime.UtcNow.Year - Built with ❤️ in Amsterdam
+        </div>
+    </div>
+</aside>

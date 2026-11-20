@@ -1,0 +1,55 @@
+@model VulWall.Dashboard.Reports.Models.SummaryReportViewModel
+
+<div class="section scope-section">
+    <h2>What We Checked</h2>
+
+    <div class="scope-grid">
+        <div class="scope-item">
+            <i class="fas fa-sitemap"></i>
+            <span>Subdomain enumeration</span>
+        </div>
+        <div class="scope-item">
+            <i class="fas fa-network-wired"></i>
+            <span>Port scanning & service detection</span>
+        </div>
+        <div class="scope-item">
+            <i class="fas fa-lock"></i>
+            <span>TLS/SSL configuration analysis</span>
+        </div>
+        <div class="scope-item">
+            <i class="fas fa-shield-alt"></i>
+            <span>HTTP security header inspection</span>
+        </div>
+        <div class="scope-item">
+            <i class="fas fa-bug"></i>
+            <span>Known CVE detection</span>
+        </div>
+        <div class="scope-item">
+            <i class="fas fa-code"></i>
+            <span>JavaScript library vulnerability scanning</span>
+        </div>
+        <div class="scope-item">
+            <i class="fas fa-fingerprint"></i>
+            <span>Web technology fingerprinting</span>
+        </div>
+        <div class="scope-item">
+            <i class="fas fa-fire-alt"></i>
+            <span>WAF & cloud infrastructure detection</span>
+        </div>
+    </div>
+
+    <div class="scope-not-included">
+        <h3>Not Included</h3>
+        <p>This assessment covers only <strong>external, unauthenticated</strong> attack surfaces. The following are outside the scope of this scan:</p>
+        <ul>
+            @foreach (var exclusion in Model.Coverage.Exclusions)
+            {
+                <li>@exclusion</li>
+            }
+        </ul>
+    </div>
+
+    <p class="scope-positioning">
+        VulWall provides continuous external monitoring between annual penetration tests &mdash; not a replacement for them.
+    </p>
+</div>

@@ -1,0 +1,79 @@
+@model VulWall.Dashboard.Reports.Models.SummaryReportViewModel
+@{
+    var topFindings = Model.CriticalFindings
+        .Concat(Model.HighFindings)
+        .Concat(Model.MediumFindings)
+        .Take(3)
+        .ToList();
+
+    // Normalizes an affected-asset string (often a URL) down to a host[:port] for display.
+    static string CleanAsset(string asset)
+    {
+        var cleaned = asset;
+        var schemeIdx = cleaned.IndexOf("://", StringComparison.Ordinal);
+        if (schemeIdx >= 0)
+        {
+            cleaned = cleaned[(schemeIdx + 3)..];
+        }
+        var slash = cleaned.IndexOf('/');
+        if (slash >= 0)
+        {
+            cleaned = cleaned[..slash];
+        }
+        return cleaned;
+    }
+}
+
+<section class="sr-band sr-findings">
+    <div class="sr-section-head">
+        <h2 class="sr-h2">Fix these first</h2>
+        <span class="sr-section-caption">Ranked by real-world risk</span>
+    </div>
+
+    @if (topFindings.Any())
+    {
+        <div class="sr-findings-list">
+            @foreach (var finding in topFindings)
+            {
+                var sev = string.IsNullOrEmpty(finding.Severity) ? "low" : finding.Severity.ToLowerInvariant();
+                var label = char.ToUpper(sev[0]) + sev[1..];
+                var firstAsset = finding.AffectedAssets.FirstOrDefault();
+                var host = !string.IsNullOrEmpty(firstAsset) ? CleanAsset(firstAsset) : null;
+
+                <article class="sr-finding-simple sr-finding-accent-@sev">
+                    <div class="sr-finding-top">
+                        <span class="sev-badge sev-@sev">@label</span>
+                        <h3 class="sr-finding-title">@finding.DisplayTitle</h3>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(finding.Description))
+                    {
+                        <p class="sr-finding-desc">@finding.Description</p>
+                    }
+                    @if (!string.IsNullOrEmpty(host) || !string.IsNullOrEmpty(finding.CweId))
+                    {
+                        <div class="sr-finding-chips">
+                            @if (!string.IsNullOrEmpty(host))
+                            {
+                                <span class="sr-chip-mono">@host</span>
+                            }
+                            @if (!string.IsNullOrEmpty(finding.CweId))
+                            {
+                                <span class="sr-chip-mono">@finding.CweId</span>
+                            }
+                        </div>
+                    }
+                </article>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="sr-findings-empty">
+            <i class="fas fa-circle-check"></i>
+            <div>
+                <strong>Nothing urgent right now.</strong>
+                <span>No critical, high, or medium issues on your external attack surface.</span>
+            </div>
+        </div>
+    }
+</section>
