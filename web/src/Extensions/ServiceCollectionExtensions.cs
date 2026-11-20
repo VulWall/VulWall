@@ -22,6 +22,7 @@ using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Reports.Services.ExecutiveSummaryJob;
 using VulWall.Dashboard.Common.Services.RateLimiter;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.About.Services;
 
 namespace VulWall.Dashboard.Extensions;
 
@@ -63,6 +64,7 @@ public static class ServiceCollectionExtensions
         services.AddRecommendationsServices();
         services.AddDashboardServices();
         services.AddDiscoveriesServices();
+        services.AddAboutServices();
 
         return services;
     }
@@ -90,6 +92,21 @@ public static class ServiceCollectionExtensions
         var keysDir = ServiceSettings.Instance.DataProtectionKeysDir;
         if (!string.IsNullOrWhiteSpace(keysDir))
             builder.PersistKeysToFileSystem(Directory.CreateDirectory(keysDir));
+
+        return services;
+    }
+
+    private static IServiceCollection AddAboutServices(this IServiceCollection services)
+    {
+        services.AddScoped<AboutService>();
+        services.AddHttpClient<UpdateCheckService>(client =>
+        {
+            client.Timeout = UpdateCheckService.Timeout;
+            // GitHub rejects API requests without a User-Agent.
+            if (!client.DefaultRequestHeaders.UserAgent.TryParseAdd($"VulWall/{ServiceSettings.Instance.Version}"))
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("VulWall");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        });
 
         return services;
     }

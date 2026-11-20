@@ -11,6 +11,7 @@ using VulWall.Dashboard.Data.Entities.FindingSuppression;
 using VulWall.Dashboard.Data.Entities.KnowledgeBase;
 using VulWall.Dashboard.Data.Entities.SharedLink;
 using VulWall.Dashboard.Data.Entities.Organization;
+using VulWall.Dashboard.Data.Entities.SystemInfo;
 
 namespace VulWall.Dashboard.Data.Repositories;
 
@@ -23,6 +24,10 @@ public class OrganizationRepository(IMongoDatabase database)
 // UsersRepository is global: local logins are not org-scoped (a self-hosted install has one admin).
 public class UsersRepository(IMongoDatabase database)
     : BaseMongoRepository<Entities.User.User, string>(database, "users");
+
+// SystemInfoRepository is global and read-only here: the scanner writes its versions to system_info.
+public class SystemInfoRepository(IMongoDatabase database)
+    : BaseMongoRepository<ScannerSystemInfo, string>(database, "system_info");
 
 public class AssetsRepository(
     IMongoDatabase database,
