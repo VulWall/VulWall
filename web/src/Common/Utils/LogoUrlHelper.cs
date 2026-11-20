@@ -15,9 +15,11 @@ public static partial class LogoUrlHelper
 {
     private const string BasePath = "/images/logos";
 
-    // Substring of the scanner's cloud provider name ("AWS", "Azure", "GCP", "Fastly") or of
+    // Whole words in the scanner's cloud provider name ("AWS", "Azure", "GCP", "Fastly") or in
     // the DB-IP ASN organization (e.g. "Amazon.com, Inc.", "Google LLC") -> shipped logo slug.
-    // First match wins: keep specific strings before generic ones.
+    // Matches are lowercase words separated by single spaces, compared on word boundaries so
+    // that e.g. "Politechnika Warszawska" is not AWS and "FIBMESH" is not IBM.
+    // First match wins: keep specific entries before generic ones.
     private static readonly (string Match, string Slug)[] KnownProviders =
     [
         ("cloudflare", "cloudflare"),
@@ -36,16 +38,15 @@ public static partial class LogoUrlHelper
         ("ovh", "ovh"),
         ("vultr", "vultr"),
         ("the constant company", "vultr"),      // Vultr's legal name
-        ("choopa", "vultr"),                    // Vultr's former ASN owner
         ("scaleway", "scaleway"),
-        ("online s.a.s", "scaleway"),           // Scaleway's former name, still on its ASN
-        ("alibaba", "alibabacloud"),
-        ("aliyun", "alibabacloud"),
+        ("online s a s", "scaleway"),           // Scaleway's former name ("Online S.A.S.")
+        ("alibaba us", "alibabacloud"),         // not bare "alibaba": DB-IP also has "Alibaba Travel Company"
+        ("alibaba cloud", "alibabacloud"),
+        ("hangzhou alibaba", "alibabacloud"),
         ("vercel", "vercel"),
         ("netlify", "netlify"),
         ("heroku", "heroku"),
         ("github", "github"),
-        ("softlayer", "ibmcloud"),              // IBM Cloud's ASN owner
         ("international business machines", "ibmcloud"),
         ("ibm", "ibmcloud"),
     ];
@@ -82,9 +83,10 @@ public static partial class LogoUrlHelper
             return null;
 
         var name = provider.Trim().ToLowerInvariant();
+        var words = $" {NonSlugRegex().Replace(name, " ").Trim()} ";
         foreach (var (match, known) in KnownProviders)
         {
-            if (name.Contains(match))
+            if (words.Contains($" {match} ", StringComparison.Ordinal))
                 return known;
         }
 
