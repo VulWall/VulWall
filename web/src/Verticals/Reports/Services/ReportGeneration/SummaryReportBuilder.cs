@@ -484,6 +484,7 @@ public class SummaryReportBuilder
     {
         ["nuclei"]           = ("Nuclei",            "Vulnerability scanning"),
         ["testssl"]          = ("testssl",            "TLS / cipher inspection"),
+        ["certificate"]      = ("Certificate",        "TLS certificate expiry"),
         ["jsscanner"]        = ("JS Scanner",         "JavaScript dependency scanning"),
         ["webtechprofiler"]  = ("WebTech Profiler",   "Web technology profiling"),
         ["http-headers"]     = ("HTTP Headers",       "HTTP security header analysis"),
