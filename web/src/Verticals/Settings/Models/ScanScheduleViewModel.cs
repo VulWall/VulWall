@@ -1,7 +1,5 @@
 namespace VulWall.Dashboard.Settings.Models;
 
-public sealed record TimeZoneOption(string Id, string Label);
-
 public sealed record ScanScheduleViewModel
 {
     public required ScanScheduleInput Input { get; init; }
@@ -14,8 +12,9 @@ public sealed record ScanScheduleViewModel
     public DateTime? NextScanUtc { get; init; }
     public DateTime? NextScanLocal { get; init; }
 
-    /// <summary>True when the selected zone observes daylight saving, so the local time can move.</summary>
+    /// <summary>True when the saved zone observes daylight saving, so the local time can move.</summary>
     public bool ZoneHasDaylightSaving { get; init; }
 
-    public required IReadOnlyList<TimeZoneOption> TimeZones { get; init; }
+    /// <summary>The stored time zone, when there is a valid one; the form times are in it.</summary>
+    public string? SavedTimeZone { get; init; }
 }

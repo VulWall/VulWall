@@ -570,7 +570,7 @@ read by the guards for older documents but is no longer written.
   scan_settings: {
     scan_cron: "0 2 * * *",       // Daily at 02:00 UTC (5-field: min hour day month weekday)
     enabled: true,                // false turns scheduled scans off
-    timezone: "Europe/Amsterdam"  // Web app only: the zone the Settings form shows the time in
+    timezone: "Europe/Amsterdam"  // Web app only: the browser zone the schedule was saved in; the Settings form shows the time in it
   }
 }
 ```

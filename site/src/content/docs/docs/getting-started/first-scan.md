@@ -57,7 +57,8 @@ is opened again.
 VulWall scans all enabled assets on the schedule in **Settings → Scan schedule**. Until you
 change it, that is once a week at a random time on a weekend night (UTC), picked on the first
 start. You can make it daily, weekly or monthly at a time in your time zone, or turn it off. The
-scanner picks up a change within 5 minutes. The sidebar and the **Scans** page show when the next
+time zone is your browser's; the page shows which one it uses. The scanner picks up a change
+within 5 minutes. The sidebar and the **Scans** page show when the next
 scan starts. You can also start a scan at any time with **Scan now**.
 
 If you add an asset or use **Scan now** while a scan is running, VulWall queues one more scan that

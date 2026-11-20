@@ -545,7 +545,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 ### Organization Context
 - A self-hosted install has exactly one organization. `DefaultOrganization.EnsureExistsAsync` creates it at startup ("My Organization", random weekly `scan_settings.scan_cron`, `enabled: true`); `/setup` renames it.
-- Scan schedule: Settings → Scan schedule (`ScanScheduleCron`) turns Off / Daily / Weekly / Monthly plus a local time and time zone into a 5-field UTC `scan_settings.scan_cron`; Off sets `enabled: false` and keeps the cron. `scan_settings.timezone` is web-only (form display). Read the cron through `ScanSettings.ActiveCron` (null when off) everywhere a next scan is shown. The scanner reloads organizations every 5 minutes.
+- Scan schedule: Settings → Scan schedule (`ScanScheduleCron`) turns Off / Daily / Weekly / Monthly plus a local time and the browser's time zone (a hidden field that `js/Settings/index.js` fills from `Intl`; missing or unknown = the saved zone, else UTC) into a 5-field UTC `scan_settings.scan_cron`; Off sets `enabled: false` and keeps the cron. `scan_settings.timezone` is web-only (form display). Read the cron through `ScanSettings.ActiveCron` (null when off) everywhere a next scan is shown. The scanner reloads organizations every 5 minutes.
 - `IOrganizationContext` always resolves that organization for an authenticated user. There is no org switching.
 - Used by org-scoped repositories. Background jobs have no `HttpContext`: they use the `*PublicRepository` classes instead.
 

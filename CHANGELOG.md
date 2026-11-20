@@ -133,6 +133,10 @@ First open-source, self-hosted release, under the MIT License.
   virtual host. Every address of the name must be public before the run
   (else coverage `error`); `-lna` stays on. Open ports are still scanned by
   IP and port.
+- Settings → Scan schedule has no time zone list any more. It uses the
+  browser's time zone and says which one. Without JavaScript it keeps the
+  saved zone, or UTC. When the saved zone is not the browser's, the page
+  says that saving again switches to the browser's zone.
 
 ### Security
 

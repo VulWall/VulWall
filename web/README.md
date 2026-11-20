@@ -81,7 +81,7 @@ Behind a TLS-terminating reverse proxy, set `SECURE_COOKIES=true` and add the pr
   restarts. They are not in the shared MongoDB database.
 - **Organization**: a self-hosted install has one organization. The app creates it at startup with
   a random weekly scan schedule (`scan_settings.scan_cron`, UTC), which the scanner reads. Settings →
-  Scan schedule changes it (Off, daily, weekly or monthly, at a time in a chosen time zone); the
+  Scan schedule changes it (Off, daily, weekly or monthly, at a time in the browser's time zone); the
   scanner picks up a change within 5 minutes.
 - **Scans**: "Scan now" and adding an asset insert a `scans` document with `status: "queued"`. The
   scanner picks it up. A scan counts as in progress while it is `queued`, `pending` or `running`

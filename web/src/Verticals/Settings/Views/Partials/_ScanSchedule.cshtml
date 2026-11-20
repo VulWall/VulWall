@@ -86,27 +86,23 @@
                 <span class="vw-fld-label-text">Time</span>
                 <input type="time" name="Time" class="vw-fld mono" value="@input.Time" step="60" required />
             </label>
-
-            <label class="vw-fld-label" data-schedule-for="Daily Weekly Monthly" hidden="@(frequency == ScanFrequency.Off)">
-                <span class="vw-fld-label-text">Time zone</span>
-                <select name="TimeZone" class="vw-fld">
-                    @foreach (var zone in Model.TimeZones)
-                    {
-                        <option value="@zone.Id" selected="@(zone.Id == input.TimeZone)">@zone.Label</option>
-                    }
-                </select>
-            </label>
         </div>
+
+        @* Settings/index.js puts the browser's time zone here. The form shows times in the saved zone
+           (UTC when none is saved): when that is the browser's zone the script rewrites the note, else
+           it shows the hint. Without JavaScript the field stays empty and the server keeps the saved
+           zone, else UTC. *@
+        <input type="hidden" name="TimeZone" value="" id="scheduleTimeZone" data-form-zone="@input.TimeZone" />
 
         <p class="vw-schedule-note" data-schedule-for="Daily Weekly Monthly" hidden="@(frequency == ScanFrequency.Off)">
             <i class="fa-solid fa-circle-info"></i>
-            The scanner keeps the schedule in UTC.
-            @if (Model.ZoneHasDaylightSaving)
-            {
-                <text>When daylight saving time starts or ends, the local time moves by one hour.</text>
-            }
-            Changes reach the scanner within 5 minutes.
+            <span data-schedule-zone-note>@(Model.SavedTimeZone is { } savedZone
+                ? $"Times are in the saved time zone ({savedZone})."
+                : "Times are in UTC.") @(Model.ZoneHasDaylightSaving
+                ? "When daylight saving time starts or ends, the scan time moves by one hour. "
+                : "")Changes apply within 5 minutes.</span>
         </p>
+        <p class="vw-schedule-note" data-schedule-zone-hint hidden></p>
 
         <div class="d-flex justify-content-end mt-4">
             <button type="submit" class="btn btn-primary">

@@ -78,6 +78,42 @@
         sync();
     }
 
+    // The schedule uses the browser's time zone: fill the hidden field and say which zone that is.
+    function initScheduleTimeZone() {
+        const field = document.getElementById('scheduleTimeZone');
+        if (!field) return;
+        let zone = '';
+        try {
+            zone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        } catch {
+            zone = '';
+        }
+        if (!zone) return; // the server keeps the saved zone, else UTC, as the note already says
+
+        field.value = zone;
+        field.form?.addEventListener('submit', () => { field.value = zone; });
+
+        // The times in the form are in the zone they were saved in (UTC when none was saved).
+        const formZone = field.dataset.formZone || 'UTC';
+        if (formZone !== zone) {
+            const hint = document.querySelector('[data-schedule-zone-hint]');
+            if (hint) {
+                hint.textContent = `Saved in ${formZone}. Saving again uses your current time zone (${zone}).`;
+                hint.hidden = false;
+            }
+            return;
+        }
+
+        const year = new Date().getFullYear();
+        const hasDst = new Date(year, 0, 1).getTimezoneOffset() !== new Date(year, 6, 1).getTimezoneOffset();
+        const note = document.querySelector('[data-schedule-zone-note]');
+        if (note) {
+            note.textContent = `Times are in your time zone (${zone}). `
+                + (hasDst ? 'When daylight saving time starts or ends, the scan time moves by one hour. ' : '')
+                + 'Changes apply within 5 minutes.';
+        }
+    }
+
     // Open the tab named in the URL hash (e.g. /Settings#schedule after saving the schedule).
     function openTabFromHash() {
         const id = window.location.hash.slice(1);
@@ -87,6 +123,7 @@
     }
 
     initScheduleForm();
+    initScheduleTimeZone();
     openTabFromHash();
 
     initLazyTab('preferences-tab', 'preferences', '/Settings/GetPreferencesData', 'Failed to load preferences. Please refresh the page.');
