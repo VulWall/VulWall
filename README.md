@@ -10,7 +10,7 @@ AI-assisted remediation guidance in a web dashboard.
 | Path       | What it is |
 |------------|------------|
 | `scanner/` | Go scanning engine: asset discovery, port scanning, vulnerability scanners (nuclei, testssl, JS dependencies, HTTP headers, email security) and the knowledge-base engine. Services talk over Redis streams and persist to MongoDB. |
-| `web/`     | ASP.NET Core MVC dashboard: assets, scans, discoveries, recommendations, reports and certificates. |
+| `web/`     | ASP.NET Core MVC dashboard: assets, scans, discoveries, recommendations and reports. |
 
 ## Install
 
