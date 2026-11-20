@@ -21,7 +21,6 @@
       <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
       <PackageReference Include="Cronos" Version="0.11.1" />
       <PackageReference Include="Anthropic" Version="12.8.0" />
-      <PackageReference Include="AspNetCore.DataProtection.MongoDb" Version="8.0.1" />
       <PackageReference Include="MongoDB.Driver" Version="3.7.0" />
     </ItemGroup>
 

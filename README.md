@@ -106,7 +106,8 @@ Data lives in Docker volumes, so it survives upgrades. Read
 
 All application data is in MongoDB (volume `vulwall_mongo-data`). Redis only
 holds work in progress, and the nuclei and geo volumes are downloaded again
-when they are missing.
+when they are missing. The `vulwall_web-keys` volume holds the keys that sign
+login cookies; if you lose it, you only have to log in again.
 
 Back up:
 

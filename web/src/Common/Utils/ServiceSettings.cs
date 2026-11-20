@@ -46,4 +46,11 @@ public class ServiceSettings : EnvLoader
     /// </summary>
     [Env(Name = "SECURE_COOKIES", Default = "false")]
     public bool SecureCookies;
+
+    /// <summary>
+    /// Directory for ASP.NET Core data-protection keys. The image sets /data/keys (a web-only
+    /// volume). Empty uses the ASP.NET Core default for the current user.
+    /// </summary>
+    [Env(Name = "DATA_PROTECTION_KEYS_DIR", Required = false)]
+    public string DataProtectionKeysDir = string.Empty;
 }

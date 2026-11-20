@@ -1,7 +1,6 @@
 using Anthropic;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
-using MongoDB.Driver;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Razor;
 using VulWall.Dashboard.Common.Services.AIServices;
@@ -72,16 +71,24 @@ public static class ServiceCollectionExtensions
         MongoDbConfiguration.ConfigureSerialization();
         MongoDbConfiguration.ConfigureClient(services);
         MongoDbConfiguration.RegisterRepositories(services);
-        services.AddMongoDataProtection();
+        services.AddFileDataProtection();
 
         return services;
     }
 
-    private static IServiceCollection AddMongoDataProtection(this IServiceCollection services)
+    /// <summary>
+    /// Data-protection keys (auth and antiforgery cookies) live on the web container's own volume,
+    /// not in the MongoDB database the scanner shares: a compromised scanner must not be able to
+    /// read or plant keys and forge an admin cookie. Without DATA_PROTECTION_KEYS_DIR (dotnet run,
+    /// tests) ASP.NET Core uses its per-user default location.
+    /// </summary>
+    private static IServiceCollection AddFileDataProtection(this IServiceCollection services)
     {
-        services.AddDataProtection()
-            .SetApplicationName("VulWall.Dashboard")
-            .PersistKeysToMongoDb(sp => sp.GetRequiredService<IMongoDatabase>());
+        var builder = services.AddDataProtection().SetApplicationName("VulWall.Dashboard");
+
+        var keysDir = ServiceSettings.Instance.DataProtectionKeysDir;
+        if (!string.IsNullOrWhiteSpace(keysDir))
+            builder.PersistKeysToFileSystem(Directory.CreateDirectory(keysDir));
 
         return services;
     }

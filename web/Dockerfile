@@ -20,7 +20,12 @@ RUN apt-get update \
 
 COPY --from=build /app/out .
 
+# Data-protection keys (auth cookies) live on a web-only volume, not in the shared database.
+# Created here so the mounted named volume inherits the non-root owner.
+RUN mkdir -p /data/keys && chown "$APP_UID" /data/keys
+
 ENV PORT=8080
+ENV DATA_PROTECTION_KEYS_DIR=/data/keys
 EXPOSE 8080
 
 # Built-in non-root user of the official .NET images

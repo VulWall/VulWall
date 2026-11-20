@@ -78,6 +78,10 @@ services:
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       SHARED_LINKS_ENABLED: ${SHARED_LINKS_ENABLED:-false}
+    volumes:
+      # Data-protection keys that sign the auth cookies. Kept off MongoDB so the scanner,
+      # which shares the database, cannot forge a login.
+      - web-keys:/data/keys
 
   jaeger:
     image: jaegertracing/all-in-one:1.76.0
@@ -91,3 +95,4 @@ volumes:
   redis-data:
   nuclei-templates:
   geo-data:
+  web-keys:
