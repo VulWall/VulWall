@@ -88,25 +88,7 @@ func (s *Service) upsertKBEntry(ctx context.Context, result shared.KBGenerationR
 
 	filter := bson.M{"_id": docID}
 
-	now := time.Now()
-	update := bson.M{
-		"$set": bson.M{
-			"finding_type": result.FindingType,
-			"business":     extractSection(result.Entry, "business"),
-			"technical":    extractSection(result.Entry, "technical"),
-			"metadata":     extractSection(result.Entry, "metadata"),
-			"model":        result.Model,
-			"updated_at":   now,
-		},
-		"$setOnInsert": bson.M{
-			"_id":        docID,
-			"published":  false,
-			"created_at": now,
-		},
-		"$inc": bson.M{
-			"version": 1,
-		},
-	}
+	update := kbUpsertUpdate(result, time.Now())
 
 	opts := options.Update().SetUpsert(true)
 
@@ -188,4 +170,28 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logger) 
 
 	logger.Info("Knowledge base collection indexes created successfully")
 	return nil
+}
+
+// kbUpsertUpdate builds the upsert document for a KB entry. New entries are
+// inserted as published; re-generation never changes an existing entry's
+// published flag.
+func kbUpsertUpdate(result shared.KBGenerationResult, now time.Time) bson.M {
+	return bson.M{
+		"$set": bson.M{
+			"finding_type": result.FindingType,
+			"business":     extractSection(result.Entry, "business"),
+			"technical":    extractSection(result.Entry, "technical"),
+			"metadata":     extractSection(result.Entry, "metadata"),
+			"model":        result.Model,
+			"updated_at":   now,
+		},
+		"$setOnInsert": bson.M{
+			"_id":        "kb_" + result.FindingType,
+			"published":  true, // self-hosted: no admin review step, entries are visible immediately
+			"created_at": now,
+		},
+		"$inc": bson.M{
+			"version": 1,
+		},
+	}
 }
