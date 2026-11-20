@@ -76,7 +76,6 @@ public static class MongoDbConfiguration
         services.AddScoped<ScansPublicRepository>();
         services.AddScoped<FindingsPublicRepository>();
         services.AddScoped<DiscoveriesPublicRepository>();
-        services.AddScoped<AuditLogPublicRepository>();
         services.AddScoped<KnowledgeBaseRepository>();
         services.AddScoped<FindingSuppressionsRepository>();
         services.AddScoped<FindingSuppressionsPublicRepository>();

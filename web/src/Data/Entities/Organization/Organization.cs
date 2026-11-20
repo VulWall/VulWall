@@ -78,13 +78,7 @@ public class Organization : IEntity<string>
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
-    /// Subscription and billing plan information
-    /// </summary>
-    [BsonElement("plan")]
-    public Plan? Plan { get; set; }
-    
-    /// <summary>
-    /// Subscription settings
+    /// Scan schedule (read by the scanner's scan coordinator)
     /// </summary>
     [BsonElement("subscription_settings")]
     public SubscriptionSettings? SubscriptionSettings { get; set; }

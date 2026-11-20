@@ -14,11 +14,7 @@
         "AUTH0_DOMAIN": "",
         "AUTH0_CLIENTID": "",
         "AUTH0_CLIENTSECRET": "",
-        "AUTH0_MANAGEMENT_DOMAIN": "",
-        "STRIPE_PRO_PRICEID": "",
-        "STRIPE_PUBLISHABLEKEY": "",
-        "STRIPE_SECRETKEY": "",
-        "STRIPE_WEBHOOKSECRET": ""
+        "AUTH0_MANAGEMENT_DOMAIN": ""
       }
     },
     "https": {

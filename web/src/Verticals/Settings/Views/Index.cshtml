@@ -5,20 +5,16 @@
 
 @section Styles {
     <link rel="stylesheet" href="~/css/Settings/index.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/Settings/billing.css" asp-append-version="true" />
 }
 
 @section Scripts {
-    <input type="hidden" id="stripe-publishable-key" value="@ViewBag.StripePublishableKey"/>
-    <script src="https://js.stripe.com/clover/stripe.js"></script>
     <script src="~/js/Settings/index.js" asp-append-version="true"></script>
-    <script src="~/js/Settings/billing.js" asp-append-version="true"></script>
 }
 
 <div class="page-header page-header--stacked vw-settings-header">
     <div class="vw-settings-eyebrow">VulWall · NightWatch</div>
     <h1 class="vw-settings-title">Settings</h1>
-    <p class="vw-settings-subtitle">Manage your organization profile, subscription, and preferences.</p>
+    <p class="vw-settings-subtitle">Manage your organization profile and preferences.</p>
 </div>
 
 <ul class="nav vw-settings-tabs" id="accountTabs" role="tablist">
@@ -26,18 +22,6 @@
         <button class="nav-link active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info"
                 type="button" role="tab" aria-controls="info" aria-selected="true">
             <i class="fa-solid fa-building"></i>Account
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="billing-tab" data-bs-toggle="tab" data-bs-target="#billing"
-                type="button" role="tab" aria-controls="billing" aria-selected="false">
-            <i class="fa-solid fa-credit-card"></i>Billing
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="plans-tab" data-bs-toggle="tab" data-bs-target="#plans"
-                type="button" role="tab" aria-controls="plans" aria-selected="false">
-            <i class="fa-solid fa-layer-group"></i>Plans
         </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -52,68 +36,8 @@
     <div class="tab-pane fade show active" id="info" role="tabpanel" aria-labelledby="info-tab">
         @await Html.PartialAsync("Partials/_AccountInfo", Model)
     </div>
-    <div class="tab-pane fade" id="billing" role="tabpanel" aria-labelledby="billing-tab">
-        <partial name="~/Verticals/Settings/Views/Partials/_TabLoadingPlaceholder.cshtml" model='("billing-loading", "Loading billing information...")' />
-        <div id="billing-content" style="display: none;"></div>
-    </div>
-    <div class="tab-pane fade" id="plans" role="tabpanel" aria-labelledby="plans-tab">
-        <partial name="~/Verticals/Settings/Views/Partials/_TabLoadingPlaceholder.cshtml" model='("plans-loading", "Loading plans...")' />
-        <div id="plans-content" style="display: none;"></div>
-    </div>
     <div class="tab-pane fade" id="preferences" role="tabpanel" aria-labelledby="preferences-tab">
         <partial name="~/Verticals/Settings/Views/Partials/_TabLoadingPlaceholder.cshtml" model='("preferences-loading", "Loading preferences...")' />
         <div id="preferences-content" style="display: none;"></div>
     </div>
 </div>
-
-<partial name="~/Common/Views/_ConfirmationModal.cshtml" model='new ConfirmationModalModel {
-    ModalId = "cancelSubscriptionModal",
-    Title = "Cancel Subscription",
-    Message = "Are you sure you want to cancel your subscription?",
-    Icon = "fa-solid fa-exclamation-triangle",
-    HeaderStyle = "warning",
-    ConfirmButtonText = "Yes, Cancel Subscription",
-    ConfirmButtonStyle = "danger",
-    ConfirmButtonIcon = "fa-solid fa-times",
-    CancelButtonText = "Keep Subscription",
-    FooterMessage = "You will keep access until the end of your current billing period.",
-    MessageBold = true
-}' />
-<partial name="~/Common/Views/_ConfirmationModal.cshtml" model='new ConfirmationModalModel {
-    ModalId = "reactivateSubscriptionModal",
-    Title = "Reactivate Subscription",
-    Message = "Are you sure you want to reactivate your subscription?",
-    Icon = "fa-solid fa-rotate-right",
-    HeaderStyle = "success",
-    ConfirmButtonText = "Yes, Reactivate",
-    ConfirmButtonStyle = "success",
-    ConfirmButtonIcon = "fa-solid fa-check",
-    CancelButtonText = "Cancel",
-    FooterMessage = "Your subscription will continue and you will be charged at the end of your current billing period.",
-    MessageBold = true
-}' />
-<partial name="~/Common/Views/_ConfirmationModal.cshtml" model='new ConfirmationModalModel {
-    ModalId = "cancelIncompleteSubscriptionModal",
-    Title = "Cancel Pending Subscription",
-    Message = "Cancel this pending subscription? You will return to the Free plan immediately.",
-    Icon = "fa-solid fa-exclamation-triangle",
-    HeaderStyle = "warning",
-    ConfirmButtonText = "Yes, Cancel",
-    ConfirmButtonStyle = "danger",
-    ConfirmButtonIcon = "fa-solid fa-times",
-    CancelButtonText = "Keep Pending",
-    MessageBold = true
-}' />
-<partial name="~/Common/Views/_ConfirmationModal.cshtml" model='new ConfirmationModalModel {
-    ModalId = "planChangeModal",
-    Title = "Change Plan",
-    Message = "",
-    DynamicContentId = "planChangeContent",
-    Icon = "fa-solid fa-arrow-right-arrow-left",
-    HeaderStyle = "info",
-    ConfirmButtonText = "Confirm Change",
-    ConfirmButtonStyle = "primary",
-    ConfirmButtonIcon = "fa-solid fa-check",
-    CancelButtonText = "Cancel",
-    MessageBold = true
-}' />

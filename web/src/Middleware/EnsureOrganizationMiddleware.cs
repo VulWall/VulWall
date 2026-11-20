@@ -2,7 +2,8 @@ using System.Security.Claims;
 using VulWall.Dashboard.Common.Services.Auth0;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Repositories;
-using VulWall.Dashboard.Settings.Models;
+using VulWall.Dashboard.Common.Services.ScanSchedule;
+using VulWall.Dashboard.Data.Entities.Organization;
 
 namespace VulWall.Dashboard.Middleware;
 
@@ -45,7 +46,7 @@ public class EnsureOrganizationMiddleware(RequestDelegate next)
             UserIds = new List<string> { auth0UserId },
             OwnerEmail = email,
             CertVisible = false, // public certificate is opt-in (Reports > Trust certificate toggle)
-            SubscriptionSettings = Plans.GetDefaultSubscriptionSettings(),
+            SubscriptionSettings = new SubscriptionSettings { ScanCron = ScanCronGenerator.RandomWeekly() },
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };

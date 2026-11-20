@@ -31,12 +31,7 @@ public static class MongoDbIndexManager
         await collection.Indexes.CreateManyAsync([
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("user_ids"),
-                new CreateIndexOptions { Name = "user_ids_1", Background = true }),
-
-            // Supports: Stripe webhook lookup via FindAsync(o => o.Plan.StripeCustomerId == customerId)
-            new CreateIndexModel<BsonDocument>(
-                Builders<BsonDocument>.IndexKeys.Ascending("plan.stripe_customer_id"),
-                new CreateIndexOptions { Name = "plan.stripe_customer_id_1", Background = true })
+                new CreateIndexOptions { Name = "user_ids_1", Background = true })
         ]);
     }
 

@@ -25,21 +25,6 @@ public class ServiceSettings : EnvLoader
     [Env(Name = "MONGO_URI", Default = "mongodb://localhost:27017/VulWall-Dev")]
     public string Mongo_URI;
 
-    [Env(Name = "STRIPE_PRO_PRICEID", Required = true)]
-    public string StripeProPriceId;
-
-    [Env(Name = "STRIPE_PRO_ANNUAL_PRICEID", Required = true)]
-    public string StripeProAnnualPriceId;
-
-    [Env(Name = "STRIPE_PUBLISHABLEKEY", Required = true)]
-    public string StripePublishableKey;
-
-    [Env(Name = "STRIPE_SECRETKEY", Required = true)]
-    public string StripeSecretKey;
-
-    [Env(Name = "STRIPE_WEBHOOKSECRET", Required = true)]
-    public string StripeWebhookSecret;
-
     [Env(Name = "ANTHROPIC_API_KEY", Required = false)]
     public string AnthropicApiKey = string.Empty;
 

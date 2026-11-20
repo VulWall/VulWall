@@ -1,64 +1,10 @@
 using VulWall.Dashboard.Data.Entities.Organization;
 using VulWall.Dashboard.Data.Repositories;
-using VulWall.Dashboard.Settings.Extensions;
-using VulWall.Dashboard.Settings.Models;
 
 namespace VulWall.Dashboard.Settings.Services;
 
-public class SettingsService(
-    OrganizationRepository organizationRepository,
-    StripePaymentService.StripePaymentService stripePaymentService)
+public class SettingsService(OrganizationRepository organizationRepository)
 {
-    public async Task<BillingDataViewModel> GetBillingDataAsync(Organization organization)
-    {
-        var paymentInfoTask = !string.IsNullOrEmpty(organization.Plan?.StripeSubscriptionId)
-            ? stripePaymentService.GetSubscriptionPaymentMethodAsync(organization.Plan.StripeSubscriptionId)
-            : Task.FromResult<PaymentMethodInfo?>(null);
-
-        var recentInvoicesTask = !string.IsNullOrEmpty(organization.Plan?.StripeCustomerId)
-            ? stripePaymentService.GetRecentInvoicesAsync(organization.Plan.StripeCustomerId)
-            : Task.FromResult(new List<InvoiceInfo>());
-
-        await Task.WhenAll(paymentInfoTask, recentInvoicesTask);
-
-        var paymentInfo = await paymentInfoTask;
-        var recentInvoices = await recentInvoicesTask;
-        var (currentPlan, pendingPlan) = GetPlanInfo(organization);
-
-        return new BillingDataViewModel
-        {
-            SubscriptionStatus = organization.Plan?.SubscriptionStatus,
-            NextBillingDate = organization.Plan?.SubscriptionCancelAtPeriodEnd == true
-                ? null
-                : organization.Plan?.SubscriptionCurrentPeriodEnd,
-            SubscriptionPeriodEnd = organization.Plan?.SubscriptionCurrentPeriodEnd,
-            CancelAtPeriodEnd = organization.Plan?.SubscriptionCancelAtPeriodEnd ?? false,
-            PaymentMethodLast4 = paymentInfo?.Last4,
-            PaymentMethodBrand = paymentInfo?.Brand,
-            CurrentPlan = currentPlan,
-            BillingInterval = organization.Plan?.BillingInterval ?? "month",
-            RecentInvoices = recentInvoices,
-            PendingSubscriptionPlanInfo = pendingPlan
-        };
-    }
-
-    public PlansDataViewModel GetPlansData(Organization organization)
-    {
-        var availablePlans = Plans.GetAvailablePlans();
-        var (currentPlan, pendingPlan) = GetPlanInfo(organization);
-
-        return new PlansDataViewModel
-        {
-            AvailablePlans = availablePlans,
-            CurrentPlan = currentPlan,
-            SubscriptionStatus = organization.Plan?.SubscriptionStatus,
-            CancelAtPeriodEnd = organization.Plan?.SubscriptionCancelAtPeriodEnd ?? false,
-            SubscriptionPeriodEnd = organization.Plan?.SubscriptionCurrentPeriodEnd,
-            PendingSubscriptionPlanInfo = pendingPlan,
-            BillingInterval = organization.Plan?.BillingInterval ?? "month"
-        };
-    }
-
     public async Task UpdateCompanyInfoAsync(string organizationId, string? companyName, string? industry, string? website)
     {
         var organization = await organizationRepository.GetByIdAsync(organizationId);
@@ -119,22 +65,5 @@ public class SettingsService(
         organization.UpdatedAt = DateTime.UtcNow;
 
         await organizationRepository.UpdateAsync(organization);
-    }
-
-    private (PlanInfo currentPlan, PlanInfo? pendingPlan) GetPlanInfo(Organization organization)
-    {
-        PlanInfo? pendingPlan = null;
-        if (organization.Plan?.SubscriptionStatus.IsIncomplete() == true &&
-            !string.IsNullOrEmpty(organization.Plan?.SubscriptionPlan))
-        {
-            pendingPlan = Plans.GetPlanByName(organization.Plan.SubscriptionPlan);
-        }
-
-        var currentPlanName = organization.Plan?.IsActive == true
-            ? organization.Plan.SubscriptionPlan ?? "Free"
-            : "Free";
-        var currentPlan = Plans.GetPlanByName(currentPlanName);
-
-        return (currentPlan, pendingPlan);
     }
 }

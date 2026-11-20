@@ -87,10 +87,6 @@ public class FindingsPublicRepository(IMongoDatabase database)
 public class DiscoveriesPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<Discovery, string>(database, "discoveries");
 
-// AuditLogPublicRepository uses BaseMongoRepository for anonymous access (e.g., Stripe webhooks)
-public class AuditLogPublicRepository(IMongoDatabase database)
-    : BaseMongoRepository<AuditLog, string>(database, "audit_logs");
-
 // KnowledgeBaseRepository uses BaseMongoRepository (not OrgScoped) because:
 // - KB entries are shared across all organizations (one entry per finding_type)
 // - Only ~84 entries total, loaded once and cached in-memory per request

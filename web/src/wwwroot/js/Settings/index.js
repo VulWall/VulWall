@@ -1,7 +1,5 @@
 (function () {
     const tabsLoaded = {
-        billing: false,
-        plans: false,
         preferences: false
     };
 
@@ -66,8 +64,6 @@
         });
     }
 
-    initLazyTab('billing-tab', 'billing', '/Settings/GetBillingData', 'Failed to load billing data. Please refresh the page.');
-    initLazyTab('plans-tab', 'plans', '/Settings/GetPlansData', 'Failed to load plans. Please refresh the page.');
     initLazyTab('preferences-tab', 'preferences', '/Settings/GetPreferencesData', 'Failed to load preferences. Please refresh the page.');
 
     initConfirmationModal('saveCompanyBtn', 'confirmCompanyModalConfirm', 'companyForm', 'confirmCompanyModal', true);

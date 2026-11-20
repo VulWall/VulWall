@@ -7,7 +7,6 @@ using System.Security.Claims;
 using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.Organization;
-using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Settings.Models;
 using VulWall.Dashboard.Settings.Services;
@@ -36,33 +35,7 @@ public class SettingsController(
             HasLogo = organization.Logo is { Length: > 0 }
         };
 
-        ViewBag.StripePublishableKey = ServiceSettings.Instance.StripePublishableKey;
-
         return View(vm);
-    }
-
-    [Authorize]
-    [HttpGet]
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public async Task<IActionResult> GetBillingData()
-    {
-        var organization = await GetCurrentOrganizationAsync();
-        var vm = await settingsService.GetBillingDataAsync(organization);
-
-        ViewBag.StripePublishableKey = ServiceSettings.Instance.StripePublishableKey;
-        return PartialView("Partials/_Billing", vm);
-    }
-
-    [Authorize]
-    [HttpGet]
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public async Task<IActionResult> GetPlansData()
-    {
-        var organization = await GetCurrentOrganizationAsync();
-        var vm = settingsService.GetPlansData(organization);
-
-        ViewBag.StripePublishableKey = ServiceSettings.Instance.StripePublishableKey;
-        return PartialView("Partials/_Plans", vm);
     }
 
     [Route("/Account/Login")]

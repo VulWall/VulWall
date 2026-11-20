@@ -13,7 +13,6 @@ using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Extensions.Configuration;
 using VulWall.Dashboard.Settings.Services;
-using VulWall.Dashboard.Settings.Services.StripePaymentService;
 using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Assets.Services.DomainVerifier;
 using VulWall.Dashboard.Reports.Services.ReportGeneration;
@@ -182,7 +181,6 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddSettingsServices(this IServiceCollection services)
     {
         services.AddScoped<SettingsService>();
-        services.AddScoped<StripePaymentService>();
 
         return services;
     }

@@ -31,7 +31,7 @@ This skill encodes the brand tokens, severity ramp, CSP constraints, dark-mode r
 - **Backend**: .NET 10.0, C#
 - **Frontend**: ASP.NET Core MVC with Razor Views
 - **Database**: MongoDB
-- **Tools**: Auth0, Stripe, Anthropic Claude AI
+- **Tools**: Auth0, Anthropic Claude AI
 - **Architecture**: Vertical Slice Architecture for Dashboard
 
 ## Project Structure
@@ -112,7 +112,7 @@ The Dashboard enforces a strict CSP with `script-src 'self'` (no `'unsafe-inline
 ### Vertical Structure
 Each vertical is self-contained and includes:
 * **Controllers**: MVC controllers for handling HTTP requests
-* **Services**: Business logic organized in subdirectories (e.g., `Services/ReportGeneration/`, `Services/StripePaymentService/`)
+* **Services**: Business logic organized in subdirectories (e.g., `Services/ReportGeneration/`)
 * **Models**: View models and DTOs specific to the vertical
 * **Views**: Razor views and partials
 * The vertical is the sole owner of its domain logic and operations
@@ -124,7 +124,7 @@ Each vertical is self-contained and includes:
 * **Recommendations**: AI-powered security recommendations for findings
 * **Reports**: Report generation (Summary, Technical), certificate management
 * **Scans**: Scan history, results, findings overview
-* **Settings**: User settings, company details, subscription/billing management
+* **Settings**: User settings, company details, preferences
 
 ### Common Layer (Shared Across Verticals)
 The Common layer contains **only** types needed for cross-vertical communication:
@@ -513,9 +513,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 | Reports | `ReportsService` | Certificate generation |
 | Reports | `ReportGenerationService` | Report building |
 | Scans | `ScansService` | Scan data aggregation |
-| Settings | `StripePaymentService` | Stripe integration |
-| Settings | `PaymentsService` | Subscription management |
-| Settings | `PlanService` | Plan definitions |
+| Settings | `SettingsService` | Company info, logo, tour state |
 
 ## Authentication & Authorization
 
@@ -548,16 +546,11 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 - Located in `Common/Services/AIServices/`
 - Prompts stored in `Prompts/` directory
 
-### Payment Processing
-- `StripePaymentService`: Stripe integration for subscriptions
-- Located in `Settings/Services/StripePaymentService/`
-- Handles subscription management, payment methods, invoices
-
 ## Environment Configuration
 
 - Use `EnvLoader` utility to load environment variables
 - Never commit secrets to version control
-- Auth0, Stripe, MongoDB, and Anthropic API keys configured via environment variables
+- Auth0, MongoDB, and Anthropic API keys configured via environment variables
 
 ## Frontend JavaScript Architecture
 

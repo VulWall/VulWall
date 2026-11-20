@@ -37,10 +37,10 @@ public static partial class WebApplicationExtensions
 
             context.Response.Headers["Content-Security-Policy"] =
                 "default-src 'self'; " +
-                "script-src 'self' https://cdn.jsdelivr.net https://js.stripe.com; " +
+                "script-src 'self' https://cdn.jsdelivr.net; " +
                 "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
                 "img-src 'self' data: https://assets.vulwall.com; " +
-                "frame-src 'self' https://js.stripe.com; " +
+                "frame-src 'self'; " +
                 "connect-src 'self'; " +
                 "base-uri 'self'; " +
                 "form-action 'self'; " +
