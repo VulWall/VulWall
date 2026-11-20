@@ -6,17 +6,20 @@ import (
 
 var Log *zap.Logger
 
+// Init creates the global logger: JSON in production, console otherwise.
+// Logs (including errors) go to stdout so `docker compose logs` shows one
+// ordered stream.
 func Init(environment string) error {
-	var err error
+	cfg := zap.NewDevelopmentConfig()
 	if environment == "production" {
-		Log, err = zap.NewProduction()
-	} else {
-		Log, err = zap.NewDevelopment()
+		cfg = zap.NewProductionConfig()
 	}
-	if err != nil {
-		return err
-	}
-	return nil
+	cfg.OutputPaths = []string{"stdout"}
+	cfg.ErrorOutputPaths = []string{"stdout"}
+
+	var err error
+	Log, err = cfg.Build()
+	return err
 }
 
 func Sync() {
