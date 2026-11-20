@@ -5,12 +5,28 @@ Thanks for your interest in contributing.
 ## Contributor License Agreement (CLA)
 
 A signed Contributor License Agreement is **required** before any
-contribution can be merged. The CLA lets the project maintainer distribute
-VulWall under the AGPL-3.0 and under other licenses. You keep the copyright to
-your contribution.
+contribution can be merged. You keep the copyright to your contribution. The
+CLA gives the maintainer a licence to use it, including under licences other
+than the AGPL-3.0 (for example in a hosted or proprietary version).
 
-Details on how to sign the CLA will be published in this file. Until then,
-please open an issue before you start work on a pull request.
+Read the CLA:
+https://gist.github.com/MojtabaTajik/ce612d57278e3c98020a652120244dc6
+
+You sign it once, on your first pull request: the CLA Assistant bot posts a
+comment with a link, and you accept with your GitHub account. The check on
+the pull request turns green after you sign.
+
+**CLA privacy note.** To manage the CLA we use CLA Assistant
+(cla-assistant.io), operated by SAP. When you sign, CLA Assistant records your
+GitHub username and user ID, the CLA version, and the date and time of
+signing. The controller is Moji Tajik, legal@example.com. We use this data
+only to prove that the CLA covers your contribution (legal basis: GDPR
+Art. 6(1)(b) and (f), our legitimate interest in proving that we have the
+right to use contributions). We keep it for as long as your contribution can
+be used in VulWall, because the licence is permanent. You can ask for access
+to the data and use your other rights under GDPR Arts. 15–21 (including the
+right to object), and you can complain to your data protection authority. We
+will not delete a signature while it is needed to prove the licence.
 
 ## Development setup
 
@@ -66,5 +82,5 @@ issue.
 ## License
 
 By contributing, you agree that your contributions are licensed under the
-GNU Affero General Public License v3.0 (see [LICENSE](LICENSE)) and under the
-terms of the CLA.
+GNU Affero General Public License v3.0 only (`AGPL-3.0-only`, see
+[LICENSE](LICENSE)) and under the terms of the CLA.
