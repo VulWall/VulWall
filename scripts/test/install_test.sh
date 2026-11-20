@@ -629,6 +629,41 @@ helper_uninstall() {
 t "helper: uninstall removes the stack, the directory and our symlink" 0 helper_uninstall &&
     expect "$work/log" "docker compose down -v --remove-orphans$"
 
+helper_uninstall_home() {
+    helper_setup
+    # Home is reached through a symlink; the install directory is home itself.
+    ln -s "$inst" "$work/case/homelink"
+    HOME=$work/case/homelink sh "$inst/vulwall" -y uninstall
+}
+t "helper: uninstall refuses the home directory, also through a symlink" 1 helper_uninstall_home &&
+    expect "$work/out" "your home directory" && holds [ -d "$work/case/inst" ] && expect_not "$work/log" "down -v"
+
+helper_uninstall_parent() {
+    helper_setup
+    mkdir -p "$inst/alice"
+    HOME=$inst/alice sh "$inst/vulwall" -y uninstall
+}
+t "helper: uninstall refuses a directory that contains home" 1 helper_uninstall_parent &&
+    expect "$work/out" "your home directory" && holds [ -d "$work/case/inst" ]
+
+helper_uninstall_repo() {
+    helper_setup
+    printf 'services: {}\n' >"$inst/docker-compose.yml"
+    HOME=$work/case/home sh "$inst/vulwall" -y uninstall
+}
+t "helper: uninstall refuses a directory not made by the installer" 1 helper_uninstall_repo &&
+    expect "$work/out" "not a VulWall install made by install.sh" && holds [ -d "$work/case/inst" ] &&
+    expect_not "$work/log" "down -v"
+
+helper_uninstall_release_copy() {
+    helper_setup
+    cp "$inst/docker-compose.yml" "$inst/.docker-compose.release.yml"
+    printf 'services: {}\n' >"$inst/docker-compose.yml"
+    HOME=$work/case/home sh "$inst/vulwall" -y uninstall
+    [ ! -e "$inst" ]
+}
+t "helper: uninstall accepts an install with the release copy" 0 helper_uninstall_release_copy
+
 helper_wrong_dir() { helper_setup; VULWALL_DIR=$work/case/elsewhere sh "$inst/vulwall" -y uninstall; }
 t "helper: refuses a directory without docker-compose.yml" 1 helper_wrong_dir &&
     expect "$work/out" "has no docker-compose.yml" && holds [ -d "$work/case/elsewhere" ]

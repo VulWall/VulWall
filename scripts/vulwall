@@ -379,9 +379,18 @@ $root"
 
 cmd_uninstall() {
     [ "$#" -eq 0 ] || die "Usage: vulwall uninstall"
-    case $dir in
-        / | "$HOME" | "$HOME/") die "Refusing to delete $dir." ;;
+    # $dir is a physical path (pwd -P): compare it with the physical home, and
+    # refuse home and every directory above it.
+    home=$(cd "$HOME" 2>/dev/null && pwd -P) || home=$HOME
+    case $home/ in
+        "$dir"/*) die "Refusing to delete $dir: it is or contains your home directory." ;;
     esac
+    [ "$dir" != / ] || die "Refusing to delete /."
+    # Only a directory the installer made: it keeps a copy of the release compose
+    # file, and the release compose file starts with a release header.
+    if [ ! -f .docker-compose.release.yml ] && [ "$(release_version)" = "unknown (not a release compose file)" ]; then
+        die "Refusing to delete $dir: it is not a VulWall install made by install.sh (no .docker-compose.release.yml). Stop it with: cd $qdir && docker compose down"
+    fi
     confirm "This stops VulWall and deletes $dir with all VulWall data (database, settings). Continue?" ||
         die "Cancelled."
     compose down -v --remove-orphans </dev/null
