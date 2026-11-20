@@ -20,7 +20,7 @@ public class AssetsServiceTests(MongoFixture mongo)
         var orgContext = new FixedOrganizationContext("org-1");
         var assets = new AssetsRepository(db, orgContext, NullLogger<OrgScopedRepository<Asset, string>>.Instance);
         var scans = new ScansRepository(db, orgContext, NullLogger<OrgScopedRepository<Scan, string>>.Instance);
-        return (new AssetsService(assets, new ScanTriggerService(scans)), db.GetCollection<BsonDocument>("assets"));
+        return (new AssetsService(assets, scans, new ScanTriggerService(scans)), db.GetCollection<BsonDocument>("assets"));
     }
 
     [Fact]
@@ -73,5 +73,50 @@ public class AssetsServiceTests(MongoFixture mongo)
 
         Assert.True(success, error);
         Assert.True((await assets.Find(new BsonDocument("_id", id)).SingleAsync())["enabled"].AsBoolean);
+    }
+
+    [Fact]
+    public async Task GetAssets_LatestScanDegradedAsset_ShowsNotice()
+    {
+        var (service, assets) = Create();
+        var (dead, _) = await service.CreateIpAssetAsync("8.8.8.8");
+        var (live, _) = await service.CreateIpAssetAsync("1.1.1.1");
+        var scans = assets.Database.GetCollection<BsonDocument>("scans");
+        BsonDocument Done(string id, DateTime createdAt, BsonArray degraded) => new()
+        {
+            { "_id", id }, { "org_id", "org-1" }, { "status", "done" }, { "type", "scheduled" },
+            { "triggered_by", "system" }, { "created_at", createdAt }, { "updated_at", createdAt },
+            { "degraded_assets", degraded },
+        };
+        // The older scan flags the live asset too; only the latest scan counts.
+        await scans.InsertManyAsync(
+        [
+            Done("old", DateTime.UtcNow.AddDays(-1), new BsonArray
+            {
+                new BsonDocument { { "asset_id", live!.Id }, { "domain", "x" }, { "reason", "dns_failures" } },
+            }),
+            Done("new", DateTime.UtcNow, new BsonArray
+            {
+                new BsonDocument { { "asset_id", dead!.Id }, { "domain", "gone.example" }, { "reason", "root_nxdomain" } },
+            }),
+        ]);
+
+        var model = await service.GetAssetsAsync();
+
+        Assert.StartsWith("Domain does not resolve", model.Assets.Single(a => a.Id == dead.Id).ScanNotice);
+        Assert.Null(model.Assets.Single(a => a.Id == live.Id).ScanNotice);
+    }
+
+    [Theory]
+    [InlineData("dns_failures", "The last scan couldn't check everything")]
+    [InlineData("subdomain_enumeration_failed", "The last scan couldn't check everything")]
+    [InlineData("root_nxdomain", "Domain does not resolve")]
+    public void ScanNotice_ByReason(string reason, string prefix)
+    {
+        var scan = new Scan { OrgId = "org-1", DegradedAssets = [new DegradedAsset { AssetId = "a1", Domain = "d", Reason = reason }] };
+
+        Assert.StartsWith(prefix, AssetsService.ScanNotice("a1", scan));
+        Assert.Null(AssetsService.ScanNotice("a2", scan));
+        Assert.Null(AssetsService.ScanNotice("a1", null));
     }
 }

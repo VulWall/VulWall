@@ -92,6 +92,11 @@ const (
 	// EnvDNSResolveConcurrency is the number of concurrent subdomain DNS lookups in domain
 	// discovery (default: 50)
 	EnvDNSResolveConcurrency = "DNS_RESOLVE_CONCURRENCY"
+	// EnvDNSRecheckResolvers lists the public resolvers (host or host:port, comma separated)
+	// that domain discovery asks directly when the local resolver says a root domain does not
+	// exist (default "1.1.1.1,8.8.8.8"). "off" disables the check, e.g. when outbound DNS is
+	// blocked; such a root is then treated as a resolver failure.
+	EnvDNSRecheckResolvers = "DNS_RECHECK_RESOLVERS"
 	// EnvAllowPrivateTargets disables the private/reserved IP guard for scan
 	// targets (true/false, default false). Only enable it for self-hosted
 	// installs that intentionally scan internal networks.

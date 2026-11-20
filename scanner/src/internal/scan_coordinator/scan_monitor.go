@@ -269,16 +269,15 @@ func (p completionPolicy) decideCompletion(scanAge time.Duration, lastActivityAt
 	return false, ""
 }
 
-// reconcileFindings decides whether a closing scan may resolve the findings it did not see
-// again. A false resolution tells a customer an unfixed vulnerability is fixed, so every
-// doubt keeps findings open: only a pipeline_quiescent close of a scan that no stage marked
-// degraded and that discovered something reconciles. skip names the reason when it does not.
-func reconcileFindings(completionReason, degradedReason string, totalDiscoveries int) (ok bool, skip string) {
+// reconcileFindings decides whether a closing scan may resolve the open findings it did not
+// see. A false resolution tells a customer an unfixed vulnerability is fixed, so every doubt
+// keeps findings open: only a pipeline_quiescent close of a scan that discovered something
+// reconciles. skip names the reason when it does not. Findings under a degraded asset stay
+// open even then (findingsToResolve).
+func reconcileFindings(completionReason string, totalDiscoveries int) (ok bool, skip string) {
 	switch {
 	case completionReason != shared.ScanCompletionPipelineQuiescent:
 		return false, "closed by " + completionReason + " before the pipeline drained"
-	case degradedReason != "":
-		return false, "scan degraded: " + degradedReason
 	case totalDiscoveries == 0:
 		// A scan with zero discoveries produced no evidence and must never mass-resolve the
 		// previous scan's real findings.
@@ -462,16 +461,16 @@ func isNoSuchKeyErr(err error) bool {
 }
 
 // markDone marks a scan as done with its completion reason and, when reconcileFindings
-// allows it, resolves the findings the scan did not see again. The web UI polls the scan
-// document for the status change.
+// allows it, resolves the open findings the scan did not see, except those under a degraded
+// asset. The web UI polls the scan document for the status change.
 func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error {
-	// Read the scan now, not from the monitor tick's listing: a degraded_reason that ingestion
+	// Read the scan now, not from the monitor tick's listing: a degraded asset that ingestion
 	// recorded after that listing, but before the pipeline read as drained, must count.
 	var scan shared.Scan
-	stats, resolvedFindingIDs := &shared.ScanStats{}, []string(nil)
+	stats := &shared.ScanStats{}
 	err := m.db.Collection(shared.CollectionScans).FindOne(ctx, bson.M{"_id": scanID}).Decode(&scan)
 	if err == nil {
-		stats, resolvedFindingIDs, err = m.computeStats(ctx, scan)
+		stats, err = m.computeStats(ctx, scan)
 	}
 	if err != nil {
 		m.logger.Error("Failed to compute scan statistics",
@@ -481,31 +480,41 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error
 		// Continue with marking scan as done even if stats computation fails. The empty
 		// stats have zero discoveries, so the findings are not reconciled.
 		stats = &shared.ScanStats{}
-		resolvedFindingIDs = nil
 	}
 
-	reconcile, skip := reconcileFindings(reason, scan.DegradedReason, stats.TotalDiscoveries)
-	if !reconcile {
-		// The resolved count would only say what a complete scan might have resolved.
-		stats.ResolvedFindings = 0
+	reconcile, skip := reconcileFindings(reason, stats.TotalDiscoveries)
+	var resolveIDs, uncheckedIDs []string
+	if reconcile {
+		resolveIDs, uncheckedIDs, err = m.findingsToResolve(ctx, scan)
+		if err != nil {
+			m.logger.Error("Failed to select the findings to resolve",
+				zap.String("scan_id", scanID), zap.Error(err))
+			reconcile, skip = false, "could not select the findings to resolve"
+			resolveIDs, uncheckedIDs = nil, nil
+		}
 	}
+	// A scan with a degraded asset resolved only part of the findings: it is partial.
+	fullyReconciled := reconcile && len(scan.DegradedAssets) == 0
+	stats.ResolvedFindings = len(resolveIDs)
 
 	now := time.Now()
-	update := bson.M{
-		"$set": bson.M{
-			"status":                     shared.StatusDone,
-			"completion_reason":          reason,
-			"findings_reconciled":        reconcile,
-			"completed_at":               now,
-			"updated_at":                 now,
-			"stats.total_discoveries":    stats.TotalDiscoveries,
-			"stats.new_discoveries":      stats.NewDiscoveries,
-			"stats.resolved_discoveries": stats.ResolvedDiscoveries,
-			"stats.total_findings":       stats.TotalFindings,
-			"stats.new_findings":         stats.NewFindings,
-			"stats.resolved_findings":    stats.ResolvedFindings,
-		},
+	set := bson.M{
+		"status":                     shared.StatusDone,
+		"completion_reason":          reason,
+		"findings_reconciled":        fullyReconciled,
+		"completed_at":               now,
+		"updated_at":                 now,
+		"stats.total_discoveries":    stats.TotalDiscoveries,
+		"stats.new_discoveries":      stats.NewDiscoveries,
+		"stats.resolved_discoveries": stats.ResolvedDiscoveries,
+		"stats.total_findings":       stats.TotalFindings,
+		"stats.new_findings":         stats.NewFindings,
+		"stats.resolved_findings":    stats.ResolvedFindings,
 	}
+	if len(uncheckedIDs) > 0 {
+		set["unchecked_finding_ids"] = uncheckedIDs
+	}
+	update := bson.M{"$set": set}
 
 	// The status guard keeps a scan that another writer already closed (for
 	// example as failed) from being reopened as done.
@@ -529,7 +538,8 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error
 	m.logger.Info("Scan marked as done",
 		zap.String("scan_id", scanID),
 		zap.String("completion_reason", reason),
-		zap.Bool("findings_reconciled", reconcile),
+		zap.Bool("findings_reconciled", fullyReconciled),
+		zap.Int("degraded_assets", len(scan.DegradedAssets)),
 		zap.Time("completed_at", now),
 	)
 
@@ -537,12 +547,18 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error
 		m.logger.Warn("Skipping finding resolution",
 			zap.String("scan_id", scanID),
 			zap.String("why", skip),
-			zap.Int("would_resolve", len(resolvedFindingIDs)),
 		)
 		return nil
 	}
+	if len(uncheckedIDs) > 0 {
+		m.logger.Warn("Leaving findings of degraded assets open",
+			zap.String("scan_id", scanID),
+			zap.Any("degraded_assets", scan.DegradedAssets),
+			zap.Int("unchecked_findings", len(uncheckedIDs)),
+		)
+	}
 
-	if err := m.resolveDisappearedFindings(ctx, scanID, resolvedFindingIDs); err != nil {
+	if err := m.resolveDisappearedFindings(ctx, scan, resolveIDs); err != nil {
 		// The findings stay open; do not claim the scan reconciled them.
 		if _, uerr := m.db.Collection(shared.CollectionScans).UpdateOne(ctx,
 			bson.M{"_id": scanID},
@@ -555,10 +571,11 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error
 	return nil
 }
 
-// resolveDisappearedFindings bulk-updates findings that were present in the previous scan
-// but absent in the current scan, marking them as resolved. This is best-effort: errors
-// are logged and returned, but do not fail the scan completion.
-func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scanID string, resolvedFindingIDs []string) error {
+// resolveDisappearedFindings bulk-updates the open findings that the scan did not see
+// (findingsToResolve), marking them as resolved. This is best-effort: errors are logged and
+// returned, but do not fail the scan completion.
+func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scan shared.Scan, resolvedFindingIDs []string) error {
+	scanID := scan.ID
 	if len(resolvedFindingIDs) == 0 {
 		return nil
 	}
@@ -573,7 +590,13 @@ func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scanID str
 
 	now := time.Now()
 	result, err := m.db.Collection(shared.CollectionFindings).UpdateMany(ctx,
-		bson.M{"_id": bson.M{"$in": resolvedFindingIDs}},
+		// Re-check status and scan_ids: a late ingestion write may have seen the finding.
+		bson.M{
+			"_id":      bson.M{"$in": resolvedFindingIDs},
+			"org_id":   scan.OrgID,
+			"status":   shared.FindingStatusOpen,
+			"scan_ids": bson.M{"$ne": scanID},
+		},
 		bson.M{"$set": bson.M{
 			"status":              shared.FindingStatusResolved,
 			"resolved_at":         now,

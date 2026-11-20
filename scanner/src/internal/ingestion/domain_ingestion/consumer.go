@@ -109,8 +109,9 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	// Extract trace context from message to link spans across service boundaries
 	ctx = telemetry.ExtractTraceContext(ctx, finding.TraceContext)
 
-	if finding.ScanDegradedReason != "" {
-		// A signal, not an asset: record it on the scan so its close does not resolve findings.
+	if finding.Degraded != nil {
+		// A signal, not an asset: record it on the scan so its close leaves this asset's
+		// findings open.
 		return c.service.RecordScanDegraded(ctx, finding)
 	}
 

@@ -148,31 +148,30 @@ func TestDecideCompletion(t *testing.T) {
 }
 
 // TestReconcileFindings pins which closes may resolve findings. Only a drained pipeline of a
-// scan that no stage marked degraded and that discovered something reconciles; a timeout
-// close (the pipeline had NOT drained) must never resolve a finding it merely did not reach.
+// scan that discovered something reconciles; a timeout close (the pipeline had NOT drained)
+// must never resolve a finding it merely did not reach. Degraded assets do not stop the
+// close from reconciling the other assets (TestPartitionByDegraded).
 func TestReconcileFindings(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name        string
 		reason      string
-		degraded    string
 		discoveries int
 		want        bool
 	}{
-		{"pipeline quiescent reconciles", shared.ScanCompletionPipelineQuiescent, "", 12, true},
-		{"idle timeout never reconciles", shared.ScanCompletionIdleTimeout, "", 12, false},
-		{"safety timeout never reconciles", shared.ScanCompletionSafetyTimeout, "", 12, false},
-		{"degraded quiescent scan does not reconcile", shared.ScanCompletionPipelineQuiescent, shared.ScanDegradedDNSFailures, 12, false},
-		{"zero discoveries does not reconcile", shared.ScanCompletionPipelineQuiescent, "", 0, false},
+		{"pipeline quiescent reconciles", shared.ScanCompletionPipelineQuiescent, 12, true},
+		{"idle timeout never reconciles", shared.ScanCompletionIdleTimeout, 12, false},
+		{"safety timeout never reconciles", shared.ScanCompletionSafetyTimeout, 12, false},
+		{"zero discoveries does not reconcile", shared.ScanCompletionPipelineQuiescent, 0, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, skip := reconcileFindings(tt.reason, tt.degraded, tt.discoveries)
+			got, skip := reconcileFindings(tt.reason, tt.discoveries)
 			if got != tt.want {
-				t.Fatalf("reconcileFindings(%q, %q, %d) = %v (%s), want %v",
-					tt.reason, tt.degraded, tt.discoveries, got, skip, tt.want)
+				t.Fatalf("reconcileFindings(%q, %d) = %v (%s), want %v",
+					tt.reason, tt.discoveries, got, skip, tt.want)
 			}
 			if !got && skip == "" {
 				t.Errorf("no skip reason for a scan that does not reconcile")
@@ -193,7 +192,7 @@ func TestIdleTimeoutCloseDoesNotReconcile(t *testing.T) {
 	if !complete || reason != shared.ScanCompletionIdleTimeout {
 		t.Fatalf("decideCompletion = %v %q, want an idle_timeout close", complete, reason)
 	}
-	if ok, _ := reconcileFindings(reason, "", 50); ok {
+	if ok, _ := reconcileFindings(reason, 50); ok {
 		t.Fatal("an idle_timeout close reconciles findings, want it to leave them open")
 	}
 }

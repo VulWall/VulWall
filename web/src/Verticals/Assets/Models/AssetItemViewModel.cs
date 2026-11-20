@@ -9,4 +9,6 @@ public class AssetItemViewModel
     public AssetType Type { get; set; }
     public bool Enabled { get; set; }
     public DateTime AddedOn { get; set; }
+    /// <summary>Set when the latest scan could not fully check this asset.</summary>
+    public string? ScanNotice { get; set; }
 }

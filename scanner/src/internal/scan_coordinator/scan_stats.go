@@ -10,10 +10,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// computeStats computes scan statistics by comparing current scan results with the previous completed scan.
-// Returns the stats and the list of finding IDs that were resolved (present in previous scan but absent in current).
-// The resolved finding IDs are used by markDone to bulk-update their status in MongoDB.
-func (m *ScanMonitor) computeStats(ctx context.Context, currentScan shared.Scan) (*shared.ScanStats, []string, error) {
+// computeStats computes scan statistics by comparing current scan results with the previous
+// completed scan. It does not set ResolvedFindings: markDone counts the findings it resolves
+// (findingsToResolve), which do not depend on the previous scan.
+func (m *ScanMonitor) computeStats(ctx context.Context, currentScan shared.Scan) (*shared.ScanStats, error) {
 	scanID := currentScan.ID
 
 	m.logger.Debug("Computing stats for scan",
@@ -24,24 +24,31 @@ func (m *ScanMonitor) computeStats(ctx context.Context, currentScan shared.Scan)
 	// 2. Get current scan's discovery IDs
 	currentDiscoveryIDs, err := m.getDiscoveryIDsForScan(ctx, currentScan.OrgID, scanID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get current discovery IDs: %w", err)
+		return nil, fmt.Errorf("failed to get current discovery IDs: %w", err)
 	}
 
 	// 3. Get current scan's finding IDs
 	currentFindingIDs, err := m.getFindingIDsForScan(ctx, currentScan.OrgID, scanID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get current finding IDs: %w", err)
+		return nil, fmt.Errorf("failed to get current finding IDs: %w", err)
 	}
 
-	// 4. Find previous completed scan for this organization. A scan that did not reconcile
-	// findings saw only part of the attack surface, so it is no baseline: comparing with it
-	// would leave findings it missed open forever and count them as new. Scans closed before
-	// findings_reconciled existed have no field and still match.
+	// 4. Find the previous completed scan for this organization, the baseline of the new/
+	// resolved counters. A scan closed before its pipeline drained saw an unknown part of the
+	// attack surface, so it is no baseline: what it missed would count as new. A drained scan
+	// with degraded assets is one, or an org with an expired domain would never have a
+	// baseline again. Scans closed before findings_reconciled existed have no field and match.
 	filter := bson.M{
-		"org_id":              currentScan.OrgID,
-		"status":              shared.StatusDone,
-		"findings_reconciled": bson.M{"$ne": false},
-		"created_at":          bson.M{"$lt": currentScan.CreatedAt},
+		"org_id":     currentScan.OrgID,
+		"status":     shared.StatusDone,
+		"created_at": bson.M{"$lt": currentScan.CreatedAt},
+		"$or": bson.A{
+			bson.M{"findings_reconciled": bson.M{"$ne": false}},
+			bson.M{
+				"completion_reason": shared.ScanCompletionPipelineQuiescent,
+				"degraded_assets.0": bson.M{"$exists": true},
+			},
+		},
 	}
 	opts := options.FindOne().SetSort(bson.D{{Key: "created_at", Value: -1}})
 
@@ -64,9 +71,8 @@ func (m *ScanMonitor) computeStats(ctx context.Context, currentScan shared.Scan)
 		stats.NewDiscoveries = len(currentDiscoveryIDs)
 		stats.NewFindings = len(currentFindingIDs)
 		stats.ResolvedDiscoveries = 0
-		stats.ResolvedFindings = 0
 
-		return stats, nil, nil
+		return stats, nil
 	}
 
 	m.logger.Debug("Found previous scan for comparison",
@@ -77,12 +83,12 @@ func (m *ScanMonitor) computeStats(ctx context.Context, currentScan shared.Scan)
 	// 5. Get previous scan's discovery and finding IDs
 	previousDiscoveryIDs, err := m.getDiscoveryIDsForScan(ctx, currentScan.OrgID, previousScan.ID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get previous discovery IDs: %w", err)
+		return nil, fmt.Errorf("failed to get previous discovery IDs: %w", err)
 	}
 
 	previousFindingIDs, err := m.getFindingIDsForScan(ctx, currentScan.OrgID, previousScan.ID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get previous finding IDs: %w", err)
+		return nil, fmt.Errorf("failed to get previous finding IDs: %w", err)
 	}
 
 	// 6. Compute set differences using maps for efficiency
@@ -90,10 +96,7 @@ func (m *ScanMonitor) computeStats(ctx context.Context, currentScan shared.Scan)
 	stats.NewDiscoveries = setDifference(currentDiscoveryIDs, previousDiscoveryIDs)
 	stats.ResolvedDiscoveries = setDifference(previousDiscoveryIDs, currentDiscoveryIDs)
 
-	// For findings: need both counts and IDs so markDone can update their status in MongoDB
-	resolvedFindingIDs := setDifferenceIDs(previousFindingIDs, currentFindingIDs)
 	stats.NewFindings = setDifference(currentFindingIDs, previousFindingIDs)
-	stats.ResolvedFindings = len(resolvedFindingIDs)
 
 	m.logger.Info("Computed scan statistics",
 		zap.String("scan_id", scanID),
@@ -102,10 +105,9 @@ func (m *ScanMonitor) computeStats(ctx context.Context, currentScan shared.Scan)
 		zap.Int("resolved_discoveries", stats.ResolvedDiscoveries),
 		zap.Int("total_findings", stats.TotalFindings),
 		zap.Int("new_findings", stats.NewFindings),
-		zap.Int("resolved_findings", stats.ResolvedFindings),
 	)
 
-	return stats, resolvedFindingIDs, nil
+	return stats, nil
 }
 
 // getDiscoveryIDsForScan retrieves all discovery IDs that contain the given scan ID in their scan_ids array
