@@ -192,6 +192,19 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
     border-color: rgba(251,251,253,0.3);
 }
 
+/* Version and license line under the sidebar controls */
+.sidebar-footer { font-size: .75rem; }
+.sidebar-footer a {
+    color: var(--sidebar-muted);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+.sidebar-footer a:hover,
+.sidebar-footer a:focus-visible {
+    color: var(--brand-on);
+    text-decoration: underline;
+}
+
 /* -------- Next-scan countdown widget -------- */
 .next-scan {
     padding: 12px 14px;

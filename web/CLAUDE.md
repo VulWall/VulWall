@@ -560,7 +560,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 - Use `EnvLoader` utility to load environment variables (`Common/Utils/ServiceSettings.cs`)
 - Never commit secrets to version control; `src/Properties/launchSettings.json` is git-ignored (copy `launchSettings.example.json`)
-- Variables: `MONGO_URI`, `MONGO_DB`, `PORT`, `ANTHROPIC_API_KEY` (optional), `DEFAULT_AI_MODEL`, `SECURE_COOKIES`, `TRUSTED_PROXIES`, `SHARED_LINKS_ENABLED`, `SETUP_TOKEN`, `DATA_PROTECTION_KEYS_DIR` (image: `/data/keys` on the web-only `web-keys` volume; keys are deliberately not in MongoDB, which the scanner shares). See `README.md`.
+- Variables: `MONGO_URI`, `MONGO_DB`, `PORT`, `ANTHROPIC_API_KEY` (optional), `DEFAULT_AI_MODEL`, `SECURE_COOKIES`, `TRUSTED_PROXIES`, `SHARED_LINKS_ENABLED`, `SETUP_TOKEN`, `DATA_PROTECTION_KEYS_DIR` (image: `/data/keys` on the web-only `web-keys` volume; keys are deliberately not in MongoDB, which the scanner shares), `VULWALL_VERSION` (sidebar footer; a Dockerfile build arg, release images pass the tag, default `dev`). See `README.md`.
 
 ## Testing
 
