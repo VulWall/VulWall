@@ -1,0 +1,73 @@
+VulWall
+Copyright (C) 2026 Moji Tajik
+
+VulWall is licensed under the GNU Affero General Public License v3.0. See
+LICENSE. The VulWall name and logo are trademarks of Moji Tajik and are not
+licensed under the AGPL.
+
+This product includes or runs the following third-party software and data.
+Each component keeps its own license. The container images ship the tools
+unmodified; their source is available at the URLs below.
+
+------------------------------------------------------------------------------
+Software included in the scanner image (ghcr.io/vulwall/scanner)
+------------------------------------------------------------------------------
+
+nuclei
+  https://github.com/projectdiscovery/nuclei
+  Copyright (c) ProjectDiscovery, Inc.
+  License: MIT
+  The nuclei templates (https://github.com/projectdiscovery/nuclei-templates,
+  MIT) are downloaded at runtime and are not part of the image.
+
+subfinder (linked into the nightwatch binary as a Go library)
+  https://github.com/projectdiscovery/subfinder
+  Copyright (c) ProjectDiscovery, Inc.
+  License: MIT
+
+testssl.sh
+  https://github.com/testssl/testssl.sh
+  Copyright (c) Dirk Wetter and contributors
+  License: GNU General Public License v2.0
+  testssl.sh runs as a separate program; it is not linked into VulWall.
+
+retire.js
+  https://github.com/RetireJS/retire.js
+  Copyright (c) Erlend Oftedal and contributors
+  License: Apache License 2.0
+
+Go module dependencies of the nightwatch binary are listed in
+scanner/src/go.mod; NuGet dependencies of the web app in
+web/src/VulWall.Dashboard.csproj. Each keeps its own license.
+
+------------------------------------------------------------------------------
+Data
+------------------------------------------------------------------------------
+
+DB-IP Lite databases (IP to Country Lite, IP to ASN Lite)
+  https://db-ip.com/db/lite.php
+  License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+  https://creativecommons.org/licenses/by/4.0/
+  Attribution: IP Geolocation by DB-IP (https://db-ip.com)
+  The databases are downloaded by the scanner container at start-up and are
+  not part of the source code or the image.
+
+------------------------------------------------------------------------------
+Services run by docker-compose.yml (separate images, not distributed by VulWall)
+------------------------------------------------------------------------------
+
+MongoDB (official image mongo:7)
+  https://www.mongodb.com
+  License: Server Side Public License v1 (SSPL). VulWall uses MongoDB
+  unmodified, as a separate database server, through its network protocol.
+  If you offer MongoDB itself as a service to third parties, read the SSPL.
+
+Redis (official image redis:7-alpine)
+  https://redis.io
+  Redis 7.4 and later are dual-licensed under the Redis Source Available
+  License v2 (RSALv2) and the Server Side Public License v1 (SSPL). VulWall
+  uses Redis unmodified, as a separate server, through its network protocol.
+
+Jaeger (optional "tracing" profile, jaegertracing/all-in-one)
+  https://www.jaegertracing.io
+  License: Apache License 2.0
