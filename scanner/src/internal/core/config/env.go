@@ -11,7 +11,7 @@ const (
 	EnvRedisURI = "REDIS_URI"
 	// EnvMongoURI is the MongoDB connection string (e.g., mongodb://localhost:27017)
 	EnvMongoURI = "MONGO_URI"
-	// EnvMongoDB is the MongoDB database name (e.g., VulWall-Dev)
+	// EnvMongoDB is the MongoDB database name (default: vulwall)
 	EnvMongoDB = "MONGO_DB"
 
 	// ===========================================
@@ -64,6 +64,10 @@ const (
 
 	// EnvNucleiTemplateUpdateCron is the cron schedule for Nuclei template updates (default: 0 2 * * *)
 	EnvNucleiTemplateUpdateCron = "NUCLEI_TEMPLATE_UPDATE_CRON"
+	// EnvNucleiTemplatesDir is where nuclei templates are installed (default: $HOME/nuclei-templates)
+	EnvNucleiTemplatesDir = "NUCLEI_TEMPLATES_DIR"
+	// EnvNucleiWorkers is the number of concurrent nuclei processes, shared by both trigger streams (default: 2)
+	EnvNucleiWorkers = "NUCLEI_WORKERS"
 	// EnvNucleiIncludeTags is the comma-separated list of Nuclei template tags to include (empty = no filter)
 	EnvNucleiIncludeTags = "NUCLEI_INCLUDE_TAGS"
 	// EnvNucleiExcludeTags is the comma-separated list of Nuclei template tags to exclude (empty = no filter)

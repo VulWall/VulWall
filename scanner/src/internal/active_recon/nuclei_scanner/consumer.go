@@ -6,35 +6,42 @@ import (
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"go.uber.org/zap"
 )
 
-// Consumer consumes discovery results from both domain and IP streams
+// Consumer consumes scan triggers from both the domain and the port trigger
+// streams.
 type Consumer struct {
 	redis   *redis.Client
 	service *Service
 	logger  *zap.Logger
+	workers int
+	// slots limits concurrent nuclei processes across both streams.
+	slots chan struct{}
 }
 
 // NewConsumer creates a new Nuclei scanner consumer
 func NewConsumer(redisClient *redis.Client, logger *zap.Logger) *Consumer {
-	service := NewService(redisClient, logger)
+	workers := config.GetEnvInt(config.EnvNucleiWorkers, DefaultWorkers)
+	if workers < 1 {
+		workers = DefaultWorkers
+	}
 	return &Consumer{
 		redis:   redisClient,
-		service: service,
+		service: NewService(redisClient, logger),
 		logger:  logger,
+		workers: workers,
+		slots:   make(chan struct{}, workers),
 	}
 }
 
-// Start begins consuming messages from both discovery streams concurrently
+// Start begins consuming messages from both trigger streams concurrently
 func (c *Consumer) Start(ctx context.Context) error {
-	c.logger.Info("Starting Nuclei scanner consumer")
-
-	// Start template updater in background (cron-based)
-	go c.service.StartTemplateUpdater(ctx)
+	c.logger.Info("Starting Nuclei scanner consumer", zap.Int("workers", c.workers))
 
 	// Create consumer groups for both trigger streams (start from latest — triggers are ephemeral)
 	if err := redisx.CreateConsumerGroupFromLatest(ctx, c.redis, shared.StreamDomainScanTriggers, GroupNucleiScanner); err != nil {
@@ -47,6 +54,13 @@ func (c *Consumer) Start(ctx context.Context) error {
 	}
 	redisx.CleanupStaleConsumers(ctx, c.redis, shared.StreamPortScanTriggers, GroupNucleiScanner, c.logger)
 
+	// Install or update templates before reading any trigger. On first boot the
+	// templates directory is empty, and a scan without templates finds nothing.
+	// Triggers published meanwhile wait in the stream (the group exists), and
+	// the scan monitor keeps the scan open until they are consumed.
+	c.service.updateTemplates(ctx)
+	go c.service.StartTemplateUpdater(ctx)
+
 	errChan := make(chan error, 2)
 
 	go func() {
@@ -55,7 +69,8 @@ func (c *Consumer) Start(ctx context.Context) error {
 			Group:          GroupNucleiScanner,
 			ConsumerPrefix: "nuclei-domain",
 			BatchSize:      ConsumerBatchSize,
-			Handler:        c.handleDomainMessage,
+			Concurrency:    c.workers,
+			Handler:        c.limited(c.handleDomainMessage),
 			Logger:         c.logger,
 		})
 	}()
@@ -66,13 +81,28 @@ func (c *Consumer) Start(ctx context.Context) error {
 			Group:          GroupNucleiScanner,
 			ConsumerPrefix: "nuclei-ip",
 			BatchSize:      ConsumerBatchSize,
-			Handler:        c.handleIPMessage,
+			Concurrency:    c.workers,
+			Handler:        c.limited(c.handleIPMessage),
 			Logger:         c.logger,
 		})
 	}()
 
 	// Return the first non-cancellation error, or wait for both to finish
 	return <-errChan
+}
+
+// limited wraps a handler so that at most c.workers nuclei scans run at once,
+// counted across both streams.
+func (c *Consumer) limited(handler redisx.MessageHandler) redisx.MessageHandler {
+	return func(ctx context.Context, message redis.XMessage) error {
+		select {
+		case c.slots <- struct{}{}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		defer func() { <-c.slots }()
+		return handler(ctx, message)
+	}
 }
 
 // handleDomainMessage processes a single domain discovery finding message

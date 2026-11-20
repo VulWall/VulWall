@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -53,8 +54,7 @@ func (s *Service) StartTemplateUpdater(ctx context.Context) {
 		zap.String("schedule", cronSchedule),
 	)
 
-	// Run update immediately on startup to ensure templates are current
-	s.updateTemplates(ctx)
+	// The first update runs in Consumer.Start before it reads any message.
 
 	// Create cron scheduler
 	s.cron = cron.New()
@@ -114,7 +114,7 @@ func (s *Service) updateTemplates(ctx context.Context) {
 	updateCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(updateCtx, "nuclei", "-update-templates")
+	cmd := exec.CommandContext(updateCtx, "nuclei", "-update-templates", "-update-template-dir", templatesDir())
 	output, err := cmd.CombinedOutput()
 
 	// Get version after update
@@ -220,7 +220,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 func nucleiArgs(target, severity string) []string {
 	args := []string{
 		"-u", target,
-		"-t", "/root/nuclei-templates",
+		"-t", templatesDir(),
 		"-j",
 		"-silent",
 		"-severity", severity,
@@ -244,6 +244,20 @@ func nucleiArgs(target, severity string) []string {
 	}
 
 	return args
+}
+
+// templatesDir is where nuclei templates are installed and read from.
+// NUCLEI_TEMPLATES_DIR overrides the default, $HOME/nuclei-templates (the
+// nuclei default), so the container can keep templates in a volume.
+func templatesDir() string {
+	if dir := config.GetEnv(config.EnvNucleiTemplatesDir, ""); dir != "" {
+		return dir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "nuclei-templates"
+	}
+	return filepath.Join(home, "nuclei-templates")
 }
 
 // runNucleiScan executes Nuclei scanner on the target
