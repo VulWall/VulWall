@@ -2,6 +2,10 @@ package email_security_scanner
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
+	"syscall"
 	"testing"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
@@ -31,3 +35,23 @@ func TestAXFRAddressHonorsAllowPrivateTargets(t *testing.T) {
 		t.Fatalf("axfrAddress = %q, %v; want 10.0.0.53:53", addr, err)
 	}
 }
+
+func TestAXFRFailureSeparatesRefusalFromUnknown(t *testing.T) {
+	refused := &net.OpError{Op: "dial", Err: fmt.Errorf("connect: %w", syscall.ECONNREFUSED)}
+	timeout := &net.OpError{Op: "read", Err: &timeoutErr{}}
+	if axfrFailure(refused) != nil {
+		t.Error("a refused connection is a definite no, want nil")
+	}
+	if axfrFailure(errors.New("dns: bad xfr rcode: 5")) != nil {
+		t.Error("a REFUSED answer is a definite no, want nil")
+	}
+	if axfrFailure(timeout) == nil {
+		t.Error("a timeout leaves the answer unknown, want an error")
+	}
+}
+
+type timeoutErr struct{}
+
+func (timeoutErr) Error() string   { return "i/o timeout" }
+func (timeoutErr) Timeout() bool   { return true }
+func (timeoutErr) Temporary() bool { return true }

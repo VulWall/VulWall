@@ -30,13 +30,13 @@ func isDNSNotFound(err error) bool {
 }
 
 // checkSPF performs SPF record validation for a domain
-func checkSPF(ctx context.Context, resolver *net.Resolver, domain string) []EmailCheckResult {
+func checkSPF(ctx context.Context, resolver *net.Resolver, domain string) ([]EmailCheckResult, error) {
 	var results []EmailCheckResult
 
 	records, err := resolver.LookupTXT(ctx, domain)
 	if err != nil {
-		// Only report missing SPF if the DNS record genuinely doesn't exist (NXDOMAIN).
-		// Skip silently for transient errors (timeout, SERVFAIL) to avoid false positives.
+		// Only report missing records when the DNS answer is "not found". A transient
+		// error (timeout, SERVFAIL) makes the check incomplete: it is returned.
 		if isDNSNotFound(err) {
 			results = append(results, EmailCheckResult{
 				FindingType: "missing-spf",
@@ -45,8 +45,9 @@ func checkSPF(ctx context.Context, resolver *net.Resolver, domain string) []Emai
 				Description: "No SPF (Sender Policy Framework) record was found for this domain. Without SPF, attackers can send emails that appear to come from this domain, enabling phishing and spam campaigns. SPF helps receiving mail servers verify that incoming mail from a domain comes from an authorized IP address.",
 				References:  []string{"https://datatracker.ietf.org/doc/html/rfc7208"},
 			})
+			return results, nil
 		}
-		return results
+		return nil, fmt.Errorf("SPF lookup: %w", err)
 	}
 
 	// Find SPF record among TXT records
@@ -66,7 +67,7 @@ func checkSPF(ctx context.Context, resolver *net.Resolver, domain string) []Emai
 			Description: "No SPF (Sender Policy Framework) record was found for this domain. Without SPF, attackers can send emails that appear to come from this domain, enabling phishing and spam campaigns. SPF helps receiving mail servers verify that incoming mail from a domain comes from an authorized IP address.",
 			References:  []string{"https://datatracker.ietf.org/doc/html/rfc7208"},
 		})
-		return results
+		return results, nil
 	}
 
 	lower := strings.ToLower(strings.TrimSpace(spfRecord))
@@ -95,18 +96,18 @@ func checkSPF(ctx context.Context, resolver *net.Resolver, domain string) []Emai
 		})
 	}
 
-	return results
+	return results, nil
 }
 
 // checkDMARC performs DMARC record validation for a domain
-func checkDMARC(ctx context.Context, resolver *net.Resolver, domain string) []EmailCheckResult {
+func checkDMARC(ctx context.Context, resolver *net.Resolver, domain string) ([]EmailCheckResult, error) {
 	var results []EmailCheckResult
 
 	dmarcDomain := "_dmarc." + domain
 	records, err := resolver.LookupTXT(ctx, dmarcDomain)
 	if err != nil {
-		// Only report missing DMARC if the DNS record genuinely doesn't exist (NXDOMAIN).
-		// Skip silently for transient errors (timeout, SERVFAIL) to avoid false positives.
+		// Only report missing records when the DNS answer is "not found". A transient
+		// error (timeout, SERVFAIL) makes the check incomplete: it is returned.
 		if isDNSNotFound(err) {
 			results = append(results, EmailCheckResult{
 				FindingType: "missing-dmarc",
@@ -115,8 +116,9 @@ func checkDMARC(ctx context.Context, resolver *net.Resolver, domain string) []Em
 				Description: "No DMARC (Domain-based Message Authentication, Reporting & Conformance) record was found at _dmarc." + domain + ". DMARC builds on SPF and DKIM to provide domain-level email authentication. Without DMARC, there is no policy instructing receiving servers how to handle emails that fail authentication checks, leaving the domain vulnerable to spoofing.",
 				References:  []string{"https://datatracker.ietf.org/doc/html/rfc7489"},
 			})
+			return results, nil
 		}
-		return results
+		return nil, fmt.Errorf("DMARC lookup: %w", err)
 	}
 
 	// Find DMARC record
@@ -136,7 +138,7 @@ func checkDMARC(ctx context.Context, resolver *net.Resolver, domain string) []Em
 			Description: "No DMARC (Domain-based Message Authentication, Reporting & Conformance) record was found at _dmarc." + domain + ". DMARC builds on SPF and DKIM to provide domain-level email authentication. Without DMARC, there is no policy instructing receiving servers how to handle emails that fail authentication checks, leaving the domain vulnerable to spoofing.",
 			References:  []string{"https://datatracker.ietf.org/doc/html/rfc7489"},
 		})
-		return results
+		return results, nil
 	}
 
 	lower := strings.ToLower(dmarcRecord)
@@ -165,7 +167,7 @@ func checkDMARC(ctx context.Context, resolver *net.Resolver, domain string) []Em
 		})
 	}
 
-	return results
+	return results, nil
 }
 
 // checkDKIM checks for DKIM records at common selectors in parallel.
@@ -227,10 +229,13 @@ func checkDKIM(ctx context.Context, resolver *net.Resolver, domain string) []Ema
 // checkZoneTransfer attempts AXFR queries against each nameserver for a domain.
 // An open zone transfer is a confirmed critical recon finding — it exposes the
 // entire DNS zone (internal hostnames, staging servers, database subdomains).
-func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain string) []EmailCheckResult {
+func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain string) ([]EmailCheckResult, error) {
 	nameservers, err := resolver.LookupNS(ctx, domain)
-	if err != nil || len(nameservers) == 0 {
-		return nil
+	if err != nil && !isDNSNotFound(err) {
+		return nil, fmt.Errorf("NS lookup: %w", err)
+	}
+	if len(nameservers) == 0 {
+		return nil, nil
 	}
 
 	var vulnerableNS []string
@@ -249,7 +254,12 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 			continue
 		}
 
-		recordCount := tryAXFR(ctx, domain, addr)
+		recordCount, err := tryAXFR(ctx, domain, addr)
+		if err != nil {
+			// The nameserver neither answered nor refused: whether it allows a transfer
+			// is unknown, so the check is incomplete.
+			return nil, fmt.Errorf("AXFR against %s: %w", host, err)
+		}
 		if recordCount > 0 {
 			vulnerableNS = append(vulnerableNS, fmt.Sprintf("%s (%d records)", host, recordCount))
 			totalRecords += recordCount
@@ -257,7 +267,7 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 	}
 
 	if len(vulnerableNS) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	return []EmailCheckResult{
@@ -275,7 +285,7 @@ func checkZoneTransfer(ctx context.Context, resolver *net.Resolver, domain strin
 			Value:      strings.Join(vulnerableNS, ", "),
 			References: []string{"https://datatracker.ietf.org/doc/html/rfc5936"},
 		},
-	}
+	}, nil
 }
 
 // axfrAddress resolves a nameserver host with the shared public-IP guard and
@@ -292,9 +302,10 @@ func axfrAddress(ctx context.Context, host string) (string, error) {
 
 // tryAXFR attempts an AXFR transfer against a single nameserver address
 // (ip:port, from axfrAddress).
-// Returns the number of records received, or 0 if the transfer was refused/failed.
+// Returns the number of records received (0 when the transfer was refused), and an error
+// when the attempt neither succeeded nor was refused (axfrFailure).
 // Caps at maxAXFRRecords and cancels the transfer to stop the underlying read.
-func tryAXFR(ctx context.Context, domain, addr string) int {
+func tryAXFR(ctx context.Context, domain, addr string) (int, error) {
 	const (
 		maxAXFRRecords = 10000
 		axfrTimeout    = 10 * time.Second
@@ -312,7 +323,7 @@ func tryAXFR(ctx context.Context, domain, addr string) int {
 
 	ch, err := t.In(m, addr)
 	if err != nil {
-		return 0
+		return 0, axfrFailure(err)
 	}
 
 	var count int
@@ -320,19 +331,33 @@ func tryAXFR(ctx context.Context, domain, addr string) int {
 		select {
 		case <-axfrCtx.Done():
 			go drainChannel(ch)
-			return count
+			return count, nil
 		default:
 		}
 		if envelope.Error != nil {
-			return 0
+			return 0, axfrFailure(envelope.Error)
 		}
 		count += len(envelope.RR)
 		if count > maxAXFRRecords {
 			go drainChannel(ch)
-			return count
+			return count, nil
 		}
 	}
-	return count
+	return count, nil
+}
+
+// axfrFailure returns err when it leaves open whether the nameserver allows a transfer (a
+// timeout or a network error other than a refused connection), and nil for a definite "no":
+// a refused connection or a DNS answer that refuses the transfer.
+func axfrFailure(err error) error {
+	var netErr net.Error
+	if shared.IsConnRefused(err) {
+		return nil
+	}
+	if errors.As(err, &netErr) {
+		return err
+	}
+	return nil
 }
 
 // drainChannel consumes remaining envelopes so the dns.Transfer goroutine

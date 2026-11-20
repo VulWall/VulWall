@@ -31,11 +31,11 @@ type downloadResult struct {
 // DownloadFiles downloads JavaScript files in parallel using a worker pool
 // Uses 20 concurrent goroutines for maximum throughput
 // Implements retry logic with exponential backoff for transient failures
-func DownloadFiles(ctx context.Context, jsFiles []string, httpClient *http.Client, logger *zap.Logger) (string, []JSFileMetadata, error) {
+func DownloadFiles(ctx context.Context, jsFiles []string, httpClient *http.Client, logger *zap.Logger) (string, []JSFileMetadata, int, error) {
 	// Create temporary directory
 	tmpDir, err := os.MkdirTemp("", "webvuln-scan-*")
 	if err != nil {
-		return "", nil, err
+		return "", nil, 0, err
 	}
 
 	// Skip non-http(s) URLs
@@ -47,7 +47,7 @@ func DownloadFiles(ctx context.Context, jsFiles []string, httpClient *http.Clien
 	}
 
 	if len(validURLs) == 0 {
-		return tmpDir, nil, nil
+		return tmpDir, nil, 0, nil
 	}
 
 	// Worker pool configuration
@@ -83,8 +83,10 @@ func DownloadFiles(ctx context.Context, jsFiles []string, httpClient *http.Clien
 
 	// Collect results
 	var fileMetadata []JSFileMetadata
+	failed := 0
 	for result := range results {
 		if result.err != nil {
+			failed++
 			logger.Debug("Failed to download JS file",
 				zap.String("url", result.metadata.URL),
 				zap.Error(result.err),
@@ -95,7 +97,7 @@ func DownloadFiles(ctx context.Context, jsFiles []string, httpClient *http.Clien
 		fileMetadata = append(fileMetadata, result.metadata)
 	}
 
-	return tmpDir, fileMetadata, nil
+	return tmpDir, fileMetadata, failed, nil
 }
 
 // downloadJob represents a download task

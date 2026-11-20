@@ -3,6 +3,9 @@ package nuclei_scanner
 import "time"
 
 const (
+	// findingSource is the source of every nuclei finding and coverage record.
+	findingSource = "nuclei"
+
 	// Consumer group for Nuclei scanner service
 	// Listens to both domain_discovery_results and ip_discovery_results
 	GroupNucleiScanner = "nuclei_scanner_service"

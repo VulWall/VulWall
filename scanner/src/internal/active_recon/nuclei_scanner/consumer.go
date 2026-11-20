@@ -157,6 +157,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,      // Pass through scan_id
 		OrgID:       finding.OrgID,
+		Unresolved:  finding.IP == nil || *finding.IP == "",
 	}
 
 	// Process the scan

@@ -171,6 +171,10 @@ type SecurityFinding struct {
 	Timestamp        time.Time              `json:"timestamp" bson:"timestamp"`                                             // When finding was discovered
 	ResolvedAt       *time.Time             `json:"resolved_at,omitempty" bson:"resolved_at,omitempty"`                     // When finding was resolved (nil if open)
 	ResolvedByScanID string                 `json:"resolved_by_scan_id,omitempty" bson:"resolved_by_scan_id,omitempty"`     // Scan that resolved this finding
+
+	// Coverage marks a message that carries no finding but evidence about a target
+	// (ScanCoverage). Ingestion stores it in scan_coverage.
+	Coverage *ScanCoverage `json:"coverage,omitempty" bson:"-"`
 }
 
 // ScanTarget represents a target to be scanned by active recon scanners
@@ -182,6 +186,9 @@ type ScanTarget struct {
 	TraceID     string  `json:"trace_id"`      // Request tracing ID
 	ScanID      *string `json:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
 	OrgID       string  `json:"org_id"`        // Organization GUID
+	// Unresolved is set when the host had no address in this scan. A network check of such a
+	// target proves nothing, so its coverage is CoverageError.
+	Unresolved bool `json:"-"`
 }
 
 // EnrichmentJob represents a request to enrich a discovered asset

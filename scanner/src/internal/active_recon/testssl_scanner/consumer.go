@@ -100,6 +100,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,      // Optional: scan identifier for linking to UI scans
 		OrgID:       finding.OrgID,
+		Unresolved:  finding.IP == nil || *finding.IP == "", // coverage is an error then
 	}
 
 	// Process the scan

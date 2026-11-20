@@ -88,6 +88,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,
 		OrgID:       finding.OrgID,
+		Unresolved:  finding.IP == nil || *finding.IP == "", // coverage is an error then
 	}
 
 	return c.service.ProcessDiscovery(ctx, scanTarget)

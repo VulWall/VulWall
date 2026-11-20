@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -55,15 +56,22 @@ func (s *JSDependencyScanner) Scan(ctx context.Context, targetURL string) ([]Pro
 	)
 
 	// Step 3: Download JS files in parallel
-	tmpDir, fileMetadata, err := DownloadFiles(ctx, jsFiles, s.httpClient, s.logger)
+	tmpDir, fileMetadata, failedDownloads, err := DownloadFiles(ctx, jsFiles, s.httpClient, s.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download JS files: %w", err)
 	}
 	defer os.RemoveAll(tmpDir) // Clean up temp directory
 
+	// A script that did not download was not checked: the scan is incomplete, and the
+	// caller must not treat a vulnerability that is missing now as fixed.
+	var incomplete error
+	if failedDownloads > 0 {
+		incomplete = fmt.Errorf("%w: %d of %d JavaScript files did not download", ErrIncomplete, failedDownloads, len(jsFiles))
+	}
+
 	if len(fileMetadata) == 0 {
 		s.logger.Debug("No JavaScript files downloaded successfully")
-		return nil, nil
+		return nil, incomplete
 	}
 
 	s.logger.Debug("Downloaded JavaScript files",
@@ -74,8 +82,7 @@ func (s *JSDependencyScanner) Scan(ctx context.Context, targetURL string) ([]Pro
 	// Step 4: Run retire.js vulnerability scanner
 	retireOutput, err := RunRetireJS(ctx, tmpDir, s.logger)
 	if err != nil {
-		// Non-fatal error - we may still have parsed output
-		s.logger.Debug("retire.js execution completed with warnings", zap.Error(err))
+		incomplete = errors.Join(incomplete, fmt.Errorf("%w: %w", ErrIncomplete, err))
 	}
 
 	// Step 5: Process vulnerabilities
@@ -85,9 +92,12 @@ func (s *JSDependencyScanner) Scan(ctx context.Context, targetURL string) ([]Pro
 			zap.String("url", targetURL),
 			zap.Int("count", len(vulnerabilities)),
 		)
-		return vulnerabilities, nil
+		return vulnerabilities, incomplete
 	}
 
 	s.logger.Debug("No vulnerabilities found", zap.String("url", targetURL))
-	return nil, nil
+	return nil, incomplete
 }
+
+// ErrIncomplete marks a scan that returned what it found but did not check everything.
+var ErrIncomplete = errors.New("scan incomplete")
