@@ -24,7 +24,7 @@ const tourSteps = [
         id: 'security-score',
         target: '[data-tour="security-score"]',
         position: 'bottom',
-        title: 'Security Score',
+        title: 'Security score',
         icon: 'fa-shield-alt',
         description: 'Your overall security health indicator. Higher scores mean better security posture across all your assets.'
     },
@@ -32,7 +32,7 @@ const tourSteps = [
         id: 'discovered-assets',
         target: '[data-tour="discovered-assets"]',
         position: 'bottom',
-        title: 'Discovered Assets',
+        title: 'Discovered assets',
         icon: 'fa-eye',
         description: 'Verified discoveries from your latest scan: domains, subdomains, IPs, open ports, and running services.'
     },
@@ -40,7 +40,7 @@ const tourSteps = [
         id: 'critical-issues',
         target: '[data-tour="critical-issues"]',
         position: 'bottom',
-        title: 'Critical & High Issues',
+        title: 'Critical & high issues',
         icon: 'fa-exclamation-triangle',
         description: 'Priority vulnerabilities that need immediate attention. Click to see remediation steps.'
     },
@@ -48,7 +48,7 @@ const tourSteps = [
         id: 'fix-now',
         target: '[data-tour="fix-now"]',
         position: 'top',
-        title: 'Fix Now',
+        title: 'Fix now',
         icon: 'fa-wrench',
         description: 'Your most critical vulnerabilities and how to fix them. Add an Anthropic API key and AI writes more detailed guidance.'
     },
@@ -56,7 +56,7 @@ const tourSteps = [
         id: 'timeline',
         target: '[data-tour="timeline"]',
         position: 'top',
-        title: 'Security Timeline',
+        title: 'Security timeline',
         icon: 'fa-chart-line',
         description: 'Track your security posture over time. See trends in vulnerabilities and score changes.'
     },
@@ -64,7 +64,7 @@ const tourSteps = [
         id: 'recent-scans',
         target: '[data-tour="recent-scans"]',
         position: 'top',
-        title: 'Recent Scans',
+        title: 'Recent scans',
         icon: 'fa-satellite-dish',
         description: 'View your latest scan activities and their results at a glance.'
     },
@@ -72,7 +72,7 @@ const tourSteps = [
         id: 'theme-controls',
         target: '#themeToggle',
         position: 'left',
-        title: 'Theme & Controls',
+        title: 'Theme & controls',
         icon: 'fa-adjust',
         description: 'Toggle between light and dark themes. Your preference is saved automatically.'
     }

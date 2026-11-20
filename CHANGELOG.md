@@ -113,6 +113,10 @@ First open-source, self-hosted release, under the MIT License.
   footer line is gone (the version stays in the About dialog).
 - The About dialog is 720px wide; its "Built with" list has three columns
   on wide screens, two on medium screens and one on phones.
+- More UI text uses sentence case: onboarding tour titles, the "False
+  positive" and "Accepted risk" labels, page titles, report headings, error
+  pages, dialogs and buttons. The design skill no longer says eyebrow labels
+  are uppercase.
 
 ### Security
 

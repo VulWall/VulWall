@@ -1,12 +1,12 @@
 @model VulWall.Dashboard.Reports.Models.ScanCoverage
 
 <div class="section">
-    <h2>6. Scan Coverage and Limitations</h2>
+    <h2>6. Scan coverage and limitations</h2>
 
     <h3>Scope</h3>
     <p>This assessment covered only <strong>external, unauthenticated</strong> attack surfaces.</p>
 
-    <h4>Not Included:</h4>
+    <h4>Not included:</h4>
     <ul>
         @foreach (var exclusion in Model.Exclusions)
         {

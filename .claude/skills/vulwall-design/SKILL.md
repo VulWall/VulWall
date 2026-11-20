@@ -79,7 +79,7 @@ The components are exposed on `window.VulWallDesignSystem_2af3fe`. (In productio
 - **Backgrounds are flat.** The only gradient is the brand navy→cobalt (sidebar/hero). No textures, no decorative imagery.
 - **Motion:** calm, 0.2s ease, no bounce/looping. Hover lifts 1px + cobalt shadow; press settles to the darker `-active` step; focus always shows a cobalt ring.
 - **Icons:** Font Awesome 6 solid only (`<i class="fas fa-…">`). Status = colored dots. **No emoji, ever.** No Unicode pictographs.
-- **Voice:** calm, plain-English security expert. Address the user as "you". Translate scanner jargon into outcomes and fixes. Sentence case for headings/buttons; UPPERCASE only for the wordmark and solid severity chips. Never alarmist.
+- **Voice:** calm, plain-English security expert. Address the user as "you". Translate scanner jargon into outcomes and fixes. Sentence case for headings, buttons and eyebrow/section labels; UPPERCASE only for the wordmark and solid severity chips. Never alarmist.
 
 ## Author and license
 

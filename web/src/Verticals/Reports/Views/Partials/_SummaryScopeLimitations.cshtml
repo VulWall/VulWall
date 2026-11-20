@@ -1,7 +1,7 @@
 @model VulWall.Dashboard.Reports.Models.SummaryReportViewModel
 
 <div class="section scope-section">
-    <h2>What We Checked</h2>
+    <h2>What we checked</h2>
 
     <div class="scope-grid">
         <div class="scope-item">
@@ -39,7 +39,7 @@
     </div>
 
     <div class="scope-not-included">
-        <h3>Not Included</h3>
+        <h3>Not included</h3>
         <p>This assessment covers only <strong>external, unauthenticated</strong> attack surfaces. The following are outside the scope of this scan:</p>
         <ul>
             @foreach (var exclusion in Model.Coverage.Exclusions)
