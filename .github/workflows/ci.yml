@@ -19,6 +19,29 @@ jobs:
     defaults:
       run:
         working-directory: scanner/src
+    # The Mongo- and Redis-backed tests skip without these; pinned like docker-compose.yml.
+    services:
+      mongo:
+        image: mongo:7.0.29@sha256:606f8e029603330411a7dd10b5ffd50eefc297fc80cee89f10a455e496a76ae7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping: 1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4.11-alpine@sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      VULWALL_TEST_MONGO_URI: mongodb://localhost:27017
+      VULWALL_TEST_REDIS_URI: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -27,7 +50,7 @@ jobs:
           cache-dependency-path: scanner/src/go.sum
       - run: go build ./...
       - run: go vet ./...
-      - run: go test -race ./...
+      - run: go test -race -count=1 -p 1 ./...
 
   web:
     name: Web (.NET)
@@ -47,6 +70,19 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - run: docker compose config -q
       - run: docker compose --profile tracing config -q
+
+  workflows:
+    name: Workflow files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: stable
+          cache: false
+      # go install verifies the module against the Go checksum database.
+      - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - run: "\"$(go env GOPATH)/bin/actionlint\" -color"
 
   scripts:
     name: Installer and helper scripts
