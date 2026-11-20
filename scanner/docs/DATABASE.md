@@ -237,12 +237,19 @@ type Scan struct {
     CompletedAt    *time.Time    `bson:"completed_at,omitempty"`
     StatusReason   string        `bson:"status_reason,omitempty"` // why a scan is "failed", e.g. "interrupted_by_restart"
     CompletionReason   string    `bson:"completion_reason,omitempty"`   // pipeline_quiescent, idle_timeout, safety_timeout, interrupted_by_restart
-    FindingsReconciled *bool     `bson:"findings_reconciled,omitempty"` // true only when the close resolved the findings this scan did not see
-    DegradedReason     string    `bson:"degraded_reason,omitempty"`     // set by ingestion when a stage reported an incomplete view, e.g. "dns_failures"
+    FindingsReconciled *bool     `bson:"findings_reconciled,omitempty"` // true only when the close resolved every open finding it did not see, for every asset
+    DegradedAssets     []DegradedAsset `bson:"degraded_assets,omitempty"` // root domain assets discovery could not fully see ($addToSet by domain ingestion)
+    UncheckedFindingIDs []string `bson:"unchecked_finding_ids,omitempty"` // open findings not seen and left open because their asset is degraded
     CreatedAt      time.Time     `bson:"created_at"`
     UpdatedAt      time.Time     `bson:"updated_at"`
     TargetedAssets []AssetTarget `bson:"targeted_assets"`
     Stats          ScanStats     `bson:"stats"`
+}
+
+type DegradedAsset struct {
+    AssetID string `bson:"asset_id,omitempty"` // assets._id (empty for jobs from older versions)
+    Domain  string `bson:"domain"`             // the root domain as scanned
+    Reason  string `bson:"reason"`             // root_nxdomain, dns_failures, subdomain_enumeration_failed
 }
 
 type AssetTarget struct {
@@ -436,16 +443,20 @@ read by the guards for older documents but is no longer written.
   (`pipeline_quiescent`) or a timeout fires (`idle_timeout`, `safety_timeout`).
   Scan age for the completion timeouts is measured from `started_at` (from
   `created_at` when `started_at` is absent).
-- Only a `pipeline_quiescent` close of a scan without `degraded_reason` and with
-  at least one discovery resolves findings (`findings_reconciled: true`). Any
-  other close leaves findings untouched, writes `findings_reconciled: false` and
-  `stats.resolved_findings: 0`, and the scan is not used as the baseline of the
-  next scan. Scans closed before these fields existed have none of them and
-  still count as a baseline.
-- Domain ingestion sets `degraded_reason: "dns_failures"` when domain discovery
-  reports too many DNS lookup failures or a root domain that did not resolve.
-  See [ARCHITECTURE.md](ARCHITECTURE.md) (scan completion and finding
-  resolution).
+- Only a `pipeline_quiescent` close of a scan with at least one discovery
+  resolves findings: every open finding of the organization that the scan did
+  not see, except those under an asset in `degraded_assets` (written to
+  `unchecked_finding_ids`). `findings_reconciled` is `true` only when nothing was
+  degraded. Any other close leaves findings untouched and writes
+  `findings_reconciled: false` and `stats.resolved_findings: 0`.
+- The `new_*` and `resolved_discoveries` counters compare with the previous
+  `done` scan that has `findings_reconciled` not `false`, or that drained with
+  `degraded_assets`. Scans closed before these fields existed have none of them
+  and still count.
+- Domain ingestion adds an entry to `degraded_assets` when domain discovery
+  reports that it could not fully see a root domain asset (`root_nxdomain`,
+  `dns_failures`, `subdomain_enumeration_failed`). See
+  [ARCHITECTURE.md](ARCHITECTURE.md) (scan completion and finding resolution).
 - When the scanner starts, before the scan monitor runs, every `pending` or
   `running` scan becomes `failed` with `status_reason` and `completion_reason`
   `"interrupted_by_restart"`, `findings_reconciled: false` and `completed_at`. The restart lost the scan's in-flight work, so the scan

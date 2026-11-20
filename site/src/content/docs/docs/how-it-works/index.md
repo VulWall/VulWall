@@ -72,13 +72,22 @@ step has processed all of its work, and no new results have come in for a short 
 timeouts are a safety net: a scan with no activity for a while is closed, and no scan runs longer
 than 3 hours.
 
-When a complete scan closes, a finding that the previous scan found and this scan did not is
-marked resolved. VulWall does this only when it is sure the scan saw everything. A scan that a
-timeout closed, or one where too many DNS lookups failed during discovery (or the domain itself
-did not resolve), is still marked done, but its findings are left as they were. The web app
-shows such a scan as a "partial scan", and the next scan compares against the last complete one.
-The scan document records why in `completion_reason`, `findings_reconciled` and
-`degraded_reason`.
+When a scan closes, an open finding that this scan did not find again is marked resolved. VulWall
+does this only for what it is sure the scan saw:
+
+- A scan that a timeout closed resolves nothing.
+- When discovery could not fully check one of your domains, the findings of that domain (its
+  subdomains, and the IP addresses and ports they point to) stay open. Your other assets are
+  checked as usual. This happens when the domain does not exist any more, when too many DNS
+  lookups failed, or when subdomain enumeration failed. Before VulWall decides that a domain
+  does not exist, it asks two public resolvers (1.1.1.1 and 8.8.8.8) directly; set
+  `DNS_RECHECK_RESOLVERS=off` if your network blocks outbound DNS.
+
+The web app shows such a scan as a "partial scan" and notes the affected domain on the Assets
+page ("Domain does not resolve", or "The last scan couldn't check everything for this domain").
+When a later scan can check the domain again, it resolves what is gone. The scan document
+records this in `completion_reason`, `findings_reconciled`, `degraded_assets` and
+`unchecked_finding_ids`.
 
 Only one scan per organization runs at a time. If the scanner restarts during a scan, it closes
 that scan as failed ("Interrupted by restart") at startup. Findings are not marked resolved

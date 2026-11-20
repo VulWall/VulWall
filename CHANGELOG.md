@@ -75,12 +75,22 @@ First open-source, self-hosted release, under the MIT License.
 ### Fixed
 
 - A scan closed by the idle timeout no longer marks findings as resolved:
-  that timeout fires only when the pipeline has not drained. A scan where too
-  many DNS lookups failed in domain discovery, or the domain itself did not
-  resolve, also leaves findings open. Scans record `completion_reason`,
-  `findings_reconciled` and `degraded_reason`; the Scans page shows such a
-  scan as "partial scan", and the next scan compares against the last
-  complete one.
+  that timeout fires only when the pipeline has not drained. When discovery
+  cannot fully check one domain asset (the domain does not exist, too many DNS
+  lookups failed, or subdomain enumeration failed), only that domain's
+  findings stay open; the other assets of the scan are reconciled as usual.
+  A domain that seems not to exist is checked against public resolvers first
+  (`DNS_RECHECK_RESOLVERS`, default `1.1.1.1,8.8.8.8`, `off` to disable). A
+  scan resolves every open finding it did not see, so a finding left open by
+  a partial scan is resolved by the next scan that checks its asset. Scans
+  record `completion_reason`, `findings_reconciled`, `degraded_assets` and
+  `unchecked_finding_ids`. The Scans page shows such a scan as "partial scan"
+  with the number of affected assets, the Assets page notes the affected
+  domain ("Domain does not resolve"), and a scan comparison lists its
+  findings as not checked instead of resolved.
+- Domain discovery no longer retries subdomains that cleanly do not exist
+  (NXDOMAIN); only timeouts, SERVFAIL and refused lookups are retried. This
+  cuts several minutes from domains with many stale passive-source names.
 - A scan that was running when the scanner restarted no longer marks
   findings as resolved. At startup the scanner closes it as `failed` with
   `status_reason: "interrupted_by_restart"`; the Scans page shows
