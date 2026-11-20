@@ -78,7 +78,8 @@ First open-source, self-hosted release, under the MIT License.
   (the `scan_coverage` collection, kept 90 days). A check that did not
   finish (a dropped target, a block or WAF challenge, a tool error) is
   coverage `error`: it resolves nothing, but the findings it did report are
-  still recorded.
+  still recorded (except nuclei matches from a run whose target blocked the
+  scanner, which may come from the block page).
 - A scan that could not check everything is shown as a "partial scan" with
   the affected assets; its findings stay open and the next scan that checks
   the asset settles them. A scan cut off by a scanner restart is closed as
