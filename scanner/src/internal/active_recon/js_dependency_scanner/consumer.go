@@ -54,13 +54,13 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	// Extract data from message
 	dataStr, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("invalid message format: missing data field")
+		return redisx.Permanent(fmt.Errorf("invalid message format: missing data field"))
 	}
 
 	// Parse discovery finding
 	var finding shared.DiscoveryFinding
 	if err := json.Unmarshal([]byte(dataStr), &finding); err != nil {
-		return fmt.Errorf("failed to unmarshal discovery finding: %w", err)
+		return redisx.Permanent(fmt.Errorf("failed to unmarshal discovery finding: %w", err))
 	}
 
 	// Extract trace context from message to link spans across service boundaries

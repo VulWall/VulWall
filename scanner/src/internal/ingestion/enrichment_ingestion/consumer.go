@@ -56,13 +56,13 @@ func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) er
 	// Extract data from message
 	data, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("message data is not a string")
+		return redisx.Permanent(fmt.Errorf("message data is not a string"))
 	}
 
 	// Parse enrichment finding
 	var enrichment shared.EnrichmentFinding
 	if err := json.Unmarshal([]byte(data), &enrichment); err != nil {
-		return fmt.Errorf("failed to unmarshal enrichment: %w", err)
+		return redisx.Permanent(fmt.Errorf("failed to unmarshal enrichment: %w", err))
 	}
 
 	// Extract trace context from message to link spans across service boundaries

@@ -53,12 +53,12 @@ func (c *Consumer) Start(ctx context.Context) error {
 func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) error {
 	dataStr, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("invalid message format: missing data field")
+		return redisx.Permanent(fmt.Errorf("invalid message format: missing data field"))
 	}
 
 	var finding shared.DiscoveryFinding
 	if err := json.Unmarshal([]byte(dataStr), &finding); err != nil {
-		return fmt.Errorf("failed to unmarshal discovery finding: %w", err)
+		return redisx.Permanent(fmt.Errorf("failed to unmarshal discovery finding: %w", err))
 	}
 
 	// Extract trace context

@@ -96,14 +96,10 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.DiscoveryFi
 	return nil
 }
 
-// scanDegradedWriteAttempts bounds the retries of RecordScanDegraded. The consumer ACKs a
-// message even when its handler fails, so a lost write would let the scan resolve findings
-// it did not see.
-const scanDegradedWriteAttempts = 3
-
 // RecordScanDegraded adds the signal's asset to the scan's degraded_assets ($addToSet, so a
-// redelivered signal adds nothing), so the scan monitor leaves the findings under that root
-// domain open. The scan monitor alone derives findings_reconciled.
+// redelivered signal adds nothing). The list is informational: it tells the user which
+// assets the scan could not fully check. Finding resolution does not depend on it. A failed
+// write is returned, so the consumer retries the message.
 func (s *Service) RecordScanDegraded(ctx context.Context, finding shared.DiscoveryFinding) error {
 	log := s.logger.With(
 		zap.String("trace_id", finding.TraceID),
@@ -118,35 +114,21 @@ func (s *Service) RecordScanDegraded(ctx context.Context, finding shared.Discove
 	}
 	log = log.With(zap.String("scan_id", *finding.ScanID))
 
-	filter := bson.M{"_id": *finding.ScanID, "org_id": finding.OrgID}
-	update := bson.M{
-		"$addToSet": bson.M{"degraded_assets": *finding.Degraded},
-		"$set":      bson.M{"updated_at": time.Now()},
+	res, err := s.db.Collection(shared.CollectionScans).UpdateOne(ctx,
+		bson.M{"_id": *finding.ScanID, "org_id": finding.OrgID},
+		bson.M{
+			"$addToSet": bson.M{"degraded_assets": *finding.Degraded},
+			"$set":      bson.M{"updated_at": time.Now()},
+		})
+	if err != nil {
+		return fmt.Errorf("failed to record asset degradation: %w", err)
 	}
-	var err error
-	for attempt := 1; attempt <= scanDegradedWriteAttempts; attempt++ {
-		var res *mongo.UpdateResult
-		res, err = s.db.Collection(shared.CollectionScans).UpdateOne(ctx, filter, update)
-		if err == nil && res.MatchedCount == 0 {
-			// Nothing to retry: no scan with this id belongs to this org.
-			log.Error("Scan degradation signal matched no scan of this org; not recorded")
-			return nil
-		}
-		if err == nil {
-			log.Warn("Asset marked degraded on the scan; its findings will stay open")
-			return nil
-		}
-		log.Warn("Failed to record scan degradation; retrying",
-			zap.Int("attempt", attempt), zap.Error(err))
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Duration(attempt) * time.Second):
-		}
+	if res.MatchedCount == 0 {
+		log.Error("Scan degradation signal matched no scan of this org; not recorded")
+		return nil
 	}
-	log.Error("Failed to record asset degradation; the scan may resolve findings it did not see",
-		zap.Error(err))
-	return err
+	log.Warn("Asset marked degraded on the scan")
+	return nil
 }
 
 // processDiscovery processes a domain/subdomain discovery and stores in discoveries collection

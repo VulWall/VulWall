@@ -57,13 +57,13 @@ func (c *Consumer) handleEnrichmentJob(ctx context.Context, message redis.XMessa
 	// Extract data from message
 	data, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("message data is not a string")
+		return redisx.Permanent(fmt.Errorf("message data is not a string"))
 	}
 
 	// Parse enrichment job
 	var job shared.EnrichmentJob
 	if err := json.Unmarshal([]byte(data), &job); err != nil {
-		return fmt.Errorf("failed to unmarshal enrichment job: %w", err)
+		return redisx.Permanent(fmt.Errorf("failed to unmarshal enrichment job: %w", err))
 	}
 
 	// Extract trace context from message to link spans across service boundaries

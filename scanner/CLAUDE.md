@@ -96,7 +96,7 @@ container health check; the scanner opens no port).
 - Components get Redis/Mongo/logger from `main.go`; return errors from `Start()` — never `os.Exit` or `logger.Fatal` inside a component
 - Trigger streams use `CreateConsumerGroupFromLatest` (from `$`) — ephemeral
 - Result/job streams use `CreateConsumerGroup` (from `0`) — guaranteed delivery
-- `redisx.ConsumeStream` ACKs after the handler returns, also on handler error and on a recovered panic (logged with stack). A handler that fails because shutdown cancelled its context is NOT ACKed
+- `redisx.ConsumeStream` ACKs after the handler succeeds. A handler error is retried in the worker (3 attempts, linear backoff) while the message stays pending; after the last attempt, or at once for an error wrapped with `redisx.Permanent` (malformed message) or a recovered panic (logged with stack), the message goes to the `dead_letter` stream and is ACKed. A handler that fails because shutdown cancelled its context is NOT ACKed. So: return an error only when a retry can help (a failed publish or write); a scanner tool that fails is a result (coverage `error`), not a handler error
 - At startup `nightwatch` closes every `pending`/`running` scan as `failed` with `status_reason: "interrupted_by_restart"` (no finding resolution), then deletes the previous process's consumers (and their pending entries) from every group the binary consumes (`ownedGroups()` in `pipeline.go`, `ReleaseOrphanedPending`), before any component starts. This assumes one scanner process per Redis
 
 ### Data Rules

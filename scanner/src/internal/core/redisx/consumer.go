@@ -16,7 +16,31 @@ import (
 // MessageHandler processes a single Redis stream message.
 // The handler is responsible for its own business logic only.
 // ACK is handled by the consumer loop after the handler returns.
+//
+// A returned error means "not done": the consumer loop runs the handler again
+// (see processMessage). Wrap an error with Permanent when a retry cannot help
+// (a malformed message), so the message is dead-lettered at once.
 type MessageHandler func(ctx context.Context, message redis.XMessage) error
+
+// permanent marks a handler error that a retry cannot fix.
+type permanent struct{ err error }
+
+func (p *permanent) Error() string { return p.err.Error() }
+func (p *permanent) Unwrap() error { return p.err }
+
+// Permanent wraps err so the consumer loop dead-letters the message without a retry.
+func Permanent(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &permanent{err: err}
+}
+
+// IsPermanent reports whether err was wrapped with Permanent.
+func IsPermanent(err error) bool {
+	var p *permanent
+	return errors.As(err, &p)
+}
 
 // ConsumerConfig configures a stream consumer loop.
 type ConsumerConfig struct {
@@ -54,6 +78,15 @@ type ConsumerConfig struct {
 const defaultBlockDuration = 5 * time.Second
 const errorBackoff = 5 * time.Second
 
+// handlerAttempts is how many times a message is handled before it is dead-lettered, and
+// handlerRetryDelay the base of the linear backoff between attempts. The retries run in the
+// worker, so the message stays pending (and the scan stays open) while they run. Variables so
+// tests can shorten them.
+var (
+	handlerAttempts   = 3
+	handlerRetryDelay = 2 * time.Second
+)
+
 // ackTimeout bounds an ACK sent with a context detached from shutdown.
 const ackTimeout = 5 * time.Second
 
@@ -61,9 +94,12 @@ const ackTimeout = 5 * time.Second
 // stream and dispatches them to handler workers. It handles:
 //   - Unique consumer name generation (prefix + UUID)
 //   - Worker pool for concurrent processing
-//   - Message ACK after handler returns (ACKs on success and on handler error)
-//   - A handler panic is recovered, logged with its stack and ACKed, so one
-//     poisoned message cannot crash the scanner or be retried forever
+//   - Message ACK after the handler succeeds
+//   - A handler error is retried in the worker (handlerAttempts in all); a
+//     message that still fails, or a Permanent error, is dead-lettered and then
+//     ACKed, so no message is redelivered forever
+//   - A handler panic is recovered, logged with its stack, dead-lettered and
+//     ACKed, so one poisoned message cannot crash the scanner or loop
 //   - Graceful shutdown on context cancellation: a handler that fails because
 //     ctx was cancelled is not ACKed, so the message stays pending
 //     (see processMessage)
@@ -108,8 +144,12 @@ func ConsumeStream(ctx context.Context, client *redis.Client, cfg ConsumerConfig
 			ack := func(ctx context.Context, id string) error {
 				return client.XAck(ctx, cfg.Stream, cfg.Group, id).Err()
 			}
+			deadLetter := func(ctx context.Context, message redis.XMessage, cause error) error {
+				data, _ := message.Values["data"].(string)
+				return PublishDeadLetter(ctx, client, cfg.Stream, cfg.Group, message.ID, data, cause)
+			}
 			for message := range jobs {
-				processMessage(ctx, cfg.Handler, ack, log, message)
+				processMessage(ctx, cfg.Handler, ack, deadLetter, log, message)
 			}
 		}(i)
 	}
@@ -171,42 +211,69 @@ func ConsumeStream(ctx context.Context, client *redis.Client, cfg ConsumerConfig
 
 // processMessage runs the handler for one message and decides whether to ACK it.
 //
-//   - Success or handler error: ACK. Services that need selective ACK
-//     (dead-letter, retry) handle it inside their handler and return nil.
-//   - Handler panic: recover, log with the stack, ACK. Without the ACK a
-//     poisoned message would crash or loop the consumer on every delivery.
-//   - Handler error while ctx is cancelled: do not ACK. The work was cut off by
-//     shutdown, not finished, so the message must stay pending.
+//   - Success: ACK.
+//   - Handler error: run the handler again, up to handlerAttempts times in all, with a
+//     growing delay. The message stays pending meanwhile. A Permanent error is not
+//     retried. When the attempts run out, dead-letter the message, then ACK it.
+//   - Handler panic: recover, log with the stack, dead-letter, ACK. A panic is a bug in
+//     the handler, so a retry would panic again.
+//   - Shutdown (ctx cancelled) while the handler fails or between attempts: do not ACK.
+//     The work was cut off, not finished, so the message must stay pending.
 //
-// The ACK uses a context detached from ctx, so a handler that finished just as
-// shutdown began is still ACKed.
-func processMessage(ctx context.Context, handler MessageHandler, ack func(context.Context, string) error, logger *zap.Logger, message redis.XMessage) {
-	err := runHandler(ctx, handler, message)
-
-	var panicErr *handlerPanic
-	switch {
-	case errors.As(err, &panicErr):
-		logger.Error("Message handler panicked; ACKing the message so it is not redelivered",
-			zap.String("message_id", message.ID),
-			zap.Any("panic", panicErr.value),
-			zap.String("stack", panicErr.stack),
-		)
-	case err != nil && ctx.Err() != nil:
-		logger.Info("Message handler stopped by shutdown; leaving the message unACKed",
-			zap.String("message_id", message.ID),
-			zap.Error(err),
-		)
-		return
-	case err != nil:
-		logger.Error("Failed to process message",
-			zap.String("message_id", message.ID),
-			zap.Error(err),
-		)
+// The ACK and the dead-letter use a context detached from ctx, so a handler that finished
+// just as shutdown began is still ACKed.
+func processMessage(ctx context.Context, handler MessageHandler, ack func(context.Context, string) error,
+	deadLetter func(context.Context, redis.XMessage, error) error, logger *zap.Logger, message redis.XMessage) {
+	var err error
+	for attempt := 1; ; attempt++ {
+		err = runHandler(ctx, handler, message)
+		var panicErr *handlerPanic
+		switch {
+		case err == nil:
+		case errors.As(err, &panicErr):
+			logger.Error("Message handler panicked; dead-lettering the message so it is not redelivered",
+				zap.String("message_id", message.ID),
+				zap.Any("panic", panicErr.value),
+				zap.String("stack", panicErr.stack),
+			)
+		case ctx.Err() != nil:
+			logger.Info("Message handler stopped by shutdown; leaving the message unACKed",
+				zap.String("message_id", message.ID),
+				zap.Error(err),
+			)
+			return
+		case IsPermanent(err) || attempt >= handlerAttempts:
+			logger.Error("Message failed for good; dead-lettering it",
+				zap.String("message_id", message.ID),
+				zap.Int("attempts", attempt),
+				zap.Error(err),
+			)
+		default:
+			logger.Warn("Message handler failed; retrying",
+				zap.String("message_id", message.ID),
+				zap.Int("attempt", attempt),
+				zap.Error(err),
+			)
+			select {
+			case <-ctx.Done():
+				logger.Info("Shutdown before a retry; leaving the message unACKed",
+					zap.String("message_id", message.ID))
+				return
+			case <-time.After(time.Duration(attempt) * handlerRetryDelay):
+			}
+			continue
+		}
+		break
 	}
 
-	ackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ackTimeout)
+	detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), ackTimeout)
 	defer cancel()
-	if err := ack(ackCtx, message.ID); err != nil {
+	if err != nil {
+		if dlErr := deadLetter(detached, message, err); dlErr != nil {
+			logger.Warn("Failed to dead-letter message", zap.String("message_id", message.ID), zap.Error(dlErr))
+		}
+	}
+	if err := ack(detached, message.ID); err != nil {
 		logger.Warn("Failed to ACK message", zap.String("message_id", message.ID), zap.Error(err))
 	}
 }
