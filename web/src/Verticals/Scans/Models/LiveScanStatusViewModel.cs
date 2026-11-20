@@ -19,5 +19,6 @@ public class RecentRunViewModel
     public string ScanTypeIcon { get; set; } = string.Empty;   // "fa-clock" | "fa-bolt"
     public string StatusTone { get; set; } = string.Empty;     // "scanning" | "completed" | "failed" | "pending"
     public string Meta { get; set; } = string.Empty;           // "Scanning…" | "42 issues" | "Failed"
+    public string? MetaHint { get; set; }                      // Tooltip for Meta, e.g. why a scan is partial
     public bool IsLive { get; set; }
 }

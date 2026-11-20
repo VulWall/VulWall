@@ -268,10 +268,12 @@ func (s *Service) markFailed(ctx context.Context, scanID string, cause error) {
 func (s *Service) CloseInterruptedScans(ctx context.Context) (int64, error) {
 	now := time.Now()
 	n, err := s.store.setStartedScans(ctx, bson.M{
-		"status":        shared.StatusFailed,
-		"status_reason": shared.ScanReasonInterruptedByRestart,
-		"completed_at":  now,
-		"updated_at":    now,
+		"status":              shared.StatusFailed,
+		"status_reason":       shared.ScanReasonInterruptedByRestart,
+		"completion_reason":   shared.ScanReasonInterruptedByRestart,
+		"findings_reconciled": false,
+		"completed_at":        now,
+		"updated_at":          now,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("close interrupted scans: %w", err)

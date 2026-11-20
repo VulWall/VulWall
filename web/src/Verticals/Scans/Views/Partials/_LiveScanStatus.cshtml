@@ -107,7 +107,7 @@
                         <span class="live-dot live-dot--@run.StatusTone @(run.IsLive ? "live-dot--live" : "")"></span>
                         <span class="live-run__date">@run.Date</span>
                         <span class="live-run__type"><i class="fas @run.ScanTypeIcon live-run__type-icon"></i>@run.ScanTypeLabel</span>
-                        <span class="live-run__meta live-run__meta--@run.StatusTone ms-auto">@run.Meta</span>
+                        <span class="live-run__meta live-run__meta--@run.StatusTone ms-auto" title="@run.MetaHint">@run.Meta</span>
                     </div>
                 }
             </div>

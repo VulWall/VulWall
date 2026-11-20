@@ -74,6 +74,13 @@ First open-source, self-hosted release, under the MIT License.
 
 ### Fixed
 
+- A scan closed by the idle timeout no longer marks findings as resolved:
+  that timeout fires only when the pipeline has not drained. A scan where too
+  many DNS lookups failed in domain discovery, or the domain itself did not
+  resolve, also leaves findings open. Scans record `completion_reason`,
+  `findings_reconciled` and `degraded_reason`; the Scans page shows such a
+  scan as "partial scan", and the next scan compares against the last
+  complete one.
 - A scan that was running when the scanner restarted no longer marks
   findings as resolved. At startup the scanner closes it as `failed` with
   `status_reason: "interrupted_by_restart"`; the Scans page shows

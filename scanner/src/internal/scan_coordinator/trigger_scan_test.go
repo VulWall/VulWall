@@ -306,7 +306,8 @@ func TestQueuedScanWithoutAssetsIsDoneImmediately(t *testing.T) {
 
 	svc.startQueuedScans(context.Background())
 
-	if store.scans["q1"].Status != shared.StatusDone || store.set["q1"]["completed_at"] == nil || len(*published) != 0 {
+	if store.scans["q1"].Status != shared.StatusDone || store.set["q1"]["completed_at"] == nil ||
+		store.set["q1"]["findings_reconciled"] != false || len(*published) != 0 {
 		t.Fatalf("scan = %+v, want done with no jobs", store.scans["q1"])
 	}
 }
@@ -385,6 +386,8 @@ func TestCloseInterruptedScansFailsOnlyStartedScans(t *testing.T) {
 		set := store.set[id]
 		if store.scans[id].Status != shared.StatusFailed ||
 			set["status_reason"] != shared.ScanReasonInterruptedByRestart ||
+			set["completion_reason"] != shared.ScanReasonInterruptedByRestart ||
+			set["findings_reconciled"] != false ||
 			set["completed_at"] == nil {
 			t.Errorf("%s: status = %q set = %+v, want failed/interrupted_by_restart with completed_at",
 				id, store.scans[id].Status, set)
