@@ -1,4 +1,4 @@
-/* Standalone auth page styles (AuthError) */
+/* Standalone auth page styles (first-run setup, sign in) */
 .claim-page {
     min-height: 100vh;
     display: flex;
@@ -273,4 +273,44 @@
     .org-name {
         font-size: 1.25rem;
     }
+}
+
+/* Setup / sign-in forms */
+.auth-form-card {
+    text-align: left;
+}
+
+.auth-form-card .claim-description {
+    text-align: left;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.auth-field .form-label {
+    font-weight: 500;
+    color: var(--vw-gray-700);
+}
+
+.auth-field-error,
+.auth-form-alert {
+    color: var(--vw-danger);
+    font-size: 0.875rem;
+}
+
+.auth-field-error:empty {
+    display: none;
+}
+
+.auth-form-alert ul {
+    margin: 0;
+    padding-left: 1.25rem;
+}
+
+/* The validation summary renders a hidden placeholder list when there are no errors. */
+.auth-form-alert.validation-summary-valid {
+    display: none;
 }

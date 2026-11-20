@@ -12,7 +12,6 @@ public static class MongoDbIndexManager
     public static async Task EnsureIndexesAsync(IMongoDatabase database)
     {
         await Task.WhenAll(
-            CreateOrganizationIndexes(database),
             CreateFindingIndexes(database),
             CreateScanIndexes(database),
             CreateAuditLogIndexes(database),
@@ -22,17 +21,6 @@ public static class MongoDbIndexManager
             CreateDiscoveryIndexes(database),
             CreateFindingSuppressionIndexes(database)
         );
-    }
-
-    private static async Task CreateOrganizationIndexes(IMongoDatabase database)
-    {
-        var collection = database.GetCollection<BsonDocument>("organizations");
-
-        await collection.Indexes.CreateManyAsync([
-            new CreateIndexModel<BsonDocument>(
-                Builders<BsonDocument>.IndexKeys.Ascending("user_ids"),
-                new CreateIndexOptions { Name = "user_ids_1", Background = true })
-        ]);
     }
 
     private static async Task CreateFindingIndexes(IMongoDatabase database)

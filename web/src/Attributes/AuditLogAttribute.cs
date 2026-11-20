@@ -67,11 +67,6 @@ public class AuditLogAttribute : ActionFilterAttribute
                           ?? user.FindFirst("email")?.Value
                           ?? "Unknown User";
 
-            var isAdmin = string.Equals(
-                user.FindFirst("https://vulwall.com/is_admin")?.Value,
-                "true",
-                StringComparison.OrdinalIgnoreCase);
-
             var auditLog = new AuditLog
             {
                 UserId = userId,
@@ -80,7 +75,6 @@ public class AuditLogAttribute : ActionFilterAttribute
                 Action = Action,
                 AdditionalInfo = AdditionalInfo ?? GetAdditionalInfoFromRoute(context),
                 IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
-                IsAdminAction = isAdmin,
                 CreatedAt = DateTime.UtcNow
             };
 

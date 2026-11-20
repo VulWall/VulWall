@@ -1,0 +1,43 @@
+@model VulWall.Dashboard.Account.Models.LoginInput
+@{
+    ViewData["Title"] = "Sign in";
+}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <partial name="~/Verticals/Account/Views/_AuthHead.cshtml" />
+</head>
+<body>
+<div class="claim-page">
+    <main class="claim-container">
+        <div class="claim-header">
+            <img src="~/img/VW_Logo.png" alt="VulWall" class="claim-logo" />
+            <h1 class="claim-title">Sign in</h1>
+        </div>
+
+        <div class="claim-card auth-form-card">
+            <form method="post" action="/login" class="auth-form" novalidate>
+                <div asp-validation-summary="ModelOnly" class="auth-form-alert" role="alert"></div>
+                <input type="hidden" asp-for="ReturnUrl" />
+
+                <div class="auth-field">
+                    <label asp-for="Email" class="form-label">Email</label>
+                    <input asp-for="Email" type="email" class="form-control" autocomplete="username" autofocus />
+                    <span asp-validation-for="Email" class="auth-field-error"></span>
+                </div>
+
+                <div class="auth-field">
+                    <label asp-for="Password" class="form-label">Password</label>
+                    <input asp-for="Password" type="password" class="form-control" autocomplete="current-password" value="" />
+                    <span asp-validation-for="Password" class="auth-field-error"></span>
+                </div>
+
+                <button type="submit" class="btn btn-claim">
+                    <i class="fas fa-right-to-bracket me-2"></i>Sign in
+                </button>
+            </form>
+        </div>
+    </main>
+</div>
+</body>
+</html>

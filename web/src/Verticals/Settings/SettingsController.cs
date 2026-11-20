@@ -1,9 +1,5 @@
-using Auth0.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.Organization;
@@ -15,7 +11,6 @@ namespace VulWall.Dashboard.Settings;
 
 public class SettingsController(
     ILogger<SettingsController> logger,
-    OrganizationRepository organizationRepository,
     IOrganizationContext organizationContext,
     Services.SettingsService settingsService)
     : Controller
@@ -36,35 +31,6 @@ public class SettingsController(
         };
 
         return View(vm);
-    }
-
-    [Route("/Account/Login")]
-    public async Task Login(string returnUrl = "/", bool signup = false)
-    {
-        if (!Url.IsLocalUrl(returnUrl))
-            returnUrl = "/";
-
-        var builder = new LoginAuthenticationPropertiesBuilder()
-            .WithRedirectUri(returnUrl);
-
-        if (signup)
-            builder.WithParameter("screen_hint", "signup");
-
-        var authenticationProperties = builder.Build();
-
-        await HttpContext.ChallengeAsync(Auth0Constants.AuthenticationScheme, authenticationProperties);
-    }
-
-    [AllowAnonymous]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Logged out")]
-    public async Task Logout()
-    {
-        var authenticationProperties = new LogoutAuthenticationPropertiesBuilder()
-            .WithRedirectUri(Url.Action("Index", "Dashboard") ?? "/")
-            .Build();
-
-        await HttpContext.SignOutAsync(Auth0Constants.AuthenticationScheme, authenticationProperties);
-        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     }
 
     [Authorize]
@@ -179,31 +145,6 @@ public class SettingsController(
     {
         var organization = await GetCurrentOrganizationAsync();
         return PartialView("Partials/_Preferences", organization.TourCompleted);
-    }
-
-    [Authorize]
-    [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Switched organization")]
-    public async Task<IActionResult> SwitchOrg(string orgId)
-    {
-        if (string.IsNullOrWhiteSpace(orgId))
-            return BadRequest("Organization ID is required.");
-
-        var auth0UserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(auth0UserId))
-            return Unauthorized();
-
-        var org = await organizationRepository.GetByIdAsync(orgId);
-        if (org == null || !org.UserIds.Contains(auth0UserId))
-        {
-            logger.LogWarning("User {UserId} attempted to switch to unauthorized org {OrgId}", auth0UserId, orgId);
-            return Forbid();
-        }
-
-        HttpContext.Session.SetString("active_org_id", orgId);
-        logger.LogInformation("User {UserId} switched to org {OrgId}", auth0UserId, orgId);
-
-        return RedirectToAction("Index", "Dashboard");
     }
 
     private async Task<Data.Entities.Organization.Organization> GetCurrentOrganizationAsync()

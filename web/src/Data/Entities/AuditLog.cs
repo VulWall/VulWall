@@ -19,7 +19,7 @@ public class AuditLog : IEntity<string>, IOrganizationEntity
     public string OrgId { get; set; } = string.Empty;
 
     /// <summary>
-    /// Auth0 User ID (from claims)
+    /// User ID (NameIdentifier claim)
     /// </summary>
     public string UserId { get; set; } = string.Empty;
 

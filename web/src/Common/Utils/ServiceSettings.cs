@@ -10,18 +10,6 @@ public class ServiceSettings : EnvLoader
     [Env(Name = "PORT", Default = "8080")]
     public int Port;
 
-    [Env(Name = "AUTH0_DOMAIN", Required = true)]
-    public string Auth0Domain;
-
-    [Env(Name = "AUTH0_MANAGEMENT_DOMAIN", Required = true)]
-    public string Auth0ManagementDomain;
-
-    [Env(Name = "AUTH0_CLIENTID", Required = true)]
-    public string Auth0ClientId;
-
-    [Env(Name = "AUTH0_CLIENTSECRET", Required = true)]
-    public string Auth0ClientSecret;
-
     [Env(Name = "MONGO_URI", Default = "mongodb://localhost:27017")]
     public string Mongo_URI;
 

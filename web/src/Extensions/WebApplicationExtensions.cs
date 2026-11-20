@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using VulWall.Dashboard.Common.Utils;
-using VulWall.Dashboard.Middleware;
 
 namespace VulWall.Dashboard.Extensions;
 
@@ -57,15 +56,8 @@ public static class WebApplicationExtensions
         app.MapStaticAssets();
         app.UseRouting();
 
-        app.UseSession();
         app.UseAuthentication();
         app.UseAuthorization();
-
-        // Log successful logins (must be after UseAuthentication)
-        app.UseMiddleware<LoginAuditMiddleware>();
-
-        // Create an org for authenticated users who don't have one yet
-        app.UseMiddleware<EnsureOrganizationMiddleware>();
 
         app.MapControllerRoute(
             name: "default",

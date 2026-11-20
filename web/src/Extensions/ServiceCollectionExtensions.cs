@@ -1,14 +1,12 @@
 using Anthropic;
-using Auth0.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using DnsClient;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Razor;
 using VulWall.Dashboard.Common.Services.AIServices;
-using VulWall.Dashboard.Common.Services.Auth0;
+using VulWall.Dashboard.Account.Services;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Extensions.Configuration;
@@ -46,16 +44,14 @@ public static class ServiceCollectionExtensions
         services.AddHealthChecks();
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
-        services.AddSessionSupport();
         services.AddAntiforgeryConfiguration();
         services.AddCustomViewLocationExpander();
-        services.AddAuth0Authentication();
+        services.AddLocalAuthentication();
         services.AddOrganizationServices();
         services.AddAiServices();
         services.AddScanTriggerServices();
         services.AddSingleton<IpRateLimiterService>();
         services.AddSingleton<KnowledgeBaseCacheService>();
-        services.AddExceptionHandler<Middleware.AuthFailureExceptionHandler>();
 
         return services;
     }
@@ -95,26 +91,8 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddOrganizationServices(this IServiceCollection services)
     {
         services.AddScoped<IOrganizationContext, OrganizationContext>();
-        services.AddScoped<IOrganizationSyncService, OrganizationSyncService>();
-        services.AddHttpClient(Auth0ManagementService.TokenHttpClientName);
-        services.AddHttpClient(Auth0ManagementService.ManagementHttpClientName);
-        services.AddSingleton<IAuth0ManagementService, Auth0ManagementService>();
         services.AddSingleton<IFeatureAccessService>(
             new FullFeatureAccessService(ServiceSettings.Instance.SharedLinksEnabled));
-
-        return services;
-    }
-
-    private static IServiceCollection AddSessionSupport(this IServiceCollection services)
-    {
-        services.AddSession(options =>
-        {
-            options.IdleTimeout = TimeSpan.FromHours(24);
-            options.Cookie.HttpOnly = true;
-            options.Cookie.IsEssential = true;
-            options.Cookie.SecurePolicy = CookieSecurePolicyFromSettings();
-            options.Cookie.SameSite = SameSiteMode.Lax;
-        });
 
         return services;
     }
@@ -147,23 +125,28 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddAuth0Authentication(this IServiceCollection services)
+    /// <summary>
+    /// Local cookie authentication against the single admin in the users collection.
+    /// A hosted fork that needs SSO would register an OIDC handler here instead (cookie scheme
+    /// as the sign-in scheme, OpenIdConnect as the challenge scheme) and replace AccountController.
+    /// </summary>
+    private static IServiceCollection AddLocalAuthentication(this IServiceCollection services)
     {
-        var auth0Domain = ServiceSettings.Instance.Auth0Domain;
-        var auth0ClientId = ServiceSettings.Instance.Auth0ClientId;
-        var auth0ClientSecret = ServiceSettings.Instance.Auth0ClientSecret;
+        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie(options =>
+            {
+                options.LoginPath = "/login";
+                options.LogoutPath = "/logout";
+                options.AccessDeniedPath = "/login";
+                options.ExpireTimeSpan = TimeSpan.FromHours(12);
+                options.SlidingExpiration = true;
+                options.Cookie.Name = "vulwall.auth";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.SecurePolicy = CookieSecurePolicyFromSettings();
+            });
 
-        services.AddAuth0WebAppAuthentication(options =>
-        {
-            options.Domain = auth0Domain;
-            options.ClientId = auth0ClientId;
-            options.ClientSecret = auth0ClientSecret;
-            options.Scope = "openid profile email";
-        });
-
-        // Register as IPostConfigureOptions to run AFTER Auth0 SDK's own IPostConfigureOptions,
-        // which overwrites any events set via options.OpenIdConnectEvents or services.PostConfigure.
-        services.AddSingleton<IPostConfigureOptions<OpenIdConnectOptions>, Auth0EventConfiguration>();
+        services.AddScoped<AccountService>();
 
         return services;
     }

@@ -1,0 +1,61 @@
+@model VulWall.Dashboard.Account.Models.SetupInput
+@using VulWall.Dashboard.Account.Services
+@{
+    ViewData["Title"] = "Set up VulWall";
+}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <partial name="~/Verticals/Account/Views/_AuthHead.cshtml" />
+</head>
+<body>
+<div class="claim-page">
+    <main class="claim-container">
+        <div class="claim-header">
+            <img src="~/img/VW_Logo.png" alt="VulWall" class="claim-logo" />
+            <h1 class="claim-title">Set up VulWall</h1>
+        </div>
+
+        <div class="claim-card auth-form-card">
+            <p class="claim-description">
+                Create the admin account for this install. You use it to sign in and manage your assets.
+            </p>
+
+            <form method="post" action="/setup" class="auth-form" novalidate>
+                <div asp-validation-summary="ModelOnly" class="auth-form-alert" role="alert"></div>
+
+                <div class="auth-field">
+                    <label asp-for="OrganizationName" class="form-label">Organization name</label>
+                    <input asp-for="OrganizationName" class="form-control" autocomplete="organization" />
+                    <span asp-validation-for="OrganizationName" class="auth-field-error"></span>
+                </div>
+
+                <div class="auth-field">
+                    <label asp-for="Email" class="form-label">Admin email</label>
+                    <input asp-for="Email" type="email" class="form-control" autocomplete="username" autofocus />
+                    <span asp-validation-for="Email" class="auth-field-error"></span>
+                </div>
+
+                <div class="auth-field">
+                    <label asp-for="Password" class="form-label">Password</label>
+                    <input asp-for="Password" type="password" class="form-control" autocomplete="new-password"
+                           minlength="@AccountService.MinPasswordLength" value="" aria-describedby="passwordHelp" />
+                    <div id="passwordHelp" class="form-text">At least @AccountService.MinPasswordLength characters.</div>
+                    <span asp-validation-for="Password" class="auth-field-error"></span>
+                </div>
+
+                <div class="auth-field">
+                    <label asp-for="ConfirmPassword" class="form-label">Repeat password</label>
+                    <input asp-for="ConfirmPassword" type="password" class="form-control" autocomplete="new-password" value="" />
+                    <span asp-validation-for="ConfirmPassword" class="auth-field-error"></span>
+                </div>
+
+                <button type="submit" class="btn btn-claim">
+                    <i class="fas fa-user-shield me-2"></i>Create admin account
+                </button>
+            </form>
+        </div>
+    </main>
+</div>
+</body>
+</html>

@@ -16,10 +16,13 @@ namespace VulWall.Dashboard.Data.Repositories;
 
 // OrganizationRepository uses BaseMongoRepository (not OrgScoped) because:
 // - Organizations ARE the organizational boundary - they don't belong to another org
-// - We find organizations by searching for Auth0 UserId in the user_ids array
 // - The organization's _id becomes the org_id used to scope other entities
 public class OrganizationRepository(IMongoDatabase database)
     : BaseMongoRepository<Entities.Organization.Organization, string>(database, "organizations");
+
+// UsersRepository is global: local logins are not org-scoped (a self-hosted install has one admin).
+public class UsersRepository(IMongoDatabase database)
+    : BaseMongoRepository<Entities.User.User, string>(database, "users");
 
 public class AuditLogRepository(
     IMongoDatabase database,

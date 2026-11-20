@@ -33,7 +33,7 @@ public class FindingSuppression : IEntity<string>, IOrganizationEntity
     public string? Note { get; set; }
 
     /// <summary>
-    /// Auth0 user ID or email of the user who performed the suppression.
+    /// User ID or email of the user who performed the suppression.
     /// </summary>
     [BsonElement("suppressed_by")]
     public string SuppressedBy { get; set; } = null!;
