@@ -91,7 +91,7 @@ else if (status == "muted")
     {
         <div class="business-impact-box">
             <i class="fas fa-file-contract"></i>
-            <span><strong>Business impact —</strong> @Model.Finding.BusinessImpact</span>
+            <span><strong>Business impact:</strong> @Model.Finding.BusinessImpact</span>
         </div>
     }
     <div class="finding-meta-row">
@@ -300,7 +300,7 @@ else if (status == "muted")
             <div class="sidebar-card suppression-panel">
                 <h5><i class="fas fa-eye-slash"></i> Mark as dismissed</h5>
                 <p class="text-muted small mb-2">
-                    Per-asset dismissal — pick an asset below to suppress that specific instance of this finding.
+                    Per-asset dismissal: pick an asset below to suppress that specific instance of this finding.
                 </p>
                 @foreach (var asset in assetsWithDiscovery)
                 {
@@ -311,7 +311,7 @@ else if (status == "muted")
                         <div class="mb-2 d-flex align-items-center justify-content-between gap-2">
                             <span class="suppressed-badge @badgeClass small">
                                 <i class="fas fa-check-circle"></i>
-                                @(asset.Target ?? asset.DiscoveryId) — @statusLabel
+                                @(asset.Target ?? asset.DiscoveryId): @statusLabel
                             </span>
                             <form method="post"
                                   action="@Url.Action("UnsuppressFinding", "Recommendations")"
@@ -341,7 +341,7 @@ else if (status == "muted")
                             <select name="Status"
                                     class="form-select form-select-sm mb-1"
                                     data-suppress-status>
-                                <option value="">— Select reason —</option>
+                                <option value="">Select a reason</option>
                                 <option value="@SuppressionStatus.FalsePositive">False positive</option>
                                 <option value="@SuppressionStatus.AcceptedRisk">Accepted risk</option>
                             </select>

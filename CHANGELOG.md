@@ -89,6 +89,8 @@ First open-source, self-hosted release, under the MIT License.
   self-hosted server.
 - A "Print / Save as PDF" button above the Summary and Technical reports
   opens the browser's print dialog. It is not printed.
+- User-facing text in the web app no longer uses em or en dashes. An em dash
+  is still shown for an empty value in tables and stat cards.
 - "Check for updates" in the About dialog says why a check failed: no
   published release yet, GitHub's rate limit (the answer is kept until the
   limit resets, at most an hour), or no connection to GitHub.

@@ -29,7 +29,7 @@
     var successMsg = successCode switch
     {
         "QueuedAfterCurrent" => "A scan is running. Another scan will start right after it finishes.",
-        _                    => "Scan started — results will appear on the heatmap when complete."
+        _                    => "Scan started. Results appear on the heatmap when it completes."
     };
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <i class="fas fa-check-circle me-2"></i>@successMsg
