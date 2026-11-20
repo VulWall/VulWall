@@ -58,6 +58,13 @@ cd web/src && dotnet build VulWall.Dashboard.csproj
 cd web/tests/VulWall.Dashboard.Tests && dotnet test
 ```
 
+Demo data and screenshots: `make demo` starts the stack without the scanner and
+loads the sample data (see "Demo data" in [README.md](README.md)). The data is
+built in `scanner/src/internal/demoseed`; its finding texts are copied from the
+scanners, so update them there when a scanner's text changes. Take product
+screenshots from this data at 1440x900, device scale 2, in light and dark
+mode, and compress them with `pngquant` and `oxipng`.
+
 AI coding agents: `.claude/skills/vulwall-design/` holds the VulWall design
 system (tokens, components, brand rules). Use it for any UI change in `web/`.
 

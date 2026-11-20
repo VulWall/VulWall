@@ -6,7 +6,9 @@ namespace VulWall.Dashboard.Data.Entities.KnowledgeBase;
 /// <summary>
 /// Shared knowledge base entry keyed by finding_type.
 /// NOT org-scoped — one entry per unique finding_type across all organizations.
+/// Extra fields (for example <c>demo</c> on sample entries from demo-seed) are ignored.
 /// </summary>
+[BsonIgnoreExtraElements]
 public class KnowledgeBaseEntry : IEntity<string>
 {
     [BsonId]

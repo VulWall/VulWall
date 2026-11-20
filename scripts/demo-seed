@@ -1,0 +1,13 @@
+#!/bin/sh
+# Loads clearly labelled sample data (organization "Acme Demo") into the database of the
+# running stack, for screenshots and demos. See "Demo data" in README.md.
+#
+#   scripts/demo-seed           seed (refuses when you already have assets or findings)
+#   scripts/demo-seed --force   seed next to your own data
+#   scripts/demo-seed --reset   remove the sample data again
+#
+# It runs the demo-seed program of the scanner image with the scanner's MONGO_URI, so MongoDB
+# must be up (docker compose up -d mongo). Set COMPOSE_PROJECT_NAME as for the stack itself.
+set -eu
+cd "$(dirname "$0")/.."
+exec docker compose run --rm --no-deps -T --entrypoint demo-seed scanner "$@"
