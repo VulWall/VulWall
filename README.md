@@ -49,11 +49,13 @@ docker compose up -d
 Get the first-run setup link from the web container's log and open it:
 
 ```bash
-docker compose logs web | grep "First-run setup"
+docker compose logs web | grep "First-run setup" | tail -1
 ```
 
-The link looks like `http://localhost:8080/setup?token=...`. The token
-protects setup, so only someone who can read the server logs can create the
+The link looks like `http://localhost:8080/setup?token=...`. It always shows
+the container port 8080; if you changed `VULWALL_PORT`, use your port instead.
+Each start of the web container prints a new token, and only the latest one
+works. The token protects setup, so only someone who can read the server logs can create the
 admin account. Create the admin account, add a domain you own, then start a
 scan.
 
@@ -98,8 +100,9 @@ TLS-terminating reverse proxy (Caddy, Traefik, nginx):
    point it at `http://web:8080` instead.
 2. Set `SECURE_COOKIES=true` in `.env`.
 3. Add the proxy's address, as VulWall sees it, to `TRUSTED_PROXIES`. For a
-   proxy on the host this is the Docker bridge gateway, often `172.17.0.1` or
-   the gateway of `vulwall_default` (`docker network inspect vulwall_default`).
+   proxy on the host this is the gateway of the `vulwall_default` network
+   (`docker network inspect vulwall_default`); for a proxy container, it is
+   that container's address on `vulwall_default`.
 4. `docker compose up -d`.
 
 Do not publish port 8080 on all interfaces (`"8080:8080"`) to get remote
@@ -162,7 +165,7 @@ first-run setup again. Your assets, scans and findings stay.
 docker compose stop web
 docker compose exec mongo mongosh vulwall --quiet --eval 'db.users.deleteOne({_id:"admin"})'
 docker compose start web
-docker compose logs web | grep "First-run setup"
+docker compose logs web | grep "First-run setup" | tail -1
 ```
 
 Open the new setup link and create the admin account again.

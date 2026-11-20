@@ -2,7 +2,7 @@
 #
 #   cp .env.example .env
 #   docker compose up -d
-#   docker compose logs web | grep "First-run setup"   # open the printed setup link
+#   docker compose logs web | grep "First-run setup" | tail -1   # open the printed setup link
 #
 # Optional tracing (Jaeger UI on http://localhost:16686):
 #   set OTEL_ENABLED=true in .env, then
