@@ -22,6 +22,21 @@ The VulWall name and logo are trademarks of Moji Tajik. The MIT License covers t
 gives no right to use the VulWall name or logo. If you distribute a modified version, give it a
 different name.
 
+## Brand assets
+
+The logo and brand assets are © 2026 Moji Tajik, designed by
+[Reyhaneh Kamali](https://reyhane.pro/), and are not covered by the MIT License. They include
+the logo images and favicons in the web app and on this website, and the brand guide in the
+design skill. [NOTICE](https://github.com/VulWall/VulWall/blob/main/NOTICE) lists the files.
+
+The design tokens and CSS that implement the design in the web app and on this website are code,
+and the MIT License covers them.
+
+## Credits
+
+VulWall is built by [Moji Tajik](https://github.com/MojtabaTajik). The logo, colour palette and
+design system are by [Reyhaneh Kamali](https://reyhane.pro/), UI/UX Designer.
+
 ## Third-party components
 
 VulWall includes or runs third-party software and data. Each keeps its own license, which the MIT

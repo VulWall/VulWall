@@ -1,0 +1,89 @@
+@*
+    About dialog, opened from the sidebar footer. Static content is rendered here; versions and the
+    system info text come from GET /about/info when the dialog opens (wwwroot/js/Common/about.js).
+*@
+@{
+    var webVersion = VulWall.Dashboard.Common.Utils.ServiceSettings.Instance.Version;
+    var builtWith = new (string Name, string Url, string License)[]
+    {
+        ("nuclei", "https://github.com/projectdiscovery/nuclei", "MIT"),
+        ("subfinder", "https://github.com/projectdiscovery/subfinder", "MIT"),
+        ("testssl.sh", "https://github.com/testssl/testssl.sh", "GPL-2.0"),
+        ("retire.js", "https://github.com/RetireJS/retire.js", "Apache-2.0"),
+        ("flag-icons", "https://github.com/lipis/flag-icons", "MIT"),
+        ("simple-icons", "https://github.com/simple-icons/simple-icons", "CC0-1.0"),
+        ("Bootstrap", "https://getbootstrap.com/", "MIT"),
+        ("Font Awesome Free", "https://fontawesome.com/", "CC BY 4.0, OFL-1.1, MIT"),
+        ("Chart.js", "https://www.chartjs.org/", "MIT"),
+        ("Inter, JetBrains Mono, Chakra Petch", "https://fonts.google.com/", "OFL-1.1"),
+    };
+}
+<div class="modal fade about-dialog" id="aboutDialog" tabindex="-1" aria-labelledby="aboutDialogTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <img src="~/img/VW_Logo.png" alt="" class="about-logo" />
+                    <h2 class="modal-title h5 mb-0" id="aboutDialogTitle">About VulWall</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="about-lead">Self-hosted external attack surface scanner.</p>
+
+                <section class="about-section" aria-labelledby="aboutVersionsTitle">
+                    <h3 class="about-heading" id="aboutVersionsTitle">Versions</h3>
+                    <dl class="about-versions" data-about-versions>
+                        <dt>VulWall web</dt>
+                        <dd>@webVersion</dd>
+                    </dl>
+                    <p class="about-note d-none" data-about-load-error role="status">Could not load the scanner versions.</p>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-about-copy disabled>
+                            <i class="fas fa-copy" aria-hidden="true"></i> Copy system info
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-about-check>
+                            <i class="fas fa-rotate" aria-hidden="true"></i> Check for updates
+                        </button>
+                    </div>
+                    <p class="about-status" data-about-status role="status" aria-live="polite"></p>
+                    <label class="visually-hidden" for="aboutCopyFallback">System info</label>
+                    <textarea id="aboutCopyFallback" class="form-control about-copy-fallback d-none" rows="8" readonly data-about-copy-fallback></textarea>
+                </section>
+
+                <section class="about-section" aria-labelledby="aboutLinksTitle">
+                    <h3 class="about-heading" id="aboutLinksTitle">Links</h3>
+                    <ul class="about-links">
+                        <li><a href="https://vulwall.com/docs/" target="_blank" rel="noopener noreferrer"><i class="fas fa-book" aria-hidden="true"></i><span>Documentation</span></a></li>
+                        <li><a href="https://github.com/VulWall/VulWall" target="_blank" rel="noopener noreferrer"><i class="fas fa-code" aria-hidden="true"></i><span>Source code on GitHub</span></a></li>
+                        <li><a href="https://github.com/VulWall/VulWall/issues/new" target="_blank" rel="noopener noreferrer"><i class="fas fa-bug" aria-hidden="true"></i><span>Report a bug</span></a></li>
+                        <li><a href="https://github.com/VulWall/VulWall/security/advisories/new" target="_blank" rel="noopener noreferrer"><i class="fas fa-shield-halved" aria-hidden="true"></i><span>Report a security issue</span></a></li>
+                        <li><a href="https://github.com/VulWall/VulWall/issues" target="_blank" rel="noopener noreferrer"><i class="fas fa-map" aria-hidden="true"></i><span>Roadmap</span></a></li>
+                    </ul>
+                </section>
+
+                <section class="about-section" aria-labelledby="aboutCreditsTitle">
+                    <h3 class="about-heading" id="aboutCreditsTitle">Credits</h3>
+                    <p class="mb-1">Built by <a href="https://github.com/MojtabaTajik" target="_blank" rel="noopener noreferrer">Moji Tajik</a></p>
+                    <p>Logo and design by <a href="https://reyhane.pro/" target="_blank" rel="noopener noreferrer">Reyhaneh Kamali</a>, UI/UX Designer</p>
+                    <p class="about-subheading">Built with</p>
+                    <ul class="about-built-with">
+                        @foreach (var item in builtWith)
+                        {
+                            <li><a href="@item.Url" target="_blank" rel="noopener noreferrer">@item.Name</a> <span class="about-license">@item.License</span></li>
+                        }
+                        <li><a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">IP geolocation by DB-IP</a> <span class="about-license">CC BY 4.0</span></li>
+                    </ul>
+                </section>
+
+                <p class="about-legal">
+                    VulWall is MIT licensed. The VulWall name and logo are trademarks of Moji Tajik.
+                    The logo and brand assets are &copy; 2026 Moji Tajik, designed by
+                    <a href="https://reyhane.pro/" target="_blank" rel="noopener noreferrer">Reyhaneh Kamali</a>,
+                    and are not covered by the MIT License.
+                    <a href="https://github.com/VulWall/VulWall/blob/main/NOTICE" target="_blank" rel="noopener noreferrer">Third-party notices</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>

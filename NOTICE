@@ -1,8 +1,32 @@
 VulWall
 Copyright (C) 2026 Moji Tajik
 
-VulWall is licensed under the MIT License. See LICENSE. The VulWall name and
-logo are trademarks of Moji Tajik and are not licensed under the MIT License.
+VulWall is licensed under the MIT License. See LICENSE.
+
+------------------------------------------------------------------------------
+VulWall name, logo and brand assets (not covered by the MIT License)
+------------------------------------------------------------------------------
+
+The VulWall name and logo are trademarks of Moji Tajik. The logo and brand
+assets are © 2026 Moji Tajik, designed by Reyhaneh Kamali
+(https://reyhane.pro/), and are not covered by the MIT License.
+
+The brand assets in this repository are:
+
+  web/src/wwwroot/img/VW_Logo.png
+  web/src/wwwroot/img/VW_Brand.png
+  web/src/wwwroot/img/favicon.ico
+  web/src/wwwroot/favicon.ico
+  site/public/favicon.svg
+  site/public/og.png
+  site/src/assets/logo-mark.svg
+  site/src/assets/logo-mark-dark.svg
+  .claude/skills/vulwall-design/assets/ (all files)
+  .claude/skills/vulwall-design/README.md (the brand guide text)
+  .claude/skills/vulwall-design/guidelines/ (brand guide specimen pages)
+
+The design tokens and CSS that implement the design in web/ and site/ (colours,
+type scale, spacing, components) are code and are covered by the MIT License.
 
 This product includes or runs the following third-party software and data.
 Each component keeps its own license. The container images ship the tools
@@ -66,6 +90,30 @@ simple-icons 11.15.0 (cloud and hosting provider logos, cloud/*.svg)
   except for an added fill attribute with the brand colour from the same
   release. The logos are trademarks of their owners and are shown only to
   identify the hosting provider of a discovered IP; see cloud/DISCLAIMER.md.
+
+------------------------------------------------------------------------------
+Libraries and fonts included in the web app (web/src/wwwroot)
+------------------------------------------------------------------------------
+
+Bootstrap 5.3.3 (lib/bootstrap)
+  https://getbootstrap.com
+  Copyright (c) 2011-2024 The Bootstrap Authors
+  License: MIT (lib/bootstrap/LICENSE)
+
+Font Awesome Free 6.5.1 (lib/fontawesome)
+  https://fontawesome.com
+  Copyright 2023 Fonticons, Inc.
+  License: icons CC BY 4.0, fonts SIL Open Font License 1.1, code MIT
+  (https://fontawesome.com/license/free)
+
+Chart.js 4.4.0 (lib/chart.js)
+  https://www.chartjs.org
+  Copyright (c) 2014-2022 Chart.js Contributors
+  License: MIT (lib/chart.js/LICENSE.md)
+
+Inter, JetBrains Mono and Chakra Petch fonts (fonts/)
+  https://fonts.google.com
+  License: SIL Open Font License 1.1
 
 ------------------------------------------------------------------------------
 Services run by docker-compose.yml (separate images, not distributed by VulWall)

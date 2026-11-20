@@ -2,6 +2,10 @@
 
 A security-first design system for **VulWall** — and its flagship product, **NightWatch**.
 
+Logo, color palette and design system by [Reyhaneh Kamali](https://reyhane.pro/), UI/UX Designer.
+
+**License.** The VulWall name and logo are trademarks of Moji Tajik. The logo and brand assets are © 2026 Moji Tajik, designed by Reyhaneh Kamali (https://reyhane.pro/), and are not covered by the MIT License. This covers `assets/`, this brand guide and `guidelines/`. The tokens and CSS that implement the design in VulWall's `web/` and `site/` are code under the MIT License. See `NOTICE` at the repository root.
+
 ---
 
 ## 1 · Company & product context

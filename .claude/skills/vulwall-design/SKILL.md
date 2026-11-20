@@ -81,5 +81,9 @@ The components are exposed on `window.VulWallDesignSystem_2af3fe`. (In productio
 - **Icons:** Font Awesome 6 solid only (`<i class="fas fa-…">`). Status = colored dots. **No emoji, ever.** No Unicode pictographs.
 - **Voice:** calm, plain-English security expert. Address the user as "you". Translate scanner jargon into outcomes and fixes. Sentence case for headings/buttons; UPPERCASE only for the wordmark and solid severity chips. Never alarmist.
 
+## Author and license
+
+The VulWall logo, color palette and design system were designed by [Reyhaneh Kamali](https://reyhane.pro/), UI/UX Designer. The VulWall name and logo are trademarks of Moji Tajik. The logo and brand assets are © 2026 Moji Tajik, designed by Reyhaneh Kamali (https://reyhane.pro/), and are not covered by the MIT License. That covers `assets/`, this brand guide (`README.md`) and `guidelines/`. The tokens and CSS that implement the design in `web/` and `site/` are code under the MIT License.
+
 ## Source & provenance
 Reverse-engineered from the real product: `web/` in this repository (canonical tokens from `site.css`; the `ScanHeatmap` from `Scans/index.css`). Explore it for production fidelity. Webfonts are Google-hosted (Inter + JetBrains Mono match the product; Chakra Petch is the display face) — swap in pinned/local fonts for offline use.

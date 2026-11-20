@@ -77,6 +77,8 @@ how it is backed up and when it is deleted. See [Back up and restore](/docs/oper
 - **AI, only if you set `ANTHROPIC_API_KEY`:** finding details go to Anthropic's API. See
   [what is sent](/docs/configuration/ai/#what-is-sent-to-anthropic).
 - **Traces, only if you turn on tracing:** to the OTLP backend you configure.
+- **Update check, only when you click Check for updates** in the About dialog: the web app asks
+  the GitHub API (`api.github.com`) for the latest VulWall release. It never checks on its own.
 
 VulWall sends no telemetry or usage data to the project.
 
