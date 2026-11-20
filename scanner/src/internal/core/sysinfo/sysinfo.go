@@ -28,6 +28,11 @@ const (
 	// update at runtime (first boot and NUCLEI_TEMPLATE_UPDATE_CRON); the
 	// other values only change when the container restarts.
 	RefreshInterval = 5 * time.Minute
+
+	// pendingInterval is used instead while the templates version is still
+	// unknown: on first boot nuclei installs the templates a minute or two
+	// after start, and the About dialog should not show "unknown" for long.
+	pendingInterval = 30 * time.Second
 )
 
 // Info is the system_info document. An empty string means "not known"; the
@@ -156,23 +161,27 @@ func Publish(ctx context.Context, db *mongo.Database, info Info) error {
 	return err
 }
 
-// Run publishes at once and then every RefreshInterval until ctx ends. A
-// failed write is logged, never returned: the About dialog is not worth
-// stopping the scanner for.
+// Run publishes at once and then every RefreshInterval (every 30 s while the
+// templates version is unknown) until ctx ends. A failed write is logged,
+// never returned: the About dialog is not worth stopping the scanner for.
 func Run(ctx context.Context, db *mongo.Database, src Sources, log *zap.Logger) error {
 	startedAt := time.Now()
-	ticker := time.NewTicker(RefreshInterval)
-	defer ticker.Stop()
 	for {
+		info := Collect(src, startedAt)
 		writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		if err := Publish(writeCtx, db, Collect(src, startedAt)); err != nil && ctx.Err() == nil {
+		if err := Publish(writeCtx, db, info); err != nil && ctx.Err() == nil {
 			log.Warn("Could not write system info", zap.Error(err))
 		}
 		cancel()
+
+		wait := RefreshInterval
+		if info.NucleiTemplates == "" {
+			wait = pendingInterval
+		}
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-time.After(wait):
 		}
 	}
 }

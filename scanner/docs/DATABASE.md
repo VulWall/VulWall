@@ -576,7 +576,8 @@ read by the guards for older documents but is no longer written.
 ```
 
 ### system_info Collection
-Written by `internal/core/sysinfo` at start-up and every 5 minutes (`$set`, upsert). Not scan
+Written by `internal/core/sysinfo` at start-up and every 5 minutes, every 30 s until the
+templates version is known (`$set`, upsert). Not scan
 data. The web app reads it and shows an empty or missing value as "unknown".
 ```javascript
 {
