@@ -18,9 +18,11 @@ type fakeStore struct {
 	orgs      map[string]bool
 	assets    map[string][]shared.Asset
 	scans     map[string]shared.Scan
-	set       map[string]bson.M // last $set applied per scan
+	set       map[string]bson.M // every field $set per scan, merged like MongoDB's $set
 	inserted  []shared.Scan
 	activeErr error
+	assetsErr error
+	onClaim   func()              // runs inside claimQueuedScan, after a successful claim
 	known     map[string][]string // by orgID/parentID
 }
 
@@ -50,6 +52,9 @@ func (f *fakeStore) hasScanIn(_ context.Context, orgID string, statuses []string
 }
 
 func (f *fakeStore) orgAssets(_ context.Context, orgID string) ([]shared.Asset, error) {
+	if f.assetsErr != nil {
+		return nil, f.assetsErr
+	}
 	return f.assets[orgID], nil
 }
 
@@ -79,7 +84,13 @@ func (f *fakeStore) claimQueuedScan(ctx context.Context, scanID string, set bson
 	if !ok || s.Status != shared.StatusQueued {
 		return false, nil
 	}
-	return true, f.setScanFields(ctx, scanID, set)
+	if err := f.setScanFields(ctx, scanID, set); err != nil {
+		return false, err
+	}
+	if f.onClaim != nil {
+		f.onClaim()
+	}
+	return true, nil
 }
 
 func (f *fakeStore) setScanFields(ctx context.Context, scanID string, set bson.M) error {
@@ -92,7 +103,12 @@ func (f *fakeStore) setScanFields(ctx context.Context, scanID string, set bson.M
 		s.Status = status
 	}
 	f.scans[scanID] = s
-	f.set[scanID] = set
+	if f.set[scanID] == nil {
+		f.set[scanID] = bson.M{}
+	}
+	for k, v := range set {
+		f.set[scanID][k] = v
+	}
 	return nil
 }
 
@@ -318,6 +334,44 @@ func TestQueuedScanWithoutAssetsIsDoneImmediately(t *testing.T) {
 	if store.scans["q1"].Status != shared.StatusDone || store.set["q1"]["completed_at"] == nil ||
 		store.set["q1"]["findings_reconciled"] != false || len(*published) != 0 {
 		t.Fatalf("scan = %+v, want done with no jobs", store.scans["q1"])
+	}
+}
+
+// An asset added while the scan is still queued is in the scan: the assets are read after
+// the claim, not before it.
+func TestQueuedScanIncludesAssetAddedUpToTheClaim(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	store.scans["q1"] = queuedScan("q1", "org-1", time.Now())
+	store.onClaim = func() {
+		store.assets["org-1"] = append(store.assets["org-1"], domainAsset("a2", "example.org"))
+	}
+	svc, published := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background())
+
+	if n := store.set["q1"]["stats.total_assets"]; n != 2 {
+		t.Fatalf("total_assets = %v, want 2 (the asset added before the claim)", n)
+	}
+	if len(*published) != 2 {
+		t.Fatalf("published %d jobs, want 2", len(*published))
+	}
+}
+
+// Once claimed, the scan is no longer queued: a failure to read the assets must close it,
+// not leave it running.
+func TestQueuedScanAssetLoadFailureAfterClaimMarksFailed(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assetsErr = errors.New("mongo down")
+	store.scans["q1"] = queuedScan("q1", "org-1", time.Now())
+	svc, published := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["q1"].Status != shared.StatusFailed || store.set["q1"]["completed_at"] == nil || len(*published) != 0 {
+		t.Fatalf("scan = %+v set = %+v, want failed with no jobs", store.scans["q1"], store.set["q1"])
 	}
 }
 

@@ -2,6 +2,7 @@ package scan_coordinator
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
@@ -94,38 +95,51 @@ func (s *Service) startQueuedScan(ctx context.Context, queued shared.Scan) {
 		return
 	}
 
-	assets, err := s.store.orgAssets(ctx, queued.OrgID)
-	if err != nil {
-		log.Error("Failed to load assets for queued scan", zap.Error(err))
-		return
-	}
-	targets := s.targetsFor(queued.OrgID, assets)
-
+	// Claim first, then read the assets: while the scan is queued, the web app promises that
+	// it includes every asset added before it starts, so an asset added up to the claim must
+	// be in it. After the claim the web app sees a running scan and queues a follow-up.
 	now := time.Now()
-	set := bson.M{
-		"status":             shared.StatusRunning,
-		"type":               shared.ScanTypeRequested,
-		"started_at":         now,
-		"updated_at":         now,
-		"targeted_assets":    targets,
-		"stats.total_assets": len(targets),
-	}
-	// Nothing to scan: complete at once instead of leaving a running scan
-	// that the monitor would only close at the safety timeout. It saw nothing,
-	// so it reconciles no findings and is no baseline for the next scan.
-	if len(targets) == 0 {
-		set["status"] = shared.StatusDone
-		set["completed_at"] = now
-		set["findings_reconciled"] = false
-	}
-
-	claimed, err := s.store.claimQueuedScan(ctx, queued.ID, set)
+	claimed, err := s.store.claimQueuedScan(ctx, queued.ID, bson.M{
+		"status":     shared.StatusRunning,
+		"type":       shared.ScanTypeRequested,
+		"started_at": now,
+		"updated_at": now,
+	})
 	if err != nil {
 		log.Error("Failed to claim queued scan", zap.Error(err))
 		return
 	}
 	if !claimed {
 		log.Info("Queued scan changed before it was claimed; skipping")
+		return
+	}
+
+	// The scan is ours now: a failure from here on closes it, or it would stay running
+	// and block the organization's next scan until the safety timeout.
+	assets, err := s.store.orgAssets(ctx, queued.OrgID)
+	if err != nil {
+		s.markFailed(ctx, queued.ID, fmt.Errorf("load assets: %w", err))
+		span.RecordError(err)
+		return
+	}
+	targets := s.targetsFor(queued.OrgID, assets)
+
+	set := bson.M{
+		"targeted_assets":    targets,
+		"stats.total_assets": len(targets),
+		"updated_at":         time.Now(),
+	}
+	// Nothing to scan: complete at once instead of leaving a running scan
+	// that the monitor would only close at the safety timeout. It saw nothing,
+	// so it reconciles no findings and is no baseline for the next scan.
+	if len(targets) == 0 {
+		set["status"] = shared.StatusDone
+		set["completed_at"] = set["updated_at"]
+		set["findings_reconciled"] = false
+	}
+	if err := s.store.setScanFields(ctx, queued.ID, set); err != nil {
+		s.markFailed(ctx, queued.ID, fmt.Errorf("record targeted assets: %w", err))
+		span.RecordError(err)
 		return
 	}
 

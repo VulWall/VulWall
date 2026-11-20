@@ -276,6 +276,9 @@ First open-source, self-hosted release, under the MIT License.
   back to the saved zone or UTC without a word, so scans ran at another time.
   Saving the schedule now fails with a message that names the zone. A form
   sent without a zone (JavaScript off) still uses the saved zone, else UTC.
+- A queued scan read the organization's assets before it was claimed, so an
+  asset added in between was left out although the page said the queued scan
+  would include it. The assets are now read after the claim.
 
 ### Removed
 
