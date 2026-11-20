@@ -12,7 +12,7 @@ else
             <div class="tr-roadmap-bucket tr-roadmap-bucket--immediate">
                 <div class="tr-roadmap-bucket-head">
                     <span class="tr-roadmap-bucket-label">Immediate</span>
-                    <span class="tr-roadmap-timeframe">0 – 7 days</span>
+                    <span class="tr-roadmap-timeframe">0 to 7 days</span>
                 </div>
                 <div class="tr-roadmap-items">
                     @foreach (var item in Model.Immediate.Take(6))
@@ -43,7 +43,7 @@ else
             <div class="tr-roadmap-bucket tr-roadmap-bucket--short">
                 <div class="tr-roadmap-bucket-head">
                     <span class="tr-roadmap-bucket-label">Short-term</span>
-                    <span class="tr-roadmap-timeframe">7 – 30 days</span>
+                    <span class="tr-roadmap-timeframe">7 to 30 days</span>
                 </div>
                 <div class="tr-roadmap-items">
                     @foreach (var item in Model.ShortTerm.Take(6))
@@ -74,7 +74,7 @@ else
             <div class="tr-roadmap-bucket tr-roadmap-bucket--medium">
                 <div class="tr-roadmap-bucket-head">
                     <span class="tr-roadmap-bucket-label">Medium-term</span>
-                    <span class="tr-roadmap-timeframe">30 – 90 days</span>
+                    <span class="tr-roadmap-timeframe">30 to 90 days</span>
                 </div>
                 <div class="tr-roadmap-items">
                     @foreach (var item in Model.MediumTerm.Take(6))

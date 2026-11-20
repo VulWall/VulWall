@@ -56,8 +56,8 @@ function hookInputValidation() {
     domainInput?.addEventListener('input', () => {
         setValidityUI(
             'domainValidIcon', 'domainInvalidIcon', 'domainHelper', isValidDomain(domainInput.value.trim()),
-            '<i class="fas fa-circle-info"></i> No http:// or paths — just the bare domain.',
-            '<i class="fas fa-circle-check"></i> Looks good — a valid domain.',
+            '<i class="fas fa-circle-info"></i> No http:// or paths, just the bare domain.',
+            '<i class="fas fa-circle-check"></i> Looks good: a valid domain.',
             '<i class="fas fa-circle-exclamation"></i> That doesn\'t look like a valid domain name.'
         );
     });
@@ -65,8 +65,8 @@ function hookInputValidation() {
     ipInput?.addEventListener('input', () => {
         setValidityUI(
             'ipValidIcon', 'ipInvalidIcon', 'ipHelper', isValidIp(ipInput.value.trim()),
-            '<i class="fas fa-circle-info"></i> A public address — private ranges are not scanned.',
-            '<i class="fas fa-circle-check"></i> Looks good — a valid IP address.',
+            '<i class="fas fa-circle-info"></i> A public address. Private ranges are not scanned.',
+            '<i class="fas fa-circle-check"></i> Looks good: a valid IP address.',
             '<i class="fas fa-circle-exclamation"></i> That doesn\'t look like a valid IP address.'
         );
     });

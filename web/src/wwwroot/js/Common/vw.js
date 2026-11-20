@@ -52,7 +52,7 @@
         }, durationMs);
       })
       .catch(function () {
-        VW.showError('Could not copy to clipboard — copy it manually.');
+        VW.showError('Could not copy to clipboard. Copy it manually.');
       });
   };
 

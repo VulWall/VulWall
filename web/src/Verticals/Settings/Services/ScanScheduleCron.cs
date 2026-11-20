@@ -16,15 +16,21 @@ public static class ScanScheduleCron
 
     /// <summary>
     /// Builds the settings to store, or returns an error message. Off keeps the current cron
-    /// (with <c>enabled: false</c>) so turning the schedule on again restores it. A missing or
-    /// unknown time zone (the browser sent none) falls back to the saved zone, else UTC.
+    /// (with <c>enabled: false</c>) so turning the schedule on again restores it. A missing time
+    /// zone (the browser sent none, JavaScript off) falls back to the saved zone, else UTC. A
+    /// zone the server does not know is an error: a fallback would shift the scan time silently.
+    /// Turning the schedule off needs no zone, so it falls back then too.
     /// </summary>
     public static (ScanSettings? Settings, string? Error) Build(ScanScheduleInput input, ScanSettings? current, DateTime nowUtc)
     {
         if (!Enum.IsDefined(input.Frequency))
             return (null, "Choose how often to scan.");
         if (!TryFindTimeZone(input.TimeZone, out var zone))
+        {
+            if (!string.IsNullOrWhiteSpace(input.TimeZone) && input.Frequency != ScanFrequency.Off)
+                return (null, $"Your browser's time zone ({Shorten(input.TimeZone.Trim())}) isn't known to the server. The schedule was not saved.");
             TryFindTimeZone(current?.TimeZone, out zone); // UTC when this fails too
+        }
 
         if (input.Frequency == ScanFrequency.Off)
             return (new ScanSettings { ScanCron = current?.ScanCron, Enabled = false, TimeZone = zone.Id }, null);
@@ -136,6 +142,9 @@ public static class ScanScheduleCron
         zone = found;
         return true;
     }
+
+    // The error message echoes the sent zone; cap it, the message goes into the TempData cookie.
+    private static string Shorten(string value) => value.Length <= 64 ? value : value[..64] + "...";
 
     private static int Mod(int value, int modulus) => ((value % modulus) + modulus) % modulus;
 }

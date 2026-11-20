@@ -116,7 +116,8 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
     // 2. Deduplicate if needed
     // 3. Convert to shared.SecurityFinding
     // 4. Publish to shared.StreamSecurityFindings with source + TraceContext;
-    //    on a failed publish, return the error (the trigger is retried)
+    //    on a failed publish, return the error (the trigger is retried).
+    //    Publish them also when the check did not complete: what it found is real
     // 5. Publish shared.TargetCoverage(source, target, reportedKeys, err):
     //    "ok" + every reported (finding_type, title) when the check completed,
     //    "error" when it did not (then return nil: no retry of the tool)

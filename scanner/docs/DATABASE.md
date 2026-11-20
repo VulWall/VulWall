@@ -475,9 +475,11 @@ should use the top-level `references` field.
 - **Requested scans** — the web app inserts
   `{_id, org_id, status: "queued", triggered_by, created_at}`. The scan
   coordinator polls every 5 s and claims the document in place: it sets
-  `status: "running"`, `type: "requested"`, `started_at`, `updated_at`,
-  `targeted_assets` and `stats.total_assets`, then publishes discovery jobs
-  with that `_id`.
+  `status: "running"`, `type: "requested"`, `started_at` and `updated_at`,
+  then reads the organization's assets (so an asset added while the scan was
+  queued is in it), sets `targeted_assets` and `stats.total_assets`, and
+  publishes discovery jobs with that `_id`. A failure after the claim marks
+  the scan `failed`.
 - **Scheduled scans** — the coordinator's cron inserts a new document with
   `status: "running"` and `started_at`.
 

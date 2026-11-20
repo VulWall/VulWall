@@ -75,6 +75,13 @@ const (
 	EnvNucleiWorkers = "NUCLEI_WORKERS"
 	// EnvNucleiRateLimit is the nuclei request rate per process, requests per second (default: 50)
 	EnvNucleiRateLimit = "NUCLEI_RATE_LIMIT"
+	// EnvNucleiInteractsh turns on nuclei's out-of-band (OAST) checks through interactsh
+	// servers: "on" or "true" (default: off, nuclei runs with -ni)
+	EnvNucleiInteractsh = "NUCLEI_INTERACTSH"
+	// EnvNucleiInteractshServer is the https URL of a self-hosted interactsh server (-iserver)
+	EnvNucleiInteractshServer = "NUCLEI_INTERACTSH_SERVER"
+	// EnvNucleiInteractshToken is the auth token of that server (-itoken). A secret: never logged
+	EnvNucleiInteractshToken = "NUCLEI_INTERACTSH_TOKEN"
 	// EnvNucleiIncludeTags is the comma-separated list of Nuclei template tags to include (empty = no filter)
 	EnvNucleiIncludeTags = "NUCLEI_INCLUDE_TAGS"
 	// EnvNucleiExcludeTags is the comma-separated list of Nuclei template tags to exclude (empty = no filter)

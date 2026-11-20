@@ -111,11 +111,11 @@ public class ScanScheduleCronTests
     [Theory]
     [InlineData(null, "Europe/Amsterdam", "Europe/Amsterdam")]
     [InlineData("", "Europe/Amsterdam", "Europe/Amsterdam")]
-    [InlineData("Mars/Olympus_Mons", "Europe/Amsterdam", "Europe/Amsterdam")]
+    [InlineData("  ", "Europe/Amsterdam", "Europe/Amsterdam")]
     [InlineData(null, null, "UTC")]
-    [InlineData("Mars/Olympus_Mons", "not/a-zone", "UTC")]
+    [InlineData(null, "not/a-zone", "UTC")]
     [InlineData("America/New_York", "Europe/Amsterdam", "America/New_York")]
-    public void Build_MissingOrUnknownZone_FallsBackToTheSavedZoneElseUtc(string? sent, string? saved, string expected)
+    public void Build_MissingZone_FallsBackToTheSavedZoneElseUtc(string? sent, string? saved, string expected)
     {
         var current = new ScanSettings { ScanCron = "0 2 * * *", Enabled = true, TimeZone = saved };
 
@@ -126,6 +126,58 @@ public class ScanScheduleCronTests
         Assert.Equal(expected, settings!.TimeZone);
         var offset = (int)TimeZoneInfo.FindSystemTimeZoneById(expected).GetUtcOffset(Winter).TotalHours;
         Assert.Equal($"0 {(4 - offset + 24) % 24} * * *", settings.ScanCron);
+    }
+
+    // A zone the server does not know must not silently become another zone: the scan would
+    // run at a different time than the one the user chose.
+    [Theory]
+    [InlineData("Mars/Olympus_Mons", "Europe/Amsterdam")]
+    [InlineData("Mars/Olympus_Mons", null)]
+    public void Build_UnknownZone_IsAnErrorAndSavesNothing(string sent, string? saved)
+    {
+        var current = new ScanSettings { ScanCron = "0 2 * * *", Enabled = true, TimeZone = saved };
+
+        var (settings, error) = ScanScheduleCron.Build(
+            new ScanScheduleInput { Frequency = ScanFrequency.Daily, Time = "04:00", TimeZone = sent }, current, Winter);
+
+        Assert.Null(settings);
+        Assert.Equal("Your browser's time zone (Mars/Olympus_Mons) isn't known to the server. The schedule was not saved.", error);
+    }
+
+    // Legacy ids that browsers still send are known too (the image has tzdata-legacy).
+    [Theory]
+    [InlineData("Asia/Calcutta", "30 22 * * *")]
+    [InlineData("Europe/Kiev", "0 2 * * *")]
+    public void Build_LegacyZoneId_IsKnown(string sent, string cron)
+    {
+        var (settings, error) = ScanScheduleCron.Build(
+            new ScanScheduleInput { Frequency = ScanFrequency.Daily, Time = "04:00", TimeZone = sent }, null, Winter);
+
+        Assert.Null(error);
+        Assert.Equal(cron, settings!.ScanCron);
+    }
+
+    [Fact]
+    public void Build_UnknownZone_LongValueIsShortenedInTheError()
+    {
+        var (_, error) = ScanScheduleCron.Build(
+            new ScanScheduleInput { Frequency = ScanFrequency.Daily, Time = "04:00", TimeZone = new string('x', 5000) }, null, Winter);
+
+        Assert.NotNull(error);
+        Assert.True(error.Length < 200, error);
+    }
+
+    [Fact]
+    public void Build_Off_WithUnknownZone_StillTurnsTheScheduleOff()
+    {
+        var current = new ScanSettings { ScanCron = "37 3 * * 6", Enabled = true, TimeZone = "Europe/Amsterdam" };
+
+        var (settings, error) = ScanScheduleCron.Build(
+            new ScanScheduleInput { Frequency = ScanFrequency.Off, TimeZone = "Mars/Olympus_Mons" }, current, Winter);
+
+        Assert.Null(error);
+        Assert.False(settings!.Enabled);
+        Assert.Equal("Europe/Amsterdam", settings.TimeZone);
     }
 
     [Fact]

@@ -28,6 +28,9 @@ Docker Compose recreates the containers whose settings changed. Your data is kep
 |----------|---------|---------|
 | `NUCLEI_WORKERS` | `2` | Number of nuclei processes that run at the same time. Each one can use several hundred MB of RAM. |
 | `NUCLEI_RATE_LIMIT` | `50` | Requests per second that each nuclei process sends. If nuclei sends faster than your connection can handle, connections time out and nuclei stops scanning that site, so the scan misses its findings and the scanner log says the target was "unresponsive". Lower the value if you see that. Raise it on a fast connection to finish scans sooner. |
+| `NUCLEI_INTERACTSH` | `off` | Set to `on` to run nuclei's out-of-band (OAST) checks, which find blind issues such as SSRF. A vulnerable target then calls back to an interactsh server: ProjectDiscovery's public servers (`oast.pro`, `oast.live` and others) unless you run your own. Those servers see the callbacks, so they learn which of your sites is vulnerable. While this is off, nuclei skips the templates that need it. |
+| `NUCLEI_INTERACTSH_SERVER` | empty | The https URL of your own interactsh server. A value that is not an https URL keeps the checks off; the scanner log says why. |
+| `NUCLEI_INTERACTSH_TOKEN` | empty | Auth token of your interactsh server. It is never written to the log. |
 | `TESTSSL_CONCURRENCY` | `5` | Number of testssl.sh scans that run at the same time. |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scans of private and internal IP ranges. Turn it on only to scan your internal network. |
 | `GEO_DOWNLOAD` | `true` | Download the free DB-IP Lite geolocation databases at start. Set to `false` on hosts without internet access. |

@@ -9,6 +9,7 @@
 }
 
 <div class="tr-page-wrapper">
+    <partial name="~/Verticals/Reports/Views/Partials/_ReportToolbar.cshtml" />
     <article class="tr-document">
         <partial name="~/Verticals/Reports/Views/Partials/_TechnicalHeader.cshtml" model="Model" />
         <partial name="~/Verticals/Reports/Views/Partials/_TechnicalDetails.cshtml" model="Model.TechnicalDetails" />
@@ -29,4 +30,5 @@
 
 @section Scripts {
     <script type="module" src="~/js/Reports/Technical/index.js" asp-append-version="true"></script>
+    <script type="module" src="~/js/Reports/print.js" asp-append-version="true"></script>
 }
