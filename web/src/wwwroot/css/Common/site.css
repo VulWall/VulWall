@@ -351,20 +351,24 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
     color: var(--brand-off-white);
 }
 
-/* Offcanvas sidebar — below lg acts as overlay, at lg+ acts as static.
-   Bootstrap's offcanvas adds a default border-right; we override it here
-   because the sidebar gradient background makes the border look wrong. */
+/* Offcanvas sidebar: below lg Bootstrap's .offcanvas-lg makes it a fixed, full-height overlay
+   panel; at lg+ it is a sticky column. Bootstrap's offcanvas adds a default border-right; we
+   override it here because the sidebar gradient background makes the border look wrong. */
 .app-shell .sidebar-offcanvas {
     --bs-offcanvas-width: 280px;
     --bs-offcanvas-border-width: 0;
     background: linear-gradient(180deg, var(--brand-bg-start) 0%, var(--brand-bg-end) 100%);
-    position: sticky;
-    top: 0;
-    height: 100dvh;
-    overflow-y: auto;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
+}
+@media (min-width: 992px) {
+    .app-shell .sidebar-offcanvas {
+        position: sticky;
+        top: 0;
+        height: 100dvh;
+        overflow-y: auto;
+    }
 }
 
 .app-shell .sidebar-offcanvas > .offcanvas-body {
@@ -374,13 +378,9 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
     min-height: 0;
 }
 
-/* Below lg: style the offcanvas panel */
+/* Below lg: style the offcanvas panel. Its body scrolls; the sidebar fills it, so the bottom
+   block (mt-auto) sits at the bottom of the panel when the content is shorter. */
 @media (max-width: 991.98px) {
-    .app-shell .sidebar-offcanvas {
-        position: static;
-        height: auto;
-        overflow-y: visible;
-    }
     .sidebar-offcanvas .offcanvas-header {
         padding: 0.75rem 0.75rem 0;
         border-bottom: none;
@@ -388,18 +388,19 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
     .sidebar-offcanvas .offcanvas-body {
         display: flex;
         flex-direction: column;
+        overflow-y: auto;
     }
     /* Sidebar inside offcanvas should fill space and not be sticky */
     .sidebar-offcanvas .sidebar {
         width: 100%;
         position: static;
         height: auto;
-        min-height: 100%;
+        flex: 1 0 auto;
         background: transparent;
     }
-    /* Add top padding to main content to clear the hamburger button */
+    /* Add top padding to main content to clear the hamburger button (beats main's .pt-4) */
     .app-shell .content > main {
-        padding-top: 4.5rem;
+        padding-top: 4.5rem !important;
     }
 }
 

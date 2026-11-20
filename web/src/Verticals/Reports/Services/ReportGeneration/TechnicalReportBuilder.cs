@@ -15,7 +15,8 @@ public class TechnicalReportBuilder(
         IEnumerable<DbFinding> findings,
         IEnumerable<Data.Entities.Discovery.Discovery> discoveries,
         Data.Entities.Scan.Scan? mostRecentScan,
-        byte[]? logo = null)
+        byte[]? logo = null,
+        string? logoContentType = null)
     {
         // Build base summary report. The technical report does not render the score trend or
         // since-last-scan delta, so the trend/delta inputs are kept minimal (current scan only,
@@ -35,7 +36,8 @@ public class TechnicalReportBuilder(
             findingsList,
             null,
             null,
-            logo
+            logo,
+            logoContentType
         );
 
         // Load KB entries for OWASP compliance mapping (only ~84 docs)
@@ -47,7 +49,7 @@ public class TechnicalReportBuilder(
         {
             // Copy all summary report properties
             OrganizationName = summaryReport.OrganizationName,
-            LogoBase64 = summaryReport.LogoBase64,
+            LogoDataUri = summaryReport.LogoDataUri,
             ScanDate = summaryReport.ScanDate,
             ReportId = summaryReport.ReportId,
             SecurityPosture = summaryReport.SecurityPosture,

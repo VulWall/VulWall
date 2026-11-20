@@ -570,7 +570,7 @@ read by the guards for older documents but is no longer written.
   scan_settings: {
     scan_cron: "0 2 * * *",       // Daily at 02:00 UTC (5-field: min hour day month weekday)
     enabled: true,                // false turns scheduled scans off
-    timezone: "Europe/Amsterdam"  // Web app only: the zone the Settings form shows the time in
+    timezone: "Europe/Amsterdam"  // Web app only: the browser zone the schedule was saved in; the Settings form shows the time in it
   }
 }
 ```
@@ -582,7 +582,7 @@ data. The web app reads it and shows an empty or missing value as "unknown".
 ```javascript
 {
   _id: "scanner",
-  version: "v0.1.0",                 // VULWALL_VERSION (release tag; "dev" for local builds)
+  version: "v0.1.0",                 // VULWALL_VERSION (release tag; "dev" or "dev (<commit>)" for local builds)
   nuclei: "3.11.1",                  // NUCLEI_VERSION, pinned in scanner/Dockerfile
   nuclei_templates: "v10.5.2",       // from nuclei's .templates-config.json; "" before the first update
   nuclei_templates_updated_at: ISODate("..."), // mtime of <templates dir>/.checksum, or null

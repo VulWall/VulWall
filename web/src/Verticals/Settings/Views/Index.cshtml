@@ -13,7 +13,7 @@
 
 <div class="page-header page-header--stacked vw-settings-header">
     <h1 class="vw-settings-title">Settings</h1>
-    <p class="vw-settings-subtitle">Manage your organization profile, scan schedule and preferences.</p>
+    <p class="vw-settings-subtitle">Manage your organization profile and scan schedule.</p>
 </div>
 
 <ul class="nav vw-settings-tabs" id="accountTabs" role="tablist">
@@ -29,12 +29,6 @@
             <i class="fa-solid fa-calendar-days"></i>Scan schedule
         </button>
     </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="preferences-tab" data-bs-toggle="tab" data-bs-target="#preferences"
-                type="button" role="tab" aria-controls="preferences" aria-selected="false">
-            <i class="fa-solid fa-sliders"></i>Preferences
-        </button>
-    </li>
 </ul>
 
 <div class="tab-content" id="accountTabsContent">
@@ -43,9 +37,5 @@
     </div>
     <div class="tab-pane fade" id="schedule" role="tabpanel" aria-labelledby="schedule-tab">
         @await Html.PartialAsync("Partials/_ScanSchedule", Model.ScanSchedule)
-    </div>
-    <div class="tab-pane fade" id="preferences" role="tabpanel" aria-labelledby="preferences-tab">
-        <partial name="~/Verticals/Settings/Views/Partials/_TabLoadingPlaceholder.cshtml" model='("preferences-loading", "Loading preferences...")' />
-        <div id="preferences-content" style="display: none;"></div>
     </div>
 </div>

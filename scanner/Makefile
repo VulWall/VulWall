@@ -3,6 +3,10 @@
 SRC_DIR := src
 # The root docker-compose.yml runs mongo, redis, the scanner and the web app.
 COMPOSE := docker compose -f ../docker-compose.yml
+# Version the built image reports (About dialog), as in the root Makefile.
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null)
+VULWALL_BUILD_VERSION ?= $(if $(GIT_COMMIT),dev ($(GIT_COMMIT)),dev)
+export VULWALL_BUILD_VERSION
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'

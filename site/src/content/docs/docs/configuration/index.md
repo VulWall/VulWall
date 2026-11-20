@@ -28,6 +28,7 @@ Docker Compose recreates the containers whose settings changed. Your data is kep
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `NUCLEI_WORKERS` | `2` | Number of nuclei processes that run at the same time. Each one can use several hundred MB of RAM. |
+| `NUCLEI_RATE_LIMIT` | `50` | Requests per second that each nuclei process sends. If nuclei sends faster than your connection can handle, connections time out and nuclei stops scanning that site, so the scan misses its findings and the scanner log says the target was "unresponsive". Lower the value if you see that. Raise it on a fast connection to finish scans sooner. |
 | `TESTSSL_CONCURRENCY` | `5` | Number of testssl.sh scans that run at the same time. |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scans of private and internal IP ranges. Turn it on only to scan your internal network. |
 | `GEO_DOWNLOAD` | `true` | Download the free DB-IP Lite geolocation databases at start. Set to `false` on hosts without internet access. |

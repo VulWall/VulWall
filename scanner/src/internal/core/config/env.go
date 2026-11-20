@@ -73,6 +73,8 @@ const (
 	EnvNucleiTemplatesDir = "NUCLEI_TEMPLATES_DIR"
 	// EnvNucleiWorkers is the number of concurrent nuclei processes, shared by both trigger streams (default: 2)
 	EnvNucleiWorkers = "NUCLEI_WORKERS"
+	// EnvNucleiRateLimit is the nuclei request rate per process, requests per second (default: 50)
+	EnvNucleiRateLimit = "NUCLEI_RATE_LIMIT"
 	// EnvNucleiIncludeTags is the comma-separated list of Nuclei template tags to include (empty = no filter)
 	EnvNucleiIncludeTags = "NUCLEI_INCLUDE_TAGS"
 	// EnvNucleiExcludeTags is the comma-separated list of Nuclei template tags to exclude (empty = no filter)

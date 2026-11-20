@@ -22,7 +22,7 @@ public class ScanScheduleCronTests
         Assert.Null(error);
         Assert.NotNull(settings);
         Assert.True(settings.Enabled);
-        Assert.Equal(input.TimeZone, settings.TimeZone);
+        Assert.Equal(input.TimeZone ?? "UTC", settings.TimeZone);
         CronExpression.Parse(settings.ScanCron!); // the dashboard parses it with Cronos too
         return settings.ScanCron!;
     }
@@ -69,7 +69,7 @@ public class ScanScheduleCronTests
         Assert.False(isCustom);
         Assert.Equal(input.Frequency, back.Frequency);
         Assert.Equal(input.Time, back.Time);
-        Assert.Equal(input.TimeZone, back.TimeZone);
+        Assert.Equal(input.TimeZone ?? "UTC", back.TimeZone);
         if (input.Frequency == ScanFrequency.Weekly) Assert.Equal(input.DayOfWeek, back.DayOfWeek);
         if (input.Frequency == ScanFrequency.Monthly) Assert.Equal(input.DayOfMonth, back.DayOfMonth);
     }
@@ -92,12 +92,9 @@ public class ScanScheduleCronTests
         new() { Frequency = ScanFrequency.Daily, Time = "25:00" },
         new() { Frequency = ScanFrequency.Daily, Time = "2am" },
         new() { Frequency = ScanFrequency.Daily, Time = "" },
-        new() { Frequency = ScanFrequency.Daily, TimeZone = "Mars/Olympus_Mons" },
-        new() { Frequency = ScanFrequency.Daily, TimeZone = "" },
         new() { Frequency = ScanFrequency.Weekly, DayOfWeek = (DayOfWeek)7 },
         new() { Frequency = ScanFrequency.Monthly, DayOfMonth = 0 },
         new() { Frequency = ScanFrequency.Monthly, DayOfMonth = 29 },
-        new() { Frequency = ScanFrequency.Off, TimeZone = "not/a-zone" },
     };
 
     [Theory]
@@ -108,6 +105,27 @@ public class ScanScheduleCronTests
 
         Assert.Null(settings);
         Assert.False(string.IsNullOrWhiteSpace(error));
+    }
+
+    // The page sends the browser's zone; without JavaScript it sends none.
+    [Theory]
+    [InlineData(null, "Europe/Amsterdam", "Europe/Amsterdam")]
+    [InlineData("", "Europe/Amsterdam", "Europe/Amsterdam")]
+    [InlineData("Mars/Olympus_Mons", "Europe/Amsterdam", "Europe/Amsterdam")]
+    [InlineData(null, null, "UTC")]
+    [InlineData("Mars/Olympus_Mons", "not/a-zone", "UTC")]
+    [InlineData("America/New_York", "Europe/Amsterdam", "America/New_York")]
+    public void Build_MissingOrUnknownZone_FallsBackToTheSavedZoneElseUtc(string? sent, string? saved, string expected)
+    {
+        var current = new ScanSettings { ScanCron = "0 2 * * *", Enabled = true, TimeZone = saved };
+
+        var (settings, error) = ScanScheduleCron.Build(
+            new ScanScheduleInput { Frequency = ScanFrequency.Daily, Time = "04:00", TimeZone = sent }, current, Winter);
+
+        Assert.Null(error);
+        Assert.Equal(expected, settings!.TimeZone);
+        var offset = (int)TimeZoneInfo.FindSystemTimeZoneById(expected).GetUtcOffset(Winter).TotalHours;
+        Assert.Equal($"0 {(4 - offset + 24) % 24} * * *", settings.ScanCron);
     }
 
     [Fact]
@@ -193,7 +211,19 @@ public class ScanScheduleCronTests
         var amsterdam = TimeZoneInfo.FindSystemTimeZoneById("Europe/Amsterdam");
         Assert.Equal(TimeZoneInfo.ConvertTimeFromUtc(vm.NextScanUtc.Value, amsterdam), vm.NextScanLocal);
         Assert.True(vm.ZoneHasDaylightSaving);
-        Assert.Equal("UTC", vm.TimeZones[0].Id);
+        Assert.Equal("Europe/Amsterdam", vm.SavedTimeZone);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not/a-zone")]
+    public void BuildScanSchedule_NoValidSavedZone_HasNoSavedZone(string? zone)
+    {
+        var vm = SettingsService.BuildScanSchedule(
+            new ScanSettings { ScanCron = "0 3 * * *", Enabled = true, TimeZone = zone }, Winter);
+
+        Assert.Null(vm.SavedTimeZone);
+        Assert.Equal("UTC", vm.Input.TimeZone);
     }
 
     [Fact]

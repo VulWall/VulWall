@@ -238,23 +238,6 @@ select.vw-fld { cursor: pointer; }
 
 #logoInput { padding: .45rem; }
 
-/* ── Preference rows ─────────────────────────────────────── */
-.vw-pref-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    padding: 16px 18px;
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    margin-bottom: 14px;
-}
-.vw-pref-row:last-child { margin-bottom: 0; }
-.vw-pref-info { display: flex; align-items: flex-start; gap: 13px; }
-.vw-pref-info > i { color: var(--text-muted); font-size: 16px; margin-top: 2px; }
-.vw-pref-name { font-size: 15px; font-weight: 600; color: var(--text-heading); margin-bottom: 2px; }
-.vw-pref-desc { font-size: 13px; color: var(--text-muted); margin: 0; }
-
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 640px) {
     .vw-fld-grid { grid-template-columns: 1fr; }

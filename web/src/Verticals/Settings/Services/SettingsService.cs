@@ -7,19 +7,10 @@ namespace VulWall.Dashboard.Settings.Services;
 
 public class SettingsService(OrganizationRepository organizationRepository)
 {
-    private static readonly Lazy<IReadOnlyList<TimeZoneOption>> TimeZoneOptions = new(() =>
-    {
-        // Sorted by base UTC offset; UTC first so the default is at the top.
-        var zones = TimeZoneInfo.GetSystemTimeZones()
-            .Where(z => z.Id != TimeZoneInfo.Utc.Id)
-            .Select(z => new TimeZoneOption(z.Id, z.DisplayName));
-        return [new TimeZoneOption(TimeZoneInfo.Utc.Id, "(UTC) Coordinated Universal Time"), .. zones];
-    });
-
     public static ScanScheduleViewModel BuildScanSchedule(ScanSettings? settings, DateTime nowUtc)
     {
         var (input, isCustom) = ScanScheduleCron.ToInput(settings, nowUtc);
-        ScanScheduleCron.TryFindTimeZone(input.TimeZone, out var zone);
+        var saved = ScanScheduleCron.TryFindTimeZone(settings?.TimeZone, out var zone);
         var next = NextScanCalculator.Compute(settings?.ActiveCron)?.NextUtc;
 
         return new ScanScheduleViewModel
@@ -30,7 +21,7 @@ public class SettingsService(OrganizationRepository organizationRepository)
             NextScanUtc = next,
             NextScanLocal = next is { } utc ? TimeZoneInfo.ConvertTimeFromUtc(utc, zone) : null,
             ZoneHasDaylightSaving = zone.SupportsDaylightSavingTime,
-            TimeZones = TimeZoneOptions.Value
+            SavedTimeZone = saved ? zone.Id : null
         };
     }
 
@@ -65,13 +56,14 @@ public class SettingsService(OrganizationRepository organizationRepository)
         await organizationRepository.UpdateAsync(organization);
     }
 
-    public async Task UpdateLogoAsync(string organizationId, byte[] logoBytes)
+    public async Task UpdateLogoAsync(string organizationId, byte[] logoBytes, string contentType)
     {
         var organization = await organizationRepository.GetByIdAsync(organizationId);
         if (organization == null)
             throw new InvalidOperationException($"Organization not found: {organizationId}");
 
         organization.Logo = logoBytes;
+        organization.LogoContentType = contentType;
         organization.UpdatedAt = DateTime.UtcNow;
 
         await organizationRepository.UpdateAsync(organization);
@@ -84,6 +76,7 @@ public class SettingsService(OrganizationRepository organizationRepository)
             throw new InvalidOperationException($"Organization not found: {organizationId}");
 
         organization.Logo = null;
+        organization.LogoContentType = null;
         organization.UpdatedAt = DateTime.UtcNow;
 
         await organizationRepository.UpdateAsync(organization);
@@ -96,18 +89,6 @@ public class SettingsService(OrganizationRepository organizationRepository)
             throw new InvalidOperationException($"Organization not found: {organizationId}");
 
         organization.TourCompleted = true;
-        organization.UpdatedAt = DateTime.UtcNow;
-
-        await organizationRepository.UpdateAsync(organization);
-    }
-
-    public async Task ResetTourAsync(string organizationId)
-    {
-        var organization = await organizationRepository.GetByIdAsync(organizationId);
-        if (organization == null)
-            throw new InvalidOperationException($"Organization not found: {organizationId}");
-
-        organization.TourCompleted = false;
         organization.UpdatedAt = DateTime.UtcNow;
 
         await organizationRepository.UpdateAsync(organization);

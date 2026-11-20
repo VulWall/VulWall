@@ -120,6 +120,15 @@ function showUpdateResult(status, result) {
         case 'Unknown':
             setStatus(status, `This is a development build. The latest release is ${latest}. `, url, 'Release notes');
             break;
+        case 'NoRelease':
+            setStatus(status, 'No published release found yet.');
+            break;
+        case 'RateLimited':
+            setStatus(status, 'GitHub limits update checks right now. Try again in an hour.');
+            break;
+        case 'Unreachable':
+            setStatus(status, "Could not reach GitHub. Check the server's internet connection and try again.");
+            break;
         default:
             setStatus(status, 'Could not check for updates. Try again later.');
     }

@@ -78,6 +78,17 @@ First open-source, self-hosted release, under the MIT License.
   follow-up scan that starts right after it and scans every asset there is
   then. Only one scan waits per organization (a unique partial index on
   `scans`); further requests say a follow-up is already queued.
+- `NUCLEI_RATE_LIMIT` (default 50) sets the requests per second of each
+  nuclei process. At nuclei's own default of 150 a home or office
+  connection timed out, nuclei dropped the target and the scan lost its
+  findings.
+- "Check for updates" in the About dialog says why a check failed: no
+  published release yet, GitHub's rate limit (the answer is kept until the
+  limit resets, at most an hour), or no connection to GitHub.
+- `make build` and `make up` in the repository root build the images from
+  source. The About dialog of those images shows `dev (<short commit>)`
+  instead of `dev`; `VULWALL_BUILD_VERSION` sets that text for a plain
+  `docker compose build`.
 
 ### Changed
 
@@ -122,6 +133,10 @@ First open-source, self-hosted release, under the MIT License.
   virtual host. Every address of the name must be public before the run
   (else coverage `error`); `-lna` stays on. Open ports are still scanned by
   IP and port.
+- Settings → Scan schedule has no time zone list any more. It uses the
+  browser's time zone and says which one. Without JavaScript it keeps the
+  saved zone, or UTC. When the saved zone is not the browser's, the page
+  says that saving again switches to the browser's zone.
 
 ### Security
 
@@ -246,6 +261,12 @@ First open-source, self-hosted release, under the MIT License.
   `$setUnion`).
 - `vulwall reset-admin` writes the new `.env` before it stops the web app,
   and keeps the old token if deleting the admin fails.
+- A JPEG company logo was served and embedded in reports as `image/png`.
+  The upload now stores the detected type (`organizations.logo_content_type`);
+  a logo uploaded before that gets its type from its first bytes.
+- On small screens the opened sidebar sat in the page and pushed the content
+  down. It is now a full-height panel over the page, scrolls when the screen
+  is short, and the menu button no longer covers the page heading.
 
 ### Removed
 
@@ -260,3 +281,5 @@ First open-source, self-hosted release, under the MIT License.
 - The feature-access layer (`IFeatureAccessService`, `FeatureAccess`): trends
   and finding suppression are always on. Shared report links stay behind
   `SHARED_LINKS_ENABLED`.
+- The Settings "Preferences" tab and its "Restart tour" button. The welcome
+  tour still opens on the first visit to the dashboard.

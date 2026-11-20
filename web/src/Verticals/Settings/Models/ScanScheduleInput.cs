@@ -23,6 +23,9 @@ public sealed record ScanScheduleInput
     /// <summary>24-hour "HH:mm".</summary>
     public string Time { get; init; } = "02:00";
 
-    /// <summary>System time zone id (IANA on Linux and macOS).</summary>
-    public string TimeZone { get; init; } = "UTC";
+    /// <summary>
+    /// IANA time zone id. The page fills it from the browser; when it is missing or unknown the
+    /// saved zone is used, else UTC.
+    /// </summary>
+    public string? TimeZone { get; init; }
 }

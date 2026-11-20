@@ -111,10 +111,12 @@ comments.
 | `VULWALL_PORT` | `8080` | Host port of the web UI (bound to `127.0.0.1`) |
 | `SETUP_TOKEN` | empty | First-run setup token. The install script sets a random one; empty means a new random token at each start, printed in the log |
 | `VULWALL_VERSION` | `latest` | Image tag of `ghcr.io/vulwall/scanner` and `ghcr.io/vulwall/web` |
+| `VULWALL_BUILD_VERSION` | `dev` | Version that images built from source show in the About dialog. `make build` and `make up` set it to `dev (<short commit>)` |
 | `SECURE_COOKIES` | `false` | Set to `true` when VulWall is served over HTTPS |
 | `TRUSTED_PROXIES` | empty | IPs/CIDRs of reverse proxies whose `X-Forwarded-*` headers are trusted |
 | `SHARED_LINKS_ENABLED` | `false` | Password-protected shared report links |
 | `NUCLEI_WORKERS` | `2` | Concurrent nuclei processes |
+| `NUCLEI_RATE_LIMIT` | `50` | Requests per second for each nuclei process |
 | `TESTSSL_CONCURRENCY` | `5` | Concurrent testssl.sh scans |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scanning private/internal IP ranges |
 | `GEO_DOWNLOAD` | `true` | Download DB-IP Lite databases on start |
@@ -168,7 +170,7 @@ From a clone:
 ```bash
 git pull
 docker compose pull          # when you use the published images
-docker compose up -d --build # when you build from source
+make up                      # when you build from source
 ```
 
 Data lives in Docker volumes, so it survives upgrades. Read

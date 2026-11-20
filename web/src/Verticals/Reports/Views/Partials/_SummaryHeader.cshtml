@@ -17,9 +17,9 @@
     </div>
 
     <div class="sr-header-title">
-        @if (!string.IsNullOrEmpty(Model.LogoBase64))
+        @if (!string.IsNullOrEmpty(Model.LogoDataUri))
         {
-            <img src="data:image/png;base64,@Model.LogoBase64" alt="@Model.OrganizationName" class="sr-org-logo" />
+            <img src="@Model.LogoDataUri" alt="@Model.OrganizationName" class="sr-org-logo" />
         }
         <div class="sr-eyebrow sr-eyebrow-light">External security assessment</div>
         <h1 class="sr-org-name">@Model.OrganizationName</h1>

@@ -16,14 +16,15 @@ public static class ScanScheduleCron
 
     /// <summary>
     /// Builds the settings to store, or returns an error message. Off keeps the current cron
-    /// (with <c>enabled: false</c>) so turning the schedule on again restores it.
+    /// (with <c>enabled: false</c>) so turning the schedule on again restores it. A missing or
+    /// unknown time zone (the browser sent none) falls back to the saved zone, else UTC.
     /// </summary>
     public static (ScanSettings? Settings, string? Error) Build(ScanScheduleInput input, ScanSettings? current, DateTime nowUtc)
     {
         if (!Enum.IsDefined(input.Frequency))
             return (null, "Choose how often to scan.");
         if (!TryFindTimeZone(input.TimeZone, out var zone))
-            return (null, "Choose a time zone from the list.");
+            TryFindTimeZone(current?.TimeZone, out zone); // UTC when this fails too
 
         if (input.Frequency == ScanFrequency.Off)
             return (new ScanSettings { ScanCron = current?.ScanCron, Enabled = false, TimeZone = zone.Id }, null);

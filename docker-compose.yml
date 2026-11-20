@@ -37,7 +37,12 @@ services:
       retries: 10
 
   scanner:
-    build: ./scanner
+    build:
+      context: ./scanner
+      args:
+        # Version shown in the About dialog. `make build` sets "dev (<commit>)";
+        # release images get the tag from release.yml.
+        VULWALL_VERSION: ${VULWALL_BUILD_VERSION:-dev}
     image: ghcr.io/vulwall/scanner:${VULWALL_VERSION:-latest}
     restart: unless-stopped
     depends_on:
@@ -52,6 +57,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
       NUCLEI_WORKERS: ${NUCLEI_WORKERS:-2}
+      NUCLEI_RATE_LIMIT: ${NUCLEI_RATE_LIMIT:-50}
       TESTSSL_CONCURRENCY: ${TESTSSL_CONCURRENCY:-5}
       DNS_RESOLVE_CONCURRENCY: ${DNS_RESOLVE_CONCURRENCY:-50}
       DNS_RECHECK_RESOLVERS: ${DNS_RECHECK_RESOLVERS:-}
@@ -66,7 +72,12 @@ services:
       - geo-data:/data/geo
 
   web:
-    build: ./web
+    build:
+      context: ./web
+      args:
+        # Version shown in the About dialog. `make build` sets "dev (<commit>)";
+        # release images get the tag from release.yml.
+        VULWALL_VERSION: ${VULWALL_BUILD_VERSION:-dev}
     image: ghcr.io/vulwall/web:${VULWALL_VERSION:-latest}
     restart: unless-stopped
     depends_on:

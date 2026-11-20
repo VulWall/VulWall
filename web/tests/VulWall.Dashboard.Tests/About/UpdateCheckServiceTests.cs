@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using VulWall.Dashboard.About.Models;
@@ -77,8 +78,8 @@ public class UpdateCheckServiceTests
     }
 
     [Theory]
-    [InlineData(HttpStatusCode.NotFound, "{}")]
-    [InlineData(HttpStatusCode.Forbidden, "{\"message\":\"rate limit\"}")]
+    [InlineData(HttpStatusCode.Forbidden, "{\"message\":\"forbidden\"}")] // a 403 without rate-limit headers
+    [InlineData(HttpStatusCode.InternalServerError, "{}")]
     [InlineData(HttpStatusCode.OK, "not json")]
     [InlineData(HttpStatusCode.OK, "{\"tag_name\":\"<script>alert(1)</script>\"}")]
     [InlineData(HttpStatusCode.OK, "[]")]
@@ -93,12 +94,106 @@ public class UpdateCheckServiceTests
         Assert.Null(result.ReleaseUrl);
     }
 
+    [Theory]
+    [InlineData("v1.0.0")]
+    [InlineData("dev (abc1234)")]
+    public async Task NoRelease_IsNoRelease(string current)
+    {
+        var (service, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") });
+
+        var result = await service.CheckAsync(current);
+
+        Assert.Equal(UpdateStatus.NoRelease, result.Status);
+        Assert.Null(result.LatestVersion);
+        Assert.Null(result.ReleaseUrl);
+    }
+
+    private static HttpResponseMessage RateLimited(HttpStatusCode status)
+    {
+        var response = new HttpResponseMessage(status) { Content = new StringContent("{\"message\":\"API rate limit exceeded\"}") };
+        response.Headers.Add("X-RateLimit-Remaining", "0");
+        response.Headers.Add("X-RateLimit-Reset", DateTimeOffset.UtcNow.AddMinutes(30).ToUnixTimeSeconds().ToString());
+        return response;
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    public async Task RateLimit_IsRateLimited_AndCached(HttpStatusCode status)
+    {
+        var (service, handler) = Create(_ => RateLimited(status));
+
+        Assert.Equal(UpdateStatus.RateLimited, (await service.CheckAsync("v1.0.0")).Status);
+        Assert.Equal(UpdateStatus.RateLimited, (await service.CheckAsync("v1.0.0")).Status);
+        Assert.Equal(1, handler.Calls);
+    }
+
     [Fact]
-    public async Task NetworkFailure_IsError()
+    public async Task TooManyRequests_WithoutHeaders_IsRateLimited()
+    {
+        var (service, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+
+        Assert.Equal(UpdateStatus.RateLimited, (await service.CheckAsync("v1.0.0")).Status);
+    }
+
+    [Fact]
+    public void RateLimitCache_LastsUntilTheReset_BetweenOneMinuteAndOneHour()
+    {
+        var now = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+        TimeSpan For(Action<HttpResponseMessage> set)
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Forbidden);
+            set(response);
+            return UpdateCheckService.RateLimitCacheFor(response.Headers, now);
+        }
+
+        Assert.Equal(TimeSpan.FromMinutes(20),
+            For(r => r.Headers.Add("X-RateLimit-Reset", now.AddMinutes(20).ToUnixTimeSeconds().ToString())));
+        Assert.Equal(TimeSpan.FromHours(1),
+            For(r => r.Headers.Add("X-RateLimit-Reset", now.AddHours(5).ToUnixTimeSeconds().ToString())));
+        Assert.Equal(TimeSpan.FromMinutes(1),
+            For(r => r.Headers.Add("X-RateLimit-Reset", now.AddMinutes(-5).ToUnixTimeSeconds().ToString())));
+        Assert.Equal(TimeSpan.FromMinutes(1), For(r => r.Headers.Add("X-RateLimit-Reset", "not a number")));
+        Assert.Equal(TimeSpan.FromMinutes(1), For(r => r.Headers.Add("X-RateLimit-Reset", "99999999999999")));
+        Assert.Equal(TimeSpan.FromMinutes(1), For(_ => { }));
+        Assert.Equal(TimeSpan.FromMinutes(10),
+            For(r => r.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromMinutes(10))));
+    }
+
+    [Fact]
+    public async Task NetworkFailure_IsUnreachable()
     {
         var (service, _) = Create(_ => throw new HttpRequestException("no route"));
 
-        Assert.Equal(UpdateStatus.Error, (await service.CheckAsync("v1.0.0")).Status);
+        Assert.Equal(UpdateStatus.Unreachable, (await service.CheckAsync("v1.0.0")).Status);
+    }
+
+    [Fact]
+    public async Task Timeout_IsUnreachable()
+    {
+        var (service, _) = Create(_ => throw new TaskCanceledException("timeout"));
+
+        Assert.Equal(UpdateStatus.Unreachable, (await service.CheckAsync("v1.0.0")).Status);
+    }
+
+    [Fact]
+    public async Task CancelledRequest_Throws_AndIsNotCached()
+    {
+        var (service, _) = Create(_ => Release("v1.2.0"));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.CheckAsync("v1.0.0", cts.Token));
+
+        Assert.Equal(UpdateStatus.Available, (await service.CheckAsync("v1.0.0")).Status);
+    }
+
+    [Fact]
+    public async Task DevBuildWithCommit_IsUnknown()
+    {
+        var (service, _) = Create(_ => Release("v1.2.0"));
+
+        Assert.Equal(UpdateStatus.Unknown, (await service.CheckAsync("dev (abc1234)")).Status);
     }
 
     [Fact]
