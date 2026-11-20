@@ -1,7 +1,7 @@
 # Builds and runs the stack from source with the root docker-compose.yml.
 # Local images report "dev (<short commit>)" as their version in the About dialog.
 
-.PHONY: help build up
+.PHONY: help build up demo
 
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null)
 VULWALL_BUILD_VERSION ?= $(if $(GIT_COMMIT),dev ($(GIT_COMMIT)),dev)
@@ -15,3 +15,8 @@ build: ## Build the scanner and web images from source
 
 up: ## Build from source and start the stack
 	docker compose up -d --build
+
+demo: ## Build, start without the scanner, and load the sample data ("Demo data" in README.md)
+	docker compose build scanner web
+	docker compose up -d --wait mongo redis web
+	scripts/demo-seed
