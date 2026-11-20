@@ -38,7 +38,7 @@ to fix.
 
 ## Quick start
 
-You need Docker with Compose v2. We suggest a host with at least 4 GB of RAM.
+You need Docker with Compose v2 and a host with 4 GB of RAM (recommended).
 
 ```bash
 git clone https://github.com/VulWall/VulWall.git && cd VulWall
