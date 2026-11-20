@@ -111,10 +111,12 @@ func (s *Service) startQueuedScan(ctx context.Context, queued shared.Scan) {
 		"stats.total_assets": len(targets),
 	}
 	// Nothing to scan: complete at once instead of leaving a running scan
-	// that the monitor would only close at the safety timeout.
+	// that the monitor would only close at the safety timeout. It saw nothing,
+	// so it reconciles no findings and is no baseline for the next scan.
 	if len(targets) == 0 {
 		set["status"] = shared.StatusDone
 		set["completed_at"] = now
+		set["findings_reconciled"] = false
 	}
 
 	claimed, err := s.store.claimQueuedScan(ctx, queued.ID, set)

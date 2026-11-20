@@ -306,7 +306,8 @@ func TestQueuedScanWithoutAssetsIsDoneImmediately(t *testing.T) {
 
 	svc.startQueuedScans(context.Background())
 
-	if store.scans["q1"].Status != shared.StatusDone || store.set["q1"]["completed_at"] == nil || len(*published) != 0 {
+	if store.scans["q1"].Status != shared.StatusDone || store.set["q1"]["completed_at"] == nil ||
+		store.set["q1"]["findings_reconciled"] != false || len(*published) != 0 {
 		t.Fatalf("scan = %+v, want done with no jobs", store.scans["q1"])
 	}
 }

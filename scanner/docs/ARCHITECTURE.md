@@ -161,7 +161,9 @@ document with `status: "queued"` and polls the document for `done`/`failed`.
 a finding that the previous complete scan saw and this scan did not is marked `resolved`. A
 false resolution tells a customer that an unfixed vulnerability is fixed, so the monitor resolves
 findings only when it is sure the scan saw everything (`reconcileFindings()` in
-`scan_monitor.go`). Each close writes `completion_reason` and `findings_reconciled` on the scan:
+`scan_monitor.go`). Each close writes `completion_reason` and `findings_reconciled` on the scan
+(a queued scan with no enabled assets is closed `done` at once with only
+`findings_reconciled: false`):
 
 | `completion_reason` | When | Resolves findings |
 |---------------------|------|-------------------|

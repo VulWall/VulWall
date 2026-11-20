@@ -428,7 +428,8 @@ read by the guards for older documents but is no longer written.
 - A scheduled trigger is skipped while the organization has a `queued`,
   `pending` or `running` scan.
 - A queued scan whose organization does not exist becomes `failed`. A queued
-  scan with no enabled assets becomes `done` at once. If no discovery job can
+  scan with no enabled assets becomes `done` at once, with
+  `findings_reconciled: false`. If no discovery job can
   be published, the scan becomes `failed`. Each of these sets `completed_at`.
 - The scan monitor sets `status: "done"`, `completed_at`, `completion_reason`,
   `findings_reconciled` and the `stats.*` counters when the pipeline is drained

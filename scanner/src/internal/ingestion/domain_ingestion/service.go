@@ -124,7 +124,13 @@ func (s *Service) RecordScanDegraded(ctx context.Context, finding shared.Discove
 	}}
 	var err error
 	for attempt := 1; attempt <= scanDegradedWriteAttempts; attempt++ {
-		_, err = s.db.Collection(shared.CollectionScans).UpdateOne(ctx, filter, update)
+		var res *mongo.UpdateResult
+		res, err = s.db.Collection(shared.CollectionScans).UpdateOne(ctx, filter, update)
+		if err == nil && res.MatchedCount == 0 {
+			// Nothing to retry: no scan with this id belongs to this org.
+			log.Error("Scan degradation signal matched no scan of this org; not recorded")
+			return nil
+		}
 		if err == nil {
 			log.Warn("Scan marked degraded; it will not resolve findings")
 			return nil
