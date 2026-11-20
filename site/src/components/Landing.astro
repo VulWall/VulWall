@@ -108,7 +108,7 @@ const checks = [
 			</ul>
 			<p class="small">
 				The scanner does need the internet: it downloads nuclei templates and IP databases, and
-				subdomain discovery looks up your domain names in public sources. See
+				subdomain discovery looks up your domain names in public sources. See{' '}
 				<a href="/docs/faq/#what-leaves-my-server">what leaves your server</a>.
 			</p>
 		</div>
@@ -228,7 +228,7 @@ const checks = [
 	.grid,
 	.steps {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
 		gap: 1rem;
 		margin: 2rem 0 0;
 		padding: 0;

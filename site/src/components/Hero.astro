@@ -16,7 +16,7 @@ const { title = data.title, tagline } = data.hero || {};
 	{tagline && <p class="tagline" set:html={tagline} />}
 	<InstallCommand />
 	<p class="note">
-		Needs Docker with Compose v2. You can <a href="/install.sh">read the script</a> first, or
+		Needs Docker with Compose v2. You can <a href="/install.sh">read the script</a> first, or{' '}
 		<a href="/docs/getting-started/manual-install/">install from the repository</a>.
 	</p>
 	<div class="actions">
@@ -59,7 +59,8 @@ const { title = data.title, tagline } = data.hero || {};
 		border-radius: 50%;
 		background: var(--vw-orange);
 	}
-	h1 {
+	/* #_top: beat the global page-title colour in brand.css */
+	h1#_top {
 		margin: 0;
 		max-width: 20ch;
 		font-family: var(--font-display);
