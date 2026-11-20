@@ -1,0 +1,30 @@
+@{
+    ViewData["Title"] = "Finish setting up VulWall";
+}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <partial name="~/Verticals/Account/Views/_AuthHead.cshtml" />
+</head>
+<body>
+<div class="claim-page">
+    <main class="claim-container">
+        <div class="claim-header">
+            <img src="~/img/VW_Logo.png" alt="VulWall" class="claim-logo" />
+            <h1 class="claim-title">Finish setting up VulWall</h1>
+        </div>
+
+        <div class="claim-card auth-form-card">
+            <p class="claim-description">
+                This install has no admin account yet. Finish setup using the link printed in
+                <code>docker compose logs web</code>.
+            </p>
+            <p class="claim-description">
+                The link contains a one-time token, so only someone with access to the server logs can
+                create the admin account.
+            </p>
+        </div>
+    </main>
+</div>
+</body>
+</html>

@@ -156,6 +156,7 @@ public static class ServiceCollectionExtensions
             });
 
         services.AddScoped<AccountService>();
+        services.AddSingleton(new SetupToken(ServiceSettings.Instance.SetupToken));
 
         return services;
     }

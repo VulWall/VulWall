@@ -18,4 +18,7 @@ public class SetupInput
 
     [StringLength(100)]
     public string? OrganizationName { get; set; }
+
+    /// <summary>First-run setup token from the startup log, carried in a hidden field.</summary>
+    public string? Token { get; set; }
 }

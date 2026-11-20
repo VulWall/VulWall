@@ -2,7 +2,7 @@
 #
 #   cp .env.example .env
 #   docker compose up -d
-#   open http://localhost:8080
+#   docker compose logs web | grep "First-run setup"   # open the printed setup link
 #
 # Optional tracing (Jaeger UI on http://localhost:16686):
 #   set OTEL_ENABLED=true in .env, then
@@ -70,7 +70,11 @@ services:
       mongo:
         condition: service_healthy
     ports:
-      - "${VULWALL_PORT:-8080}:8080"
+      # Loopback only: put a TLS reverse proxy in front to reach VulWall from other machines
+      # (see "Exposing VulWall" in README.md). Docker-published ports bypass ufw/firewalld,
+      # so the line below exposes plain HTTP to everyone who can reach this host:
+      # - "${VULWALL_PORT:-8080}:8080"
+      - "127.0.0.1:${VULWALL_PORT:-8080}:8080"
     environment:
       MONGO_URI: mongodb://mongo:27017
       MONGO_DB: vulwall
@@ -78,6 +82,7 @@ services:
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       SHARED_LINKS_ENABLED: ${SHARED_LINKS_ENABLED:-false}
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
     volumes:
       # Data-protection keys that sign the auth cookies. Kept off MongoDB so the scanner,
       # which shares the database, cannot forge a login.

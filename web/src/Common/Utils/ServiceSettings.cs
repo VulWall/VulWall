@@ -53,4 +53,11 @@ public class ServiceSettings : EnvLoader
     /// </summary>
     [Env(Name = "DATA_PROTECTION_KEYS_DIR", Required = false)]
     public string DataProtectionKeysDir = string.Empty;
+
+    /// <summary>
+    /// Fixed first-run setup token for unattended installs. Empty (default) generates a random
+    /// token at startup and logs the setup link.
+    /// </summary>
+    [Env(Name = "SETUP_TOKEN", Required = false)]
+    public string SetupToken = string.Empty;
 }

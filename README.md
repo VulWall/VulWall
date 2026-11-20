@@ -46,8 +46,19 @@ cp .env.example .env        # optional: set ANTHROPIC_API_KEY
 docker compose up -d
 ```
 
-Open http://localhost:8080 and follow the first-run setup. Add a domain you
-own, then start a scan.
+Get the first-run setup link from the web container's log and open it:
+
+```bash
+docker compose logs web | grep "First-run setup"
+```
+
+The link looks like `http://localhost:8080/setup?token=...`. The token
+protects setup, so only someone who can read the server logs can create the
+admin account. Create the admin account, add a domain you own, then start a
+scan.
+
+The web UI listens on `127.0.0.1` only. To use it from another machine, see
+[Exposing VulWall](#exposing-vulwall).
 
 The first start takes a few minutes: the scanner downloads the nuclei
 templates and the geolocation databases. `docker compose logs -f scanner`
@@ -62,7 +73,8 @@ comments.
 |----------|---------|---------|
 | `ANTHROPIC_API_KEY` | empty | Enables AI remediation guidance and executive summaries |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Model for the scanner's knowledge-base engine |
-| `VULWALL_PORT` | `8080` | Host port of the web UI |
+| `VULWALL_PORT` | `8080` | Host port of the web UI (bound to `127.0.0.1`) |
+| `SETUP_TOKEN` | empty | Fixed first-run setup token for unattended installs; empty means a random token, printed in the log |
 | `VULWALL_VERSION` | `latest` | Image tag of `ghcr.io/vulwall/scanner` and `ghcr.io/vulwall/web` |
 | `SECURE_COOKIES` | `false` | Set to `true` when VulWall is served over HTTPS |
 | `TRUSTED_PROXIES` | empty | IPs/CIDRs of reverse proxies whose `X-Forwarded-*` headers are trusted |
@@ -75,11 +87,25 @@ comments.
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://jaeger:4318` | OTLP/HTTP endpoint |
 | `OTEL_EXPORTER_OTLP_HEADERS` | empty | Headers for a hosted OTLP backend |
 
-### HTTPS
+### Exposing VulWall
 
-VulWall serves plain HTTP on port 8080. To expose it beyond your machine, put
-it behind a TLS-terminating reverse proxy (Caddy, Traefik, nginx), set
-`SECURE_COOKIES=true` and add the proxy's address to `TRUSTED_PROXIES`.
+VulWall serves plain HTTP on port 8080, and compose publishes it on
+`127.0.0.1` only. To use it from other machines, put it behind a
+TLS-terminating reverse proxy (Caddy, Traefik, nginx):
+
+1. Run the proxy on the same host and point it at `http://127.0.0.1:8080`.
+   If the proxy runs in Docker, add it to the `vulwall_default` network and
+   point it at `http://web:8080` instead.
+2. Set `SECURE_COOKIES=true` in `.env`.
+3. Add the proxy's address, as VulWall sees it, to `TRUSTED_PROXIES`. For a
+   proxy on the host this is the Docker bridge gateway, often `172.17.0.1` or
+   the gateway of `vulwall_default` (`docker network inspect vulwall_default`).
+4. `docker compose up -d`.
+
+Do not publish port 8080 on all interfaces (`"8080:8080"`) to get remote
+access. Docker writes its own iptables rules, so ports it publishes bypass
+host firewalls such as ufw and firewalld, and anyone who can reach the host
+gets plain HTTP.
 
 Login and shared-report passwords are rate-limited per client IP (5 failed
 attempts per 15 minutes), and login also has a limit for the admin account (20
@@ -126,6 +152,20 @@ Restore (this replaces the current data):
 ```bash
 docker compose exec -T mongo mongorestore --drop --archive --gzip < vulwall-2026-01-31.archive.gz
 ```
+
+## Lost admin password
+
+VulWall has one admin account. To replace it, delete it and run the
+first-run setup again. Your assets, scans and findings stay.
+
+```bash
+docker compose stop web
+docker compose exec mongo mongosh vulwall --quiet --eval 'db.users.deleteOne({_id:"admin"})'
+docker compose start web
+docker compose logs web | grep "First-run setup"
+```
+
+Open the new setup link and create the admin account again.
 
 ## Scan only what you are allowed to scan
 

@@ -20,6 +20,7 @@ namespace VulWall.Dashboard.Account;
 /// </summary>
 public class AccountController(
     AccountService accountService,
+    SetupToken setupToken,
     IpRateLimiterService rateLimiter,
     ILogger<AccountController> logger) : Controller
 {
@@ -31,12 +32,16 @@ public class AccountController(
 
     [AllowAnonymous]
     [HttpGet("/setup")]
-    public async Task<IActionResult> Setup()
+    public async Task<IActionResult> Setup(string? token)
     {
         if (await accountService.AdminExistsAsync())
             return Redirect("/login");
 
-        return View(new SetupInput { OrganizationName = DefaultOrganization.DefaultName });
+        // 404, not 403: a wrong token should not confirm that setup is pending.
+        if (!setupToken.Matches(token))
+            return NotFound();
+
+        return View(new SetupInput { OrganizationName = DefaultOrganization.DefaultName, Token = token });
     }
 
     [AllowAnonymous]
@@ -45,6 +50,9 @@ public class AccountController(
     {
         if (await accountService.AdminExistsAsync())
             return Redirect("/login");
+
+        if (!setupToken.Matches(input.Token))
+            return NotFound();
 
         if (AccountService.ValidatePassword(input.Password) is { } passwordError)
             ModelState.AddModelError(nameof(input.Password), passwordError);
@@ -66,7 +74,7 @@ public class AccountController(
     public async Task<IActionResult> Login(string? returnUrl = null)
     {
         if (!await accountService.AdminExistsAsync())
-            return Redirect("/setup");
+            return View("SetupPending");
 
         if (User.Identity?.IsAuthenticated == true)
             return LocalRedirect(SafeReturnUrl(returnUrl));
@@ -80,7 +88,7 @@ public class AccountController(
     public async Task<IActionResult> Login(LoginInput input)
     {
         if (!await accountService.AdminExistsAsync())
-            return Redirect("/setup");
+            return View("SetupPending");
 
         if (!ModelState.IsValid)
             return View(input);

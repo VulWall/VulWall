@@ -23,6 +23,7 @@
 
             <form method="post" action="/setup" asp-antiforgery="true" class="auth-form" novalidate>
                 <div asp-validation-summary="ModelOnly" class="auth-form-alert" role="alert"></div>
+                <input type="hidden" asp-for="Token" />
 
                 <div class="auth-field">
                     <label asp-for="OrganizationName" class="form-label">Organization name</label>

@@ -155,6 +155,8 @@ public class AccountControllerTests(MongoFixture mongo)
         public void SaveTempData(HttpContext context, IDictionary<string, object> values) { }
     }
 
+    private const string Token = "test-setup-token";
+
     private (AccountController Controller, AccountService Service) Create(
         IMongoDatabase? db = null, IMemoryCache? cache = null, string ip = "203.0.113.7")
     {
@@ -170,7 +172,7 @@ public class AccountControllerTests(MongoFixture mongo)
         };
         httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(ip);
         var accessor = new FixedAccessor(httpContext);
-        var controller = new AccountController(service,
+        var controller = new AccountController(service, new SetupToken(Token),
             new IpRateLimiterService(cache ?? new MemoryCache(new MemoryCacheOptions()), accessor),
             NullLogger<AccountController>.Instance)
         {
@@ -190,20 +192,80 @@ public class AccountControllerTests(MongoFixture mongo)
     }
 
     [Fact]
-    public async Task SetupGet_NoAdmin_ShowsSetupPage()
+    public async Task SetupGet_NoAdmin_CorrectToken_ShowsSetupPageWithToken()
     {
         var (controller, _) = Create();
 
-        Assert.IsType<ViewResult>(await controller.Setup());
+        var view = Assert.IsType<ViewResult>(await controller.Setup(Token));
+        Assert.Equal(Token, Assert.IsType<SetupInput>(view.Model).Token);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("wrong-token")]
+    [InlineData("test-setup-tokeN")]
+    public async Task SetupGet_MissingOrWrongToken_Returns404(string? token)
+    {
+        var (controller, _) = Create();
+
+        Assert.IsType<NotFoundResult>(await controller.Setup(token));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("wrong-token")]
+    public async Task SetupPost_MissingOrWrongToken_Returns404AndCreatesNoAdmin(string? token)
+    {
+        var (controller, service) = Create();
+
+        var result = await controller.Setup(new SetupInput
+        {
+            Email = "attacker@example.com",
+            Password = "attacker-password",
+            ConfirmPassword = "attacker-password",
+            Token = token
+        });
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.False(await service.AdminExistsAsync());
     }
 
     [Fact]
-    public async Task SetupGet_AdminExists_RedirectsToLogin()
+    public async Task SetupPost_CorrectToken_CreatesAdmin()
+    {
+        var (controller, service) = Create();
+
+        var result = await controller.Setup(new SetupInput
+        {
+            Email = "admin@example.com",
+            Password = "a-long-password",
+            ConfirmPassword = "a-long-password",
+            Token = Token
+        });
+
+        Assert.Equal("/", Assert.IsType<RedirectResult>(result).Url);
+        Assert.NotNull(await service.ValidateCredentialsAsync("admin@example.com", "a-long-password"));
+    }
+
+    [Fact]
+    public async Task SetupPost_ValidationError_KeepsTokenForTheNextSubmit()
+    {
+        var (controller, _) = Create();
+        var input = new SetupInput { Email = "admin@example.com", Password = "short", ConfirmPassword = "short", Token = Token };
+
+        var view = Assert.IsType<ViewResult>(await controller.Setup(input));
+
+        Assert.Equal(Token, Assert.IsType<SetupInput>(view.Model).Token);
+    }
+
+    [Fact]
+    public async Task SetupGet_AdminExists_RedirectsToLoginEvenWithToken()
     {
         var (controller, service) = Create();
         await service.CreateAdminAsync("admin@example.com", "a-long-password", null);
 
-        var redirect = Assert.IsType<RedirectResult>(await controller.Setup());
+        var redirect = Assert.IsType<RedirectResult>(await controller.Setup(Token));
         Assert.Equal("/login", redirect.Url);
     }
 
@@ -217,7 +279,8 @@ public class AccountControllerTests(MongoFixture mongo)
         {
             Email = "attacker@example.com",
             Password = "attacker-password",
-            ConfirmPassword = "attacker-password"
+            ConfirmPassword = "attacker-password",
+            Token = Token
         });
 
         Assert.Equal("/login", Assert.IsType<RedirectResult>(result).Url);
@@ -233,7 +296,8 @@ public class AccountControllerTests(MongoFixture mongo)
         {
             Email = "admin@example.com",
             Password = "short",
-            ConfirmPassword = "short"
+            ConfirmPassword = "short",
+            Token = Token
         });
 
         Assert.IsType<ViewResult>(result);
@@ -242,11 +306,13 @@ public class AccountControllerTests(MongoFixture mongo)
     }
 
     [Fact]
-    public async Task LoginGet_NoAdmin_RedirectsToSetup()
+    public async Task LoginGet_NoAdmin_ShowsSetupPendingPageWithoutToken()
     {
         var (controller, _) = Create();
 
-        Assert.Equal("/setup", Assert.IsType<RedirectResult>(await controller.Login(returnUrl: null)).Url);
+        var view = Assert.IsType<ViewResult>(await controller.Login(returnUrl: null));
+        Assert.Equal("SetupPending", view.ViewName);
+        Assert.Null(view.Model);
     }
 
     [Fact]
@@ -289,5 +355,30 @@ public class AccountControllerTests(MongoFixture mongo)
 
         Assert.IsType<ViewResult>(result);
         Assert.Contains(fresh.ModelState[string.Empty]!.Errors, e => e.ErrorMessage.Contains("Too many"));
+    }
+}
+
+public class SetupTokenTests
+{
+    [Fact]
+    public void Generated_IsRandom32HexChars()
+    {
+        var a = new SetupToken(null);
+        var b = new SetupToken("  ");
+
+        Assert.Matches("^[0-9a-f]{32}$", a.Value);
+        Assert.NotEqual(a.Value, b.Value);
+        Assert.True(a.Matches(a.Value));
+    }
+
+    [Fact]
+    public void Configured_OverridesGeneratedToken()
+    {
+        var token = new SetupToken(" unattended-install-token ");
+
+        Assert.Equal("unattended-install-token", token.Value);
+        Assert.True(token.Matches("unattended-install-token"));
+        Assert.False(token.Matches("unattended-install-toke"));
+        Assert.False(token.Matches(null));
     }
 }
