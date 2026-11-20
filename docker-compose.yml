@@ -1,8 +1,9 @@
 # VulWall self-hosted stack.
 #
 #   cp .env.example .env
+#   echo "SETUP_TOKEN=$(openssl rand -hex 16)" >> .env
 #   docker compose up -d
-#   docker compose logs web | grep "First-run setup" | tail -1   # open the printed setup link
+#   then open http://localhost:8080/setup?token=<SETUP_TOKEN from .env>
 #
 # Optional tracing (Jaeger UI on http://localhost:16686):
 #   set OTEL_ENABLED=true in .env, then

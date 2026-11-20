@@ -8,6 +8,7 @@ Use this method if you want to build the images from source, follow `main`, or s
 ```sh
 git clone https://github.com/VulWall/VulWall.git && cd VulWall
 cp .env.example .env        # optional: set ANTHROPIC_API_KEY
+echo "SETUP_TOKEN=$(openssl rand -hex 16)" >> .env
 docker compose up -d
 ```
 
@@ -24,19 +25,26 @@ docker compose up -d --build
 The first start takes a few minutes: the scanner downloads the nuclei templates and the
 geolocation databases. `docker compose logs -f scanner` shows progress.
 
-## Get the setup link
+## Open the setup page
 
-The web app prints a one-time setup link to its log when no admin account exists:
+Only someone with the setup token can create the admin account: without a valid token, `/setup`
+returns 404. Get the token you put in `.env`:
 
 ```sh
-docker compose logs web | grep "First-run setup" | tail -1
+grep SETUP_TOKEN .env
 ```
 
-The link looks like `http://localhost:8080/setup?token=...`. It always shows the container port
-8080. If you changed `VULWALL_PORT`, use your port instead.
+and open `http://localhost:8080/setup?token=<token>`. If you changed `VULWALL_PORT`, use your
+port instead of 8080.
 
-Each start of the web container prints a new token, and only the latest one works. Without a
-valid token, `/setup` returns 404, so only someone who can read the server logs can create the
-admin account. For unattended installs, set a fixed token with `SETUP_TOKEN` in `.env`.
+If you leave `SETUP_TOKEN` empty, the web container makes a new random token at each start, and
+only the latest one works. It prints the setup link to its log when no admin account exists.
+This command prints only the real link line and strips control characters:
+
+```sh
+docker compose logs --no-log-prefix web | grep -a '^ *First-run setup: open http://localhost:[0-9]*/setup?token=[0-9a-f]* ' | tail -1 | tr -cd '[:print:]\n'
+```
+
+The link always shows the container port 8080.
 
 Open the link and continue with [your first scan](/docs/getting-started/first-scan/).

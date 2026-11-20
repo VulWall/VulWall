@@ -21,7 +21,7 @@ Docker Compose recreates the containers whose settings changed. Your data is kep
 | `SECURE_COOKIES` | `false` | Set to `true` when you serve VulWall over HTTPS. Turns on Secure cookies, HSTS and the HTTP to HTTPS redirect. See [Reverse proxy and HTTPS](/docs/configuration/reverse-proxy/). |
 | `TRUSTED_PROXIES` | empty | Comma-separated IP addresses or CIDR ranges of reverse proxies whose `X-Forwarded-For` and `X-Forwarded-Proto` headers are trusted. Empty means loopback only. |
 | `SHARED_LINKS_ENABLED` | `false` | `true` turns on password-protected shared report links. When `false`, the share option is hidden and shared links return 404. |
-| `SETUP_TOKEN` | empty | Fixed first-run setup token for unattended installs. Empty means a random token, printed in `docker compose logs web` at each start. |
+| `SETUP_TOKEN` | empty | First-run setup token: only someone with it can create the admin account. The install script adds a random one to `.env`; for a manual install, generate one with `openssl rand -hex 16`. Empty means a new random token at each start, printed in `docker compose logs web`. |
 
 ## Scanner
 
@@ -31,6 +31,7 @@ Docker Compose recreates the containers whose settings changed. Your data is kep
 | `TESTSSL_CONCURRENCY` | `5` | Number of testssl.sh scans that run at the same time. |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scans of private and internal IP ranges. Turn it on only to scan your internal network. |
 | `GEO_DOWNLOAD` | `true` | Download the free DB-IP Lite geolocation databases at start. Set to `false` on hosts without internet access. |
+| `DNS_RECHECK_RESOLVERS` | `1.1.1.1,8.8.8.8` | Public DNS resolvers that the scanner asks directly when your local resolver says a root domain does not exist. Set your own comma-separated resolvers, or `off` to turn the check off. |
 
 ## AI (optional)
 
