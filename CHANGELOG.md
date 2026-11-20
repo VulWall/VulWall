@@ -272,6 +272,10 @@ First open-source, self-hosted release, under the MIT License.
   or blocking after the run) dropped the findings they did report. Those
   findings are now published; the coverage stays `error`, so the run still
   resolves nothing.
+- A browser time zone the server does not know made the scan schedule fall
+  back to the saved zone or UTC without a word, so scans ran at another time.
+  Saving the schedule now fails with a message that names the zone. A form
+  sent without a zone (JavaScript off) still uses the saved zone, else UTC.
 
 ### Removed
 

@@ -24,8 +24,8 @@ public sealed record ScanScheduleInput
     public string Time { get; init; } = "02:00";
 
     /// <summary>
-    /// IANA time zone id. The page fills it from the browser; when it is missing or unknown the
-    /// saved zone is used, else UTC.
+    /// IANA time zone id. The page fills it from the browser; when it is missing the saved zone
+    /// is used, else UTC. An unknown zone is a validation error.
     /// </summary>
     public string? TimeZone { get; init; }
 }
