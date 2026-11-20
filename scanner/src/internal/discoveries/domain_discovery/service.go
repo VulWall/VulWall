@@ -2,6 +2,7 @@ package domain_discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync/atomic"
@@ -31,6 +32,9 @@ type Service struct {
 	subfinderClient *subfinderx.Client
 	tracer          trace.Tracer
 	dnsWorkers      int // concurrent subdomain lookups (DNS_RESOLVE_CONCURRENCY)
+
+	// lookupIP replaces the system resolver in tests; nil uses net.Resolver.
+	lookupIP func(ctx context.Context, network, host string) ([]net.IP, error)
 }
 
 func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error) {
@@ -307,13 +311,22 @@ func selectPublicIP(ips []net.IP) (string, error) {
 
 // resolveIPs resolves a domain name to all of its A and AAAA addresses.
 // Retries up to dnsRetryAttempts times with dnsRetryDelay between attempts
-// to handle transient DNS failures.
+// to handle transient DNS failures. A name that does not exist (NXDOMAIN) is
+// a final answer and is not retried: passive sources return thousands of stale
+// names, and retrying each one made resolution several times slower.
 func (s *Service) resolveIPs(ctx context.Context, domain string) ([]net.IP, error) {
-	resolver := &net.Resolver{}
+	lookupIP := s.lookupIP
+	if lookupIP == nil {
+		lookupIP = (&net.Resolver{}).LookupIP
+	}
 	var lastErr error
 
 	for attempt := 1; attempt <= dnsRetryAttempts; attempt++ {
-		ips, err := resolver.LookupIP(ctx, "ip", domain)
+		ips, err := lookupIP(ctx, "ip", domain)
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+			return nil, err
+		}
 		if err == nil && len(ips) > 0 {
 			if attempt > 1 {
 				s.logger.Info("DNS resolution succeeded after retry",
