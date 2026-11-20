@@ -48,6 +48,9 @@ type scanStore interface {
 	orgExists(ctx context.Context, orgID string) (bool, error)
 	hasScanIn(ctx context.Context, orgID string, statuses []string) (bool, error)
 	orgAssets(ctx context.Context, orgID string) ([]shared.Asset, error)
+	// knownSubdomains returns the names of the org's subdomain discoveries whose parent is
+	// parentID and that a scan saw within knownSubdomainWindow.
+	knownSubdomains(ctx context.Context, orgID, parentID string) ([]string, error)
 	insertScan(ctx context.Context, scan shared.Scan) error
 	queuedScans(ctx context.Context) ([]shared.Scan, error)
 	// claimQueuedScan applies set to the scan only while it is still queued.
@@ -339,6 +342,44 @@ func (m mongoScanStore) orgAssets(ctx context.Context, orgID string) ([]shared.A
 	return assets, nil
 }
 
+// knownSubdomainWindow bounds the known names a discovery job carries: names not seen for
+// this long are no longer checked (their findings are long resolved or confirmed gone).
+const knownSubdomainWindow = 90 * 24 * time.Hour
+
+// maxKnownSubdomains caps the names one job carries, to bound the message size.
+const maxKnownSubdomains = 10000
+
+func (m mongoScanStore) knownSubdomains(ctx context.Context, orgID, parentID string) ([]string, error) {
+	cursor, err := m.db.Collection(shared.CollectionDiscoveries).Find(ctx,
+		bson.M{
+			"org_id":     orgID,
+			"asset_type": shared.AssetTypeSubdomain,
+			"parent_id":  parentID,
+			"last_seen":  bson.M{"$gte": time.Now().Add(-knownSubdomainWindow)},
+		},
+		options.Find().
+			SetProjection(bson.M{"subdomain": 1}).
+			SetSort(bson.D{{Key: "last_seen", Value: -1}}).
+			SetLimit(maxKnownSubdomains),
+	)
+	if err != nil {
+		return nil, err
+	}
+	var docs []struct {
+		Subdomain string `bson:"subdomain"`
+	}
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(docs))
+	for _, d := range docs {
+		if d.Subdomain != "" {
+			names = append(names, d.Subdomain)
+		}
+	}
+	return names, nil
+}
+
 // insertScan inserts a new scan record.
 func (m mongoScanStore) insertScan(ctx context.Context, scan shared.Scan) error {
 	_, err := m.db.Collection(shared.CollectionScans).InsertOne(ctx, scan)
@@ -420,14 +461,24 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 			// Sanitize domain to strip URL scheme (https://) and paths
 			host := sanitizeDomain(*asset.Domain)
 
+			// The names earlier scans saw below this domain: discovery checks them even when
+			// subfinder misses them. Without them the job still runs; it only cannot confirm
+			// a known name gone, so its findings stay open.
+			known, err := s.store.knownSubdomains(ctx, orgID, shared.GenerateDomainID(orgID, host))
+			if err != nil {
+				s.logger.Warn("Failed to load known subdomains; discovery will check subfinder's names only",
+					zap.String("org_id", orgID), zap.String("host", host), zap.Error(err))
+			}
+
 			job := shared.DiscoveryJob{
-				TraceID:      traceID,
-				TraceContext: telemetry.InjectTraceContext(ctx), // Inject trace context for distributed tracing
-				ScanID:       &scanID,
-				OrgID:        orgID,
-				AssetID:      asset.ID,
-				Host:         host,
-				Created:      time.Now(),
+				TraceID:         traceID,
+				TraceContext:    telemetry.InjectTraceContext(ctx), // Inject trace context for distributed tracing
+				ScanID:          &scanID,
+				OrgID:           orgID,
+				AssetID:         asset.ID,
+				Host:            host,
+				KnownSubdomains: known,
+				Created:         time.Now(),
 			}
 
 			if err := s.publish(ctx, shared.StreamDomainDiscoveryQueue, job); err != nil {

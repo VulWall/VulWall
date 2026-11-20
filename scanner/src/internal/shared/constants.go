@@ -27,8 +27,8 @@ const (
 	ScanCompletionSafetyTimeout     = "safety_timeout"
 
 	// Reasons in scans.degraded_assets[].reason: domain discovery could not see
-	// the whole attack surface of one root domain asset. The scan still resolves
-	// findings of every other asset; the findings under a degraded root stay open.
+	// the whole attack surface of one root domain asset. Information for the user;
+	// finding resolution does not depend on it.
 	//
 	// ScanDegradedDNSFailures: the resolver failed for the root domain, or for
 	// too many of its subdomains.
@@ -38,6 +38,8 @@ const (
 	ScanDegradedRootNXDOMAIN = "root_nxdomain"
 	// ScanDegradedSubdomainEnumFailed: subdomain enumeration (subfinder) failed.
 	ScanDegradedSubdomainEnumFailed = "subdomain_enumeration_failed"
+	// ScanDegradedPublishFailed: discovery could not hand some names to the pipeline.
+	ScanDegradedPublishFailed = "publish_failed"
 
 	// Scan Type
 	ScanTypeScheduled = "scheduled"

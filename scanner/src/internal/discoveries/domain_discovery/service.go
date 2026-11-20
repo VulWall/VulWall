@@ -2,8 +2,10 @@ package domain_discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -155,43 +157,52 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		return err
 	}
 
+	// A root that public resolvers confirm does not exist is gone: record it, so the scan
+	// monitor can close the root's findings once later scans confirm it too.
+	if rootReason == shared.ScanDegradedRootNXDOMAIN {
+		if err := s.publishAbsent(ctx, job, discoveryID, job.Host); err != nil {
+			return err
+		}
+	}
+
 	// Run subdomain discovery inline — keeps the message unACKed until enumeration finishes,
 	// ensuring at-least-once delivery and safe serial use of the shared subfinder runner.
-	// A domain that does not exist has no subdomains to enumerate.
-	names, failures := 0, 0
-	enumFailed := false
-	if job.ParentID == nil && job.Port == nil && s.isDomain(job.Host) && rootReason != shared.ScanDegradedRootNXDOMAIN {
+	// A domain that does not exist has no subdomains to enumerate, but the names earlier
+	// scans saw are still checked, so they can be confirmed gone.
+	var res subdomainResult
+	if job.ParentID == nil && job.Port == nil && s.isDomain(job.Host) {
 		var err error
-		names, failures, err = s.discoverSubdomains(ctx, job.TraceID, job.ScanID, job.OrgID, job.Host)
+		res, err = s.discoverSubdomains(ctx, job, rootReason != shared.ScanDegradedRootNXDOMAIN)
 		if err != nil {
 			// Cut off by shutdown: return the error so the job is not ACKed as complete.
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			enumFailed = true
-			s.logger.Error("subfinder subdomain discovery failed",
+			return err
+		}
+		if res.enumErr != nil {
+			s.logger.Error("subfinder subdomain discovery failed; checked the known names only",
 				zap.String("host", job.Host),
-				zap.Error(err),
+				zap.Error(res.enumErr),
 			)
 		}
 	}
 
-	reason := degradedReason(rootReason, enumFailed, names, failures)
+	reason := degradedReason(rootReason, res)
 	if reason == "" {
 		return nil
 	}
-	s.logger.Warn("Domain discovery incomplete; the scan will leave this asset's findings open",
+	s.logger.Warn("Domain discovery incomplete; the scan will show this asset as not fully checked",
 		zap.String("trace_id", job.TraceID),
 		zap.String("org_id", job.OrgID),
 		zap.String("asset_id", job.AssetID),
 		zap.String("host", job.Host),
 		zap.String("degraded_reason", reason),
-		zap.Int("names", names),
-		zap.Int("lookup_failures", failures),
+		zap.Int("names", res.names),
+		zap.Int("lookup_failures", res.failures),
+		zap.Int("known_name_failures", res.knownFailures),
+		zap.Int("publish_failed", res.publishFailed),
 	)
 	// Published before the job is ACKed, so the scan cannot read as drained before
 	// ingestion has recorded it.
-	return s.publishFinding(ctx, shared.DiscoveryFinding{
+	err := s.publishFinding(ctx, shared.DiscoveryFinding{
 		TraceID:   job.TraceID,
 		ScanID:    job.ScanID,
 		OrgID:     job.OrgID,
@@ -204,11 +215,30 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 			Reason:  reason,
 		},
 	})
+	if err == nil && res.publishFailed > 0 {
+		// Some names never reached the pipeline: run the job again (ConsumeStream retries).
+		err = fmt.Errorf("%d subdomain messages failed to publish", res.publishFailed)
+	}
+	return err
 }
 
-// discoverSubdomains uses subfinder to discover and publish subdomain findings. It returns
-// the number of names it looked up and how many of those lookups failed (isLookupFailure).
-func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID *string, orgID, domain string) (int, int, error) {
+// subdomainResult is what one subdomain discovery run saw.
+type subdomainResult struct {
+	names         int   // names looked up (subfinder's and the known ones)
+	failures      int   // lookups the resolver could not answer
+	knownFailures int   // of those, names that earlier scans saw
+	publishFailed int   // messages that failed to publish
+	enumErr       error // subfinder failed; only the known names were checked
+}
+
+// discoverSubdomains resolves the names subfinder returns (when enumerate is set) together
+// with the names earlier scans saw (job.KnownSubdomains), and publishes each live one. A known
+// name that the local resolver reports as not found is asked again of the public resolvers
+// (DNS_RECHECK_RESOLVERS): an address there means the local resolver failed and the name is
+// published; "no address" from all of them means it is gone (coverage absent). It returns
+// ctx.Err() when shutdown cut the run off.
+func (s *Service) discoverSubdomains(ctx context.Context, job shared.DiscoveryJob, enumerate bool) (subdomainResult, error) {
+	domain, orgID, traceID, scanID := job.Host, job.OrgID, job.TraceID, job.ScanID
 	ctx, span := s.tracer.Start(ctx, "subfinder_subdomain_discovery",
 		trace.WithAttributes(
 			attribute.String("org.id", orgID),
@@ -218,60 +248,68 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 	)
 	defer span.End()
 
-	s.logger.Info("Starting subfinder subdomain discovery",
-		zap.String("trace_id", traceID),
-		zap.String("org_id", orgID),
-		zap.String("domain", domain),
-	)
-
-	// Discover subdomains using subfinder
-	subdomains, err := s.subfinderClient.DiscoverSubdomains(ctx, domain)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		span.SetAttributes(attribute.Bool("scan.success", false))
-		return 0, 0, err
+	var res subdomainResult
+	var subdomains []string
+	if enumerate {
+		s.logger.Info("Starting subfinder subdomain discovery",
+			zap.String("trace_id", traceID),
+			zap.String("org_id", orgID),
+			zap.String("domain", domain),
+		)
+		var err error
+		subdomains, err = s.subfinderClient.DiscoverSubdomains(ctx, domain)
+		if err != nil {
+			if ctx.Err() != nil {
+				return res, ctx.Err()
+			}
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			res.enumErr = err
+		}
 	}
-
-	span.SetAttributes(attribute.Bool("scan.success", true))
-	span.SetStatus(codes.Ok, "")
-
 	span.SetAttributes(attribute.Int("subdomain.count", len(subdomains)))
 
-	if len(subdomains) == 0 {
+	names, known := subdomainNames(domain, subdomains, job.KnownSubdomains)
+	res.names = len(names)
+	if len(names) == 0 {
 		s.logger.Info("No subdomains discovered", zap.String("domain", domain))
-		return 0, 0, nil
+		return res, nil
 	}
 
 	now := time.Now()
 	// Generate parent domain ID (org-scoped)
 	parentDomainID := shared.GenerateDomainID(orgID, domain)
 
-	// Build the full names, skipping empty strings, wildcards and duplicates.
-	seen := make(map[string]bool, len(subdomains))
-	names := make([]string, 0, len(subdomains))
-	for _, subdomainName := range subdomains {
-		if subdomainName == "" || subdomainName == "*" {
-			continue
-		}
-		fullSubdomain := subdomainName
-		if !contains(subdomainName, domain) {
-			fullSubdomain = subdomainName + "." + domain
-		}
-		if !seen[fullSubdomain] {
-			seen[fullSubdomain] = true
-			names = append(names, fullSubdomain)
-		}
-	}
-
 	// Resolve in parallel and publish each name as soon as it resolves. Names that do not
 	// resolve are dropped (passive sources return many stale names, and an unresolved name
 	// could later be pointed at an internal address), and so are names with a private answer.
-	var published, publishFailed atomic.Int64
+	var published, publishFailed, knownFailures atomic.Int64
 	log := s.logger.With(zap.String("trace_id", traceID), zap.String("org_id", orgID))
 	lookup := func(ctx context.Context, host string) ([]net.IP, error) {
 		// Passive sources return many stale names: a clean NXDOMAIN is final, not retried.
-		return s.resolveIPs(ctx, host, false)
+		ips, err := s.resolveIPs(ctx, host, false)
+		if !known[host] {
+			return ips, err
+		}
+		if err != nil && !isLookupFailure(err) && ctx.Err() == nil {
+			// A known name that "does not exist" may be a resolver that refused upstream.
+			switch answer, public := recheckName(ctx, host, s.recheckServers); answer {
+			case answerAddress:
+				log.Info("Local resolver missed a known subdomain; public resolvers found it",
+					zap.String("subdomain", host))
+				return public, nil
+			case answerNXDomain:
+				if perr := s.publishAbsent(ctx, job, shared.GenerateSubdomainID(orgID, host), host); perr != nil {
+					publishFailed.Add(1)
+				}
+			default:
+				err = fmt.Errorf("public resolvers did not confirm that %s is gone: %w", host, errRecheckUnknown)
+			}
+		}
+		if isLookupFailure(err) {
+			knownFailures.Add(1)
+		}
+		return ips, err
 	}
 	failures, err := resolvePublic(ctx, names, s.dnsWorkers, lookup, func(host, ip string) {
 		if err := s.publishFinding(ctx, shared.DiscoveryFinding{
@@ -298,18 +336,77 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 		s.logger.Info("Published subdomain finding", zap.String("subdomain", host))
 	}, log)
 
+	res.failures = failures
+	res.knownFailures = int(knownFailures.Load())
+	res.publishFailed = int(publishFailed.Load())
 	log.Info("Subdomain resolution finished",
 		zap.String("domain", domain),
 		zap.Int("names", len(names)),
+		zap.Int("known_names", len(known)),
 		zap.Int64("published", published.Load()),
-		zap.Int64("publish_failed", publishFailed.Load()),
+		zap.Int("publish_failed", res.publishFailed),
 		zap.Int("lookup_failures", failures),
+		zap.Int("known_name_failures", res.knownFailures),
 		zap.Int("dns_resolve_concurrency", s.dnsWorkers),
 		zap.Duration("duration", time.Since(now)),
 		zap.Bool("cancelled", err != nil),
 	)
 	span.SetAttributes(attribute.Int64("subdomain.published", published.Load()))
-	return len(names), failures, err
+	return res, err
+}
+
+// errRecheckUnknown marks a known name that the local resolver reported as not found while
+// the public resolvers gave no usable answer: a lookup failure, not a fact.
+var errRecheckUnknown = errors.New("recheck inconclusive")
+
+// subdomainNames builds the full names to resolve under domain: subfinder's names and the
+// known names below domain, without empty strings, wildcards and duplicates. known reports
+// which names earlier scans saw.
+func subdomainNames(domain string, subfinder, knownNames []string) (names []string, known map[string]bool) {
+	seen := map[string]bool{}
+	add := func(name string) {
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	for _, sub := range subfinder {
+		if sub == "" || sub == "*" {
+			continue
+		}
+		if !contains(sub, domain) {
+			sub = sub + "." + domain
+		}
+		add(sub)
+	}
+	known = map[string]bool{}
+	for _, name := range knownNames {
+		name = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
+		if name == "" || name == domain || !strings.HasSuffix(name, "."+domain) {
+			continue
+		}
+		known[name] = true
+		add(name)
+	}
+	return names, known
+}
+
+// publishAbsent records that host (discoveryID) no longer exists in this scan: a coverage
+// message, published on security_findings before the job is ACKed.
+func (s *Service) publishAbsent(ctx context.Context, job shared.DiscoveryJob, discoveryID, host string) error {
+	msg := shared.CoverageMessage(job.OrgID, job.ScanID, job.TraceID, shared.ScanCoverage{
+		Source:      shared.CoverageSourceDomainDiscovery,
+		DiscoveryID: discoveryID,
+		Target:      host,
+		Status:      shared.CoverageAbsent,
+	})
+	msg.TraceContext = telemetry.InjectTraceContext(ctx)
+	if err := redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, msg, 0); err != nil {
+		s.logger.Error("Failed to publish absent host", zap.String("host", host), zap.Error(err))
+		return err
+	}
+	s.logger.Info("Known host confirmed gone", zap.String("host", host), zap.String("discovery_id", discoveryID))
+	return nil
 }
 
 // publishFinding publishes a discovery finding to the domain discovery results stream

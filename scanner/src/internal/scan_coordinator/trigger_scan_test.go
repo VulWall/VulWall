@@ -21,6 +21,7 @@ type fakeStore struct {
 	set       map[string]bson.M // last $set applied per scan
 	inserted  []shared.Scan
 	activeErr error
+	known     map[string][]string // by orgID/parentID
 }
 
 func newFakeStore() *fakeStore {
@@ -50,6 +51,10 @@ func (f *fakeStore) hasScanIn(_ context.Context, orgID string, statuses []string
 
 func (f *fakeStore) orgAssets(_ context.Context, orgID string) ([]shared.Asset, error) {
 	return f.assets[orgID], nil
+}
+
+func (f *fakeStore) knownSubdomains(_ context.Context, orgID, parentID string) ([]string, error) {
+	return f.known[orgID+"/"+parentID], nil
 }
 
 func (f *fakeStore) insertScan(_ context.Context, scan shared.Scan) error {
@@ -180,6 +185,7 @@ func TestTriggerScanCreatesRunningScanAndPublishes(t *testing.T) {
 	store := newFakeStore()
 	store.orgs["org-1"] = true
 	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "https://example.com/path")}
+	store.known = map[string][]string{"org-1/" + shared.GenerateDomainID("org-1", "example.com"): {"old.example.com"}}
 	svc, published := newTestService(store, nil)
 
 	scanID, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled, TriggeredBy: "system"})
@@ -197,6 +203,9 @@ func TestTriggerScanCreatesRunningScanAndPublishes(t *testing.T) {
 	job := (*published)[0].job.(shared.DiscoveryJob)
 	if job.Host != "example.com" || job.ScanID == nil || *job.ScanID != scanID {
 		t.Fatalf("job = %+v", job)
+	}
+	if len(job.KnownSubdomains) != 1 || job.KnownSubdomains[0] != "old.example.com" {
+		t.Fatalf("known subdomains = %v, want the names earlier scans saw below the domain", job.KnownSubdomains)
 	}
 }
 

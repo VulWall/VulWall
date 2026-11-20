@@ -14,6 +14,10 @@ type DiscoveryJob struct {
 	OrgID        string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
 	// AssetID is the assets._id the job was made for (empty on jobs from older versions).
 	AssetID      string                 `json:"asset_id,omitempty" bson:"asset_id,omitempty"`
+	// KnownSubdomains are names below Host that earlier scans saw (filled by the coordinator,
+	// which reads discoveries). Domain discovery resolves them even when subfinder does not
+	// return them, and confirms with public resolvers that a missing one is really gone.
+	KnownSubdomains []string `json:"known_subdomains,omitempty" bson:"-"`
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host         string                 `json:"host" bson:"host"`
 	Port         *int                   `json:"port,omitempty" bson:"port,omitempty"`
@@ -43,14 +47,14 @@ type DiscoveryFinding struct {
 
 	// Degraded marks a message that carries no asset: discovery could not see the whole
 	// attack surface of one root domain, so ingestion adds it to the scan's degraded_assets
-	// and the scan leaves the findings under that root open. It is published before the
-	// discovery job is ACKed, so the scan cannot read as drained before it lands.
+	// (information for the user). It is published before the discovery job is ACKed, so the
+	// scan cannot read as drained before it lands.
 	Degraded *DegradedAsset `json:"degraded,omitempty" bson:"-"`
 }
 
 // DegradedAsset is one entry of scans.degraded_assets: a root domain asset whose attack
-// surface this scan could not fully see. Findings under Domain (the domain itself, its
-// subdomains, and the IPs and ports they resolve to) are not resolved by the scan.
+// surface this scan could not fully see. It is information for the user; finding resolution
+// does not depend on it (a scan resolves only on positive evidence, see ScanCoverage).
 // It holds no timestamp, so $addToSet keeps a redelivered signal from adding a duplicate.
 type DegradedAsset struct {
 	AssetID string `json:"asset_id,omitempty" bson:"asset_id,omitempty"` // assets._id; empty for jobs from older versions
