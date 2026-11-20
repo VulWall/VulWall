@@ -115,7 +115,7 @@ public static class ServiceCollectionExtensions
             options.IdleTimeout = TimeSpan.FromHours(24);
             options.Cookie.HttpOnly = true;
             options.Cookie.IsEssential = true;
-            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            options.Cookie.SecurePolicy = CookieSecurePolicyFromSettings();
             options.Cookie.SameSite = SameSiteMode.Lax;
         });
 
@@ -124,10 +124,21 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAntiforgeryConfiguration(this IServiceCollection services)
     {
-        services.AddAntiforgery(options => { options.SuppressXFrameOptionsHeader = false; });
+        services.AddAntiforgery(options =>
+        {
+            options.SuppressXFrameOptionsHeader = false;
+            options.Cookie.SecurePolicy = CookieSecurePolicyFromSettings();
+        });
 
         return services;
     }
+
+    /// <summary>
+    /// SECURE_COOKIES=true forces the Secure flag. Otherwise the flag follows the request scheme,
+    /// so a plain-HTTP install still works and an HTTPS request still gets a Secure cookie.
+    /// </summary>
+    internal static CookieSecurePolicy CookieSecurePolicyFromSettings() =>
+        ServiceSettings.Instance.SecureCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
 
     private static IServiceCollection AddCustomViewLocationExpander(this IServiceCollection services)
     {

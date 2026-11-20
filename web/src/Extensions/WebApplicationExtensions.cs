@@ -42,14 +42,18 @@ public static class WebApplicationExtensions
 
         app.UseExceptionHandler("/Error");
         app.UseStatusCodePagesWithReExecute("/Error/{0}");
-        
-        if (!app.Environment.IsDevelopment())
+
+        // Before the HTTPS redirect so the container healthcheck works over plain HTTP.
+        app.UseHealthChecks("/health");
+
+        // Self-hosted installs often run on plain http://localhost. HSTS and the HTTPS redirect
+        // are only safe once TLS is in place, so they follow SECURE_COOKIES.
+        if (ServiceSettings.Instance.SecureCookies)
         {
             app.UseHsts();
+            app.UseHttpsRedirection();
         }
 
-        app.UseHttpsRedirection();
-        app.UseHealthChecks("/health");
         app.MapStaticAssets();
         app.UseRouting();
 

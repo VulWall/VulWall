@@ -48,12 +48,8 @@ public static class MongoDbConfiguration
     /// </summary>
     public static void ConfigureClient(IServiceCollection services)
     {
-        // Create MongoDB client and database — DB name is extracted from the URI path
-        var mongoUrl = new MongoUrl(ServiceSettings.Instance.Mongo_URI);
-        var mongoClient = new MongoClient(mongoUrl);
-        var dbName = mongoUrl.DatabaseName
-            ?? throw new InvalidOperationException("MONGO_URI must include a database name in the path (e.g. mongodb+srv://host/MyDatabase).");
-        var database = mongoClient.GetDatabase(dbName);
+        var mongoClient = new MongoClient(ServiceSettings.Instance.Mongo_URI);
+        var database = mongoClient.GetDatabase(ServiceSettings.Instance.MongoDb);
 
         // Register as singletons
         services.AddSingleton<IMongoClient>(mongoClient);
