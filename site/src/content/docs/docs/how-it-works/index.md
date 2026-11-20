@@ -72,6 +72,14 @@ step has processed all of its work, and no new results have come in for a short 
 timeouts are a safety net: a scan with no activity for a while is closed, and no scan runs longer
 than 3 hours.
 
+When a complete scan closes, a finding that the previous scan found and this scan did not is
+marked resolved. VulWall does this only when it is sure the scan saw everything. A scan that a
+timeout closed, or one where too many DNS lookups failed during discovery (or the domain itself
+did not resolve), is still marked done, but its findings are left as they were. The web app
+shows such a scan as a "partial scan", and the next scan compares against the last complete one.
+The scan document records why in `completion_reason`, `findings_reconciled` and
+`degraded_reason`.
+
 Only one scan per organization runs at a time. If the scanner restarts during a scan, it closes
 that scan as failed ("Interrupted by restart") at startup. Findings are not marked resolved
 because of an incomplete scan.

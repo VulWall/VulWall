@@ -157,6 +157,33 @@ document with `status: "queued"` and polls the document for `done`/`failed`.
 3. Discovery → ingestion → active recon pipeline processes normally
 4. Scan monitor checks the pipeline groups → marks the scan `done` when every group has drained (or a timeout fires)
 
+**Scan completion and finding resolution.** Closing a scan as `done` can also resolve findings:
+a finding that the previous complete scan saw and this scan did not is marked `resolved`. A
+false resolution tells a customer that an unfixed vulnerability is fixed, so the monitor resolves
+findings only when it is sure the scan saw everything (`reconcileFindings()` in
+`scan_monitor.go`). Each close writes `completion_reason` and `findings_reconciled` on the scan:
+
+| `completion_reason` | When | Resolves findings |
+|---------------------|------|-------------------|
+| `pipeline_quiescent` | Past `ScanMinRuntime`, ingestion quiet for `ScanSettleGrace`, every scan-pipeline group drained | Yes, unless the scan has a `degraded_reason` or zero discoveries |
+| `idle_timeout` | No ingestion activity for `ScanIdleTimeout` and no work in flight, but the pipeline has NOT drained | No |
+| `safety_timeout` | Scan older than `ScanSafetyTimeout` (3h) | No |
+| `interrupted_by_restart` | Scan was running when the scanner started (closed as `failed`) | No |
+
+`degraded_reason` is set by a stage that knows its view is incomplete. Domain discovery
+counts DNS lookups that failed (timeout, SERVFAIL, refused, network error; a clean NXDOMAIN
+is not a failure). When the root domain did not resolve (any error, because a refused
+upstream can surface as NXDOMAIN under Docker's embedded DNS), or more than 20% of more than
+50 subdomain lookups failed, it logs a Warn with the counts and publishes a signal message
+(`DiscoveryFinding.ScanDegradedReason = "dns_failures"`, no asset) on
+`domain_discovery_results` before it ACKs the job. Domain ingestion writes it to the scan's
+`degraded_reason`. Because the signal is on a watched stream and is published before the ACK,
+the pipeline cannot read as drained before ingestion has recorded it; the monitor reads the
+scan again when it closes it.
+
+An unreconciled scan stores `stats.resolved_findings: 0` and is not used as the baseline of
+the next scan's comparison (`computeStats` skips scans with `findings_reconciled: false`).
+
 Only one scan per organization is active at a time; see the lifecycle rules in [DATABASE.md](DATABASE.md#scans-collection).
 
 ---
