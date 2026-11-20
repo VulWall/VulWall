@@ -10,9 +10,7 @@ export function initializeTypeCards() {
     };
 }
 
-export function initializeTypeActions(modalHandlers) {
-    const typeCards = document.querySelectorAll('.report-type-card');
-
+export function initializeTypeActions() {
     // Preview buttons
     const previewButtons = document.querySelectorAll('.btn-preview');
     previewButtons.forEach(function(button) {
@@ -30,19 +28,6 @@ export function initializeTypeActions(modalHandlers) {
                 window.location.href = `/Reports/Summary${scanParam}`;
             } else if (typeId === 'technical') {
                 window.location.href = `/Reports/Technical${scanParam}`;
-            }
-        });
-    });
-
-    // Generate Link buttons
-    const generateLinkButtons = document.querySelectorAll('.btn-generate-link');
-    generateLinkButtons.forEach(function(button) {
-        button.addEventListener('click', function(e) {
-            e.stopPropagation();
-
-            // Show generate link modal
-            if (modalHandlers && modalHandlers.showGenerateLinkModal) {
-                modalHandlers.showGenerateLinkModal();
             }
         });
     });

@@ -2,8 +2,6 @@
 // Initializes all modules for the Reports page
 
 import { initializeTypeCards, initializeTypeActions } from './template-cards.js';
-import { initializeModals } from './modals.js';
-import { initializeSharedLinks } from './shared-links.js';
 
 // Score ring radius (must match the SVG markup in Index.cshtml: r="26").
 const RING_RADIUS = 26;
@@ -121,17 +119,10 @@ function initializeTypeCardSelection() {
 document.addEventListener('DOMContentLoaded', function () {
     const scans = parseScanData();
 
-    // Initialize modals first (they provide handlers for other modules).
-    // The parsed scan data is passed in so modals don't re-parse the JSON island.
-    const modalHandlers = initializeModals(scans);
-
     // Initialize type cards
     initializeTypeCards();
-    initializeTypeActions(modalHandlers);
+    initializeTypeActions();
     initializeTypeCardSelection();
-
-    // Initialize shared links table
-    initializeSharedLinks(modalHandlers);
 
     // Initialize scan scope dropdown + context strip
     initializeScopeDropdown(scans);

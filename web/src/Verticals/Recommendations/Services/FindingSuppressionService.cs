@@ -8,24 +8,13 @@ using VulWall.Dashboard.Recommendations.Models;
 
 namespace VulWall.Dashboard.Recommendations.Services;
 
-public class FindingSuppressionService(
-    FindingSuppressionsRepository suppressionsRepository,
-    FindingSuppressionsPublicRepository suppressionsPublicRepository)
+public class FindingSuppressionService(FindingSuppressionsRepository suppressionsRepository)
     : ISuppressionFilter
 {
     /// <inheritdoc />
     public async Task<HashSet<(string DiscoveryId, string FindingType)>> GetActiveSuppressionKeysAsync()
     {
         var all = await suppressionsRepository.FindAsync(s => s.Active);
-        return all
-            .Select(s => (s.DiscoveryId, s.FindingType))
-            .ToHashSet();
-    }
-
-    /// <inheritdoc />
-    public async Task<HashSet<(string DiscoveryId, string FindingType)>> GetActiveSuppressionKeysForOrgAsync(string orgId)
-    {
-        var all = await suppressionsPublicRepository.FindAsync(s => s.OrgId == orgId && s.Active);
         return all
             .Select(s => (s.DiscoveryId, s.FindingType))
             .ToHashSet();

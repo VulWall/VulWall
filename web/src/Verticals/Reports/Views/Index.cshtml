@@ -7,8 +7,6 @@
     var initialScan = Model.Scans.FirstOrDefault();
     var initialScore = initialScan?.Score ?? 0;
 
-    var hasScans = Model.Scans.Any();
-
     // Context-strip score ring geometry (matches the radius the JS uses to redraw on scan change).
     // Color cutoffs align with the score bands (>=70 "Good" green, >=50 "Needs attention" amber).
     const double ringRadius = 26.0;
@@ -17,32 +15,18 @@
     var ringColor = initialScore >= 70 ? "var(--vw-success)"
         : initialScore >= 50 ? "var(--severity-medium)"
         : "var(--severity-high)";
-
-    var meterPct = Model.MaxLinksCount > 0
-        ? Math.Min(100, Model.ActiveLinksCount * 100 / Model.MaxLinksCount)
-        : 0;
-
-    string TypeIcon(string type) => type switch
-    {
-        "Summary" => "fas fa-clipboard-list",
-        "Technical" => "fas fa-code",
-        _ => "fas fa-link"
-    };
-    string TypeSlug(string type) => type.ToLowerInvariant() is "summary" or "technical" ? type.ToLowerInvariant() : "summary";
 }
 
 @section Styles {
     <link rel="stylesheet" href="~/css/Reports/index.css" />
 }
 
-@Html.AntiForgeryToken()
-
 <div class="rpt-page">
     <!-- Page header + scope selector -->
     <div class="page-header rpt-header">
         <div class="rpt-header-text">
             <h1 class="rpt-title">Reports</h1>
-            <p class="rpt-subtitle">Turn a scan into a shareable, password-protected report — branded for stakeholders or detailed for your engineers.</p>
+            <p class="rpt-subtitle">Turn a scan into a report — branded for stakeholders or detailed for your engineers.</p>
         </div>
 
         <div class="rpt-scope">
@@ -135,10 +119,6 @@
             </ul>
             <div class="rpt-type-actions">
                 <button type="button" class="btn btn-sm btn-secondary btn-preview"><i class="fas fa-eye me-1"></i>Preview</button>
-                @if (Model.SharedLinksEnabled)
-                {
-                    <button type="button" class="btn btn-sm btn-primary btn-generate-link" disabled="@(!hasScans)" title="@(hasScans ? "Generate a shareable link" : "Run a completed scan first")"><i class="fas fa-share-nodes me-1"></i>Share</button>
-                }
             </div>
         </div>
 
@@ -159,147 +139,10 @@
             </ul>
             <div class="rpt-type-actions">
                 <button type="button" class="btn btn-sm btn-secondary btn-preview"><i class="fas fa-eye me-1"></i>Preview</button>
-                @if (Model.SharedLinksEnabled)
-                {
-                    <button type="button" class="btn btn-sm btn-primary btn-generate-link" disabled="@(!hasScans)" title="@(hasScans ? "Generate a shareable link" : "Run a completed scan first")"><i class="fas fa-share-nodes me-1"></i>Share</button>
-                }
             </div>
         </div>
     </div>
-
-    <!-- Shared links (disabled unless SHARED_LINKS_ENABLED=true) -->
-    @if (Model.SharedLinksEnabled)
-    {
-    <div class="rpt-links-block">
-        <h2 class="rpt-section-heading">
-            Shared links
-        </h2>
-
-            <div class="rpt-links-card">
-                <div class="rpt-links-header">
-                    <div class="rpt-links-meter">
-                        <span class="rpt-meter-label">@Model.ActiveLinksCount of @Model.MaxLinksCount active</span>
-                        <div class="rpt-meter-bar">
-                            <div class="rpt-meter-fill" style="width: @(meterPct)%"></div>
-                        </div>
-                    </div>
-                    <button type="button" class="btn btn-sm btn-primary btn-generate-link" disabled="@(!hasScans)" title="@(hasScans ? "Generate a shareable link" : "Run a completed scan first")"><i class="fas fa-plus me-1"></i>New shared link</button>
-                </div>
-                <div class="rpt-links-scroll">
-                    <table class="rpt-links-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Scan</th>
-                                <th>Type</th>
-                                <th>Expires</th>
-                                <th class="rpt-th-actions">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="sharedLinksTableBody">
-                            @if (!Model.SharedLinks.Any())
-                            {
-                                <tr class="rpt-links-empty-row">
-                                    <td colspan="5">
-                                        <div class="rpt-links-empty">
-                                            <i class="fas fa-link"></i>
-                                            <span>No shared links yet. Create one to share a report securely.</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
-                            @foreach (var link in Model.SharedLinks)
-                            {
-                                var slug = TypeSlug(link.Type);
-                                var icon = TypeIcon(link.Type);
-                                <tr data-link-id="@link.Id" data-link-token="@link.Token">
-                                    <td>
-                                        <div class="rpt-link-name">
-                                            <span class="rpt-link-icon rpt-link-icon--@slug"><i class="@icon"></i></span>
-                                            <span class="rpt-link-name-text">@link.ReportName</span>
-                                        </div>
-                                    </td>
-                                    <td class="rpt-link-scan">@link.ScanName</td>
-                                    <td>
-                                        <span class="rpt-type-pill rpt-type-pill--@slug"><i class="@icon"></i> @link.Type</span>
-                                    </td>
-                                    <td>
-                                        @if (link.IsRevoked)
-                                        {
-                                            <span class="sev-badge sev-info">Revoked</span>
-                                        }
-                                        else if (link.IsExpired)
-                                        {
-                                            <span class="sev-badge sev-high">Expired</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="rpt-link-expires">@link.Expires</span>
-                                        }
-                                    </td>
-                                    <td class="rpt-td-actions">
-                                        @if (link.IsRevoked)
-                                        {
-                                            <span class="rpt-link-muted">Link revoked</span>
-                                        }
-                                        else if (link.IsExpired)
-                                        {
-                                            <span class="rpt-link-muted">Link expired</span>
-                                        }
-                                        else
-                                        {
-                                            <div class="rpt-row-actions">
-                                                <button type="button" class="rpt-row-btn rpt-row-btn--primary btn-copy-link" title="Copy link">
-                                                    <i class="fas fa-copy"></i>
-                                                </button>
-                                                <button type="button" class="rpt-row-btn btn-open-link" title="Open in new tab">
-                                                    <i class="fas fa-arrow-up-right-from-square"></i>
-                                                </button>
-                                                <button type="button" class="rpt-row-btn rpt-row-btn--danger btn-revoke" title="Revoke access" data-report-name="@link.ReportName" data-link-id="@link.Id">
-                                                    <i class="fas fa-ban"></i>
-                                                </button>
-                                            </div>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-    </div>
-    }
 </div>
-
-<!-- Generate Link Modal -->
-<partial name="~/Verticals/Reports/Views/Partials/_GenerateLinkModal.cshtml" model="Model.CompanyName" />
-
-@{
-    var revokeAccessModalModel = new VulWall.Dashboard.Common.Contracts.Models.ConfirmationModalModel
-    {
-        ModalId = "revokeAccessModal",
-        Title = "Revoke access",
-        Message = "Are you sure you want to revoke access to this shared link?",
-        MessageBold = true,
-        ConfirmButtonText = "Revoke access",
-        ConfirmButtonStyle = "danger",
-        ConfirmButtonIcon = "fas fa-ban",
-        HeaderStyle = "danger",
-        Icon = "fas fa-exclamation-circle",
-        Details = new List<string>
-        {
-            "This action cannot be undone",
-            "Anyone with this link will lose access immediately",
-            "You will need to generate a new link to share again"
-        },
-        DetailsTitle = "Important:",
-        DetailsIcon = "fas fa-info-circle",
-        DetailsStyle = "warning",
-        DynamicContentId = "revokeReportContent"
-    };
-}
-
-<partial name="~/Common/Views/_ConfirmationModal.cshtml" model="revokeAccessModalModel" />
 
 <script type="application/json" id="reports-scan-data">
     @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Scans, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }))

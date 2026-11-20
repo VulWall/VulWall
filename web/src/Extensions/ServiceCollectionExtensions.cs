@@ -13,7 +13,6 @@ using VulWall.Dashboard.Settings.Services;
 using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Reports.Services.ReportGeneration;
 using VulWall.Dashboard.Reports.Services;
-using VulWall.Dashboard.Reports.Services.SharedLinkService;
 using VulWall.Dashboard.Scans.Services;
 using VulWall.Dashboard.Recommendations.Services;
 using VulWall.Dashboard.Dashboard.Services;
@@ -216,7 +215,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SummaryReportBuilder>();
         services.AddScoped<TechnicalReportBuilder>();
         services.AddScoped<ReportsService>();
-        services.AddScoped<SharedLinkService>();
         services.AddScoped<ExecutiveSummaryProcessor>();
         services.AddHostedService<ExecutiveSummaryPoller>();
 

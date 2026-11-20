@@ -2,18 +2,8 @@ namespace VulWall.Dashboard.Reports.Models;
 
 public class IndexViewModel
 {
-    public List<SharedLinkViewModel> SharedLinks { get; set; } = new();
-    public int ActiveLinksCount { get; set; }
-    public int MaxLinksCount { get; set; }
-    public string OrganizationId { get; set; } = string.Empty;
-    public string CompanyName { get; set; } = string.Empty;
     public List<ScanSelectItem> Scans { get; set; } = new();
     public string? SelectedScanId { get; set; }
-
-    /// <summary>
-    /// SHARED_LINKS_ENABLED: whether the shared report links UI is shown.
-    /// </summary>
-    public bool SharedLinksEnabled { get; set; }
 }
 
 public class ScanSelectItem
