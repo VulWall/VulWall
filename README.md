@@ -38,19 +38,34 @@ to fix.
 
 ## Quick start
 
-You need Docker with Compose v2 and a host with 4 GB of RAM (recommended).
-In a test scan of one domain with the default settings, the stack used up to
-1.5 GB, of which the scanner used 1.2 GB. More domains and a higher
-`NUCLEI_WORKERS` use more.
+You need a Linux or macOS host with 4 GB of RAM (recommended) and Docker
+with Compose v2. In a test scan of one domain with the default settings, the
+stack used up to 1.5 GB, of which the scanner used 1.2 GB. More domains and a
+higher `NUCLEI_WORKERS` use more. The CPU must be 64-bit and able to run
+MongoDB: AVX on x86-64, ARMv8.2-A on ARM (a Raspberry Pi 5 works, a Pi 4 does
+not).
 
 ```bash
 curl -fsSL https://vulwall.com/install.sh | sh
 ```
 
-The script installs the latest release into `~/vulwall`, verifies the
-downloaded files, adds a random first-run setup token to `.env`, starts the
-stack and prints the setup link. Run it again to upgrade. See the [documentation](https://vulwall.com/docs) for
-options.
+The script checks the host, installs the latest release into `~/vulwall`,
+verifies the downloaded files, adds a random first-run setup token to `.env`,
+starts the stack and prints the setup link. If port 8080 is taken, it picks a
+free port from 8081 to 8099. On Linux without Docker, it offers to install
+Docker with Docker's official script; it uses `sudo` only for that, and only
+after you say yes. Run it again to upgrade. See the
+[documentation](https://vulwall.com/docs) for options.
+
+The script also installs the `vulwall` command for day-to-day tasks:
+
+```bash
+~/vulwall/vulwall status       # containers, health and URL
+~/vulwall/vulwall backup       # back up the database and .env
+~/vulwall/vulwall upgrade      # upgrade to the latest release
+~/vulwall/vulwall doctor       # check the host and the scanner's internet access
+~/vulwall/vulwall help         # all commands
+```
 
 Or install from a clone of this repository:
 
@@ -143,6 +158,10 @@ Jaeger runs at http://localhost:16686 (bound to `127.0.0.1`; traces include your
 
 ## Upgrading
 
+With the install script: `~/vulwall/vulwall upgrade`, or run the script again.
+
+From a clone:
+
 ```bash
 git pull
 docker compose pull          # when you use the published images
@@ -168,6 +187,9 @@ holds work in progress, and the nuclei and geo volumes are downloaded again
 when they are missing. The `vulwall_web-keys` volume holds the keys that sign
 login cookies; if you lose it, you only have to log in again.
 
+With the install script, `~/vulwall/vulwall backup` and
+`~/vulwall/vulwall restore <file>` do the steps below.
+
 Back up:
 
 ```bash
@@ -183,7 +205,9 @@ docker compose exec -T mongo mongorestore --drop --archive --gzip < vulwall-2026
 ## Lost admin password
 
 VulWall has one admin account. To replace it, delete it and run the
-first-run setup again. Your assets, scans and findings stay.
+first-run setup again. Your assets, scans and findings stay. With the install
+script, `~/vulwall/vulwall reset-admin` does this and prints a new setup link.
+Otherwise:
 
 ```bash
 docker compose stop web

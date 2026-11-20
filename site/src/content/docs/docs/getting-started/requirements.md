@@ -7,17 +7,35 @@ description: What a host needs to run VulWall.
 
 - **Docker** with the **Compose v2** plugin (`docker compose`, not `docker-compose`): Docker
   Engine on Linux, or Docker Desktop on macOS. The commands in these docs are for a Linux or
-  macOS shell.
+  macOS shell. On Windows, use WSL 2.
 - For the [install script](/docs/getting-started/install/): a POSIX shell, `curl`, and
-  `sha256sum` or `shasum`. Your user must be able to run `docker` without `sudo`.
+  `sha256sum` or `shasum`. On Linux, the script can install Docker for you.
 
-The images are published for `linux/amd64` and `linux/arm64`.
+## CPU
 
-## Memory
+The images are published for `linux/amd64` and `linux/arm64`. 32-bit systems are not supported.
 
-Plan for **4 GB of RAM**. In a test scan of one domain with the default settings, the whole stack
-used up to 1.5 GB, of which the scanner used 1.2 GB. More domains and a higher `NUCLEI_WORKERS`
-use more memory: each nuclei process can use several hundred MB.
+VulWall's database, MongoDB 7, needs a recent enough CPU. On x86-64 the CPU must support AVX,
+which most CPUs made since 2011 do; some Celeron, Pentium and Atom models do not. On ARM the CPU
+must implement ARMv8.2-A. A Raspberry Pi 5 and AWS Graviton2 or later work. A Raspberry Pi 4 or
+older does not, because its Cortex-A72 is ARMv8.0.
+
+In a virtual machine, the hypervisor must pass these CPU features through, and many hide AVX with
+their default CPU model. In Proxmox, set the VM's CPU type to `host` (Hardware > Processors), then
+stop and start the VM. In VirtualBox, Hyper-V, VMware and others, use the host CPU model or host
+passthrough.
+
+The install script checks the CPU before it changes anything. On a CPU without these features,
+MongoDB stops at start with "Illegal instruction".
+
+## Memory and disk
+
+Plan for **4 GB of RAM**; 2 GB is the minimum. In a test scan of one domain with the default
+settings, the whole stack used up to 1.5 GB, of which the scanner used 1.2 GB. More domains and a
+higher `NUCLEI_WORKERS` use more memory: each nuclei process can use several hundred MB.
+
+Plan for at least **5 GB of free disk space** for the images, the nuclei templates and your data.
+The install script warns you when the host has less memory or disk space than this.
 
 ## Network
 

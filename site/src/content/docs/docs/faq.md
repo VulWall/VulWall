@@ -47,7 +47,15 @@ Not by default. The scanner skips private and internal IP ranges. Set
 
 ### Does it run on ARM?
 
-Yes. The images are published for `linux/amd64` and `linux/arm64`.
+Yes. The images are published for `linux/amd64` and `linux/arm64`. On ARM, the CPU must implement
+ARMv8.2-A for MongoDB: a Raspberry Pi 5 works, a Raspberry Pi 4 does not. See
+[Requirements](/docs/getting-started/requirements/#cpu).
+
+### Can I install without Docker?
+
+No. VulWall needs MongoDB, Redis, .NET, Node.js and several scanners, each at a tested version.
+Docker keeps all of that to one command and away from the rest of your server. On Linux, the
+[install script](/docs/getting-started/install/#if-docker-is-missing) can install Docker for you.
 
 ## Your data
 
