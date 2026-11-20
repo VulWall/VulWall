@@ -24,7 +24,7 @@
 	--vw-text-heading: var(--text-heading);
 	--vw-text-body: var(--text-body);
 	--vw-text-muted: var(--text-muted);
-	--vw-link: var(--text-link);
+	--vw-link: var(--brand-blue);
 	--vw-hero: var(--brand-gradient);
 	--vw-code-bg: var(--brand-very-dark);
 
@@ -36,7 +36,10 @@
 	--sl-color-purple: var(--vw-primary);
 	--sl-color-green-low: var(--vw-success-bg);
 	--sl-color-green: var(--vw-success);
-	--sl-color-orange: var(--vw-warning);
+	/* Caution asides use the medium-severity amber */
+	--sl-color-orange-low: var(--severity-medium-bg);
+	--sl-color-orange: var(--severity-medium-border);
+	--sl-color-orange-high: var(--severity-medium);
 	--sl-color-red-low: var(--vw-danger-bg);
 	--sl-color-red: var(--vw-danger);
 
@@ -50,12 +53,10 @@
 	--sl-color-gray-6: var(--surface-card);
 	--sl-color-black: var(--app-bg);
 	--sl-color-accent-low: var(--brand-grad-end);
-	--sl-color-accent-high: var(--text-link);
-	--sl-color-blue-high: var(--text-link);
-	--sl-color-purple-high: var(--text-link);
+	--sl-color-accent-high: var(--brand-blue);
+	--sl-color-blue-high: var(--brand-blue);
+	--sl-color-purple-high: var(--brand-blue);
 	--sl-color-green-high: var(--vw-success-border);
-	--sl-color-orange-low: rgba(181, 71, 8, 0.2);
-	--sl-color-orange-high: var(--severity-medium-solid);
 	--sl-color-red-high: var(--severity-high-solid);
 
 	--vw-shadow-card: 0 4px 16px rgba(0, 0, 0, 0.5);
@@ -79,8 +80,6 @@
 	--sl-color-blue-high: var(--vw-primary-active);
 	--sl-color-purple-high: var(--vw-primary-active);
 	--sl-color-green-high: var(--vw-success-hover);
-	--sl-color-orange-low: var(--vw-warning-bg);
-	--sl-color-orange-high: var(--vw-warning);
 	--sl-color-red-high: var(--vw-danger-hover);
 
 	--vw-shadow-card: 0 8px 24px rgba(16, 24, 40, 0.06);
