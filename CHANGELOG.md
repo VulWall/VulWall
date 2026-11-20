@@ -82,6 +82,9 @@ First open-source, self-hosted release, under the MIT License.
   nuclei process. At nuclei's own default of 150 a home or office
   connection timed out, nuclei dropped the target and the scan lost its
   findings.
+- "Check for updates" in the About dialog says why a check failed: no
+  published release yet, GitHub's rate limit (the answer is kept until the
+  limit resets, at most an hour), or no connection to GitHub.
 
 ### Changed
 

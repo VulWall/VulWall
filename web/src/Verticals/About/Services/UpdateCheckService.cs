@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
@@ -20,28 +22,36 @@ public partial class UpdateCheckService(HttpClient http, IMemoryCache cache, ILo
 
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
+    /// <summary>A fetch result: the latest tag, or the failure status (with a null tag).</summary>
+    private sealed record Fetched(string? Tag, UpdateStatus Failure);
+
     public async Task<UpdateCheckResult> CheckAsync(string currentVersion, CancellationToken ct = default)
     {
-        if (!cache.TryGetValue(CacheKey, out string? latestTag))
+        if (!cache.TryGetValue(CacheKey, out Fetched? fetched) || fetched is null)
         {
-            latestTag = await FetchLatestTagAsync(ct);
-            cache.Set(CacheKey, latestTag, latestTag is null ? ErrorCacheFor : CacheFor);
+            var (result, cacheFor) = await FetchAsync(ct);
+            fetched = result;
+            cache.Set(CacheKey, fetched, cacheFor);
         }
 
-        if (latestTag is null || !SemVer.TryParse(latestTag, out var latest))
-            return new UpdateCheckResult(UpdateStatus.Error);
+        if (fetched.Tag is null || !SemVer.TryParse(fetched.Tag, out var latest))
+            return new UpdateCheckResult(fetched.Tag is null ? fetched.Failure : UpdateStatus.Error);
 
-        var url = ReleaseTagUrl + Uri.EscapeDataString(latestTag);
+        var url = ReleaseTagUrl + Uri.EscapeDataString(fetched.Tag);
+        // Not a release version, for example "dev" or "dev (abc1234)" from a local build.
         if (!SemVer.TryParse(currentVersion, out var current))
-            return new UpdateCheckResult(UpdateStatus.Unknown, latestTag, url);
+            return new UpdateCheckResult(UpdateStatus.Unknown, fetched.Tag, url);
 
         return current.CompareTo(latest) >= 0
-            ? new UpdateCheckResult(UpdateStatus.Latest, latestTag, url)
-            : new UpdateCheckResult(UpdateStatus.Available, latestTag, url);
+            ? new UpdateCheckResult(UpdateStatus.Latest, fetched.Tag, url)
+            : new UpdateCheckResult(UpdateStatus.Available, fetched.Tag, url);
     }
 
-    /// <summary>Returns the latest release tag, or null on any failure.</summary>
-    private async Task<string?> FetchLatestTagAsync(CancellationToken ct)
+    /// <summary>
+    /// Asks GitHub for the latest release tag. Every failure is a result, cached for a while; only a
+    /// cancelled request (the browser went away) throws, so it is never cached.
+    /// </summary>
+    private async Task<(Fetched Result, TimeSpan CacheFor)> FetchAsync(CancellationToken ct)
     {
         try
         {
@@ -51,7 +61,11 @@ public partial class UpdateCheckService(HttpClient http, IMemoryCache cache, ILo
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning("Update check: GitHub answered {Status}", (int)response.StatusCode);
-                return null;
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                    return (new Fetched(null, UpdateStatus.NoRelease), ErrorCacheFor);
+                if (IsRateLimited(response))
+                    return (new Fetched(null, UpdateStatus.RateLimited), RateLimitCacheFor(response.Headers, DateTimeOffset.UtcNow));
+                return (new Fetched(null, UpdateStatus.Error), ErrorCacheFor);
             }
 
             await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
@@ -61,18 +75,57 @@ public partial class UpdateCheckService(HttpClient http, IMemoryCache cache, ILo
                 tag.ValueKind == JsonValueKind.String &&
                 tag.GetString() is { } value && SemVer.TryParse(value, out _))
             {
-                return value;
+                return (new Fetched(value, UpdateStatus.Error), CacheFor);
             }
 
             logger.LogWarning("Update check: GitHub response has no valid tag_name");
-            return null;
+            return (new Fetched(null, UpdateStatus.Error), ErrorCacheFor);
         }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException)
+        catch (JsonException)
         {
+            logger.LogWarning("Update check: GitHub response is not JSON");
+            return (new Fetched(null, UpdateStatus.Error), ErrorCacheFor);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            // Connection failure, DNS failure or our timeout.
             logger.LogWarning("Update check failed: {Error}", ex.GetType().Name);
-            return null;
+            return (new Fetched(null, UpdateStatus.Unreachable), ErrorCacheFor);
         }
     }
+
+    /// <summary>
+    /// GitHub's rate limit answer: 429, or 403 with X-RateLimit-Remaining: 0 or Retry-After (a
+    /// secondary limit). Any other 403 is a plain error.
+    /// </summary>
+    internal static bool IsRateLimited(HttpResponseMessage response) =>
+        response.StatusCode == HttpStatusCode.TooManyRequests ||
+        (response.StatusCode == HttpStatusCode.Forbidden &&
+         (Header(response.Headers, "X-RateLimit-Remaining") == "0" || response.Headers.RetryAfter is not null));
+
+    /// <summary>
+    /// How long to keep a rate-limit answer: until GitHub's reset time (Retry-After, else
+    /// X-RateLimit-Reset in Unix seconds), at least 1 minute and at most 1 hour. 1 minute without
+    /// either header.
+    /// </summary>
+    internal static TimeSpan RateLimitCacheFor(HttpResponseHeaders headers, DateTimeOffset now)
+    {
+        TimeSpan? wait = null;
+        if (headers.RetryAfter?.Delta is { } delta)
+            wait = delta;
+        else if (headers.RetryAfter?.Date is { } date)
+            wait = date - now;
+        else if (long.TryParse(Header(headers, "X-RateLimit-Reset"), out var reset) &&
+                 reset is > 0 and < 253402300800) // before year 10000, or FromUnixTimeSeconds throws
+            wait = DateTimeOffset.FromUnixTimeSeconds(reset) - now;
+
+        if (wait is not { } w)
+            return ErrorCacheFor;
+        return w < ErrorCacheFor ? ErrorCacheFor : w > CacheFor ? CacheFor : w;
+    }
+
+    private static string? Header(HttpResponseHeaders headers, string name) =>
+        headers.TryGetValues(name, out var values) ? values.FirstOrDefault()?.Trim() : null;
 
     /// <summary>
     /// Enough semantic versioning for release tags: v-prefix optional; a pre-release sorts before its
