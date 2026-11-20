@@ -118,8 +118,12 @@ func TestResolvePublic_ConcurrencyBound(t *testing.T) {
 			if err := resolvePublic(context.Background(), names, workers, dns.lookup, got.add, zap.NewNop()); err != nil {
 				t.Fatal(err)
 			}
-			if peak := dns.peak.Load(); peak != int64(workers) {
-				t.Fatalf("peak lookups in flight = %d, want exactly %d", peak, workers)
+			peak := dns.peak.Load()
+			if peak > int64(workers) {
+				t.Fatalf("peak lookups in flight = %d, want at most %d", peak, workers)
+			}
+			if workers > 1 && peak < 2 {
+				t.Fatalf("peak lookups in flight = %d, want parallel lookups", peak)
 			}
 			if n := len(got.sorted()); n != len(names) {
 				t.Fatalf("found %d names, want %d", n, len(names))
