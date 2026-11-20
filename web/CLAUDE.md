@@ -122,7 +122,7 @@ Each vertical is self-contained and includes:
 ### Available Verticals
 * **Account**: First-run `/setup`, `/login`, `/logout` (local admin account)
 * **Assets**: Asset management (domains, IPs); assets are enabled on add, no ownership verification
-* **Dashboard**: Main overview, metrics, charts, recent activities
+* **Dashboard**: Main overview, metrics, charts, recent scans
 * **Discoveries**: Discovered assets, ports, services from scans
 * **Recommendations**: AI-powered security recommendations for findings
 * **Reports**: Report generation (Summary, Technical), shared report links
@@ -505,7 +505,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 |----------|---------|---------|
 | Account | `AccountService` | Admin setup, password hashing, credential check |
 | Assets | `AssetsService` | Asset CRUD |
-| Dashboard | `DashboardService` | Metrics, charts, activities |
+| Dashboard | `DashboardService` | Metrics, charts, recent scans |
 | Discoveries | `DiscoveriesService` | Discovery data aggregation |
 | Recommendations | `RecommendationsService` | Finding recommendations |
 | Reports | `ReportsService` | Report index scan selector |
