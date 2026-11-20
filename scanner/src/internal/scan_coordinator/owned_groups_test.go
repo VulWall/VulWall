@@ -3,6 +3,7 @@ package scan_coordinator
 import (
 	"testing"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/certificate_scanner"
 	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/discovery_enrichment"
 	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/email_security_scanner"
 	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/http_header_scanner"
@@ -33,6 +34,8 @@ func TestOwnedGroups(t *testing.T) {
 		{shared.StreamDomainScanTriggers, js_dependency_scanner.GroupJSDependencyScanner}:        true,
 		{shared.StreamDomainScanTriggers, http_header_scanner.GroupHTTPHeaderScanner}:            true,
 		{shared.StreamDomainScanTriggers, email_security_scanner.GroupEmailSecurityScanner}:      true,
+		{shared.StreamDomainScanTriggers, certificate_scanner.GroupCertificateScanner}:           true,
+		{shared.StreamPortScanTriggers, certificate_scanner.GroupCertificateScanner}:             true,
 		{shared.StreamDiscoveryEnrichmentQueue, discovery_enrichment.GroupDiscoveryEnrichment}:   true,
 		{shared.StreamKBGenerationQueue, knowledge_base.GroupKBEngine}:                           true,
 		{shared.StreamDomainDiscoveryResults, domain_ingestion.GroupDomainIngestion}:             true,
