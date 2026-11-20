@@ -85,19 +85,6 @@ make run-testssl-scanner
 make run-scan-coordinator
 ```
 
-### Docker Deployment
-
-```bash
-# Deploy all services
-make prod-deploy-all
-
-# Check status
-make prod-status
-
-# View logs
-make prod-logs SERVICE=ingestion OPTS=-f
-```
-
 ## Configuration
 
 Environment variables (`.env`):
@@ -132,7 +119,7 @@ src/                         # Go source code
 │   └── scan_coordinator/        # Scan coordinator implementation
 ├── go.mod
 └── go.sum
-ops/                         # Docker, compose, deploy scripts
+ops/                         # Dockerfiles and per-service compose files
 ```
 
 ## MongoDB Collections
@@ -151,7 +138,6 @@ ops/                         # Docker, compose, deploy scripts
 - **[docs/DATABASE.md](docs/DATABASE.md)** — Go models, MongoDB schemas, query examples
 - **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** — OpenTelemetry tracing patterns
 - **[docs/ADDING_SERVICES.md](docs/ADDING_SERVICES.md)** — How to add new services, scanners, enrichment types
-- **[ops/PRODUCTION.md](ops/PRODUCTION.md)** — Production deployment guide
 
 ## Development
 

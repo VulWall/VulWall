@@ -1,0 +1,17 @@
+# Build output
+bin/
+obj/
+
+# Local secrets and machine-specific settings
+.env
+launchSettings.json
+
+# OS / editor
+.DS_Store
+
+# Personal notes and local worktrees
+Notes
+.worktrees/
+
+# GeoIP databases (downloaded, not committed)
+data/*.mmdb

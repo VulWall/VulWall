@@ -2,9 +2,10 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
+
 ## Project Overview
 
-VulWall NightWatch is a **vertically-sliced Go monorepo** for security scanning. Each service compiles and deploys independently while sharing common infrastructure.
+The VulWall scanner (formerly NightWatch) is a **vertically-sliced Go monorepo** for security scanning. Each service compiles and deploys independently while sharing common infrastructure.
 
 **Core rules:**
 - All jobs MUST include `org_id` (organization GUID) or they will be skipped
@@ -17,12 +18,12 @@ VulWall NightWatch is a **vertically-sliced Go monorepo** for security scanning.
 ## Project Structure
 
 ```
-VulWall.NightWatch/
+scanner/
 ├── CLAUDE.md              ← You are here
 ├── docs/                  ← Detailed documentation (see index below)
 ├── Makefile
 ├── README.md
-├── ops/                   # Docker, compose, deploy scripts
+├── ops/                   # Dockerfiles, per-service compose files
 │   └── docker-compose.yml
 └── src/                   # Go source code
     ├── cmd/
@@ -59,9 +60,8 @@ VulWall.NightWatch/
 | **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** | All 16 services, Redis streams, consumer groups, scan monitor coverage — **the ground truth** |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Communication flows, design patterns, model ownership rules |
 | **[docs/DATABASE.md](docs/DATABASE.md)** | Go models, MongoDB schemas, query examples |
-| **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** | OpenTelemetry tracing patterns, Honeycomb queries |
+| **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** | OpenTelemetry tracing patterns |
 | **[docs/ADDING_SERVICES.md](docs/ADDING_SERVICES.md)** | Step-by-step guides: new discovery service, scanner, enrichment, ingestion slice |
-| **[ops/PRODUCTION.md](ops/PRODUCTION.md)** | Production deployment guide |
 
 ## Common Commands
 
@@ -118,10 +118,8 @@ make deps                   # Download and tidy dependencies
 5. **Update SERVICE_REGISTRY.md** — add to all relevant tables
 6. Inject TraceContext before publishing, extract after consuming
 7. Add Makefile targets, Dockerfile, docker-compose entry
-8. **Update CI/CD pipeline** — add to build matrix in `.github/workflows/docker-build-push.yml`
-9. **Update deploy scripts** — add to `ops/scripts/deploy-all.sh` service list AND `ops/scripts/deploy-service.sh` routing + help text
 
-> **Why this matters:** Missing step 3 causes scans to complete before the new scanner finishes. Missing steps 8-9 means the service won't be built or deployed by CI/CD.
+> **Why this matters:** Missing step 3 causes scans to complete before the new scanner finishes.
 
 ### Architecture Invariants
 
@@ -174,9 +172,6 @@ make deps                   # Download and tidy dependencies
 - Consumer groups: each service's `constants.go`
 - Scan monitor tracking: `src/internal/scan_coordinator/scan_monitor.go:105-131`
 - Stream cleanup: `src/internal/scan_coordinator/stream_cleanup.go:30-38`
-- CI/CD build matrix: `.github/workflows/docker-build-push.yml`
-- Deploy service list: `ops/scripts/deploy-all.sh`
-- Deploy service routing: `ops/scripts/deploy-service.sh`
 
 ## Configuration
 
@@ -184,13 +179,13 @@ Environment variables (`.env`):
 
 | Variable | Purpose |
 |----------|---------|
-| `REDIS_URI` | Cloud Redis connection string |
-| `MONGO_URI` | MongoDB Atlas connection string |
+| `REDIS_URI` | Redis connection string |
+| `MONGO_URI` | MongoDB connection string |
 | `MONGO_DB` | Database name (default: vulwall) |
 | `ANTHROPIC_API_KEY` | Anthropic API key for KB generation |
 | `ANTHROPIC_MODEL` | Anthropic model (default: claude-sonnet-4-5-20250514) |
 | `ENVIRONMENT` | development / production |
-| `HONEYCOMB_API_KEY` | Honeycomb API key for tracing |
+| `HONEYCOMB_API_KEY` | Optional key sent as the `x-honeycomb-team` header to the OTLP trace exporter |
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
 | `NIGHTWATCH_API_KEY` | Bearer key callers must send in `X-API-Key` to access `POST /api/scans`. Empty = auth disabled (dev only) |

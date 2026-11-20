@@ -14,12 +14,9 @@ Before merging any new service, verify ALL of the following:
 - [ ] **Stream cleanup updated** — add new result streams to `streamsToClean()` in `src/internal/scan_coordinator/stream_cleanup.go`
 - [ ] **SERVICE_REGISTRY.md updated** — add service to all relevant tables
 - [ ] Entry point created in `src/cmd/`
-- [ ] Makefile targets added (build, run, docker-scale, prod-deploy)
+- [ ] Makefile targets added (build, run, docker-scale)
 - [ ] Dockerfile created in `ops/`
 - [ ] docker-compose.yml created in service's `ops/` directory
-- [ ] **CI/CD: Added to `.github/workflows/docker-build-push.yml`** build matrix
-- [ ] **Deploy: Added to `ops/scripts/deploy-all.sh`** SERVICES array
-- [ ] **Deploy: Added to `ops/scripts/deploy-service.sh`** routing condition + help text
 
 ---
 
