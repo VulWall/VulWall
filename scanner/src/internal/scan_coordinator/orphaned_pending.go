@@ -26,18 +26,19 @@ func (a redisConsumerAdmin) deleteConsumer(ctx context.Context, stream, group, n
 }
 
 // ReleaseOrphanedPending removes every consumer that a previous scanner process left in the
-// scan-pipeline groups, together with its pending entries. It must run at startup, after
-// CloseInterruptedScans and before any consumer starts.
+// groups this binary consumes (ownedGroups), together with its pending entries. It must run
+// at startup, after CloseInterruptedScans and before any consumer starts.
 //
 // Every process gives its consumers new names and reads only new messages (">"), so entries
 // that a previous process read but never ACKed are never delivered again. The scan they
-// belonged to was just closed as interrupted, but the entries would keep the pipeline from
-// ever looking quiescent: every later scan would then wait for the 15-minute idle timeout,
-// and could be closed (and resolve findings) while a slow scanner was still working.
+// belonged to was just closed as interrupted, but in a scan-pipeline group the entries would
+// keep the pipeline from ever looking quiescent: every later scan would then wait for the idle
+// timeout. In the other groups the dead consumers would only pile up.
 //
-// Like CloseInterruptedScans, this assumes one scanner process per Redis.
+// Like CloseInterruptedScans, this assumes one scanner process per Redis: a second live
+// process would lose its consumers and their in-flight work.
 func ReleaseOrphanedPending(ctx context.Context, rdb *redis.Client, log *zap.Logger) error {
-	return releaseOrphanedPending(ctx, redisConsumerAdmin{rdb}, scanPipelineGroups(), log)
+	return releaseOrphanedPending(ctx, redisConsumerAdmin{rdb}, ownedGroups(), log)
 }
 
 func releaseOrphanedPending(ctx context.Context, admin consumerAdmin, groups []StreamGroup, log *zap.Logger) error {
@@ -53,6 +54,8 @@ func releaseOrphanedPending(ctx context.Context, admin consumerAdmin, groups []S
 			if err := admin.deleteConsumer(ctx, g.Stream, g.Group, c.Name); err != nil {
 				return fmt.Errorf("delete consumer %s of %s/%s: %w", c.Name, g.Stream, g.Group, err)
 			}
+			log.Info("Removed consumer of a previous scanner process",
+				zap.String("stream", g.Stream), zap.String("group", g.Group), zap.String("consumer", c.Name))
 			if c.Pending > 0 {
 				log.Warn("Dropped work left unfinished by a previous scanner process",
 					zap.String("stream", g.Stream), zap.String("group", g.Group),

@@ -82,7 +82,8 @@ container health check; the scanner opens no port).
 4. **Update stream cleanup** — add new result streams to `streamsToClean()` in `src/internal/scan_coordinator/stream_cleanup.go`
 5. **Update SERVICE_REGISTRY.md** — add to all relevant tables
 6. Inject TraceContext before publishing, extract after consuming
-7. **Register in `src/cmd/nightwatch/main.go`** — add the consumer to `consumers()` and its job-queue/trigger group to `createConsumerGroups()`; install any CLI tool (pinned, checksum-verified) in `scanner/Dockerfile`
+7. **Update startup cleanup** — add every (stream, group) the service consumes to `ownedGroups()` in `src/internal/scan_coordinator/pipeline.go` (guarded by `TestOwnedGroups`)
+8. **Register in `src/cmd/nightwatch/main.go`** — add the consumer to `consumers()` and its job-queue/trigger group to `createConsumerGroups()`; install any CLI tool (pinned, checksum-verified) in `scanner/Dockerfile`
 
 > **Why this matters:** Missing step 3 causes scans to complete before the new scanner finishes.
 
@@ -96,7 +97,7 @@ container health check; the scanner opens no port).
 - Trigger streams use `CreateConsumerGroupFromLatest` (from `$`) — ephemeral
 - Result/job streams use `CreateConsumerGroup` (from `0`) — guaranteed delivery
 - `redisx.ConsumeStream` ACKs after the handler returns, also on handler error and on a recovered panic (logged with stack). A handler that fails because shutdown cancelled its context is NOT ACKed
-- At startup `nightwatch` closes every `pending`/`running` scan as `failed` with `status_reason: "interrupted_by_restart"` (no finding resolution), then deletes the previous process's consumers (and their pending entries) from the `scanPipelineGroups()` groups (`ReleaseOrphanedPending`), before any component starts
+- At startup `nightwatch` closes every `pending`/`running` scan as `failed` with `status_reason: "interrupted_by_restart"` (no finding resolution), then deletes the previous process's consumers (and their pending entries) from every group the binary consumes (`ownedGroups()` in `pipeline.go`, `ReleaseOrphanedPending`), before any component starts. This assumes one scanner process per Redis
 
 ### Data Rules
 

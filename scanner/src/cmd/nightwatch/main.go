@@ -145,7 +145,6 @@ func createConsumerGroups(ctx context.Context, rdb *redis.Client, log *zap.Logge
 		if err := redisx.CreateConsumerGroup(ctx, rdb, q.stream, q.group); err != nil {
 			return fmt.Errorf("create consumer group %s/%s: %w", q.stream, q.group, err)
 		}
-		redisx.CleanupStaleConsumers(ctx, rdb, q.stream, q.group, log)
 	}
 
 	triggers := []struct{ stream, group string }{
