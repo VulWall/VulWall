@@ -113,9 +113,17 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
     vulns, err := s.scanner.Scan(ctx, target.URL)
     // 2. Deduplicate if needed
     // 3. Convert to shared.SecurityFinding
-    // 4. Publish to shared.StreamSecurityFindings with source + TraceContext
+    // 4. Publish to shared.StreamSecurityFindings with source + TraceContext;
+    //    on a failed publish, return the error (the trigger is retried)
+    // 5. Publish shared.TargetCoverage(source, target, reportedKeys, err):
+    //    "ok" + every reported (finding_type, title) when the check completed,
+    //    "error" when it did not (then return nil: no retry of the tool)
 }
 ```
+
+Without step 5 the scan never resolves the scanner's findings. Decide carefully what
+"completed" means: a timeout or partial fetch hidden behind "no findings" resolves real
+findings. See ARCHITECTURE.md (scan completion and finding resolution).
 
 ### 4. Choose consumer pattern
 
@@ -137,8 +145,9 @@ Consumer creates groups on both `domain_scan_triggers` and `port_scan_triggers`.
 - [ ] Scanner interface in `scanner/` package
 - [ ] Service orchestration under 200 lines
 - [ ] Convert results to `shared.SecurityFinding`
-- [ ] Set `Source` to a consistent lowercase name (existing: "nuclei", "testssl", "jsscanner", "http-headers")
+- [ ] Set `Source` to a consistent lowercase name (existing: "nuclei", "testssl", "jsscanner", "http-headers", "email-security")
 - [ ] Publish to `shared.StreamSecurityFindings`
+- [ ] Publish a coverage message per target (`shared.TargetCoverage`) after the findings
 - [ ] Inject TraceContext before publishing
 - [ ] Extract TraceContext after consuming
 - [ ] Add to scan monitor's `isComplete()` (critical!)

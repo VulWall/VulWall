@@ -14,8 +14,8 @@ whole scanner.
 
 | # | Component | Consumer Group | Consumes From | Produces To | Started in `main.go` by | MongoDB |
 |---|---------|---------------|---------------|-------------|-----------|---------|
-| 1 | **domain-discovery** | `domain_discovery_service` | `domain_discovery_queue` | `domain_discovery_results` | `consumers()` | No |
-| 2 | **port-discovery** | `port_discovery_service` | `ip_discovery_queue` | `ip_discovery_results` | `consumers()` | No |
+| 1 | **domain-discovery** | `domain_discovery_service` | `domain_discovery_queue` | `domain_discovery_results`, `security_findings` (coverage `absent`) | `consumers()` | No |
+| 2 | **port-discovery** | `port_discovery_service` | `ip_discovery_queue` | `ip_discovery_results`, `security_findings` (coverage `ok` per IP) | `consumers()` | No |
 | 3 | **nuclei-scanner** | `nuclei_scanner_service` | `domain_scan_triggers` + `port_scan_triggers` | `security_findings` | `consumers()` | No |
 | 4 | **testssl-scanner** | `testssl_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
 | 5 | **js-dependency-scanner** | `js_dependency_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
@@ -25,15 +25,17 @@ whole scanner.
 | 9 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | `knowledgeBase()` — only when `ANTHROPIC_API_KEY` is set | No |
 | 10 | **domain-ingestion** | `domain_ingestion_service` | `domain_discovery_results` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` | `consumers()` → ingestion orchestrator | Yes |
 | 11 | **port-ingestion** | `port_ingestion_service` | `ip_discovery_results` | `discovery_enrichment_queue`, `port_scan_triggers` | `consumers()` → ingestion orchestrator | Yes |
-| 12 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | `kb_generation_queue` | `consumers()` → ingestion orchestrator | Yes |
+| 12 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | MongoDB `findings`, `scan_coverage`; `kb_generation_queue` | `consumers()` → ingestion orchestrator | Yes |
 | 13 | **enrichment-ingestion** | `enrichment_ingestion_service` | `discovery_enrichment_results` | MongoDB `discoveries` | `consumers()` → ingestion orchestrator | Yes |
 | 14 | **kb-ingestion** | `kb_ingestion_service` | `kb_generation_results` | MongoDB `knowledge_base` | `consumers()` → ingestion orchestrator | Yes |
-| 15 | **scan-coordinator** | _(not a consumer)_ | MongoDB `scans` (status `queued`) | `domain_discovery_queue`, `ip_discovery_queue` | `coordinatorComponents()` | Yes (`scans` only) |
+| 15 | **scan-coordinator** | _(not a consumer)_ | MongoDB `scans` (status `queued`) | `domain_discovery_queue`, `ip_discovery_queue` | `coordinatorComponents()` | Yes (writes `scans`; the scan monitor also resolves `findings`) |
 
 **Notes:**
 - Ingestion slices (#10–14) run inside the ingestion orchestrator (`src/internal/ingestion/orchestrator.go`).
-- The scan coordinator (#15) is three goroutines: the cron **scheduler** (per-org `scan_cron`, plus stream cleanup), the **queued-scan poller** (every 5 s, claims scans the web app queued), and the **scan monitor** (marks scans `done`). It writes only the `scans` collection; see the scan lifecycle in [DATABASE.md](DATABASE.md#scans-collection).
+- The scan coordinator (#15) is three goroutines: the cron **scheduler** (per-org `scan_cron`, plus stream cleanup), the **queued-scan poller** (every 5 s, claims scans the web app queued), and the **scan monitor** (marks scans `done`). It writes the `scans` collection, and the scan monitor also resolves `findings`; see the scan lifecycle in [DATABASE.md](DATABASE.md#scans-collection).
 - Without `ANTHROPIC_API_KEY` the KB engine (#9) does not start. `kb_generation_queue` keeps its jobs until the key is set.
+- Every consumer uses `redisx.ConsumeStream`: a handler error is retried in the worker (3 attempts), then the message goes to `dead_letter` and is ACKed; malformed messages (`redisx.Permanent`) and panics go there at once. Shutdown leaves the message pending.
+- **Restart loses pending work, including KB and enrichment.** At startup `ReleaseOrphanedPending` deletes the previous process's consumers, with their pending entries, from every group in `ownedGroups()`. For the scan-pipeline groups this is safe: the running scan is closed `interrupted_by_restart` and resolves nothing. For the terminal groups it is a loss: a `kb_generation_queue` job or a `discovery_enrichment_queue` job that was in progress is dropped (its finding keeps no KB entry until the next new finding of that type takes the Redis `kb_generating:<type>` lock after 24 h; its discovery keeps the enrichment of the previous scan).
 - `main.go` creates the job-queue groups (`0`) and every trigger-stream group (`$`) before any component starts.
 
 ---
@@ -48,7 +50,7 @@ whole scanner.
 | `ip_discovery_results` | `StreamIPDiscoveryResults` | result | port-discovery | port-ingestion | `0` |
 | `domain_scan_triggers` | `StreamDomainScanTriggers` | trigger | domain-ingestion | nuclei, testssl, js-dep, http-header, email-security | `$` |
 | `port_scan_triggers` | `StreamPortScanTriggers` | trigger | port-ingestion | nuclei | `$` |
-| `security_findings` | `StreamSecurityFindings` | result | nuclei, testssl, js-dep, http-header, email-security | findings-ingestion | `0` |
+| `security_findings` | `StreamSecurityFindings` | result | nuclei, testssl, js-dep, http-header, email-security (findings and coverage); domain-discovery, port-discovery (coverage only) | findings-ingestion | `0` |
 | `discovery_enrichment_queue` | `StreamDiscoveryEnrichmentQueue` | job | domain-ingestion, port-ingestion | discovery-enrichment | `0` |
 | `discovery_enrichment_results` | `StreamDiscoveryEnrichmentResults` | result | discovery-enrichment | enrichment-ingestion | `0` |
 | `kb_generation_queue` | `StreamKBGenerationQueue` | job | findings-ingestion | knowledge-base-engine | `0` |
@@ -64,7 +66,7 @@ whole scanner.
 
 **Source:** `src/internal/scan_coordinator/pipeline.go` — `scanPipelineGroups()` (consumed by `pipelineQuiescent()` in `scan_monitor.go`)
 
-The scan monitor tracks these consumer groups to determine when a scan is complete. A scan is completed via the **pipeline-quiescence** path when it has run past `ScanMinRuntime`, ingestion has been quiet for `ScanSettleGrace`, and EVERY group below has drained the stream — meaning **0 pending (read-but-unacked) messages AND no undelivered entries** (the group's last-delivered id has reached the stream's last-generated id). The undelivered-entries check is what catches trigger messages still sitting unread on a stream while a single-threaded scanner (nuclei) works through its backlog; an `XPending`-only check was blind to those and marked scans "done" ~30s in. Backstops: `idle_timeout` (no ingestion activity for `ScanIdleTimeout` after `ScanMinRuntime`, and no group below holds work in flight) and `safety_timeout` (3h absolute). Only the pipeline-quiescence path resolves findings; both backstops close a scan whose pipeline had not drained, so they leave findings untouched (`findings_reconciled: false`; see ARCHITECTURE.md).
+The scan monitor tracks these consumer groups to determine when a scan is complete. A scan is completed via the **pipeline-quiescence** path when it has run past `ScanMinRuntime`, ingestion has been quiet for `ScanSettleGrace`, and EVERY group below has drained the stream — meaning **0 pending (read-but-unacked) messages AND no undelivered entries** (the group's last-delivered id has reached the stream's last-generated id). The undelivered-entries check is what catches trigger messages still sitting unread on a stream while a single-threaded scanner (nuclei) works through its backlog; an `XPending`-only check was blind to those and marked scans "done" ~30s in. Backstops: `idle_timeout` (no ingestion activity for `ScanIdleTimeout` after `ScanMinRuntime`, and no group below holds work in flight) and `safety_timeout` (3h absolute). Only the pipeline-quiescence path resolves findings, and only on positive evidence in `scan_coverage`; both backstops close a scan whose pipeline had not drained, so they leave findings untouched (`findings_reconciled: false`; see ARCHITECTURE.md).
 
 **Work in flight** means a group below has a pending entry delivered less than `ScanStuckThreshold` (30 min) ago (`XPENDING` idle of its youngest entry): a live consumer is still working on it, so the idle timeout waits. When every pending entry is older than the threshold, the work is treated as stuck and the idle timeout may close the scan. `SCAN_IDLE_TIMEOUT` and `SCAN_MIN_RUNTIME` (Go durations) override the defaults (15m, 10m); the monitor logs the effective values at startup and logs `Idle timeout suppressed: work in flight` each time the guard holds a scan open.
 
@@ -133,12 +135,13 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 |------------|----------|---------|-----------|
 | `assets` | `CollectionAssets` | User-added assets to scan (managed via UI) | web app |
 | `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (domain, subdomain, ip, port) | domain-ingestion, port-ingestion, enrichment-ingestion |
-| `findings` | `CollectionFindings` | Security vulnerabilities from scanners | findings-ingestion |
+| `findings` | `CollectionFindings` | Security vulnerabilities from scanners | findings-ingestion; scan-monitor (resolves) |
+| `scan_coverage` | `CollectionScanCoverage` | Per-scan evidence that a check completed on a target, or that a host is gone (TTL 90 days) | findings-ingestion |
 | `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries keyed by finding_type (~84 entries) | kb-ingestion |
 | `organizations` | `CollectionOrganizations` | Org settings with the scan schedule (`scan_settings`) | web app |
 | `scans` | `CollectionScans` | Scan execution records | web app (inserts `queued`), scan-coordinator, scan-monitor |
 
-**Read-only access (scanner):** `assets`, `organizations` — written by the web app, read by scan-coordinator. The web app creates the default organization with `scan_settings.scan_cron` (UTC) and `scan_settings.enabled`, and changes them from Settings → Scan schedule; the scheduler reloads organizations every 5 minutes.
+**Read-only access (scanner):** `assets`, `organizations` — written by the web app, read by scan-coordinator. The coordinator also reads `discoveries` (known subdomains for discovery jobs) and, in the scan monitor, `discoveries` and `scan_coverage` (finding resolution). The web app creates the default organization with `scan_settings.scan_cron` (UTC) and `scan_settings.enabled`, and changes them from Settings → Scan schedule; the scheduler reloads organizations every 5 minutes.
 
 ---
 

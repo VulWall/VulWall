@@ -58,75 +58,66 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 
 	// Scan both HTTP and HTTPS in parallel
 	allVulnerabilities := s.scanBothProtocols(ctx, target)
+	if ctx.Err() != nil {
+		return ctx.Err() // shutdown: leave the trigger pending
+	}
 
-	// Count total vulnerabilities
+	// The check is complete only when every protocol answered (all its scripts checked) or
+	// refused the connection.
+	var probeErrs []error
 	totalVulns := 0
 	for _, result := range allVulnerabilities {
+		probeErrs = append(probeErrs, result.err)
 		totalVulns += len(result.vulnerabilities)
 	}
 	span.SetAttributes(attribute.Int("vulnerabilities.count", totalVulns))
 	span.SetAttributes(attribute.Bool("scan.success", true))
 	span.SetStatus(codes.Ok, "")
 
-	// Publish unique vulnerabilities to Redis
-	s.publishUniqueVulnerabilities(ctx, allVulnerabilities, target)
-
-	return nil
+	// Publish the findings, then the coverage that lists them. A failed publish is returned
+	// before the coverage, so the consumer retries the target.
+	reported, err := s.publishUniqueVulnerabilities(ctx, allVulnerabilities, target)
+	if err != nil {
+		return err
+	}
+	if probeErr := shared.ProbeError(probeErrs...); probeErr != nil {
+		s.logger.Info("JS dependency check incomplete; its findings on this target stay open",
+			zap.String("target", target.Target), zap.Error(probeErr))
+		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, probeErr))
+	}
+	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
 }
 
-// scanBothProtocols scans both HTTP and HTTPS protocols concurrently
-// Returns deduplicated vulnerabilities from both protocols
+// scanBothProtocols scans both HTTP and HTTPS protocols concurrently and returns one result
+// per protocol, with its error. A protocol can return vulnerabilities and an error (some
+// scripts were not checked).
 func (s *Service) scanBothProtocols(ctx context.Context, target ScanTarget) []protocolScanResult {
 	protocols := []string{"http", "https"}
-	results := make(chan protocolScanResult, len(protocols))
+	results := make([]protocolScanResult, len(protocols))
 
 	var wg sync.WaitGroup
-
-	// Launch parallel scans for each protocol
-	for _, protocol := range protocols {
+	for i, proto := range protocols {
 		wg.Add(1)
-		go func(proto string) {
+		go func() {
 			defer wg.Done()
-
 			url := fmt.Sprintf("%s://%s", proto, target.Target)
 			vulnerabilities, err := s.scanner.Scan(ctx, url)
-
 			if err != nil {
-				s.logger.Debug("Failed to scan URL",
-					zap.String("url", url),
-					zap.Error(err),
-				)
+				s.logger.Debug("Failed to scan URL", zap.String("url", url), zap.Error(err))
 			}
-
-			results <- protocolScanResult{
-				protocol:        proto,
-				url:             url,
-				vulnerabilities: vulnerabilities,
-			}
-		}(protocol)
+			results[i] = protocolScanResult{protocol: proto, url: url, vulnerabilities: vulnerabilities, err: err}
+		}()
 	}
-
-	// Wait for all scans to complete
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// Collect results from both protocols
-	var allResults []protocolScanResult
-	for result := range results {
-		if len(result.vulnerabilities) > 0 {
-			allResults = append(allResults, result)
-		}
-	}
-
-	return allResults
+	wg.Wait()
+	return results
 }
 
-// publishUniqueVulnerabilities publishes deduplicated vulnerabilities to Redis
-func (s *Service) publishUniqueVulnerabilities(ctx context.Context, results []protocolScanResult, target ScanTarget) {
+// publishUniqueVulnerabilities publishes deduplicated vulnerabilities to Redis and returns
+// their finding keys. It stops at the first failed publish.
+func (s *Service) publishUniqueVulnerabilities(ctx context.Context, results []protocolScanResult, target ScanTarget) ([]shared.FindingKey, error) {
 	// Dedup by component+version+CVE across all protocols
 	seen := make(map[string]bool)
+	var reported []shared.FindingKey
 
 	for _, result := range results {
 		for _, vuln := range result.vulnerabilities {
@@ -136,31 +127,27 @@ func (s *Service) publishUniqueVulnerabilities(ctx context.Context, results []pr
 				cveStr = "no-cve"
 			}
 			key := fmt.Sprintf("%s|%s|%s", vuln.Component, vuln.Version, cveStr)
-
-			if !seen[key] {
-				seen[key] = true
-
-				// Convert to SecurityFinding and publish
-				finding := convertToSecurityFinding(vuln, result.url, target)
-				if err := s.publishFinding(ctx, finding); err != nil {
-					s.logger.Error("Failed to publish finding",
-						zap.String("component", vuln.Component),
-						zap.String("version", vuln.Version),
-						zap.Error(err),
-					)
-					continue
-				}
-
-				s.logger.Info("Published vulnerability finding",
-					zap.String("component", vuln.Component),
-					zap.String("version", vuln.Version),
-					zap.String("severity", vuln.Severity),
-					zap.Strings("cves", vuln.CVEs),
-					zap.String("org_id", target.OrgID),
-				)
+			if seen[key] {
+				continue
 			}
+			seen[key] = true
+
+			finding := convertToSecurityFinding(vuln, result.url, target)
+			if err := s.publishFinding(ctx, finding); err != nil {
+				return nil, fmt.Errorf("publish JS finding %s %s: %w", vuln.Component, vuln.Version, err)
+			}
+			reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
+
+			s.logger.Info("Published vulnerability finding",
+				zap.String("component", vuln.Component),
+				zap.String("version", vuln.Version),
+				zap.String("severity", vuln.Severity),
+				zap.Strings("cves", vuln.CVEs),
+				zap.String("org_id", target.OrgID),
+			)
 		}
 	}
+	return reported, nil
 }
 
 // publishFinding publishes a security finding to the Redis stream
@@ -201,7 +188,7 @@ func convertToSecurityFinding(vuln scanner.ProcessedVulnerability, pageURL strin
 		TraceID:     target.TraceID,
 		ScanID:      target.ScanID,
 		OrgID:       target.OrgID,
-		Source:     "jsscanner",
+		Source:     findingSource,
 		DiscoveryID: target.DiscoveryID,
 		FindingType: findingType,
 		Severity:    vuln.Severity,
@@ -285,4 +272,5 @@ type protocolScanResult struct {
 	protocol        string
 	url             string
 	vulnerabilities []scanner.ProcessedVulnerability
+	err             error
 }

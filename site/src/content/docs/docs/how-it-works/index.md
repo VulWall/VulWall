@@ -72,22 +72,31 @@ step has processed all of its work, and no new results have come in for a short 
 timeouts are a safety net: a scan with no activity for a while is closed, and no scan runs longer
 than 3 hours.
 
-When a scan closes, an open finding that this scan did not find again is marked resolved. VulWall
-does this only for what it is sure the scan saw:
+When a scan closes, it marks a finding resolved only when it has proof that the issue is gone.
+Missing data never closes a finding:
 
-- A scan that a timeout closed resolves nothing.
-- When discovery could not fully check one of your domains, the findings of that domain (its
-  subdomains, and the IP addresses and ports they point to) stay open. Your other assets are
-  checked as usual. This happens when the domain does not exist any more, when too many DNS
-  lookups failed, or when subdomain enumeration failed. Before VulWall decides that a domain
-  does not exist, it asks two public resolvers (1.1.1.1 and 8.8.8.8) directly; set
-  `DNS_RECHECK_RESOLVERS=off` if your network blocks outbound DNS.
+- **Not reproduced.** The scan found the finding's host again, the scanner that reported the
+  finding ran to completion on that host, and it did not report the finding this time. If the
+  scanner failed, timed out, or could not reach the host over http or https, the finding stays
+  open.
+- **Host no longer found.** The host was confirmed gone in 3 scans in a row: for a domain or
+  subdomain, your DNS and two public resolvers (1.1.1.1 and 8.8.8.8) all say it has no address;
+  for a port, the port scan of its IP finished, found other ports open, and did not find this
+  one. Ports on an IP address that your domains no longer point to are not scanned again, so
+  their findings stay open.
 
-The web app shows such a scan as a "partial scan" and notes the affected domain on the Assets
-page ("Domain does not resolve", or "The last scan couldn't check everything for this domain").
-When a later scan can check the domain again, it resolves what is gone. The scan document
-records this in `completion_reason`, `findings_reconciled`, `degraded_assets` and
-`unchecked_finding_ids`.
+Everything else stays open: findings on a host this scan did not find, on a disabled asset, or
+on a host a scan could not fully check. A scan that a timeout closed resolves nothing. Each scan
+also re-checks the subdomains earlier scans found, so a live host is not lost when subdomain
+enumeration misses it. Set `DNS_RECHECK_RESOLVERS=off` if your network blocks outbound DNS; known
+hosts that your resolver cannot find then stay open instead of being confirmed gone.
+
+When discovery could not fully check one of your domains (the domain does not exist, DNS lookups
+failed, or subdomain enumeration failed), the web app shows the scan as a "partial scan" with the
+number of open issues it could not re-check, and notes the domain on the Assets page. The scan
+document records `completion_reason`, `degraded_assets`, `stats.unchecked_findings` and
+`unchecked_finding_ids`; a resolved finding records `resolution_reason` (`not_reproduced` or
+`host_no_longer_found`) and the scan that resolved it.
 
 Only one scan per organization runs at a time. If the scanner restarts during a scan, it closes
 that scan as failed ("Interrupted by restart") at startup. Findings are not marked resolved

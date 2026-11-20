@@ -108,13 +108,13 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	// Extract data from message
 	data, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("message data is not a string")
+		return redisx.Permanent(fmt.Errorf("message data is not a string"))
 	}
 
 	// Parse discovery finding
 	var finding shared.DiscoveryFinding
 	if err := json.Unmarshal([]byte(data), &finding); err != nil {
-		return fmt.Errorf("failed to unmarshal finding: %w", err)
+		return redisx.Permanent(fmt.Errorf("failed to unmarshal finding: %w", err))
 	}
 
 	// Extract trace context from message to link spans across service boundaries
@@ -157,6 +157,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,      // Pass through scan_id
 		OrgID:       finding.OrgID,
+		Unresolved:  finding.IP == nil || *finding.IP == "",
 	}
 
 	// Process the scan
@@ -168,13 +169,13 @@ func (c *Consumer) handleIPMessage(ctx context.Context, message redis.XMessage) 
 	// Extract data from message
 	data, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("message data is not a string")
+		return redisx.Permanent(fmt.Errorf("message data is not a string"))
 	}
 
 	// Parse IP discovery finding
 	var finding shared.IPDiscoveryFinding
 	if err := json.Unmarshal([]byte(data), &finding); err != nil {
-		return fmt.Errorf("failed to unmarshal IP finding: %w", err)
+		return redisx.Permanent(fmt.Errorf("failed to unmarshal IP finding: %w", err))
 	}
 
 	// Extract trace context from message to link spans across service boundaries

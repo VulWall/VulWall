@@ -41,33 +41,46 @@ func TestIsLookupFailure(t *testing.T) {
 func TestDegradedReason(t *testing.T) {
 	t.Parallel()
 
+	enumErr := errors.New("subfinder failed")
 	tests := []struct {
 		name       string
 		rootReason string
-		enumFailed bool
-		names      int
-		failures   int
+		res        subdomainResult
 		want       string
 	}{
-		{"clean run", "", false, 200, 0, ""},
-		{"root without address but existing is clean", "", false, 0, 0, ""},
-		{"root nxdomain", shared.ScanDegradedRootNXDOMAIN, false, 0, 0, shared.ScanDegradedRootNXDOMAIN},
-		{"root resolver failure wins over enumeration failure", shared.ScanDegradedDNSFailures, true, 0, 0, shared.ScanDegradedDNSFailures},
-		{"enumeration failed", "", true, 0, 0, shared.ScanDegradedSubdomainEnumFailed},
-		{"exactly 20% is tolerated", "", false, 200, 40, ""},
-		{"just over 20% degrades", "", false, 200, 41, shared.ScanDegradedDNSFailures},
-		{"all failed but only 50 names is tolerated", "", false, 50, 50, ""},
-		{"51 names, 11 failed degrades", "", false, 51, 11, shared.ScanDegradedDNSFailures},
-		{"51 names, 10 failed is tolerated", "", false, 51, 10, ""},
+		{"clean run", "", subdomainResult{names: 200}, ""},
+		{"root without address but existing is clean", "", subdomainResult{}, ""},
+		{"root nxdomain", shared.ScanDegradedRootNXDOMAIN, subdomainResult{}, shared.ScanDegradedRootNXDOMAIN},
+		{"root resolver failure wins over enumeration failure", shared.ScanDegradedDNSFailures, subdomainResult{enumErr: enumErr}, shared.ScanDegradedDNSFailures},
+		{"publish failure", "", subdomainResult{names: 3, publishFailed: 1}, shared.ScanDegradedPublishFailed},
+		{"enumeration failed", "", subdomainResult{enumErr: enumErr}, shared.ScanDegradedSubdomainEnumFailed},
+		{"exactly 20% is tolerated", "", subdomainResult{names: 200, failures: 40}, ""},
+		{"just over 20% degrades", "", subdomainResult{names: 200, failures: 41}, shared.ScanDegradedDNSFailures},
+		{"small domain: one stale new name is tolerated", "", subdomainResult{names: 2, failures: 1}, ""},
+		{"11 names, 3 failed degrades", "", subdomainResult{names: 11, failures: 3}, shared.ScanDegradedDNSFailures},
+		{"any failed known name degrades", "", subdomainResult{names: 200, failures: 1, knownFailures: 1}, shared.ScanDegradedDNSFailures},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := degradedReason(tt.rootReason, tt.enumFailed, tt.names, tt.failures); got != tt.want {
-				t.Errorf("degradedReason(%q, %v, %d, %d) = %q, want %q",
-					tt.rootReason, tt.enumFailed, tt.names, tt.failures, got, tt.want)
+			if got := degradedReason(tt.rootReason, tt.res); got != tt.want {
+				t.Errorf("degradedReason(%q, %+v) = %q, want %q", tt.rootReason, tt.res, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSubdomainNamesMergesKnownNames(t *testing.T) {
+	t.Parallel()
+	names, known := subdomainNames("example.com",
+		[]string{"www", "api.example.com", "", "*", "www"},
+		[]string{"API.example.com.", "old.example.com", "example.com", "other.org"})
+	want := []string{"www.example.com", "api.example.com", "old.example.com"}
+	if fmt.Sprint(names) != fmt.Sprint(want) {
+		t.Fatalf("names = %v, want %v", names, want)
+	}
+	if !known["api.example.com"] || !known["old.example.com"] || known["www.example.com"] || len(known) != 2 {
+		t.Fatalf("known = %v, want api and old only (the root and foreign names are dropped)", known)
 	}
 }
 
@@ -101,7 +114,7 @@ func TestResolvePublic_CountsOnlyLookupFailures(t *testing.T) {
 	if n := len(got.sorted()); n != 30 {
 		t.Errorf("published %d names, want 30", n)
 	}
-	if !subdomainLookupsDegraded(len(names), failures) {
+	if degradedReason("", subdomainResult{names: len(names), failures: failures}) != shared.ScanDegradedDNSFailures {
 		t.Errorf("120 names with 30 failures (25%%) should be degraded")
 	}
 }

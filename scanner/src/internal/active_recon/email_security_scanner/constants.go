@@ -1,6 +1,9 @@
 package email_security_scanner
 
 const (
+	// findingSource is the source of every email security finding and coverage record.
+	findingSource = "email-security"
+
 	// GroupEmailSecurityScanner is the consumer group name for the email_security_scanner service
 	// Listens to domain_scan_triggers stream only (domains and subdomains)
 	GroupEmailSecurityScanner = "email_security_scanner_service"

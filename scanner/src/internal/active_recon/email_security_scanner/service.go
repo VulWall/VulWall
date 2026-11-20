@@ -2,6 +2,8 @@ package email_security_scanner
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -21,7 +23,7 @@ type Service struct {
 	redis    *redis.Client
 	logger   *zap.Logger
 	tracer   trace.Tracer
-	resolver *net.Resolver
+	resolver dnsResolver
 }
 
 // NewService creates a new email security scanner service
@@ -30,8 +32,18 @@ func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 		redis:    redisClient,
 		logger:   logger,
 		tracer:   otel.Tracer("email-security-scanner"),
-		resolver: net.DefaultResolver,
+		resolver: newResolver(),
 	}
+}
+
+// newResolver returns the system resolver, confirmed by the public resolvers of
+// DNS_RECHECK_RESOLVERS when they are configured.
+func newResolver() dnsResolver {
+	r := confirmingResolver{local: net.DefaultResolver}
+	if public := shared.RecheckResolver(shared.RecheckResolvers()); public != nil {
+		r.public = public
+	}
+	return r
 }
 
 // ProcessDiscovery processes a discovery target and checks email security (SPF, DKIM, DMARC).
@@ -65,57 +77,58 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	defer cancel()
 
 	var allResults []EmailCheckResult
-
+	var checkErr error
 	if target.AssetType == shared.AssetTypeSubdomain {
-		allResults = s.scanSubdomain(dnsCtx, span, target)
+		allResults, checkErr = s.scanSubdomain(dnsCtx, span, target)
 	} else {
-		allResults = s.scanRootDomain(dnsCtx, span, target)
+		allResults, checkErr = s.scanRootDomain(dnsCtx, span, target)
+	}
+	if ctx.Err() != nil {
+		return ctx.Err() // shutdown: leave the trigger pending
 	}
 
 	span.SetAttributes(attribute.Int("findings.count", len(allResults)))
-	span.SetAttributes(attribute.Bool("scan.success", true))
+	span.SetAttributes(attribute.Bool("scan.success", checkErr == nil))
 	span.SetStatus(codes.Ok, "")
 
-	// Publish deduplicated findings
-	s.publishUniqueFindings(ctx, allResults, target)
-
-	return nil
+	// Publish the findings, then the coverage that lists them. A failed publish is returned
+	// before the coverage, so the consumer retries the target.
+	reported, err := s.publishUniqueFindings(ctx, allResults, target)
+	if err != nil {
+		return err
+	}
+	if checkErr != nil {
+		s.logger.Info("Email security check incomplete; its findings on this target stay open",
+			zap.String("target", target.Target), zap.Error(checkErr))
+		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, checkErr))
+	}
+	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
 }
 
 // scanRootDomain runs the full email security check suite on a root domain (eTLD+1):
-// SPF, DMARC, DKIM, and zone transfer (AXFR).
-func (s *Service) scanRootDomain(ctx context.Context, span trace.Span, target ScanTarget) []EmailCheckResult {
+// SPF, DMARC, DKIM, and zone transfer (AXFR). It returns what it found and the errors of the
+// checks that could not complete.
+func (s *Service) scanRootDomain(ctx context.Context, span trace.Span, target ScanTarget) ([]EmailCheckResult, error) {
 	span.SetAttributes(attribute.String("email.scan_scope", "full"))
 
-	var results []EmailCheckResult
-	results = append(results, checkSPF(ctx, s.resolver, target.Target)...)
-	results = append(results, checkDMARC(ctx, s.resolver, target.Target)...)
-	results = append(results, checkDKIM(ctx, s.resolver, target.Target)...)
-	results = append(results, checkZoneTransfer(ctx, s.resolver, target.Target)...)
-	return results
+	spf, spfErr := checkSPF(ctx, s.resolver, target.Target)
+	dmarc, dmarcErr := checkDMARC(ctx, s.resolver, target.Target)
+	dkim := checkDKIM(ctx, s.resolver, target.Target)
+	// AXFR last: it is the slowest check and shares the DNS timeout.
+	axfr, axfrErr := checkZoneTransfer(ctx, s.resolver, target.Target)
+	results := append(append(spf, dmarc...), dkim...)
+	return append(results, axfr...), errors.Join(spfErr, dmarcErr, axfrErr)
 }
 
 // scanSubdomain performs an MX lookup to determine if the subdomain handles email.
 // If MX records exist, it runs SPF and DKIM checks only (DMARC inherits from parent,
-// AXFR is zone-level). If no MX records exist, the subdomain is skipped entirely.
-func (s *Service) scanSubdomain(ctx context.Context, span trace.Span, target ScanTarget) []EmailCheckResult {
+// AXFR is zone-level). If no MX records exist, the subdomain is skipped entirely: the
+// check is complete with no findings. A failed MX lookup makes the check incomplete.
+func (s *Service) scanSubdomain(ctx context.Context, span trace.Span, target ScanTarget) ([]EmailCheckResult, error) {
 	mxRecords, err := s.resolver.LookupMX(ctx, target.Target)
-	if err != nil {
-		if isDNSNotFound(err) {
-			span.SetAttributes(attribute.String("email.scan_scope", "skipped_no_mx"))
-			s.logger.Debug("Skipping subdomain with no MX records",
-				zap.String("target", target.Target),
-				zap.String("org_id", target.OrgID),
-			)
-			return nil
-		}
-		// Transient error (timeout, SERVFAIL) — skip silently
+	if err != nil && !isDNSNotFound(err) {
 		span.SetAttributes(attribute.String("email.scan_scope", "skipped_mx_error"))
-		s.logger.Debug("MX lookup failed, skipping subdomain",
-			zap.String("target", target.Target),
-			zap.Error(err),
-		)
-		return nil
+		return nil, fmt.Errorf("MX lookup: %w", err)
 	}
 	if len(mxRecords) == 0 {
 		span.SetAttributes(attribute.String("email.scan_scope", "skipped_no_mx"))
@@ -123,7 +136,7 @@ func (s *Service) scanSubdomain(ctx context.Context, span trace.Span, target Sca
 			zap.String("target", target.Target),
 			zap.String("org_id", target.OrgID),
 		)
-		return nil
+		return nil, nil
 	}
 
 	span.SetAttributes(attribute.String("email.scan_scope", "mx_only"))
@@ -133,15 +146,15 @@ func (s *Service) scanSubdomain(ctx context.Context, span trace.Span, target Sca
 		zap.String("org_id", target.OrgID),
 	)
 
-	var results []EmailCheckResult
-	results = append(results, checkSPF(ctx, s.resolver, target.Target)...)
-	results = append(results, checkDKIM(ctx, s.resolver, target.Target)...)
-	return results
+	spf, spfErr := checkSPF(ctx, s.resolver, target.Target)
+	return append(spf, checkDKIM(ctx, s.resolver, target.Target)...), spfErr
 }
 
-// publishUniqueFindings publishes deduplicated findings to Redis
-func (s *Service) publishUniqueFindings(ctx context.Context, results []EmailCheckResult, target ScanTarget) {
+// publishUniqueFindings publishes deduplicated findings to Redis and returns their keys. It
+// stops at the first failed publish.
+func (s *Service) publishUniqueFindings(ctx context.Context, results []EmailCheckResult, target ScanTarget) ([]shared.FindingKey, error) {
 	seen := make(map[string]bool)
+	var reported []shared.FindingKey
 
 	for _, check := range results {
 		if seen[check.FindingType] {
@@ -151,13 +164,9 @@ func (s *Service) publishUniqueFindings(ctx context.Context, results []EmailChec
 
 		finding := convertToSecurityFinding(check, target)
 		if err := s.publishFinding(ctx, finding); err != nil {
-			s.logger.Error("Failed to publish finding",
-				zap.String("finding_type", check.FindingType),
-				zap.String("domain", target.Target),
-				zap.Error(err),
-			)
-			continue
+			return nil, fmt.Errorf("publish email finding %s: %w", check.FindingType, err)
 		}
+		reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
 
 		s.logger.Info("Published email security finding",
 			zap.String("finding_type", check.FindingType),
@@ -165,6 +174,7 @@ func (s *Service) publishUniqueFindings(ctx context.Context, results []EmailChec
 			zap.String("org_id", target.OrgID),
 		)
 	}
+	return reported, nil
 }
 
 // publishFinding publishes a security finding to the Redis stream
@@ -189,7 +199,7 @@ func convertToSecurityFinding(check EmailCheckResult, target ScanTarget) shared.
 		TraceID:     target.TraceID,
 		ScanID:      target.ScanID,
 		OrgID:       target.OrgID,
-		Source:      "email-security",
+		Source:      findingSource,
 		DiscoveryID: target.DiscoveryID,
 		FindingType: check.FindingType,
 		Severity:    check.Severity,

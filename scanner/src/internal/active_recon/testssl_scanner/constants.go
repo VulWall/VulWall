@@ -1,6 +1,9 @@
 package testssl_scanner
 
 const (
+	// findingSource is the source of every testssl finding and coverage record.
+	findingSource = "testssl"
+
 	// Consumer group for testssl scanner service
 	// Listens to domain_scan_triggers for TLS/SSL analysis
 	GroupTestSSLScanner = "testssl_scanner_service"

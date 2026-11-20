@@ -3,42 +3,18 @@ package domain_discovery
 import (
 	"context"
 	"net"
-	"strings"
 	"time"
 
-	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"github.com/miekg/dns"
 )
-
-// defaultRecheckResolvers are asked directly when the local resolver says a root domain does
-// not exist. Under Docker's embedded DNS an upstream REFUSED can surface as NXDOMAIN, so the
-// local answer alone cannot tell "the domain is gone" from "the resolver failed".
-const defaultRecheckResolvers = "1.1.1.1,8.8.8.8"
 
 // recheckTimeout bounds one query to one public resolver.
 const recheckTimeout = 3 * time.Second
 
 // recheckResolversFromEnv returns the resolvers of DNS_RECHECK_RESOLVERS as host:port, or nil
 // when the value is "off".
-func recheckResolversFromEnv() []string {
-	v := strings.TrimSpace(config.GetEnv(config.EnvDNSRecheckResolvers, defaultRecheckResolvers))
-	if strings.EqualFold(v, "off") {
-		return nil
-	}
-	var servers []string
-	for _, s := range strings.Split(v, ",") {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		if _, _, err := net.SplitHostPort(s); err != nil {
-			s = net.JoinHostPort(s, "53")
-		}
-		servers = append(servers, s)
-	}
-	return servers
-}
+func recheckResolversFromEnv() []string { return shared.RecheckResolvers() }
 
 // rootAnswer is what one public resolver said about a root domain.
 type rootAnswer int
@@ -62,7 +38,7 @@ const (
 func rootNotFoundReason(ctx context.Context, host string, servers []string) string {
 	var nx, nodata int
 	for _, server := range servers {
-		switch queryRoot(ctx, host, server) {
+		switch answer, _ := queryRoot(ctx, host, server); answer {
 		case answerAddress:
 			return shared.ScanDegradedDNSFailures
 		case answerNXDomain:
@@ -81,27 +57,47 @@ func rootNotFoundReason(ctx context.Context, host string, servers []string) stri
 	}
 }
 
+// recheckName asks the public resolvers about a name that the local resolver reported as not
+// found. It returns answerAddress with the addresses when any resolver has one (the local
+// resolver failed), answerNXDomain when every resolver answered that the name has no address
+// (NXDOMAIN or NODATA: as a host, it is gone), and answerUnknown otherwise (a resolver did not
+// answer, or the check is off).
+func recheckName(ctx context.Context, host string, servers []string) (rootAnswer, []net.IP) {
+	gone := 0
+	for _, server := range servers {
+		switch answer, ips := queryRoot(ctx, host, server); answer {
+		case answerAddress:
+			return answerAddress, ips
+		case answerNXDomain, answerNoData:
+			gone++
+		}
+	}
+	if len(servers) > 0 && gone == len(servers) {
+		return answerNXDomain, nil
+	}
+	return answerUnknown, nil
+}
+
 // queryRoot asks one resolver for the A and AAAA records of host.
-func queryRoot(ctx context.Context, host, server string) rootAnswer {
-	a := queryType(ctx, host, server, dns.TypeA)
+func queryRoot(ctx context.Context, host, server string) (rootAnswer, []net.IP) {
+	a, ips := queryType(ctx, host, server, dns.TypeA)
 	if a == answerAddress || a == answerNXDomain || a == answerUnknown {
-		return a
+		return a, ips
 	}
 	// A is NODATA: the name exists; it may still have an IPv6 address.
-	aaaa := queryType(ctx, host, server, dns.TypeAAAA)
+	aaaa, ips := queryType(ctx, host, server, dns.TypeAAAA)
 	if aaaa == answerAddress || aaaa == answerNoData {
-		return aaaa
+		return aaaa, ips
 	}
-	return answerUnknown
+	return answerUnknown, nil
 }
 
 // queryType sends one recursive query over UDP and repeats it over TCP when the UDP answer
-// is truncated or lost.
-func queryType(ctx context.Context, host, server string, qtype uint16) rootAnswer {
+// is truncated or lost. With answerAddress it returns the A or AAAA addresses.
+func queryType(ctx context.Context, host, server string, qtype uint16) (rootAnswer, []net.IP) {
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(host), qtype)
 	msg.RecursionDesired = true
-
 	var resp *dns.Msg
 	for _, network := range []string{"udp", "tcp"} {
 		c := &dns.Client{Net: network, Timeout: recheckTimeout}
@@ -112,20 +108,26 @@ func queryType(ctx context.Context, host, server string, qtype uint16) rootAnswe
 		}
 	}
 	if resp == nil {
-		return answerUnknown
+		return answerUnknown, nil
 	}
 	switch resp.Rcode {
 	case dns.RcodeNameError:
-		return answerNXDomain
+		return answerNXDomain, nil
 	case dns.RcodeSuccess:
+		var ips []net.IP
 		for _, rr := range resp.Answer {
-			switch rr.(type) {
-			case *dns.A, *dns.AAAA:
-				return answerAddress
+			switch rr := rr.(type) {
+			case *dns.A:
+				ips = append(ips, rr.A)
+			case *dns.AAAA:
+				ips = append(ips, rr.AAAA)
 			}
 		}
-		return answerNoData
+		if len(ips) > 0 {
+			return answerAddress, ips
+		}
+		return answerNoData, nil
 	default:
-		return answerUnknown
+		return answerUnknown, nil
 	}
 }

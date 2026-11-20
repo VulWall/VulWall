@@ -161,9 +161,13 @@ public class ScansService(
     internal static string PartialScanHint(Scan scan)
     {
         var n = scan.DegradedAssetCount();
-        return n == 0
+        var hint = n == 0
             ? "This scan did not check everything, so issues it did not see were left open."
             : $"This scan could not fully check {n} asset{(n == 1 ? "" : "s")}, so issues on {(n == 1 ? "it" : "them")} were left open. Other assets were checked as usual.";
+        var u = scan.Stats.UncheckedFindings;
+        return u == 0
+            ? hint
+            : $"{hint} {u} open issue{(u == 1 ? "" : "s")} could not be re-checked and stay{(u == 1 ? "s" : "")} open until a scan confirms the fix.";
     }
 
     /// <summary>

@@ -57,71 +57,64 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 
 	// Scan both HTTP and HTTPS in parallel
 	allResults := s.scanBothProtocols(ctx, target)
+	if ctx.Err() != nil {
+		return ctx.Err() // shutdown: leave the trigger pending
+	}
 
-	// Count total findings
+	// The check is complete only when every protocol answered or refused the connection.
+	var probeErrs []error
 	totalFindings := 0
 	for _, result := range allResults {
+		probeErrs = append(probeErrs, result.err)
 		totalFindings += len(result.checks)
 	}
 	span.SetAttributes(attribute.Int("findings.count", totalFindings))
 	span.SetAttributes(attribute.Bool("scan.success", true))
 	span.SetStatus(codes.Ok, "")
 
-	// Publish unique findings to Redis
-	s.publishUniqueFindings(ctx, allResults, target)
-
-	return nil
+	// Publish the findings, then the coverage that lists them. A failed publish is returned
+	// before the coverage, so the consumer retries the target.
+	reported, err := s.publishUniqueFindings(ctx, allResults, target)
+	if err != nil {
+		return err
+	}
+	if probeErr := shared.ProbeError(probeErrs...); probeErr != nil {
+		s.logger.Info("Header check incomplete; its findings on this target stay open",
+			zap.String("target", target.Target), zap.Error(probeErr))
+		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, probeErr))
+	}
+	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
 }
 
-// scanBothProtocols scans both HTTP and HTTPS protocols concurrently
+// scanBothProtocols scans both HTTP and HTTPS protocols concurrently and returns one result
+// per protocol, with its error.
 func (s *Service) scanBothProtocols(ctx context.Context, target ScanTarget) []protocolScanResult {
 	protocols := []string{"http", "https"}
-	results := make(chan protocolScanResult, len(protocols))
+	results := make([]protocolScanResult, len(protocols))
 
 	var wg sync.WaitGroup
-
-	for _, protocol := range protocols {
+	for i, proto := range protocols {
 		wg.Add(1)
-		go func(proto string) {
+		go func() {
 			defer wg.Done()
-
 			url := fmt.Sprintf("%s://%s", proto, target.Target)
 			checks, err := s.scanner.Scan(ctx, url)
-
 			if err != nil {
-				s.logger.Debug("Failed to scan URL",
-					zap.String("url", url),
-					zap.Error(err),
-				)
+				s.logger.Debug("Failed to scan URL", zap.String("url", url), zap.Error(err))
 			}
-
-			results <- protocolScanResult{
-				protocol: proto,
-				url:      url,
-				checks:   checks,
-			}
-		}(protocol)
+			results[i] = protocolScanResult{protocol: proto, url: url, checks: checks, err: err}
+		}()
 	}
-
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	var allResults []protocolScanResult
-	for result := range results {
-		if len(result.checks) > 0 {
-			allResults = append(allResults, result)
-		}
-	}
-
-	return allResults
+	wg.Wait()
+	return results
 }
 
-// publishUniqueFindings publishes deduplicated header findings to Redis
-func (s *Service) publishUniqueFindings(ctx context.Context, results []protocolScanResult, target ScanTarget) {
+// publishUniqueFindings publishes deduplicated header findings to Redis and returns their
+// keys. It stops at the first failed publish.
+func (s *Service) publishUniqueFindings(ctx context.Context, results []protocolScanResult, target ScanTarget) ([]shared.FindingKey, error) {
 	// Dedup by finding_type across protocols (same header issue on HTTP and HTTPS = one finding)
 	seen := make(map[string]bool)
+	var reported []shared.FindingKey
 
 	for _, result := range results {
 		for _, check := range result.checks {
@@ -133,13 +126,9 @@ func (s *Service) publishUniqueFindings(ctx context.Context, results []protocolS
 
 			finding := convertToSecurityFinding(check, result.url, target)
 			if err := s.publishFinding(ctx, finding); err != nil {
-				s.logger.Error("Failed to publish finding",
-					zap.String("header", check.HeaderName),
-					zap.String("finding_type", check.FindingType),
-					zap.Error(err),
-				)
-				continue
+				return nil, fmt.Errorf("publish header finding %s: %w", check.FindingType, err)
 			}
+			reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
 
 			s.logger.Info("Published header finding",
 				zap.String("header", check.HeaderName),
@@ -149,6 +138,7 @@ func (s *Service) publishUniqueFindings(ctx context.Context, results []protocolS
 			)
 		}
 	}
+	return reported, nil
 }
 
 // publishFinding publishes a security finding to the Redis stream
@@ -181,7 +171,7 @@ func convertToSecurityFinding(check scanner.HeaderCheckResult, pageURL string, t
 		TraceID:     target.TraceID,
 		ScanID:      target.ScanID,
 		OrgID:       target.OrgID,
-		Source:      "http-headers",
+		Source:      findingSource,
 		DiscoveryID: target.DiscoveryID,
 		FindingType: check.FindingType,
 		Severity:    check.Severity,
@@ -199,4 +189,5 @@ type protocolScanResult struct {
 	protocol string
 	url      string
 	checks   []scanner.HeaderCheckResult
+	err      error
 }

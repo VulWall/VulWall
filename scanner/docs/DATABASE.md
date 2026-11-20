@@ -6,7 +6,8 @@
 |------------|----------|---------|--------|
 | `assets` | `CollectionAssets` | User-added assets to scan (managed via UI) | Dashboard |
 | `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (4 asset types) | Ingestion |
-| `findings` | `CollectionFindings` | Security vulnerabilities from scanners | Ingestion |
+| `findings` | `CollectionFindings` | Security vulnerabilities from scanners | Ingestion (the scan monitor resolves) |
+| `scan_coverage` | `CollectionScanCoverage` | Per-scan evidence that a check completed on a target, or that a host is gone | Ingestion |
 | `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries by finding_type (~84 entries) | Ingestion |
 | `organizations` | `CollectionOrganizations` | Org settings with the scan schedule (`scan_settings`) | Dashboard |
 | `scans` | `CollectionScans` | Scan execution records | Scan coordinator |
@@ -29,6 +30,7 @@ type DiscoveryJob struct {
     Port         *int                   `json:"port,omitempty"`
     Protocol     *string                `json:"protocol,omitempty"`
     Metadata     map[string]interface{} `json:"metadata,omitempty"`
+    KnownSubdomains []string            `json:"known_subdomains,omitempty"` // names below Host seen in the last 90 days (coordinator)
     Created      time.Time              `json:"created"`
 }
 ```
@@ -110,6 +112,17 @@ type SecurityFinding struct {
     Metadata     map[string]interface{} `json:"metadata,omitempty"`
     Status       string                 `json:"status"`       // open, resolved
     Timestamp    time.Time              `json:"timestamp"`
+    Coverage     *ScanCoverage          `json:"coverage,omitempty" bson:"-"` // set: not a finding, see below
+}
+
+// ScanCoverage is evidence about one target in one scan (stored in scan_coverage).
+type ScanCoverage struct {
+    Source      string       `json:"source"`       // finding source, or "domain_discovery" / "port_discovery"
+    DiscoveryID string       `json:"discovery_id"`
+    Target      string       `json:"target,omitempty"`
+    Status      string       `json:"status"`       // ok, error, absent
+    Error       string       `json:"error,omitempty"`
+    Reported    []FindingKey `json:"reported,omitempty"` // {finding_type, title} of every finding reported
 }
 ```
 
@@ -237,9 +250,9 @@ type Scan struct {
     CompletedAt    *time.Time    `bson:"completed_at,omitempty"`
     StatusReason   string        `bson:"status_reason,omitempty"` // why a scan is "failed", e.g. "interrupted_by_restart"
     CompletionReason   string    `bson:"completion_reason,omitempty"`   // pipeline_quiescent, idle_timeout, safety_timeout, interrupted_by_restart
-    FindingsReconciled *bool     `bson:"findings_reconciled,omitempty"` // true only when the close resolved every open finding it did not see, for every asset
-    DegradedAssets     []DegradedAsset `bson:"degraded_assets,omitempty"` // root domain assets discovery could not fully see ($addToSet by domain ingestion)
-    UncheckedFindingIDs []string `bson:"unchecked_finding_ids,omitempty"` // open findings not seen and left open because their asset is degraded
+    FindingsReconciled *bool     `bson:"findings_reconciled,omitempty"` // true for a pipeline_quiescent close with no degraded_assets (display flag)
+    DegradedAssets     []DegradedAsset `bson:"degraded_assets,omitempty"` // root domain assets discovery could not fully see ($addToSet by domain ingestion; information only)
+    UncheckedFindingIDs []string `bson:"unchecked_finding_ids,omitempty"` // open findings not seen and left open: no positive evidence they are gone
     CreatedAt      time.Time     `bson:"created_at"`
     UpdatedAt      time.Time     `bson:"updated_at"`
     TargetedAssets []AssetTarget `bson:"targeted_assets"`
@@ -249,7 +262,7 @@ type Scan struct {
 type DegradedAsset struct {
     AssetID string `bson:"asset_id,omitempty"` // assets._id (empty for jobs from older versions)
     Domain  string `bson:"domain"`             // the root domain as scanned
-    Reason  string `bson:"reason"`             // root_nxdomain, dns_failures, subdomain_enumeration_failed
+    Reason  string `bson:"reason"`             // root_nxdomain, dns_failures, publish_failed, subdomain_enumeration_failed
 }
 
 type AssetTarget struct {
@@ -348,9 +361,51 @@ type ScanStats struct {
   scan_ids: ["scan-abc-456"],
   first_detected: ISODate("..."),
   last_detected: ISODate("..."),
-  resolved_at: null
+  resolved_at: null,             // set with status "resolved"
+  resolved_by_scan_id: null,     // the scan that resolved it
+  resolution_reason: null        // "not_reproduced" | "host_no_longer_found"
 }
 ```
+
+A finding is resolved only by the scan monitor, only at a `pipeline_quiescent` close, and only
+on positive evidence (`resolution_reason`): `not_reproduced` (its host was re-discovered, its
+scanner completed on it and did not report it) or `host_no_longer_found` (its host was confirmed
+gone in 3 consecutive drained scans). See [ARCHITECTURE.md](ARCHITECTURE.md) (scan completion
+and finding resolution). When a scan reports the finding again, ingestion reopens it and removes
+`resolved_at`, `resolved_by_scan_id` and `resolution_reason`.
+
+### scan_coverage Collection
+
+One record per `(scan_id, source, discovery_id)` (unique index), written by
+`findings_ingestion` from the coverage messages that scanners and discovery publish on
+`security_findings` (`shared.ScanCoverage`, carried in `SecurityFinding.coverage`):
+
+```javascript
+{
+  _id: ObjectId("..."),
+  scan_id: "scan-uuid",
+  org_id: "org-uuid",
+  source: "http-headers",        // a finding source, or "domain_discovery" / "port_discovery"
+  discovery_id: "uuid",          // the target; for port_discovery, the IP discovery
+  target: "www.example.com",     // what was checked (for people)
+  status: "ok",                  // "ok" | "error" | "absent" (domain_discovery only)
+  error: "...",                  // why the check did not complete (status "error")
+  reported: [                    // scanners, status "ok": every finding the check reported
+    { finding_type: "missing-hsts", title: "Missing Strict-Transport-Security (HSTS) header" }
+  ],
+  created_at: ISODate("..."),
+  updated_at: ISODate("...")
+}
+```
+
+- Two runs for the same key in one scan (a redelivered message, or a host that is both an asset
+  and a subdomain of another asset) merge: `error` sticks, `reported` is the union.
+- Retention: a TTL index removes records 90 days after `created_at`
+  (`mongox.ScanCoverageRetention`). Resolution reads the closing scan's records and, for
+  `host_no_longer_found`, those of the organization's last 3 drained scans, so scans more than
+  90 days apart cannot confirm a host gone (its findings then stay open).
+- Indexes: `idx_scan_source_discovery` (unique), `idx_org_discovery_source_time`, `ttl_created_at`
+  (created at startup by `mongox.EnsureIndexes`).
 
 #### Finding text written by the scanners
 
@@ -443,19 +498,22 @@ read by the guards for older documents but is no longer written.
   (`pipeline_quiescent`) or a timeout fires (`idle_timeout`, `safety_timeout`).
   Scan age for the completion timeouts is measured from `started_at` (from
   `created_at` when `started_at` is absent).
-- Only a `pipeline_quiescent` close of a scan with at least one discovery
-  resolves findings: every open finding of the organization that the scan did
-  not see, except those under an asset in `degraded_assets` (written to
-  `unchecked_finding_ids`). `findings_reconciled` is `true` only when nothing was
-  degraded. Any other close leaves findings untouched and writes
-  `findings_reconciled: false` and `stats.resolved_findings: 0`.
+- Only a `pipeline_quiescent` close resolves findings, and only those with
+  positive evidence in `scan_coverage` (see the findings collection). The open
+  findings the scan did not see and could not resolve are counted in
+  `stats.unchecked_findings` and listed in `unchecked_finding_ids`.
+  `findings_reconciled` is `true` for a `pipeline_quiescent` close with no
+  `degraded_assets` (the web app labels the others "partial"). Any other close
+  leaves findings untouched and writes `findings_reconciled: false` and
+  `stats.resolved_findings: 0`.
 - The `new_*` and `resolved_discoveries` counters compare with the previous
-  `done` scan that has `findings_reconciled` not `false`, or that drained with
-  `degraded_assets`. Scans closed before these fields existed have none of them
-  and still count.
+  `done` scan that closed `pipeline_quiescent`. Scans closed before
+  `completion_reason` existed have no field and still count, unless they are
+  the instant close of a scan with no assets (`findings_reconciled: false`).
 - Domain ingestion adds an entry to `degraded_assets` when domain discovery
   reports that it could not fully see a root domain asset (`root_nxdomain`,
-  `dns_failures`, `subdomain_enumeration_failed`). See
+  `dns_failures`, `publish_failed`, `subdomain_enumeration_failed`). It is
+  information for the user; resolution does not depend on it. See
   [ARCHITECTURE.md](ARCHITECTURE.md) (scan completion and finding resolution).
 - When the scanner starts, before the scan monitor runs, every `pending` or
   `running` scan becomes `failed` with `status_reason` and `completion_reason`
@@ -492,7 +550,8 @@ read by the guards for older documents but is no longer written.
     resolved_discoveries: 1,
     total_findings: 8,
     new_findings: 2,
-    resolved_findings: 0
+    resolved_findings: 0,
+    unchecked_findings: 3       // open findings not seen and not resolvable this scan
   }
 }
 ```

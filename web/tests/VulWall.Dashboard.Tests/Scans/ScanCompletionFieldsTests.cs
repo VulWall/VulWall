@@ -116,6 +116,33 @@ public class ScanCompletionFieldsTests(MongoFixture mongo)
         Assert.Contains("2 assets", run.MetaHint);
     }
 
+    [Fact]
+    public void RecentRun_PartialScanHint_NamesUncheckedIssueCount()
+    {
+        var scan = new Scan
+        {
+            OrgId = OrgId,
+            Status = ScanStatus.Done,
+            FindingsReconciled = false,
+            Stats = new ScanStats { TotalFindings = 3, UncheckedFindings = 4 },
+        };
+
+        var run = Assert.Single(ScansService.BuildLiveScanStatus([scan], []).RecentRuns);
+
+        Assert.Contains("4 open issues could not be re-checked", run.MetaHint);
+    }
+
+    [Fact]
+    public async Task ScanStats_UncheckedFindings_RoundTrips()
+    {
+        var doc = DoneScan("s-unchecked");
+        doc["stats"] = new BsonDocument { { "total_findings", 7 }, { "unchecked_findings", 5 } };
+
+        var read = await RoundTrip(doc);
+
+        Assert.Equal(5, read!.Stats.UncheckedFindings);
+    }
+
     private static Finding NewFinding(string id, string title, params string[] scanIds) => new()
     {
         Id = id,

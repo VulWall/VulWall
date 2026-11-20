@@ -100,7 +100,7 @@ func RunRetireJS(ctx context.Context, scanPath string, logger *zap.Logger) (*Ret
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 13 {
 			logger.Debug("Vulnerabilities detected by retire.js")
 		} else {
-			logger.Warn("retire.js execution error", zap.Error(err))
+			return &result, fmt.Errorf("retire.js failed: %w", err)
 		}
 	}
 

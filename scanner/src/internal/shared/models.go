@@ -14,6 +14,10 @@ type DiscoveryJob struct {
 	OrgID        string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
 	// AssetID is the assets._id the job was made for (empty on jobs from older versions).
 	AssetID      string                 `json:"asset_id,omitempty" bson:"asset_id,omitempty"`
+	// KnownSubdomains are names below Host that earlier scans saw (filled by the coordinator,
+	// which reads discoveries). Domain discovery resolves them even when subfinder does not
+	// return them, and confirms with public resolvers that a missing one is really gone.
+	KnownSubdomains []string `json:"known_subdomains,omitempty" bson:"-"`
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host         string                 `json:"host" bson:"host"`
 	Port         *int                   `json:"port,omitempty" bson:"port,omitempty"`
@@ -43,14 +47,14 @@ type DiscoveryFinding struct {
 
 	// Degraded marks a message that carries no asset: discovery could not see the whole
 	// attack surface of one root domain, so ingestion adds it to the scan's degraded_assets
-	// and the scan leaves the findings under that root open. It is published before the
-	// discovery job is ACKed, so the scan cannot read as drained before it lands.
+	// (information for the user). It is published before the discovery job is ACKed, so the
+	// scan cannot read as drained before it lands.
 	Degraded *DegradedAsset `json:"degraded,omitempty" bson:"-"`
 }
 
 // DegradedAsset is one entry of scans.degraded_assets: a root domain asset whose attack
-// surface this scan could not fully see. Findings under Domain (the domain itself, its
-// subdomains, and the IPs and ports they resolve to) are not resolved by the scan.
+// surface this scan could not fully see. It is information for the user; finding resolution
+// does not depend on it (a scan resolves only on positive evidence, see ScanCoverage).
 // It holds no timestamp, so $addToSet keeps a redelivered signal from adding a duplicate.
 type DegradedAsset struct {
 	AssetID string `json:"asset_id,omitempty" bson:"asset_id,omitempty"` // assets._id; empty for jobs from older versions
@@ -171,6 +175,10 @@ type SecurityFinding struct {
 	Timestamp        time.Time              `json:"timestamp" bson:"timestamp"`                                             // When finding was discovered
 	ResolvedAt       *time.Time             `json:"resolved_at,omitempty" bson:"resolved_at,omitempty"`                     // When finding was resolved (nil if open)
 	ResolvedByScanID string                 `json:"resolved_by_scan_id,omitempty" bson:"resolved_by_scan_id,omitempty"`     // Scan that resolved this finding
+
+	// Coverage marks a message that carries no finding but evidence about a target
+	// (ScanCoverage). Ingestion stores it in scan_coverage.
+	Coverage *ScanCoverage `json:"coverage,omitempty" bson:"-"`
 }
 
 // ScanTarget represents a target to be scanned by active recon scanners
@@ -182,6 +190,9 @@ type ScanTarget struct {
 	TraceID     string  `json:"trace_id"`      // Request tracing ID
 	ScanID      *string `json:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
 	OrgID       string  `json:"org_id"`        // Organization GUID
+	// Unresolved is set when the host had no address in this scan. A network check of such a
+	// target proves nothing, so its coverage is CoverageError.
+	Unresolved bool `json:"-"`
 }
 
 // EnrichmentJob represents a request to enrich a discovered asset
@@ -265,16 +276,17 @@ type Scan struct {
 	LastActivityAt *time.Time `json:"last_activity_at,omitempty" bson:"last_activity_at,omitempty"` // Updated by ingestion services on each batch
 	// CompletionReason is how the scan was closed: ScanCompletion* or ScanReasonInterruptedByRestart.
 	CompletionReason string `json:"completion_reason,omitempty" bson:"completion_reason,omitempty"`
-	// FindingsReconciled is true only when the close resolved every open finding this scan
-	// did not see, for every asset. False for a partial scan: a timeout or restart close
-	// (nothing resolved), or a scan with DegradedAssets (resolved only outside the degraded
-	// roots). Nil on scans closed before the field existed.
+	// FindingsReconciled is true when the scan drained (pipeline_quiescent) and no asset was
+	// degraded. False for a partial scan: a timeout close (nothing resolved), or a scan with
+	// DegradedAssets. The web app labels the latter partial. Nil on scans closed before the
+	// field existed. Resolution itself depends only on positive evidence (scan_coverage).
 	FindingsReconciled *bool `json:"findings_reconciled,omitempty" bson:"findings_reconciled,omitempty"`
 	// DegradedAssets is added to by ingestion ($addToSet) when domain discovery reports that
 	// it could not fully see a root domain asset.
 	DegradedAssets []DegradedAsset `json:"degraded_assets,omitempty" bson:"degraded_assets,omitempty"`
 	// UncheckedFindingIDs are the open findings that this scan did not see and left open
-	// because they are under a degraded asset. Written by the scan monitor at close.
+	// because it had no positive evidence that they are gone (the check of their target did
+	// not run or not complete, or the host was not seen). Written by the scan monitor at close.
 	UncheckedFindingIDs []string `json:"unchecked_finding_ids,omitempty" bson:"unchecked_finding_ids,omitempty"`
 	CreatedAt      time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at" bson:"updated_at"`
@@ -295,6 +307,9 @@ type ScanStats struct {
 	TotalFindings       int `json:"total_findings" bson:"total_findings"`
 	NewFindings         int `json:"new_findings" bson:"new_findings"`
 	ResolvedFindings    int `json:"resolved_findings" bson:"resolved_findings"`
+	// UncheckedFindings: open findings this scan did not see and could not resolve, because
+	// it had no positive evidence that they are gone (see Scan.UncheckedFindingIDs).
+	UncheckedFindings int `json:"unchecked_findings" bson:"unchecked_findings"`
 }
 
 // AssetTarget represents an asset that was targeted for scanning

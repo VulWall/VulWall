@@ -3,6 +3,7 @@ package scanner
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -38,10 +39,13 @@ func NewScanner(logger *zap.Logger) *HTTPHeaderScanner {
 
 // Scan fetches HTTP headers from the target URL and checks them against security rules
 func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]HeaderCheckResult, error) {
-	headers, err := s.fetchHeaders(ctx, targetURL)
+	headers, status, err := s.fetchHeaders(ctx, targetURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch headers from %s: %w", targetURL, err)
 	}
+	// The checks still run on an error page, but its headers may be the WAF's or the proxy's,
+	// not the application's: the check is then incomplete (see blockedStatus).
+	incomplete := blockedStatus(targetURL, status)
 
 	var results []HeaderCheckResult
 
@@ -100,11 +104,15 @@ func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]Heade
 	}
 
 	// Check CORS misconfiguration (requires its own request with Origin header)
-	results = append(results, s.checkCORS(ctx, targetURL)...)
+	cors, corsErr := s.checkCORS(ctx, targetURL)
+	results = append(results, cors...)
 
 	// Check HTTPS redirect (only for HTTP URLs)
+	var redirectErr error
 	if strings.HasPrefix(targetURL, "http://") {
-		results = append(results, s.checkHTTPSRedirect(ctx, targetURL)...)
+		var redirect []HeaderCheckResult
+		redirect, redirectErr = s.checkHTTPSRedirect(ctx, targetURL)
+		results = append(results, redirect...)
 	}
 
 	// Check security.txt (only on HTTPS to avoid duplicate findings)
@@ -112,30 +120,40 @@ func (s *HTTPHeaderScanner) Scan(ctx context.Context, targetURL string) ([]Heade
 		results = append(results, s.checkSecurityTxt(ctx, targetURL)...)
 	}
 
-	return results, nil
+	return results, errors.Join(incomplete, corsErr, redirectErr)
+}
+
+// blockedStatus returns an error for a status that may come from a block or an outage
+// rather than the application (403, 429, 5xx): a check of such a response is incomplete.
+func blockedStatus(url string, status int) error {
+	if status == http.StatusForbidden || status == http.StatusTooManyRequests || status >= 500 {
+		return fmt.Errorf("%s answered HTTP %d: the headers may not be the application's", url, status)
+	}
+	return nil
 }
 
 // checkCORS sends a request with a spoofed Origin header and checks if the server
 // reflects it or uses a wildcard — both indicate CORS misconfiguration.
-func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []HeaderCheckResult {
+func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) ([]HeaderCheckResult, error) {
 	const testOrigin = "https://evil-cors-test.com"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	req.Header.Set("User-Agent", shared.DefaultUserAgent)
 	req.Header.Set("Origin", testOrigin)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("CORS check: %w", err)
 	}
 	defer resp.Body.Close()
+	blocked := blockedStatus(targetURL, resp.StatusCode)
 
 	acao := resp.Header.Get("Access-Control-Allow-Origin")
 	if acao == "" {
-		return nil // No CORS header — not misconfigured
+		return nil, blocked // No CORS header — not misconfigured
 	}
 
 	acac := strings.EqualFold(resp.Header.Get("Access-Control-Allow-Credentials"), "true")
@@ -205,7 +223,7 @@ func (s *HTTPHeaderScanner) checkCORS(ctx context.Context, targetURL string) []H
 		}
 	}
 
-	return results
+	return results, blocked
 }
 
 // checkSecurityTxt checks for the presence of a security.txt file at the
@@ -261,7 +279,7 @@ func (s *HTTPHeaderScanner) hasSecurityTxt(ctx context.Context, url string) bool
 
 // checkHTTPSRedirect checks whether an HTTP URL redirects to HTTPS.
 // A missing redirect means users can be served over plaintext.
-func (s *HTTPHeaderScanner) checkHTTPSRedirect(ctx context.Context, targetURL string) []HeaderCheckResult {
+func (s *HTTPHeaderScanner) checkHTTPSRedirect(ctx context.Context, targetURL string) ([]HeaderCheckResult, error) {
 	// Use a client that does not follow redirects
 	noRedirectClient := &http.Client{
 		Timeout:   10 * time.Second,
@@ -273,21 +291,22 @@ func (s *HTTPHeaderScanner) checkHTTPSRedirect(ctx context.Context, targetURL st
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	req.Header.Set("User-Agent", shared.DefaultUserAgent)
 
 	resp, err := noRedirectClient.Do(req)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("HTTPS redirect check: %w", err)
 	}
 	defer resp.Body.Close()
+	blocked := blockedStatus(targetURL, resp.StatusCode)
 
 	// Check if response is a redirect to HTTPS
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		location := resp.Header.Get("Location")
 		if strings.HasPrefix(strings.ToLower(location), "https://") {
-			return nil // Correctly redirects to HTTPS
+			return nil, blocked // Correctly redirects to HTTPS
 		}
 	}
 
@@ -305,25 +324,25 @@ func (s *HTTPHeaderScanner) checkHTTPSRedirect(ctx context.Context, targetURL st
 				"https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections",
 			},
 		},
-	}
+	}, blocked
 }
 
-// fetchHeaders sends a GET request and returns the response headers
-func (s *HTTPHeaderScanner) fetchHeaders(ctx context.Context, targetURL string) (http.Header, error) {
+// fetchHeaders sends a GET request and returns the response headers and status
+func (s *HTTPHeaderScanner) fetchHeaders(ctx context.Context, targetURL string) (http.Header, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("User-Agent", shared.DefaultUserAgent)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
-	return resp.Header, nil
+	return resp.Header, resp.StatusCode, nil
 }
 
 // getHeaderCaseInsensitive looks up a header by canonical name

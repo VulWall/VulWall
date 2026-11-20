@@ -133,6 +133,24 @@ First open-source, self-hosted release, under the MIT License.
   waiting for the scanner.
 - The organization's scan schedule moved from `subscription_settings` to
   `scan_settings` (`ScanSettings` in the web app and the scanner).
+- A scan now marks a finding resolved only on positive evidence, never
+  because data is missing. Before, a drained scan resolved every open finding
+  it did not see, so a subdomain lost to a DNS hiccup or to subfinder
+  variance, a filtered port, a scanner error, a disabled asset or a lost
+  message resolved unfixed findings, which then came back. Now a finding is
+  resolved as `not_reproduced` only when its host was found again, the
+  scanner that reported it completed on that host and did not report it, or
+  as `host_no_longer_found` when its host was confirmed gone in 3 scans in a
+  row. Every scanner reports per-host coverage (new `scan_coverage`
+  collection, kept 90 days), findings record `resolution_reason`, and scans
+  count `stats.unchecked_findings`. Degraded assets are information only.
+- Domain discovery re-checks the subdomains earlier scans found, also when
+  subfinder misses them or fails, and asks the public resolvers before it
+  treats a known name as gone.
+- A stream message whose handler fails (for example a Redis or MongoDB
+  error) is retried 3 times and then moved to the `dead_letter` stream,
+  instead of being acknowledged and lost. Scanners no longer skip a finding
+  they failed to publish.
 
 ### Removed
 

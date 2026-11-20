@@ -15,30 +15,28 @@ import (
 // DNS_RESOLVE_CONCURRENCY is not set.
 const defaultDNSResolveConcurrency = 50
 
-// A discovery whose lookups failed this much is degraded: its scan did not see the names it
-// could not resolve, so it must not resolve their findings. Some failures are normal noise
-// (passive sources return names with broken delegations), hence the floor on the name count.
+// A discovery is shown as degraded when a name that earlier scans saw failed to resolve, or
+// when more than dnsDegradedFailurePercent of more than dnsDegradedMinNames lookups failed.
+// Degradation is information for the user only (finding resolution needs positive evidence);
+// the floor keeps one broken passive-source name on a small domain from flagging every scan.
 const (
-	dnsDegradedMinNames       = 50 // more than this many names, and
-	dnsDegradedFailurePercent = 20 // more than this percent of them failed
+	dnsDegradedMinNames       = 10
+	dnsDegradedFailurePercent = 20
 )
-
-// subdomainLookupsDegraded reports whether more than dnsDegradedFailurePercent of more than
-// dnsDegradedMinNames subdomain lookups failed (isLookupFailure).
-func subdomainLookupsDegraded(names, failures int) bool {
-	return names > dnsDegradedMinNames && failures*100 > names*dnsDegradedFailurePercent
-}
 
 // degradedReason picks the one reason a domain discovery reports for its root asset, or ""
 // when the discovery saw the whole attack surface. One reason per job keeps the signal
 // idempotent; the root's own problem comes first because it is what the user must fix.
-func degradedReason(rootReason string, enumFailed bool, names, failures int) string {
+func degradedReason(rootReason string, res subdomainResult) string {
 	switch {
 	case rootReason != "":
 		return rootReason
-	case enumFailed:
+	case res.publishFailed > 0:
+		return shared.ScanDegradedPublishFailed
+	case res.enumErr != nil:
 		return shared.ScanDegradedSubdomainEnumFailed
-	case subdomainLookupsDegraded(names, failures):
+	case res.knownFailures > 0 ||
+		res.names > dnsDegradedMinNames && res.failures*100 > res.names*dnsDegradedFailurePercent:
 		return shared.ScanDegradedDNSFailures
 	}
 	return ""

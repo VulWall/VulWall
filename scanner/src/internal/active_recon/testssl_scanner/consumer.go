@@ -62,13 +62,13 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 	// Extract data from message
 	data, ok := message.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("message data is not a string")
+		return redisx.Permanent(fmt.Errorf("message data is not a string"))
 	}
 
 	// Parse discovery finding
 	var finding shared.DiscoveryFinding
 	if err := json.Unmarshal([]byte(data), &finding); err != nil {
-		return fmt.Errorf("failed to unmarshal finding: %w", err)
+		return redisx.Permanent(fmt.Errorf("failed to unmarshal finding: %w", err))
 	}
 
 	// Extract trace context from message to link spans across service boundaries
@@ -100,6 +100,7 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 		TraceID:     finding.TraceID,
 		ScanID:      finding.ScanID,      // Optional: scan identifier for linking to UI scans
 		OrgID:       finding.OrgID,
+		Unresolved:  finding.IP == nil || *finding.IP == "", // coverage is an error then
 	}
 
 	// Process the scan

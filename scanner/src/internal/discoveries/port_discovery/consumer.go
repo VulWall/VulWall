@@ -50,7 +50,7 @@ func (c *Consumer) processMessage(ctx context.Context, message redis.XMessage) e
 	var job shared.IPDiscoveryJob
 	if err := json.Unmarshal([]byte(data), &job); err != nil {
 		c.logger.Error("Failed to unmarshal job", zap.Error(err))
-		return err
+		return redisx.Permanent(err)
 	}
 
 	// Extract trace context from message to link spans across service boundaries

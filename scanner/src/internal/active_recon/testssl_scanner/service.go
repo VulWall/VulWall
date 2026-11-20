@@ -68,7 +68,15 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		span.SetAttributes(attribute.Bool("scan.success", false))
 		return err
 	}
+	if err == nil {
+		// Like nuclei, only a target that still answers after the run makes it evidence.
+		if rerr := shared.Reachable(ctx, target.Target); rerr != nil {
+			err = fmt.Errorf("target not reachable after the run: %w", rerr)
+		}
+	}
 	if err != nil {
+		// A failed run is a result, not a handler error: coverage "error" keeps every
+		// testssl finding on this target open.
 		s.logger.Error("testssl.sh scan failed",
 			zap.String("target", target.Target),
 			zap.Error(err),
@@ -76,7 +84,7 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(attribute.Bool("scan.success", false))
-		return err
+		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
 	}
 
 	span.SetAttributes(attribute.Int("findings.count", len(findings)))
@@ -88,25 +96,21 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		zap.Int("findings_count", len(findings)),
 	)
 
-	// Publish each finding to Redis
+	// Publish each finding, then the coverage that lists them. A failed publish is returned
+	// before the coverage, so the consumer retries the target.
+	var reported []shared.FindingKey
 	for _, testSSLFinding := range findings {
 		finding := s.convertToSecurityFinding(testSSLFinding, target)
 		// Skip findings downgraded to info by severity overrides (e.g. LUCKY13, SWEET32, CRIME_TLS)
 		if strings.EqualFold(finding.Severity, shared.SeverityInfo) {
 			continue
 		}
-		finding.TraceContext = telemetry.InjectTraceContext(ctx)
 		if err := s.publishFinding(ctx, finding); err != nil {
-			s.logger.Error("Failed to publish finding",
-				zap.String("target", target.Target),
-				zap.String("finding_id", testSSLFinding.ID),
-				zap.Error(err),
-			)
-			// Continue publishing other findings
+			return fmt.Errorf("publish testssl finding %s: %w", testSSLFinding.ID, err)
 		}
+		reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
 	}
-
-	return nil
+	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
 }
 
 // resolveTargetIP resolves the host of a host:port target with the shared SSRF
@@ -299,7 +303,7 @@ func (s *Service) convertToSecurityFinding(testSSLFinding TestSSLFinding, target
 		TraceID:     target.TraceID,
 		ScanID:      target.ScanID, // Optional: scan identifier for linking to UI scans
 		OrgID:       target.OrgID,
-		Source:      "testssl",
+		Source:      findingSource,
 		DiscoveryID: target.DiscoveryID,
 		FindingType: testSSLFinding.ID, // Use test ID as finding type (e.g., "BREACH", "heartbleed")
 		Severity:    severity,
@@ -331,6 +335,7 @@ func (s *Service) mapSeverity(testsslSeverity string) string {
 
 // publishFinding publishes a security finding to Redis stream
 func (s *Service) publishFinding(ctx context.Context, finding shared.SecurityFinding) error {
+	finding.TraceContext = telemetry.InjectTraceContext(ctx)
 	// Publish WITHOUT MAXLEN — safe cleanup job handles trimming after all consumers process
 	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, finding, 0)
 }

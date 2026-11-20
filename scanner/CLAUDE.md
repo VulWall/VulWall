@@ -93,10 +93,11 @@ container health check; the scanner opens no port).
 - Ingestion service: **ONLY writer of scan data in MongoDB** — single source of truth (the coordinator writes only `scans`)
 - All jobs require `org_id` — consumers MUST validate and skip if missing
 - All findings require `source` — ingestion MUST validate and skip if missing
+- Every scanner ends each target with a coverage message (`shared.TargetCoverage`): `ok` + the keys of every finding it reported, or `error` when the check did not complete. A scan resolves a finding only on that evidence (see ARCHITECTURE.md, scan completion and finding resolution); a new scanner without it never resolves its findings
 - Components get Redis/Mongo/logger from `main.go`; return errors from `Start()` — never `os.Exit` or `logger.Fatal` inside a component
 - Trigger streams use `CreateConsumerGroupFromLatest` (from `$`) — ephemeral
 - Result/job streams use `CreateConsumerGroup` (from `0`) — guaranteed delivery
-- `redisx.ConsumeStream` ACKs after the handler returns, also on handler error and on a recovered panic (logged with stack). A handler that fails because shutdown cancelled its context is NOT ACKed
+- `redisx.ConsumeStream` ACKs after the handler succeeds. A handler error is retried in the worker (3 attempts, linear backoff) while the message stays pending; after the last attempt, or at once for an error wrapped with `redisx.Permanent` (malformed message) or a recovered panic (logged with stack), the message goes to the `dead_letter` stream and is ACKed. A handler that fails because shutdown cancelled its context is NOT ACKed. So: return an error only when a retry can help (a failed publish or write); a scanner tool that fails is a result (coverage `error`), not a handler error
 - At startup `nightwatch` closes every `pending`/`running` scan as `failed` with `status_reason: "interrupted_by_restart"` (no finding resolution), then deletes the previous process's consumers (and their pending entries) from every group the binary consumes (`ownedGroups()` in `pipeline.go`, `ReleaseOrphanedPending`), before any component starts. This assumes one scanner process per Redis
 
 ### Data Rules
@@ -128,7 +129,8 @@ container health check; the scanner opens no port).
 |------------|---------|
 | `assets` | User-added assets (UI-managed) |
 | `discoveries` | Scan results (4 asset types, org-scoped) |
-| `findings` | Security vulnerabilities |
+| `findings` | Security vulnerabilities (resolved by the scan monitor only on positive evidence) |
+| `scan_coverage` | Per-scan evidence: a check completed on a target, or a host is gone (TTL 90 days) |
 | `knowledge_base` | Shared KB entries by finding_type (only when the KB engine runs) |
 | `organizations` | Org settings with scan_cron |
 | `scans` | Scan execution records (web app inserts `queued`; coordinator claims) |
@@ -160,7 +162,7 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry delivered < 30 min ago). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
 | `SCAN_MIN_RUNTIME` | Minimum scan age before a scan can complete, Go duration (default `10m`). Same as above |
 | `DNS_RESOLVE_CONCURRENCY` | Concurrent subdomain DNS lookups in domain discovery (default 50); each name is published as soon as it resolves |
-| `DNS_RECHECK_RESOLVERS` | Public resolvers (comma list, default `1.1.1.1,8.8.8.8`) asked directly when the local resolver says a root domain does not exist; `off` disables the check (the root then counts as a resolver failure) |
+| `DNS_RECHECK_RESOLVERS` | Public resolvers (comma list, default `1.1.1.1,8.8.8.8`) asked directly when the local resolver says a root domain, a known subdomain, or an email record (SPF, DMARC, MX, NS) does not exist; `off` disables the check (the root then counts as a resolver failure, known subdomains are never confirmed gone, and the local email answer is final) |
 | `IP_ENRICHMENT_DB_PATH` | Country MMDB (DB-IP Country Lite; default `./data/dbip-country-lite.mmdb`) |
 | `IP_ASN_DB_PATH` | Optional ASN MMDB (DB-IP ASN Lite; default `./data/dbip-asn-lite.mmdb`) |
 | `ALLOW_PRIVATE_TARGETS` | `true` disables the private/reserved IP guard (SSRF dialer, discovery, port scanner, testssl `--ip` check, nuclei `-lna`, AXFR nameserver dial). Default `false`; enable only to scan internal networks on purpose |

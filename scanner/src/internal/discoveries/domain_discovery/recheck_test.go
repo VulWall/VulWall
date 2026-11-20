@@ -138,3 +138,37 @@ func TestResolveIPs_RetriesOnlyLookupFailures(t *testing.T) {
 		})
 	}
 }
+
+func TestRecheckName(t *testing.T) {
+	t.Parallel()
+
+	nx := startDNS(t, reply(dns.RcodeNameError))
+	nodata := startDNS(t, reply(dns.RcodeSuccess))
+	v4 := startDNS(t, reply(dns.RcodeSuccess, "gone.example. 60 IN A 203.0.113.7"))
+	refused := startDNS(t, reply(dns.RcodeRefused))
+
+	tests := []struct {
+		name    string
+		servers []string
+		want    rootAnswer
+		wantIP  string
+	}{
+		{"every resolver says NXDOMAIN: gone", []string{nx, nx}, answerNXDomain, ""},
+		{"NXDOMAIN and NODATA both mean no address: gone", []string{nx, nodata}, answerNXDomain, ""},
+		{"one resolver has an address: live, with it", []string{nx, v4}, answerAddress, "203.0.113.7"},
+		{"one resolver refused: not confirmed", []string{nx, refused}, answerUnknown, ""},
+		{"check off: not confirmed", nil, answerUnknown, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, ips := recheckName(context.Background(), "gone.example", tt.servers)
+			if got != tt.want {
+				t.Fatalf("recheckName = %v, want %v", got, tt.want)
+			}
+			if tt.wantIP != "" && (len(ips) != 1 || ips[0].String() != tt.wantIP) {
+				t.Fatalf("ips = %v, want [%s]", ips, tt.wantIP)
+			}
+		})
+	}
+}

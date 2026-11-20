@@ -212,7 +212,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 	// If finding was previously resolved, reopen it
 	if status, ok := existingFinding["status"].(string); ok && status == shared.FindingStatusResolved {
 		update["$set"].(bson.M)["status"] = shared.FindingStatusOpen
-		update["$unset"] = bson.M{"resolved_at": ""}
+		update["$unset"] = bson.M{"resolved_at": "", "resolved_by_scan_id": "", "resolution_reason": ""}
 
 		s.logger.Info("Reopening resolved finding",
 			zap.String("finding_id", findingID),

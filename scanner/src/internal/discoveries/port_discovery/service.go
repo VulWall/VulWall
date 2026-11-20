@@ -2,6 +2,7 @@ package port_discovery
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -132,6 +133,9 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 
 	// Scan all ports and filter to open ones
 	openPorts := s.tcpScanner.ScanPortsFiltered(ctx, job.IP, portsToScan)
+	if ctx.Err() != nil {
+		return ctx.Err() // shutdown cut the scan off: leave the job pending
+	}
 
 	s.logger.Info("TCP port scan completed",
 		zap.String("trace_id", job.TraceID),
@@ -169,13 +173,9 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 		}
 
 		if err := s.publishFinding(ctx, finding); err != nil {
-			s.logger.Error("Failed to publish TCP port finding",
-				zap.String("trace_id", job.TraceID),
-				zap.String("ip", job.IP),
-				zap.Int("port", portResult.Port),
-				zap.Error(err),
-			)
-			continue
+			// Returned, so the job is retried: a port that did not reach the pipeline
+			// must not read as closed.
+			return fmt.Errorf("publish port %d of %s: %w", portResult.Port, job.IP, err)
 		}
 
 		s.logger.Debug("Published TCP port finding",
@@ -193,7 +193,21 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 		)
 	}
 
-	return nil
+	// The port scan of this IP completed: a port of it that was open before and is not open
+	// now was checked and found closed. A scan that found no port open at all is no
+	// evidence: the IP may be dropping the scanner's packets (a block looks like "all
+	// closed"). After the open ports, before the ACK.
+	if len(openPorts) == 0 {
+		return nil
+	}
+	msg := shared.CoverageMessage(job.OrgID, job.ScanID, job.TraceID, shared.ScanCoverage{
+		Source:      shared.CoverageSourcePortDiscovery,
+		DiscoveryID: shared.GenerateIPID(job.OrgID, job.IP),
+		Target:      job.IP,
+		Status:      shared.CoverageOK,
+	})
+	msg.TraceContext = telemetry.InjectTraceContext(ctx)
+	return redisx.PublishToStream(ctx, s.redis, shared.StreamSecurityFindings, msg, 0)
 }
 
 // publishFinding publishes a port discovery finding to the IP discovery results stream
