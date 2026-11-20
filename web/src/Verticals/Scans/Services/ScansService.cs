@@ -127,7 +127,7 @@ public class ScansService(
                 _ => string.Empty
             },
             MetaHint = s.Status == ScanStatus.Done && s.FindingsReconciled == false
-                ? "This scan did not check everything, so issues it did not see were left open."
+                ? PartialScanHint(s)
                 : null,
             IsLive = s.Status == ScanStatus.Running
         }).ToList();
@@ -156,6 +156,14 @@ public class ScansService(
             RecentRuns = recentRuns,
             ScanNowState = scanNowState
         };
+    }
+
+    internal static string PartialScanHint(Scan scan)
+    {
+        var n = scan.DegradedAssetCount();
+        return n == 0
+            ? "This scan did not check everything, so issues it did not see were left open."
+            : $"This scan could not fully check {n} asset{(n == 1 ? "" : "s")}, so issues on {(n == 1 ? "it" : "them")} were left open. Other assets were checked as usual.";
     }
 
     /// <summary>
@@ -210,7 +218,7 @@ public class ScansService(
         return BuildComparison(baseline, latest, findings);
     }
 
-    private static ScanComparisonViewModel BuildComparison(Scan baseline, Scan latest, IEnumerable<Finding> allFindings)
+    internal static ScanComparisonViewModel BuildComparison(Scan baseline, Scan latest, IEnumerable<Finding> allFindings)
     {
         var findings = allFindings.ToList();
         var baselineFindings = findings.Where(f => f.ScanIds.Contains(baseline.Id)).ToList();
@@ -222,11 +230,19 @@ public class ScansService(
         // would appear in the diff lists while the band counts (which dedup) stay flat.
         static string Key(Finding f) => $"{f.FindingType ?? f.Title}|{f.Severity}|{f.Source ?? ""}";
 
-        var baselineDeduped = baselineFindings
+        // A group missing from the latest scan is "not checked" rather than resolved when any of
+        // its findings sits under an asset the latest scan could not fully check: the scanner
+        // left those open (Scan.UncheckedFindingIds).
+        var uncheckedIds = latest.UncheckedFindingIds.ToHashSet();
+        var baselineGroups = baselineFindings
             .Where(f => f.Severity != Severity.Info)
             .GroupBy(Key)
-            .Select(g => g.First())
             .ToList();
+        var notCheckedKeys = baselineGroups
+            .Where(g => g.Any(f => uncheckedIds.Contains(f.Id)))
+            .Select(g => g.Key)
+            .ToHashSet();
+        var baselineDeduped = baselineGroups.Select(g => g.First()).ToList();
 
         var latestDeduped = latestFindings
             .Where(f => f.Severity != Severity.Info)
@@ -237,7 +253,9 @@ public class ScansService(
         var latestKeySet  = latestDeduped.Select(Key).ToHashSet();
         var baselineKeySet = baselineDeduped.Select(Key).ToHashSet();
 
-        var resolved  = baselineDeduped.Where(f => !latestKeySet.Contains(Key(f))).ToList();
+        var missing   = baselineDeduped.Where(f => !latestKeySet.Contains(Key(f))).ToList();
+        var resolved  = missing.Where(f => !notCheckedKeys.Contains(Key(f))).ToList();
+        var notChecked = missing.Count - resolved.Count;
         var added     = latestDeduped.Where(f => !baselineKeySet.Contains(Key(f))).ToList();
         var unchanged = baselineDeduped.Count(f => latestKeySet.Contains(Key(f)));
 
@@ -270,13 +288,14 @@ public class ScansService(
             Net = net,
             PctChange = pct,
             Improved = net < 0,
-            NoChange = resolved.Count == 0 && added.Count == 0,
+            NoChange = resolved.Count == 0 && added.Count == 0 && notChecked == 0,
             Bands = bands,
             Resolved = resolved.Take(6).Select(MapToDiffFinding).ToList(),
             Added = added.Take(6).Select(MapToDiffFinding).ToList(),
             ResolvedTotal = resolved.Count,
             AddedTotal = added.Count,
             UnchangedCount = unchanged,
+            NotCheckedCount = notChecked,
         };
     }
 

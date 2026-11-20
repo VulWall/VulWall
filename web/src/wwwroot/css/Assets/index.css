@@ -231,6 +231,27 @@
     white-space: nowrap;
 }
 
+/* Name with an optional note about the last scan */
+.asset-name-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.asset-notice {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--bs-secondary-color);
+}
+
+.asset-notice i {
+    font-size: 11px;
+}
+
 /* Type label */
 .asset-type-label {
     font-size: 13px;

@@ -1,6 +1,7 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Data.Entities.Asset;
+using VulWall.Dashboard.Data.Entities.Scan;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Validation;
@@ -9,12 +10,18 @@ namespace VulWall.Dashboard.Assets.Services;
 
 public class AssetsService(
     AssetsRepository assetsRepository,
+    ScansRepository scansRepository,
     ScanTriggerService scanTriggerService)
 {
     public async Task<IndexViewModel> GetAssetsAsync()
     {
         var allAssets = await assetsRepository.GetAllAsync();
-        var assets = allAssets.Select(MapAssetToViewModel).ToList();
+        var latestDone = (await scansRepository.FindAsync(
+            predicate: s => s.Status == ScanStatus.Done,
+            orderByProperty: s => s.CreatedAt,
+            sortDirection: SortDirection.Descending,
+            limit: 1)).FirstOrDefault();
+        var assets = allAssets.Select(a => MapAssetToViewModel(a, latestDone)).ToList();
         var stats = await GetStatisticsAsync();
 
         return new IndexViewModel
@@ -157,7 +164,7 @@ public class AssetsService(
         };
     }
 
-    private static AssetItemViewModel MapAssetToViewModel(Asset asset)
+    private static AssetItemViewModel MapAssetToViewModel(Asset asset, Scan? latestDone)
     {
         return new AssetItemViewModel
         {
@@ -165,7 +172,25 @@ public class AssetsService(
             Name = asset.Type == AssetType.Domain ? asset.Domain! : asset.Ip!,
             Type = asset.Type,
             Enabled = asset.Enabled,
-            AddedOn = asset.AddedOn
+            AddedOn = asset.AddedOn,
+            ScanNotice = ScanNotice(asset.Id, latestDone)
         };
+    }
+
+    /// <summary>
+    /// A calm note for an asset that the latest completed scan could not fully check. Its open
+    /// issues were kept, not resolved.
+    /// </summary>
+    internal static string? ScanNotice(string assetId, Scan? latestDone)
+    {
+        var reasons = latestDone?.DegradedAssets
+            .Where(d => d.AssetId == assetId)
+            .Select(d => d.Reason)
+            .ToList();
+        if (reasons is null || reasons.Count == 0)
+            return null;
+        return reasons.Contains(DegradedAsset.RootNxDomain)
+            ? "Domain does not resolve. Its open issues stay open until a scan can check it again."
+            : "The last scan couldn't check everything for this domain, so its open issues were kept.";
     }
 }

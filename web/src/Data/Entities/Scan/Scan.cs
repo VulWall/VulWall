@@ -47,17 +47,25 @@ public class Scan : IEntity<string>, IOrganizationEntity
     public string? CompletionReason { get; set; }
 
     /// <summary>
-    /// True when the scan resolved the findings it did not see again. False for a partial scan
-    /// (timeout, restart, DNS failures): its findings were left open. Null on older scans.
+    /// True when the scan resolved every open finding it did not see. False for a partial scan:
+    /// a timeout or restart close (nothing resolved), or a scan with <see cref="DegradedAssets"/>
+    /// (findings of those assets were left open). Null on older scans.
     /// </summary>
     [BsonElement("findings_reconciled")]
     [BsonIgnoreIfNull]
     public bool? FindingsReconciled { get; set; }
 
-    /// <summary>Why the scanner judged the scan's view incomplete, e.g. "dns_failures".</summary>
-    [BsonElement("degraded_reason")]
-    [BsonIgnoreIfNull]
-    public string? DegradedReason { get; set; }
+    /// <summary>Domain assets this scan could not fully check. Written by the scanner.</summary>
+    [BsonElement("degraded_assets")]
+    public List<DegradedAsset> DegradedAssets { get; set; } = [];
+
+    /// <summary>Open findings this scan did not see and left open because their asset is degraded.</summary>
+    [BsonElement("unchecked_finding_ids")]
+    public List<string> UncheckedFindingIds { get; set; } = [];
+
+    /// <summary>Number of distinct assets in <see cref="DegradedAssets"/>.</summary>
+    public int DegradedAssetCount() =>
+        DegradedAssets.Select(a => string.IsNullOrEmpty(a.AssetId) ? a.Domain : a.AssetId).Distinct().Count();
 
     [BsonElement("targeted_assets")]
     public List<TargetedAsset> TargetedAssets { get; set; } = new();

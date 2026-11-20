@@ -106,7 +106,13 @@
                         @* Asset *@
                         <div class="asset-cell">
                             <span class="asset-avatar"><i class="@assetIcon"></i></span>
-                            <span class="asset-name">@asset.Name</span>
+                            <span class="asset-name-block">
+                                <span class="asset-name">@asset.Name</span>
+                                @if (asset.ScanNotice is not null)
+                                {
+                                    <span class="asset-notice"><i class="fas fa-circle-info"></i>@asset.ScanNotice</span>
+                                }
+                            </span>
                         </div>
                         @* Type *@
                         <span class="asset-type-label type-col">@typeLabel</span>

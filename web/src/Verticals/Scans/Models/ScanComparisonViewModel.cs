@@ -21,6 +21,7 @@ public class ScanComparisonViewModel
     public int ResolvedTotal     { get; set; }   // total count before cap
     public int AddedTotal        { get; set; }
     public int UnchangedCount    { get; set; }
+    public int NotCheckedCount   { get; set; }   // missing from the latest scan, but under an asset it could not fully check
 }
 
 public class SeverityBandDelta
