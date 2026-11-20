@@ -15,3 +15,7 @@ Notes
 
 # GeoIP databases (downloaded, not committed)
 data/*.mmdb
+
+# Local agent/editor state
+.claude/agent-memory/
+.claude/settings.local.json
