@@ -144,7 +144,8 @@ public class ScanScheduleCronTests
         Assert.Equal("Your browser's time zone (Mars/Olympus_Mons) isn't known to the server. The schedule was not saved.", error);
     }
 
-    // Legacy ids that browsers still send are known too (the image has tzdata-legacy).
+    // Legacy ids that browsers still send are known too (the image has tzdata-legacy). A host
+    // without the alias (some CI runners) must reject it as unknown instead.
     [Theory]
     [InlineData("Asia/Calcutta", "30 22 * * *")]
     [InlineData("Europe/Kiev", "0 2 * * *")]
@@ -153,6 +154,12 @@ public class ScanScheduleCronTests
         var (settings, error) = ScanScheduleCron.Build(
             new ScanScheduleInput { Frequency = ScanFrequency.Daily, Time = "04:00", TimeZone = sent }, null, Winter);
 
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(sent, out _))
+        {
+            Assert.Null(settings);
+            Assert.Contains("isn't known to the server", error);
+            return;
+        }
         Assert.Null(error);
         Assert.Equal(cron, settings!.ScanCron);
     }
