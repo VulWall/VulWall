@@ -43,18 +43,8 @@
 
 /* ── Page header ─────────────────────────────────────────── */
 /* Uses shared .page-header.page-header--stacked (sections.css); gap:0 keeps the
-   eyebrow/title/subtitle spacing driven by their own margins. */
+   title/subtitle spacing driven by their own margins. */
 .vw-settings-header { margin-bottom: 28px; gap: 0; }
-
-.vw-settings-eyebrow {
-    font-family: var(--font-display);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: .14em;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    margin-bottom: 7px;
-}
 
 .vw-settings-title {
     font-size: 30px;
