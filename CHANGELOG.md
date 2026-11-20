@@ -264,6 +264,9 @@ First open-source, self-hosted release, under the MIT License.
 - A JPEG company logo was served and embedded in reports as `image/png`.
   The upload now stores the detected type (`organizations.logo_content_type`);
   a logo uploaded before that gets its type from its first bytes.
+- On small screens the opened sidebar sat in the page and pushed the content
+  down. It is now a full-height panel over the page, scrolls when the screen
+  is short, and the menu button no longer covers the page heading.
 
 ### Removed
 
