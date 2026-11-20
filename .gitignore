@@ -17,5 +17,5 @@ Notes
 data/*.mmdb
 
 # Local agent/editor state
-.claude/agent-memory/
-.claude/settings.local.json
+**/.claude/agent-memory/
+**/.claude/settings.local.json
