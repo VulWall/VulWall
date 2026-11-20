@@ -17,6 +17,7 @@ public static partial class LogoUrlHelper
 
     // Substring of the scanner's cloud provider name ("AWS", "Azure", "GCP", "Fastly") or of
     // the DB-IP ASN organization (e.g. "Amazon.com, Inc.", "Google LLC") -> shipped logo slug.
+    // First match wins: keep specific strings before generic ones.
     private static readonly (string Match, string Slug)[] KnownProviders =
     [
         ("cloudflare", "cloudflare"),
@@ -29,7 +30,24 @@ public static partial class LogoUrlHelper
         ("fastly", "fastly"),
         ("digitalocean", "digitalocean"),
         ("akamai", "akamai"),
+        ("linode", "akamai"),                   // Akamai owns Linode; simple-icons 11.15.0 has no Linode icon
         ("oracle", "oracle"),
+        ("hetzner", "hetzner"),
+        ("ovh", "ovh"),
+        ("vultr", "vultr"),
+        ("the constant company", "vultr"),      // Vultr's legal name
+        ("choopa", "vultr"),                    // Vultr's former ASN owner
+        ("scaleway", "scaleway"),
+        ("online s.a.s", "scaleway"),           // Scaleway's former name, still on its ASN
+        ("alibaba", "alibabacloud"),
+        ("aliyun", "alibabacloud"),
+        ("vercel", "vercel"),
+        ("netlify", "netlify"),
+        ("heroku", "heroku"),
+        ("github", "github"),
+        ("softlayer", "ibmcloud"),              // IBM Cloud's ASN owner
+        ("international business machines", "ibmcloud"),
+        ("ibm", "ibmcloud"),
     ];
 
     // File existence per web root and path, cached for the process lifetime (wwwroot is

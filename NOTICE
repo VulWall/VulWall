@@ -60,7 +60,7 @@ flag-icons 7.6.0 (country flags, countries/*.svg)
   Copyright (c) 2013 Panayiotis Lipiridis
   License: MIT (countries/LICENSE)
 
-simple-icons 11.15.0 (cloud provider logos, cloud/*.svg)
+simple-icons 11.15.0 (cloud and hosting provider logos, cloud/*.svg)
   https://github.com/simple-icons/simple-icons
   License: CC0 1.0 Universal (cloud/LICENSE.md). The SVGs are unmodified
   except for an added fill attribute with the brand colour from the same
