@@ -2,6 +2,11 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace VulWall.Dashboard.Common.Services.RateLimiter;
 
+/// <summary>
+/// Counts failed attempts per endpoint in a fixed window. By default the counter is keyed on the
+/// caller's IP; pass a <c>subject</c> (for example a shared-link token) to key it on that value
+/// instead, so attempts from many IPs against one target share a single counter.
+/// </summary>
 public class IpRateLimiterService(IMemoryCache cache, IHttpContextAccessor httpContextAccessor)
 {
     private const int MaxAttempts = 5;
@@ -10,9 +15,9 @@ public class IpRateLimiterService(IMemoryCache cache, IHttpContextAccessor httpC
     private string GetIp() =>
         httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-    public bool IsRateLimited(string endpoint)
+    public bool IsRateLimited(string endpoint, string? subject = null)
     {
-        var key = GetKey(GetIp(), endpoint);
+        var key = GetKey(endpoint, subject);
         var attempts = cache.GetOrCreate(key, entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = Window;
@@ -22,9 +27,9 @@ public class IpRateLimiterService(IMemoryCache cache, IHttpContextAccessor httpC
         return attempts >= MaxAttempts;
     }
 
-    public void RecordAttempt(string endpoint)
+    public void RecordAttempt(string endpoint, string? subject = null)
     {
-        var key = GetKey(GetIp(), endpoint);
+        var key = GetKey(endpoint, subject);
         var attempts = cache.GetOrCreate(key, entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = Window;
@@ -34,21 +39,17 @@ public class IpRateLimiterService(IMemoryCache cache, IHttpContextAccessor httpC
         cache.Set(key, attempts + 1, Window);
     }
 
-    public void ResetAttempts(string endpoint)
+    public void ResetAttempts(string endpoint, string? subject = null)
     {
-        var key = GetKey(GetIp(), endpoint);
-        cache.Remove(key);
+        cache.Remove(GetKey(endpoint, subject));
     }
 
-    public int GetRemainingAttempts(string endpoint)
+    public int GetRemainingAttempts(string endpoint, string? subject = null)
     {
-        var key = GetKey(GetIp(), endpoint);
-        var attempts = cache.Get<int>(key);
+        var attempts = cache.Get<int>(GetKey(endpoint, subject));
         return Math.Max(0, MaxAttempts - attempts);
     }
 
-    private static string GetKey(string ipAddress, string endpoint)
-    {
-        return $"rate_limit:{endpoint}:{ipAddress}";
-    }
+    private string GetKey(string endpoint, string? subject) =>
+        $"rate_limit:{endpoint}:{subject ?? GetIp()}";
 }

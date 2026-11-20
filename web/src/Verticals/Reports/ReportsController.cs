@@ -385,8 +385,9 @@ public class ReportsController(
             return View(new SharedReportViewModel { RequiresPassword = true, Token = token });
         }
 
-        // Check rate limiting before verifying password
-        if (rateLimiter.IsRateLimited(endpoint))
+        // Check rate limiting before verifying password. Failures count against both the caller's
+        // IP and the link token, so rotating IPs does not allow unlimited guesses on one link.
+        if (rateLimiter.IsRateLimited(endpoint) || rateLimiter.IsRateLimited(endpoint, token))
         {
             return View(new SharedReportViewModel
             {
@@ -401,7 +402,10 @@ public class ReportsController(
         if (!isValidPassword)
         {
             rateLimiter.RecordAttempt(endpoint);
-            var remaining = rateLimiter.GetRemainingAttempts(endpoint);
+            rateLimiter.RecordAttempt(endpoint, token);
+            var remaining = Math.Min(
+                rateLimiter.GetRemainingAttempts(endpoint),
+                rateLimiter.GetRemainingAttempts(endpoint, token));
 
             return View(new SharedReportViewModel
             {
@@ -413,8 +417,9 @@ public class ReportsController(
             });
         }
 
-        // Password correct - reset rate limiter
-        rateLimiter.ResetAttempts(endpoint);
+        // Password correct - reset only this link's counter. The IP counter is left to expire so
+        // a correct password on one link (e.g. the attacker's own) cannot clear failures on another.
+        rateLimiter.ResetAttempts(endpoint, token);
 
         // Password correct - build and show report
         var organization = await organizationRepository.GetByIdAsync(link.OrgId);
