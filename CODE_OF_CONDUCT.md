@@ -37,7 +37,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement. Open a private security advisory at https://github.com/VulWall/VulWall/security/advisories/new, or write to the email address listed on the VulWall GitHub organization profile (https://github.com/VulWall). <!-- TODO(owner): confirm the organization profile lists a monitored contact email before release. --> All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement. Email security@example.com. All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 
