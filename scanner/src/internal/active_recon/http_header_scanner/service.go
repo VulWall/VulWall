@@ -112,23 +112,25 @@ func (s *Service) scanBothProtocols(ctx context.Context, target ScanTarget) []pr
 // publishUniqueFindings publishes deduplicated header findings to Redis and returns their
 // keys. It stops at the first failed publish.
 func (s *Service) publishUniqueFindings(ctx context.Context, results []protocolScanResult, target ScanTarget) ([]shared.FindingKey, error) {
-	// Dedup by finding_type across protocols (same header issue on HTTP and HTTPS = one finding)
-	seen := make(map[string]bool)
+	// Dedup across protocols (same header issue on HTTP and HTTPS = one finding) by the key
+	// ingestion stores findings under, (finding_type, title): a coarser key would drop a
+	// finding that is still present and let the scan resolve it.
+	seen := make(map[shared.FindingKey]bool)
 	var reported []shared.FindingKey
 
 	for _, result := range results {
 		for _, check := range result.checks {
-			key := check.FindingType
+			finding := convertToSecurityFinding(check, result.url, target)
+			key := shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title}
 			if seen[key] {
 				continue
 			}
 			seen[key] = true
 
-			finding := convertToSecurityFinding(check, result.url, target)
 			if err := s.publishFinding(ctx, finding); err != nil {
 				return nil, fmt.Errorf("publish header finding %s: %w", check.FindingType, err)
 			}
-			reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
+			reported = append(reported, key)
 
 			s.logger.Info("Published header finding",
 				zap.String("header", check.HeaderName),

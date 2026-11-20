@@ -103,3 +103,35 @@ func TestProcessDiscoveryCoverage(t *testing.T) {
 		})
 	}
 }
+
+// TestPublishUniqueFindingsKeysByTypeAndTitle: two findings with one finding_type but
+// different titles are two findings for ingestion, so both must be reported; the same
+// (finding_type, title) on http and https is one.
+func TestPublishUniqueFindingsKeysByTypeAndTitle(t *testing.T) {
+	uri := os.Getenv("VULWALL_TEST_REDIS_URI")
+	if uri == "" {
+		t.Skip("VULWALL_TEST_REDIS_URI not set")
+	}
+	opts, err := redis.ParseURL(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rdb := redis.NewClient(opts)
+	defer rdb.Close()
+	ctx := context.Background()
+	rdb.Del(ctx, shared.StreamSecurityFindings)
+
+	weakA := scanner.HeaderCheckResult{FindingType: "weak-csp", Title: "CSP allows unsafe-inline"}
+	weakB := scanner.HeaderCheckResult{FindingType: "weak-csp", Title: "CSP allows unsafe-eval"}
+	results := []protocolScanResult{
+		{protocol: "http", url: "http://x", checks: []scanner.HeaderCheckResult{weakA, hsts}},
+		{protocol: "https", url: "https://x", checks: []scanner.HeaderCheckResult{weakB, hsts}},
+	}
+	reported, err := newService(rdb, nil).publishUniqueFindings(ctx, results, testTarget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reported) != 3 {
+		t.Fatalf("reported = %+v, want weak-csp twice (two titles) and missing-hsts once", reported)
+	}
+}
