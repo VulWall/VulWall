@@ -10,7 +10,7 @@
 #
 # Stubs are defined inside test functions and set variables that the loaded
 # functions read, which shellcheck cannot follow:
-# shellcheck disable=SC2034,SC2329,SC2016,SC2154,SC2012
+# shellcheck disable=SC2034,SC2317,SC2329,SC2016,SC2154,SC2012
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -191,8 +191,13 @@ t "port: VULWALL_PORT from .env busy, not ours" 1 port_dotenv_busy &&
 port_dotenv_ours() { port_stubs; busy=9000; ours=9000; printf 'VULWALL_PORT=9000\n' >.env; choose_port; }
 t "port: VULWALL_PORT busy with our own web container" 0 port_dotenv_ours
 
-port_set_free() { port_stubs; busy=8080; VULWALL_PORT=9001; choose_port; }
-t "port: VULWALL_PORT free, 8080 busy: no auto-pick" 0 port_set_free && expect_not "$work/out" "uses port"
+port_set_free() { port_stubs; busy=8080; VULWALL_PORT=9001; : >.env; choose_port; cp .env "$work/env"; }
+t "port: VULWALL_PORT free, 8080 busy: no auto-pick, saved in .env" 0 port_set_free &&
+    expect_not "$work/out" "uses port" && expect "$work/env" "^VULWALL_PORT=9001$"
+
+port_env_and_dotenv() { port_stubs; busy=; VULWALL_PORT=9002; printf 'VULWALL_PORT=9003\n' >.env; choose_port; cp .env "$work/env"; }
+t "port: VULWALL_PORT in .env is not overwritten" 0 port_env_and_dotenv &&
+    expect_not "$work/env" "9002"
 
 port_bad() { port_stubs; VULWALL_PORT=80a; choose_port; }
 t "port: VULWALL_PORT not a number" 1 port_bad && expect "$work/out" "not a port number"

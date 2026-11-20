@@ -327,7 +327,7 @@ $root"
     for s in mongo redis scanner web; do
         id=$(compose ps -a -q "$s" 2>/dev/null </dev/null | head -n 1 || true)
         if [ -z "$id" ]; then
-            bad "$s: no container (run: cd $dir && docker compose up -d)"
+            bad "$s: no container (run: cd $qdir && docker compose up -d)"
             continue
         fi
         st=$(dk inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}} restarts={{.RestartCount}}' "$id" 2>/dev/null </dev/null || echo unknown)
@@ -411,6 +411,7 @@ main() {
     dir=${VULWALL_DIR:-$(script_dir)}
     cd "$dir" 2>/dev/null || die "No such directory: $dir"
     dir=$(pwd -P)
+    qdir="'$(printf '%s' "$dir" | sed "s/'/'\\\\''/g")'"
     [ -f docker-compose.yml ] ||
         die "$dir has no docker-compose.yml. Set VULWALL_DIR to your VulWall install directory."
 

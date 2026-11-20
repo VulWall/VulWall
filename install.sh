@@ -430,6 +430,11 @@ choose_port() {
         if port_in_use "$p" && ! port_is_ours "$p"; then
             die "Port $p (VULWALL_PORT in $from) is in use by another program. Stop that program, or set VULWALL_PORT to a free port in $from, and run the installer again."
         fi
+        # Keep a port from the environment for later "docker compose" commands.
+        if [ "$from" = "your environment" ] && [ -z "$(env_value VULWALL_PORT)" ]; then
+            env_append VULWALL_PORT "$p" "Web UI port, from VULWALL_PORT when install.sh ran."
+            say "Saved VULWALL_PORT=$p in $dir/.env"
+        fi
         return 0
     fi
     if ! port_in_use 8080 || port_is_ours 8080; then
