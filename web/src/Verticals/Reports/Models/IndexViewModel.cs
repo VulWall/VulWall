@@ -9,7 +9,6 @@ public class IndexViewModel
     public int MaxLinksCount { get; set; }
     public string OrganizationId { get; set; } = string.Empty;
     public string CompanyName { get; set; } = string.Empty;
-    public bool CertVisible { get; set; } = true;
     public List<ScanSelectItem> Scans { get; set; } = new();
     public string? SelectedScanId { get; set; }
 

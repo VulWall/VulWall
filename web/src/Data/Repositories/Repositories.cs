@@ -83,7 +83,7 @@ public class ScansPublicRepository(IMongoDatabase database)
 public class FindingsPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<Finding, string>(database, "findings");
 
-// DiscoveriesPublicRepository uses BaseMongoRepository for anonymous access (e.g., public certificates)
+// DiscoveriesPublicRepository uses BaseMongoRepository for anonymous access (e.g., webhooks)
 public class DiscoveriesPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<Discovery, string>(database, "discoveries");
 
@@ -106,6 +106,6 @@ public class FindingSuppressionsRepository(
     ILogger<OrgScopedRepository<FindingSuppression, string>> logger)
     : OrgScopedRepository<FindingSuppression, string>(database, "finding_suppressions", orgContext, logger);
 
-// FindingSuppressionsPublicRepository uses BaseMongoRepository for anonymous access (e.g., public certificate scoring)
+// FindingSuppressionsPublicRepository uses BaseMongoRepository for anonymous access (e.g., shared reports)
 public class FindingSuppressionsPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<FindingSuppression, string>(database, "finding_suppressions");

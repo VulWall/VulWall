@@ -3,7 +3,6 @@
 
 export function initializeModals(scans = []) {
     const generateLinkModal = document.getElementById('generateLinkModal');
-    const embedCodeModal = document.getElementById('embedCodeModal');
     const revokeAccessModal = document.getElementById('revokeAccessModal');
 
     // Resolve a friendly date for the selected scan from the scans passed in by the page entry
@@ -217,47 +216,6 @@ export function initializeModals(scans = []) {
         });
     }
 
-    // Embed Code Modal
-    function initializeEmbedModal() {
-        const copyBtn = document.getElementById('copyEmbedCode');
-        const embedCodeTextarea = document.getElementById('embedCode');
-        const embedPreview = document.getElementById('embedPreview');
-
-        if (!copyBtn) return;
-
-        // Populate embed code and preview when modal is shown
-        embedCodeModal.addEventListener('shown.bs.modal', function() {
-            // Get organization ID from certificate card
-            const certCard = document.querySelector('[data-type-id="certificate"]');
-            const orgId = certCard ? certCard.getAttribute('data-org-id') : '';
-
-            // Generate embed URL
-            const baseUrl = window.location.origin;
-            const embedUrl = `${baseUrl}/certs/${orgId}/embed`;
-
-            // Generate embed code
-            const embedCode = `<iframe src="${embedUrl}" width="270" height="96" frameborder="0" allowtransparency="true" style="border: none; overflow: hidden; background: transparent;"></iframe>`;
-
-            // Set embed code in textarea
-            embedCodeTextarea.value = embedCode;
-
-            // Create live preview iframe — use DOM API to avoid innerHTML-based XSS sink
-            const previewFrame = document.createElement('iframe');
-            previewFrame.src = embedUrl;
-            previewFrame.width = '270';
-            previewFrame.height = '96';
-            previewFrame.setAttribute('frameborder', '0');
-            previewFrame.setAttribute('allowtransparency', 'true');
-            previewFrame.style.cssText = 'border: none; overflow: hidden;';
-            embedPreview.replaceChildren(previewFrame);
-        });
-
-        copyBtn.addEventListener('click', function() {
-            embedCodeTextarea.select();
-            VW.copyWithFeedback(copyBtn, embedCodeTextarea.value);
-        });
-    }
-
     // Revoke Access Modal
     function initializeRevokeModal() {
         let currentRevokeButton = null;
@@ -333,17 +291,12 @@ export function initializeModals(scans = []) {
 
     // Initialize all modals
     initializeGenerateLinkModal();
-    initializeEmbedModal();
     const revokeHandlers = initializeRevokeModal();
 
     // Return modal control functions
     return {
         showGenerateLinkModal: function() {
             const modal = new bootstrap.Modal(generateLinkModal);
-            modal.show();
-        },
-        showEmbedModal: function() {
-            const modal = new bootstrap.Modal(embedCodeModal);
             modal.show();
         },
         showRevokeModal: revokeHandlers.showRevokeModal

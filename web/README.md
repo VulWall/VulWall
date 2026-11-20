@@ -8,8 +8,7 @@ Web application for security assessment management, vulnerability monitoring, an
 - **Scan Management** — View scan history, results, and findings overview
 - **Discovery Browser** — Explore discovered subdomains, ports, and services
 - **AI Recommendations** — AI-powered security recommendations for findings
-- **Reports** — Summary and Technical reports with shared link support
-- **Security Certificate** — Public-facing security certificate with embeddable badge
+- **Reports** — Summary and Technical reports, with optional password-protected shared links (`SHARED_LINKS_ENABLED`)
 - **Settings** — Account management, preferences
 
 ## Tech Stack
@@ -81,6 +80,7 @@ Environment variables:
 | `AUTH0_CLIENT_ID` | Auth0 application client ID |
 | `AUTH0_CLIENT_SECRET` | Auth0 application client secret |
 | `MONGO_URI` | MongoDB connection string (include DB name in path, e.g. `mongodb+srv://host/VulWall-Dev`) |
+| `SHARED_LINKS_ENABLED` | `true` enables password-protected shared report links. Default `false`: the share UI is hidden and `/shared-reports/*` returns 404 |
 | `TRUSTED_PROXIES` | Comma-separated IPs or CIDR ranges of reverse proxies whose `X-Forwarded-For`/`X-Forwarded-Proto` headers are trusted (e.g. `10.0.0.0/8`). Empty: only loopback is trusted |
 
 ## Documentation

@@ -244,8 +244,8 @@ public static class SecurityScoreCalculator
 
     /// <summary>
     /// Groups findings by (FindingType, Severity, Source) and computes asset multipliers
-    /// using discovery asset types. This is the standard grouping used across scoring,
-    /// reports, and certificates.
+    /// using discovery asset types. This is the standard grouping used across scoring
+    /// and reports.
     /// </summary>
     public static List<FindingGroupInput> BuildFindingGroups(
         List<Finding> findings,

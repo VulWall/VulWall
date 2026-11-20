@@ -12,9 +12,12 @@ public interface IFeatureAccessService
 }
 
 /// <summary>
-/// Default for self-hosted installs: every organization has full access.
+/// Default for self-hosted installs: every organization has full access, except that shared
+/// report links follow the install-wide SHARED_LINKS_ENABLED setting (off by default).
 /// </summary>
-public sealed class FullFeatureAccessService : IFeatureAccessService
+public sealed class FullFeatureAccessService(bool sharedLinksEnabled) : IFeatureAccessService
 {
-    public Task<FeatureAccess> GetFeatureAccessAsync() => Task.FromResult(FeatureAccess.Full);
+    private readonly FeatureAccess _access = FeatureAccess.Full with { CanShareReports = sharedLinksEnabled };
+
+    public Task<FeatureAccess> GetFeatureAccessAsync() => Task.FromResult(_access);
 }

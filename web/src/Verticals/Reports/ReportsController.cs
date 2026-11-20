@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MongoDB.Bson;
 using MongoDB.Driver;
 using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
@@ -40,7 +39,6 @@ public class ReportsController(
         var featureAccess = await featureAccessService.GetFeatureAccessAsync();
 
         var organization = await organizationRepository.GetByIdAsync(orgId);
-        var certVisible = organization?.CertVisible ?? true;
 
         var scans = await scansRepository.GetAllAsync();
         var rawFindings = await findingsRepository.GetAllAsync();
@@ -62,7 +60,6 @@ public class ReportsController(
             MaxLinksCount = 5,
             OrganizationId = orgId,
             CompanyName = organization?.CompanyName ?? "Organization",
-            CertVisible = certVisible,
             Scans = scanItems,
             SelectedScanId = scanItems.FirstOrDefault()?.Id,
             FeatureAccess = featureAccess
@@ -204,100 +201,6 @@ public class ReportsController(
     }
 
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Reports, Action = "Certificate visibility updated")]
-    public async Task<IActionResult> UpdateCertVisibility([FromBody] bool isVisible)
-    {
-        var featureAccess = await featureAccessService.GetFeatureAccessAsync();
-        if (!featureAccess.CanPublishCertificate)
-        {
-            return BadRequest(new { success = false, error = "Publishing the certificate is not enabled" });
-        }
-
-        var orgId = await organizationContext.GetCurrentOrgIdAsync();
-        var organization = await organizationRepository.GetByIdAsync(orgId);
-
-        if (organization == null)
-        {
-            return NotFound("Organization not found");
-        }
-
-        var previousStatus = organization.CertVisible;
-        organization.CertVisible = isVisible;
-        organization.UpdatedAt = DateTime.UtcNow;
-
-        await organizationRepository.UpdateAsync(organization);
-
-        logger.LogInformation("Updated certificate visibility for organization: {OrgId} from {PreviousStatus} to {NewStatus}",
-            orgId, previousStatus, isVisible);
-
-        HttpContext.Items["AuditLogAdditionalInfo"] = isVisible ? "enabled certificate" : "disabled certificate";
-
-        return Ok(new { success = true, certVisible = isVisible });
-    }
-
-    [AllowAnonymous]
-    [Route("/certs/{orgId}")]
-    public async Task<IActionResult> Cert(string orgId)
-    {
-        if (!ObjectId.TryParse(orgId, out _))
-        {
-            return NotFound();
-        }
-
-        var organization = await organizationRepository.GetByIdAsync(orgId);
-        if (organization == null)
-        {
-            return View("CertNotAvailable");
-        }
-
-        var certUrl = $"{Request.Scheme}://{Request.Host}/certs/{orgId}";
-        var model = await reportsService.BuildPublicCertificateViewModel(orgId, certUrl);
-
-        return model == null ? View("CertNotAvailable") : View(model);
-    }
-
-    [AllowAnonymous]
-    [Route("/certs/{orgId}/logo")]
-    public async Task<IActionResult> GetOrgLogo(string orgId)
-    {
-        var organization = await organizationRepository.GetByIdAsync(orgId);
-
-        if (organization?.Logo == null || organization.Logo.Length == 0)
-        {
-            return NotFound();
-        }
-
-        return File(organization.Logo, "image/png");
-    }
-
-    [AllowAnonymous]
-    [Route("/certs/{orgId}/embed")]
-    public async Task<IActionResult> CertEmbed(string orgId)
-    {
-        if (!ObjectId.TryParse(orgId, out _))
-        {
-            return NotFound();
-        }
-
-        var organization = await organizationRepository.GetByIdAsync(orgId);
-
-        if (organization == null || !organization.CertVisible)
-        {
-            return View("CertEmbedDisabled");
-        }
-
-        var certUrl = $"{Request.Scheme}://{Request.Host}/certs/{orgId}";
-        var model = await reportsService.BuildPublicCertificateViewModel(orgId, certUrl);
-
-        if (model == null)
-        {
-            return View("CertEmbedDisabled");
-        }
-
-        return View(model);
-    }
-
-    [HttpPost]
     [AuditLog(Category = AuditLogCategory.Reports, Action = "Shared link created")]
     public async Task<IActionResult> CreateSharedLink([FromBody] CreateSharedLinkRequest request)
     {
@@ -361,6 +264,11 @@ public class ReportsController(
     public async Task<IActionResult> SharedReport(string token, [FromForm] string? password = null)
     {
         const string endpoint = "shared-reports";
+
+        if (!(await featureAccessService.GetFeatureAccessAsync()).CanShareReports)
+        {
+            return NotFound();
+        }
 
         var link = await sharedLinkService.GetSharedLinkByTokenAsync(token);
 

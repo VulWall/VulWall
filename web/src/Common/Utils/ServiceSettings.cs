@@ -46,4 +46,11 @@ public class ServiceSettings : EnvLoader
     /// </summary>
     [Env(Name = "TRUSTED_PROXIES", Required = false)]
     public string TrustedProxies = string.Empty;
+
+    /// <summary>
+    /// Enables password-protected shared report links. When false (default) the share UI is
+    /// hidden and /shared-reports/* returns 404.
+    /// </summary>
+    [Env(Name = "SHARED_LINKS_ENABLED", Default = "false")]
+    public bool SharedLinksEnabled;
 }

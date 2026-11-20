@@ -102,7 +102,8 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient(Auth0ManagementService.TokenHttpClientName);
         services.AddHttpClient(Auth0ManagementService.ManagementHttpClientName);
         services.AddSingleton<IAuth0ManagementService, Auth0ManagementService>();
-        services.AddSingleton<IFeatureAccessService, FullFeatureAccessService>();
+        services.AddSingleton<IFeatureAccessService>(
+            new FullFeatureAccessService(ServiceSettings.Instance.SharedLinksEnabled));
 
         return services;
     }

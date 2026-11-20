@@ -1,15 +1,11 @@
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.HttpOverrides;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Middleware;
 
 namespace VulWall.Dashboard.Extensions;
 
-public static partial class WebApplicationExtensions
+public static class WebApplicationExtensions
 {
-    [GeneratedRegex(@"^/[Cc]erts/[a-fA-F0-9]{24}/embed$")]
-    private static partial Regex CertEmbedPathRegex();
-
     public static void ConfigureDashboardPipeline(this WebApplication app)
     {
         var forwardedHeadersOptions = new ForwardedHeadersOptions
@@ -26,16 +22,9 @@ public static partial class WebApplicationExtensions
 
         app.Use(async (context, next) =>
         {
-            var isEmbedRoute = context.Request.Path.Value != null &&
-                CertEmbedPathRegex().IsMatch(context.Request.Path.Value);
-
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
             context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
             context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
-
-            var frameAncestors = isEmbedRoute
-                ? "frame-ancestors *"
-                : "frame-ancestors 'self'";
 
             context.Response.Headers["Content-Security-Policy"] =
                 "default-src 'self'; " +
@@ -46,10 +35,7 @@ public static partial class WebApplicationExtensions
                 "connect-src 'self'; " +
                 "base-uri 'self'; " +
                 "form-action 'self'; " +
-                frameAncestors;
-
-            if (isEmbedRoute)
-                context.Response.Headers.Remove("X-Frame-Options");
+                "frame-ancestors 'self'";
 
             await next();
         });

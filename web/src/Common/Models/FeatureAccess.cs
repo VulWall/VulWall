@@ -8,7 +8,6 @@ public record FeatureAccess
 {
     public bool CanViewTrends { get; init; } = true;
     public bool CanShareReports { get; init; } = true;
-    public bool CanPublishCertificate { get; init; } = true;
     public bool CanSuppressFindings { get; init; } = true;
 
     /// <summary>

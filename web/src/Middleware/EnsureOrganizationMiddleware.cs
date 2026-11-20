@@ -45,7 +45,6 @@ public class EnsureOrganizationMiddleware(RequestDelegate next)
         {
             UserIds = new List<string> { auth0UserId },
             OwnerEmail = email,
-            CertVisible = false, // public certificate is opt-in (Reports > Trust certificate toggle)
             SubscriptionSettings = new SubscriptionSettings { ScanCron = ScanCronGenerator.RandomWeekly() },
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow

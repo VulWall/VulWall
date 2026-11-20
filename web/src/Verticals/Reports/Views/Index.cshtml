@@ -165,52 +165,16 @@
                 }
             </div>
         </div>
-
-        <!-- Certificate -->
-        <div class="rpt-type-card report-type-card @(!Model.CertVisible ? "disabled" : "")"
-             data-type-id="certificate" id="certificateCard" data-org-id="@Model.OrganizationId">
-            <div class="rpt-type-ring rpt-type-ring--cert"></div>
-            <div class="rpt-type-head">
-                <span class="rpt-type-icon rpt-type-icon--cert"><i class="fas fa-certificate"></i></span>
-                <span class="rpt-type-badge rpt-type-badge--cert">PUBLIC</span>
-            </div>
-            <div class="rpt-type-title">Trust certificate</div>
-            @if (Model.FeatureAccess.CanPublishCertificate)
-            {
-                <div class="rpt-cert-toggle-row">
-                    <input class="form-check-input" type="checkbox" id="certVisibilityToggle" @(Model.CertVisible ? "checked" : "")>
-                    <small class="rpt-cert-toggle-label text-muted">@(Model.CertVisible ? "Public" : "Private")</small>
-                </div>
-            }
-            else
-            {
-                <div class="rpt-type-audience">Internal only</div>
-            }
-            <ul class="rpt-type-features">
-                <li><i class="fas fa-check"></i> Branded trust badge</li>
-                <li><i class="fas fa-check"></i> Security score &amp; rating</li>
-                <li><i class="fas fa-check"></i> Public verification page</li>
-                <li><i class="fas fa-check"></i> Embed on your site</li>
-            </ul>
-            <div class="rpt-type-actions">
-                <button type="button" class="btn btn-sm btn-secondary btn-preview"><i class="fas fa-eye me-1"></i>Preview</button>
-                @if (Model.FeatureAccess.CanPublishCertificate)
-                {
-                    <button type="button" class="btn btn-sm btn-secondary btn-copy-certificate-link" data-certificate-url="/Certs/@Model.OrganizationId"><i class="fas fa-link me-1"></i>Copy link</button>
-                    <button type="button" class="btn btn-sm btn-secondary btn-embed"><i class="fas fa-code me-1"></i>Embed</button>
-                }
-            </div>
-        </div>
     </div>
 
-    <!-- Shared links -->
+    <!-- Shared links (disabled unless SHARED_LINKS_ENABLED=true) -->
+    @if (Model.FeatureAccess.CanShareReports)
+    {
     <div class="rpt-links-block">
         <h2 class="rpt-section-heading">
             Shared links
         </h2>
 
-        @if (Model.FeatureAccess.CanShareReports)
-        {
             <div class="rpt-links-card">
                 <div class="rpt-links-header">
                     <div class="rpt-links-meter">
@@ -303,15 +267,12 @@
                     </table>
                 </div>
             </div>
-        }
     </div>
+    }
 </div>
 
 <!-- Generate Link Modal -->
 <partial name="~/Verticals/Reports/Views/Partials/_GenerateLinkModal.cshtml" model="Model.CompanyName" />
-
-<!-- Embed Code Modal -->
-<partial name="~/Verticals/Reports/Views/Partials/_EmbedCodeModal.cshtml" />
 
 @{
     var revokeAccessModalModel = new VulWall.Dashboard.Common.Contracts.Models.ConfirmationModalModel
@@ -339,27 +300,6 @@
 }
 
 <partial name="~/Common/Views/_ConfirmationModal.cshtml" model="revokeAccessModalModel" />
-
-@{
-    var certVisibilityModalModel = new VulWall.Dashboard.Common.Contracts.Models.ConfirmationModalModel
-    {
-        ModalId = "certVisibilityModal",
-        Title = "Certificate Visibility",
-        Message = "", // Will be dynamically populated by JavaScript
-        MessageBold = true,
-        ConfirmButtonText = "Confirm",
-        ConfirmButtonStyle = "primary",
-        ConfirmButtonIcon = "fas fa-check",
-        HeaderStyle = "warning",
-        Icon = "fas fa-exclamation-triangle",
-        DetailsTitle = "What this means:",
-        DetailsIcon = "fas fa-info-circle",
-        DetailsStyle = "info",
-        DynamicContentId = "certModalDynamicContent"
-    };
-}
-
-<partial name="~/Common/Views/_ConfirmationModal.cshtml" model="certVisibilityModalModel" />
 
 <script type="application/json" id="reports-scan-data">
     @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Scans, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }))

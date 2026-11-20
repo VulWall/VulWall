@@ -1,4 +1,3 @@
-using Net.Codecrete.QrCodeGenerator;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Common.Utils;
@@ -10,69 +9,8 @@ using DbDiscovery = VulWall.Dashboard.Data.Entities.Discovery.Discovery;
 
 namespace VulWall.Dashboard.Reports.Services;
 
-public class ReportsService(
-    FindingsPublicRepository findingsPublicRepository,
-    ScansPublicRepository scansPublicRepository,
-    DiscoveriesPublicRepository discoveriesPublicRepository,
-    OrganizationRepository organizationRepository,
-    ISuppressionFilter suppressionFilter)
+public class ReportsService
 {
-    public async Task<CertificateViewModel?> BuildPublicCertificateViewModel(string orgId, string certUrl)
-    {
-        var organization = await organizationRepository.GetByIdAsync(orgId);
-
-        if (organization == null)
-        {
-            return null;
-        }
-
-        if (!organization.CertVisible)
-        {
-            return null;
-        }
-
-        var memberSince = CalculateMemberSince(organization.CreatedAt);
-
-        var scans = (await scansPublicRepository.FindAsync(
-            s => s.OrgId == orgId && s.Status == ScanStatus.Done)).ToList();
-        var mostRecentScan = scans.OrderByDescending(s => s.CreatedAt).FirstOrDefault();
-        var lastAssessment = mostRecentScan?.CreatedAt ?? DateTime.UtcNow;
-
-        var allFindingsRaw = (await findingsPublicRepository.FindAsync(f => f.OrgId == orgId && f.Status == "open")).ToList();
-
-        // Exclude actively-suppressed (discoveryId, findingType) pairs from certificate score.
-        // Uses the public (non-org-scoped) key lookup because this endpoint is anonymous.
-        var suppressedKeys = await suppressionFilter.GetActiveSuppressionKeysForOrgAsync(orgId);
-        var allFindings = suppressionFilter.FilterSuppressed(allFindingsRaw, suppressedKeys).ToList();
-
-        var findings = mostRecentScan != null
-            ? allFindings.Where(f => f.ScanIds.Contains(mostRecentScan.Id)).ToList()
-            : allFindings;
-
-        var validUntil = lastAssessment.AddDays(30);
-        var nextReview = lastAssessment.AddDays(23);
-
-        // Load discoveries for asset type multipliers (matches dashboard scoring path)
-        var discoveries = (await discoveriesPublicRepository.FindAsync(d => d.OrgId == orgId)).ToList();
-        var discoveryAssetTypes = discoveries.ToDictionary(d => d.Id, d => d.AssetType);
-        var groups = SecurityScoreCalculator.BuildFindingGroups(findings, discoveryAssetTypes);
-        var score = SecurityScoreCalculator.CalculateScore(groups, DateTime.UtcNow);
-
-        return new CertificateViewModel
-        {
-            OrganizationId = organization.Id,
-            CompanyName = organization.CompanyName ?? "Unknown Organization",
-            SecurityScore = score,
-            MemberSince = memberSince,
-            LastVerified = DateTime.UtcNow,
-            LastAssessment = lastAssessment,
-            ValidUntil = validUntil,
-            NextReview = nextReview,
-            HasLogo = organization.Logo is { Length: > 0 },
-            QrCodeSvg = GenerateQrCodeSvg(certUrl)
-        };
-    }
-
     /// <summary>
     /// Builds the per-scan selector items shown on the Reports index page. Each item carries the
     /// scan's findings/asset counts, severity breakdown, and the same security score + band the
@@ -128,7 +66,7 @@ public class ReportsService(
         List<DbFinding> scanFindings,
         List<DbDiscovery> scanDiscoveries)
     {
-        // Same scoring path as SummaryReportBuilder / certificate so the band matches everywhere.
+        // Same scoring path as SummaryReportBuilder so the band matches everywhere.
         var discoveryAssetTypes = scanDiscoveries.ToDictionary(d => d.Id, d => d.AssetType);
         var findingGroups = SecurityScoreCalculator.BuildFindingGroups(scanFindings, discoveryAssetTypes);
         var scoreResult = SecurityScoreCalculator.Calculate(findingGroups, DateTime.UtcNow);
@@ -149,14 +87,5 @@ public class ReportsService(
             Info = scanFindings.Count(f => f.Severity == Severity.Info)
         };
     }
-
-    private static string GenerateQrCodeSvg(string url)
-    {
-        var qr = QrCode.EncodeText(url, QrCode.Ecc.Medium);
-        return qr.ToSvgString(2);
-    }
-
-    public static string CalculateMemberSince(DateTime createdAt)
-        => createdAt.ToString("MMMM yyyy");
 
 }

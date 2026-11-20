@@ -21,17 +21,6 @@ export function initializeTypeActions(modalHandlers) {
             const card = button.closest('.report-type-card');
             const typeId = card.getAttribute('data-type-id');
 
-            // Handle certificate preview - open in new tab
-            if (typeId === 'certificate') {
-                const orgId = card.getAttribute('data-org-id');
-                if (orgId) {
-                    window.open(`/certs/${orgId}`, '_blank');
-                } else {
-                    console.error('Organization ID not found for certificate preview');
-                }
-                return;
-            }
-
             // Navigate to report preview page with selected scan
             const scanIdInput = document.getElementById('rptSelectedScanId');
             const scanId = scanIdInput ? scanIdInput.value : '';
@@ -54,19 +43,6 @@ export function initializeTypeActions(modalHandlers) {
             // Show generate link modal
             if (modalHandlers && modalHandlers.showGenerateLinkModal) {
                 modalHandlers.showGenerateLinkModal();
-            }
-        });
-    });
-
-    // Embed buttons (for certificate)
-    const embedButtons = document.querySelectorAll('.btn-embed');
-    embedButtons.forEach(function(button) {
-        button.addEventListener('click', function(e) {
-            e.stopPropagation();
-
-            // Show embed code modal
-            if (modalHandlers && modalHandlers.showEmbedModal) {
-                modalHandlers.showEmbedModal();
             }
         });
     });

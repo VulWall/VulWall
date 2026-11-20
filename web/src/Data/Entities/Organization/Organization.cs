@@ -48,12 +48,6 @@ public class Organization : IEntity<string>
     public byte[]? Logo { get; set; }
 
     /// <summary>
-    /// Certificate visibility status - organization-level setting applied to all users
-    /// </summary>
-    [BsonElement("cert_visible")]
-    public bool CertVisible { get; set; } = true;
-    
-    /// <summary>
     /// Auth0 User ID of the organization owner (the user who created the org).
     /// </summary>
     [BsonElement("owner_id")]

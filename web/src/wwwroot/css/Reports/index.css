@@ -14,7 +14,6 @@
     --rpt-hover: var(--vw-gray-50);
     --rpt-menu-shadow: 0 8px 24px rgba(16, 24, 40, .12);
     --rpt-card-hover-shadow: 0 8px 24px rgba(16, 24, 40, .1);
-    --rpt-cert-tint: rgba(6, 118, 71, .1);
     --rpt-danger-tint: #fef3f2;
 }
 
@@ -27,7 +26,6 @@
     --rpt-hover: #2d3748;
     --rpt-menu-shadow: 0 8px 24px rgba(0, 0, 0, .45);
     --rpt-card-hover-shadow: 0 8px 24px rgba(0, 0, 0, .4);
-    --rpt-cert-tint: rgba(6, 118, 71, .2);
     --rpt-danger-tint: rgba(217, 45, 32, .15);
 }
 
@@ -314,7 +312,7 @@
 /* -------- Report type cards -------- */
 .rpt-type-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 16px;
     margin-bottom: 34px;
 }
@@ -338,10 +336,6 @@
     box-shadow: var(--rpt-card-hover-shadow);
 }
 
-.rpt-type-card.disabled {
-    opacity: .55;
-}
-
 .rpt-type-ring {
     display: none;
     position: absolute;
@@ -358,7 +352,6 @@
 
 .rpt-type-ring--summary { border-color: var(--brand-blue); }
 .rpt-type-ring--technical { border-color: var(--brand-dark-blue); }
-.rpt-type-ring--cert { border-color: var(--vw-success); }
 
 [data-bs-theme="dark"] .rpt-type-ring--technical { border-color: #6b8afd; }
 
@@ -381,7 +374,6 @@
 
 .rpt-type-icon--summary { background: var(--vw-info-bg); color: var(--brand-blue); }
 .rpt-type-icon--technical { background: var(--vw-gray-200); color: var(--brand-dark-blue); }
-.rpt-type-icon--cert { background: var(--rpt-cert-tint); color: var(--vw-success); }
 
 [data-bs-theme="dark"] .rpt-type-icon--technical { background: #2d3748; color: #a5b4fc; }
 
@@ -395,7 +387,6 @@
 
 .rpt-type-badge--summary { color: var(--brand-blue); background: var(--vw-info-bg); }
 .rpt-type-badge--technical { color: var(--vw-gray-700); background: var(--vw-gray-200); }
-.rpt-type-badge--cert { color: var(--accent-orange-text); background: var(--accent-orange-bg); }
 
 [data-bs-theme="dark"] .rpt-type-badge--technical { background: #2d3748; color: #cbd5e1; }
 
@@ -410,37 +401,6 @@
     color: var(--rpt-muted);
     margin-top: 3px;
     margin-bottom: 14px;
-}
-
-.rpt-cert-toggle-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 5px;
-    margin-bottom: 14px;
-}
-
-.rpt-cert-toggle-row .form-check-input {
-    width: 2.4rem;
-    height: 1.25rem;
-    margin: 0;
-    cursor: pointer;
-}
-
-.rpt-cert-toggle-row .form-check-input:checked {
-    background-color: var(--vw-success);
-    border-color: var(--vw-success);
-}
-
-.rpt-cert-toggle-row .form-check-input:focus {
-    border-color: var(--vw-success);
-    box-shadow: 0 0 0 0.2rem rgba(6, 118, 71, .25);
-}
-
-.rpt-cert-toggle-label {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--rpt-muted);
 }
 
 .rpt-type-features {
@@ -471,7 +431,6 @@
 
 .rpt-type-card[data-type-id="summary"] .rpt-type-features li i { color: var(--brand-blue); }
 .rpt-type-card[data-type-id="technical"] .rpt-type-features li i { color: var(--brand-dark-blue); }
-.rpt-type-card[data-type-id="certificate"] .rpt-type-features li i { color: var(--vw-success); }
 
 [data-bs-theme="dark"] .rpt-type-card[data-type-id="technical"] .rpt-type-features li i { color: #c7d2fe; }
 

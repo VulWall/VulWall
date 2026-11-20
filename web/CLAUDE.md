@@ -122,7 +122,7 @@ Each vertical is self-contained and includes:
 * **Dashboard**: Main overview, metrics, charts, recent activities
 * **Discoveries**: Discovered assets, ports, services from scans
 * **Recommendations**: AI-powered security recommendations for findings
-* **Reports**: Report generation (Summary, Technical), certificate management
+* **Reports**: Report generation (Summary, Technical), shared report links
 * **Scans**: Scan history, results, findings overview
 * **Settings**: User settings, company details, preferences
 
@@ -150,7 +150,6 @@ The Common layer contains **only** types needed for cross-vertical communication
 VulWall supports multiple report types, each with its own view and styling:
 * **Summary Report**: High-level security overview for executives/management
 * **Technical Report**: Detailed vulnerability findings for technical teams
-* **Certificate**: Public-facing security certificate with embeddable badge
 
 ### Report Generation Architecture
 Reports use **server-side rendering** with the following components:
@@ -187,7 +186,6 @@ wwwroot/
         ├── index.js           # Report management (link generation, modals)
         ├── modals.js          # Modal handlers
         ├── shared-links.js    # Shared link management
-        ├── certificate-toggle.js  # Certificate visibility toggle
         └── Technical/
             └── index.js       # Technical report interactions (navigation, etc.)
 ```
@@ -198,10 +196,6 @@ Reports/Views/
 ├── Index.cshtml                              # Report management page
 ├── Summary.cshtml                            # Summary report view
 ├── Technical.cshtml                          # Technical report view
-├── Cert.cshtml                              # Certificate view
-├── CertEmbed.cshtml                         # Certificate embed view
-├── CertEmbedDisabled.cshtml                 # Disabled certificate message
-├── CertNotAvailable.cshtml                  # No certificate available
 └── Partials/                                # Shared report components
     ├── _SummaryHeader.cshtml
     ├── _SummaryExecutiveSummary.cshtml
@@ -510,7 +504,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 | Dashboard | `DashboardService` | Metrics, charts, activities |
 | Discoveries | `DiscoveriesService` | Discovery data aggregation |
 | Recommendations | `RecommendationsService` | Finding recommendations |
-| Reports | `ReportsService` | Certificate generation |
+| Reports | `ReportsService` | Report index scan selector |
 | Reports | `ReportGenerationService` | Report building |
 | Scans | `ScansService` | Scan data aggregation |
 | Settings | `SettingsService` | Company info, logo, tour state |

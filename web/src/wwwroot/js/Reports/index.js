@@ -4,7 +4,6 @@
 import { initializeTypeCards, initializeTypeActions } from './template-cards.js';
 import { initializeModals } from './modals.js';
 import { initializeSharedLinks } from './shared-links.js';
-import { initializeCertificateToggle } from './certificate-toggle.js';
 
 // Score ring radius (must match the SVG markup in Index.cshtml: r="26").
 const RING_RADIUS = 26;
@@ -113,8 +112,6 @@ function initializeTypeCardSelection() {
     const cards = document.querySelectorAll('.rpt-type-card');
     cards.forEach(card => {
         card.addEventListener('click', () => {
-            // A disabled certificate card is not selectable.
-            if (card.classList.contains('disabled')) return;
             cards.forEach(c => c.classList.remove('active'));
             card.classList.add('active');
         });
@@ -135,9 +132,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initialize shared links table
     initializeSharedLinks(modalHandlers);
-
-    // Initialize certificate toggle
-    initializeCertificateToggle();
 
     // Initialize scan scope dropdown + context strip
     initializeScopeDropdown(scans);
