@@ -62,7 +62,7 @@ public class ServiceSettings : EnvLoader
     public string SetupToken = string.Empty;
 
     /// <summary>
-    /// Release version shown in the sidebar footer. The release workflow passes it to the image
+    /// Release version shown in the About dialog. The release workflow passes it to the image
     /// as a build argument; local builds and <c>dotnet run</c> show "dev".
     /// </summary>
     [Env(Name = "VULWALL_VERSION", Default = "dev")]
