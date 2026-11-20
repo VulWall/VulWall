@@ -1,6 +1,7 @@
 @using VulWall.Dashboard.Common.Contracts.Enums
 @using VulWall.Dashboard.Common.Utils
 @model (VulWall.Dashboard.Discoveries.Models.DiscoveryItemViewModel Discovery, bool IsChild)
+@inject IWebHostEnvironment Env
 @removeTagHelper Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
@@ -85,13 +86,29 @@
         <div class="disc-hosting">
             @if (!string.IsNullOrEmpty(d.CountryCode))
             {
-                <img class="geo-flag" src="@LogoUrlHelper.GetCountryFlagUrl(d.CountryCode)" alt="@d.CountryCode" title="@d.CountryCode" />
+                var flagUrl = LogoUrlHelper.GetCountryFlagUrl(Env.WebRootFileProvider, d.CountryCode);
+                if (flagUrl != null)
+                {
+                    <img class="geo-flag" src="@flagUrl" alt="@d.CountryCode" title="@d.CountryCode" />
+                }
+                else
+                {
+                    <i class="fas fa-earth-americas geo-icon" title="@d.CountryCode" aria-hidden="true"></i>
+                }
                 <span class="country-code">@d.CountryCode</span>
             }
             @if (!string.IsNullOrEmpty(d.CloudProvider) || !string.IsNullOrEmpty(d.Isp))
             {
                 var providerName = d.CloudProvider ?? d.Isp;
-                <img class="geo-cloud-logo" src="@LogoUrlHelper.GetCloudProviderLogoUrl(providerName)" alt="@providerName" title="@providerName" />
+                var logoUrl = LogoUrlHelper.GetCloudProviderLogoUrl(Env.WebRootFileProvider, providerName);
+                if (logoUrl != null)
+                {
+                    <img class="geo-cloud-logo" src="@logoUrl" alt="@providerName" title="@providerName" />
+                }
+                else
+                {
+                    <i class="fas fa-cloud geo-icon" title="@providerName" aria-label="@providerName"></i>
+                }
             }
         </div>
 

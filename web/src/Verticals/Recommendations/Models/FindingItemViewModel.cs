@@ -42,5 +42,12 @@ public class FindingItemViewModel
     public string? Cve { get; set; }
     public string? Cwe { get; set; }
     public string? DetectedBy { get; set; }
+
+    /// <summary>
+    /// Fix text and reference URLs the scanner attached to the finding. Shown as the fallback
+    /// guidance when the finding type has no knowledge-base entry.
+    /// </summary>
+    public string? ScannerRemediation { get; set; }
+    public List<string> References { get; set; } = [];
     public string? Status { get; set; }
 }

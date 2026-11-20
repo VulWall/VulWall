@@ -8,7 +8,9 @@ namespace VulWall.Dashboard.Data.Serializers;
 /// Allows enum values to be stored in lowercase but deserialized regardless of case.
 /// </summary>
 /// <typeparam name="TEnum">The enum type to serialize/deserialize</typeparam>
-public class CaseInsensitiveEnumSerializer<TEnum> : MongoDB.Bson.Serialization.Serializers.SerializerBase<TEnum>
+/// <param name="aliases">Extra stored values that map to an enum member (case-insensitive).</param>
+public class CaseInsensitiveEnumSerializer<TEnum>(IReadOnlyDictionary<string, TEnum>? aliases = null)
+    : MongoDB.Bson.Serialization.Serializers.SerializerBase<TEnum>
     where TEnum : struct, Enum
 {
     public override TEnum Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
@@ -18,6 +20,15 @@ public class CaseInsensitiveEnumSerializer<TEnum> : MongoDB.Bson.Serialization.S
         if (type == BsonType.String)
         {
             var value = context.Reader.ReadString();
+            if (aliases != null)
+            {
+                foreach (var (alias, mapped) in aliases)
+                {
+                    if (string.Equals(alias, value, StringComparison.OrdinalIgnoreCase))
+                        return mapped;
+                }
+            }
+
             return Enum.TryParse<TEnum>(value, ignoreCase: true, out var result)
                 ? result
                 : throw new FormatException($"Cannot parse '{value}' to enum type {typeof(TEnum).Name}");

@@ -1,7 +1,7 @@
 # Claude Code Context for VulWall Project
 
 ## Project Overview
-VulWall is a security assessment and vulnerability scanning platform with automated asset discovery, continuous vulnerability monitoring, and AI-powered security recommendations.
+VulWall is an open-source (AGPL), self-hosted security scanner with automated asset discovery, continuous vulnerability monitoring, and optional AI-powered security recommendations. This `web/` app is the UI; the Go scanner lives in `../scanner/`. The two share one MongoDB database and nothing else (see "Scanner Link" below).
 
 ## Design Skill — MANDATORY for all UI/UX work
 
@@ -31,12 +31,14 @@ This skill encodes the brand tokens, severity ramp, CSP constraints, dark-mode r
 - **Backend**: .NET 10.0, C#
 - **Frontend**: ASP.NET Core MVC with Razor Views
 - **Database**: MongoDB
-- **Tools**: Auth0, Anthropic Claude AI
+- **Auth**: Local cookie authentication (single admin, BCrypt)
+- **AI**: Anthropic Claude, optional (`ANTHROPIC_API_KEY`)
 - **Architecture**: Vertical Slice Architecture for Dashboard
 
 ## Project Structure
 ```
-VulWall.Dashboard/
+web/
+├── Dockerfile                      # Build context = web/
 ├── src/
 │   ├── VulWall.Dashboard.csproj
 │   ├── Program.cs
@@ -87,7 +89,7 @@ The Dashboard enforces a strict CSP with `script-src 'self'` (no `'unsafe-inline
 * **Pass server data to JS via JSON blocks:** `<script id="my-data" type="application/json">@Html.Raw(JsonSerializer.Serialize(Model.Data))</script>` — these are not executable and are not restricted by CSP.
 * **Read JSON blocks in external JS:** `JSON.parse(document.getElementById('my-data')?.textContent || '{}')` — always wrap in try-catch for resilience.
 * **Place JSON blocks before the `<script>` tags that consume them** in the view.
-* **New external CDN scripts** must be added to the CSP allowlist in `Extensions/WebApplicationExtensions.cs` with `https://` prefix (e.g., `https://cdn.example.com`).
+* **No external hosts.** Self-hosted installs must work offline: vendor third-party scripts, styles and images into `wwwroot/lib/` (or `wwwroot/images/`) and keep the CSP in `Extensions/WebApplicationExtensions.cs` at `'self'`.
 * **No `eval()`, `new Function()`, or `setTimeout('string')`** — these require `'unsafe-eval'` which we do not allow.
 
 ### UI Components
@@ -118,7 +120,8 @@ Each vertical is self-contained and includes:
 * The vertical is the sole owner of its domain logic and operations
 
 ### Available Verticals
-* **Assets**: Asset management (domains, IPs), ownership verification
+* **Account**: First-run `/setup`, `/login`, `/logout` (local admin account)
+* **Assets**: Asset management (domains, IPs); assets are enabled on add, no ownership verification
 * **Dashboard**: Main overview, metrics, charts, recent activities
 * **Discoveries**: Discovered assets, ports, services from scans
 * **Recommendations**: AI-powered security recommendations for findings
@@ -500,28 +503,34 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 **Existing Services by Vertical:**
 | Vertical | Service | Purpose |
 |----------|---------|---------|
-| Assets | `AssetsService` | Asset CRUD, verification |
+| Account | `AccountService` | Admin setup, password hashing, credential check |
+| Assets | `AssetsService` | Asset CRUD |
 | Dashboard | `DashboardService` | Metrics, charts, activities |
 | Discoveries | `DiscoveriesService` | Discovery data aggregation |
 | Recommendations | `RecommendationsService` | Finding recommendations |
 | Reports | `ReportsService` | Report index scan selector |
 | Reports | `ReportGenerationService` | Report building |
+| Reports | `ExecutiveSummaryProcessor` / `ExecutiveSummaryPoller` | Background AI executive summaries for finished scans |
 | Scans | `ScansService` | Scan data aggregation |
 | Settings | `SettingsService` | Company info, logo, tour state |
 
 ## Authentication & Authorization
 
-- **Auth0** is used for authentication
-- All controller actions require `[Authorize]` attribute unless explicitly public
-- Organization context is automatically resolved via `IOrganizationContext`
-- Multi-tenancy via organization-scoped data access
+- **Local cookie authentication** (`AddLocalAuthentication` in `Extensions/ServiceCollectionExtensions.cs`, `Verticals/Account/`).
+- One admin per install, stored in the `users` collection under the fixed `_id` `"admin"` with a BCrypt hash. The fixed id makes first-run setup safe against concurrent submissions.
+- `/setup` is reachable only while no admin exists; afterwards it redirects to `/login`. `/login` is rate-limited per IP with `IpRateLimiterService`. `/logout` is a POST.
+- Claims: `NameIdentifier` (user id), `Email`, `Name` (email). Audit logging and `triggered_by` read these.
+- All controller actions require `[Authorize]` unless explicitly public. Antiforgery is validated on every POST (global `AutoValidateAntiforgeryTokenAttribute`).
+- Cookie `Secure` flag, HSTS and the HTTPS redirect follow `SECURE_COOKIES` (default `false` so plain `http://localhost` works).
+- A hosted fork that needs SSO plugs an OIDC handler into `AddLocalAuthentication` and replaces `AccountController`; keep the rest of the app independent of the auth scheme.
 
 ## Database Patterns
 
 ### Repository Pattern
 - All data access goes through repositories in `Data/Repositories/`
 - Base classes: `BaseMongoRepository<T>`, `OrgScopedRepository<T>`
-- Organization-scoped repositories automatically filter by current user's organization
+- Organization-scoped repositories automatically filter by the current organization
+- Never call `UpdateAsync` (a full `ReplaceOne`) on documents the scanner also writes (`scans`, `findings`, `discoveries`): it drops fields the C# entity does not map. Use a `$set` partial update.
 
 ### Entities
 - Located in `Data/Entities/`
@@ -531,9 +540,14 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 ## Common Services
 
 ### Organization Context
-- `IOrganizationContext`: Provides current user's organization ID
-- Auto-resolved from Auth0 claims
-- Used by org-scoped repositories
+- A self-hosted install has exactly one organization. `DefaultOrganization.EnsureExistsAsync` creates it at startup ("My Organization", random weekly `subscription_settings.scan_cron`); `/setup` renames it.
+- `IOrganizationContext` always resolves that organization for an authenticated user. There is no org switching.
+- Used by org-scoped repositories. Background jobs have no `HttpContext`: they use the `*PublicRepository` classes instead.
+
+### Scanner Link
+- **Trigger**: `ScanTriggerService` (Common) inserts a `scans` document with `status: "queued"`, `type: "requested"` and a string UUID `_id`. The scanner picks it up. There is no HTTP call to the scanner.
+- **In progress**: a scan for the org with status `queued`, `pending` or `running`, created in the last 24 hours (`ScanTriggerService.InProgressPredicate`). Use it for every "scan running" check.
+- **Completion**: the scanner sets `status: "done"` (`"completed"` is also read as `Done`). `ExecutiveSummaryPoller` checks every 30s, claims each finished scan atomically (`executive_summary_status`: `processing` → `done` | `skipped` | `failed`) and writes `executive_summary` when `ANTHROPIC_API_KEY` is set. There is no webhook.
 
 ### AI Services
 - `AnthropicAIService`: Anthropic Claude AI integration for security recommendations
@@ -542,9 +556,13 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 ## Environment Configuration
 
-- Use `EnvLoader` utility to load environment variables
-- Never commit secrets to version control
-- Auth0, MongoDB, and Anthropic API keys configured via environment variables
+- Use `EnvLoader` utility to load environment variables (`Common/Utils/ServiceSettings.cs`)
+- Never commit secrets to version control; `src/Properties/launchSettings.json` is git-ignored (copy `launchSettings.example.json`)
+- Variables: `MONGO_URI`, `MONGO_DB`, `PORT`, `ANTHROPIC_API_KEY` (optional), `DEFAULT_AI_MODEL`, `SECURE_COOKIES`, `TRUSTED_PROXIES`, `SHARED_LINKS_ENABLED`. See `README.md`.
+
+## Testing
+
+- `dotnet test` from `web/`. Tests that touch MongoDB use `MongoFixture` (EphemeralMongo starts a throwaway `mongod`; the binary is downloaded on first run) and `[Collection(MongoCollection.Name)]`, with one fresh database per test.
 
 ## Frontend JavaScript Architecture
 

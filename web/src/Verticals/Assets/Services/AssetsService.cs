@@ -1,17 +1,15 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Data.Entities.Asset;
 using VulWall.Dashboard.Data.Repositories;
-using VulWall.Dashboard.Assets.Constants;
 using VulWall.Dashboard.Assets.Models;
-using VulWall.Dashboard.Assets.Services.DomainVerifier;
 using VulWall.Dashboard.Assets.Validation;
 
 namespace VulWall.Dashboard.Assets.Services;
 
 public class AssetsService(
     AssetsRepository assetsRepository,
-    ScansRepository scansRepository,
-    IDomainVerifier domainVerifier)
+    ScanTriggerService scanTriggerService)
 {
     public async Task<IndexViewModel> GetAssetsAsync()
     {
@@ -24,35 +22,15 @@ public class AssetsService(
             Assets = assets,
             TotalAssets = stats.TotalAssets,
             ActiveAssets = stats.ActiveAssets,
-            InactiveAssets = stats.InactiveAssets,
-            PendingAssets = stats.PendingAssets
+            InactiveAssets = stats.InactiveAssets
         };
     }
 
     /// <summary>
-    /// Returns the domain this user can add + scan in one click — the ownable domain derived
-    /// from their verified email — but only when it is not already an existing Domain asset.
-    /// Returns null when the email implies no ownable domain (freemail/malformed) or when the
-    /// domain is already tracked. The caller must pass the server-trusted verified email; this
-    /// method never accepts a client-supplied domain, so it cannot be used to bypass DNS-TXT.
+    /// Self-hosted installs have no ownership check: the asset is enabled immediately. The add
+    /// page warns the user to only scan assets they own or are authorized to test.
     /// </summary>
-    public async Task<string?> GetQuickAddDomainAsync(string? verifiedEmail)
-    {
-        var domain = EmailDomainMatcher.GetOwnableDomain(verifiedEmail);
-        if (domain == null)
-        {
-            return null;
-        }
-
-        var allAssets = await assetsRepository.GetAllAsync();
-        var alreadyExists = allAssets.Any(a =>
-            a.Type == AssetType.Domain
-            && string.Equals(a.Domain, domain, StringComparison.OrdinalIgnoreCase));
-
-        return alreadyExists ? null : domain;
-    }
-
-    public async Task<(Asset? Asset, string? Error)> CreateDomainAssetAsync(string domainName, string? userEmail)
+    public async Task<(Asset? Asset, string? Error)> CreateDomainAssetAsync(string domainName)
     {
         var domain = SanitizeDomain(domainName);
 
@@ -66,15 +44,9 @@ public class AssetsService(
             return (null, $"The domain '{domain}' resolves to a private or reserved IP address and cannot be added as an asset.");
         }
 
-        // Ownership implied by a matching corporate email domain auto-verifies the asset;
-        // everyone else must prove ownership via the DNS-TXT flow before it is enabled.
-        var autoVerified = EmailDomainMatcher.IsOwnershipImpliedByEmail(userEmail, domain);
-
         var asset = new Asset
         {
-            // ponytail: reuse DnsVerifiedAt as the "verified" signal so all downstream stats/guards already work; no new VerificationMethod field. Add one only if we need to distinguish email- vs DNS-proof in audit.
-            Enabled = autoVerified,
-            DnsVerifiedAt = autoVerified ? DateTime.UtcNow : null,
+            Enabled = true,
             Type = AssetType.Domain,
             Domain = domain,
             AddedOn = DateTime.UtcNow
@@ -117,77 +89,30 @@ public class AssetsService(
         return domain.Trim();
     }
 
-    // ponytail: IP ownership verification deferred — temporarily disabled, see <ticket>. Restore add+scan when PTR/A-record gating lands.
-    // IP assets auto-enabled with no ownership check — the same abuse vector we closed for domains.
-    // Fail closed here so the asset is never created/enabled even if the route is hit directly.
-    // The real add+scan logic is preserved below (commented) for the follow-up ticket to restore.
-    public Task<(Asset? Asset, string? Error)> CreateIpAssetAsync(string ipAddress)
+    public async Task<(Asset? Asset, string? Error)> CreateIpAssetAsync(string ipAddress)
     {
-        return Task.FromResult<(Asset?, string?)>(
-            (null, "IP assets are temporarily unavailable while we add ownership verification for them."));
+        var ip = ipAddress.Trim();
 
-        // var ip = ipAddress.Trim();
-        //
-        // if (!System.Net.IPAddress.TryParse(ip, out _))
-        // {
-        //     return (null, "Please enter a valid IP address.");
-        // }
-        //
-        // if (PrivateIpValidator.IsPrivateIp(ip))
-        // {
-        //     return (null, $"The IP address '{ip}' is a private or reserved address and cannot be added as an asset.");
-        // }
-        //
-        // var asset = new Asset
-        // {
-        //     Enabled = true,
-        //     Type = AssetType.Ip,
-        //     Ip = ip,
-        //     AddedOn = DateTime.UtcNow
-        // };
-        //
-        // await assetsRepository.CreateAsync(asset);
-        // return (asset, null);
-    }
-
-    public async Task<VerifyDomainViewModel?> GetVerifyDomainViewModelAsync(string id)
-    {
-        var asset = await assetsRepository.GetByIdAsync(id);
-        if (asset?.Type != AssetType.Domain)
+        if (!System.Net.IPAddress.TryParse(ip, out _))
         {
-            return null;
+            return (null, "Please enter a valid IP address.");
         }
 
-        var txtValue = domainVerifier.GenerateVerificationToken(asset.Domain!, asset.OrgId);
-
-        return new VerifyDomainViewModel
+        if (PrivateIpValidator.IsPrivateIp(ip))
         {
-            Id = asset.Id,
-            Domain = asset.Domain!,
-            TxtHost = Consts.TxtRecordName,
-            TxtValue = txtValue
+            return (null, $"The IP address '{ip}' is a private or reserved address and cannot be added as an asset.");
+        }
+
+        var asset = new Asset
+        {
+            Enabled = true,
+            Type = AssetType.Ip,
+            Ip = ip,
+            AddedOn = DateTime.UtcNow
         };
-    }
 
-    public async Task<(bool Success, string Message)> VerifyDomainAsync(string id)
-    {
-        var asset = await assetsRepository.GetByIdAsync(id);
-        if (asset?.Domain == null)
-        {
-            return (false, $"Asset with ID {id} not found.");
-        }
-
-        var isVerified = await domainVerifier.VerifyDomain(asset.Domain, asset.OrgId);
-
-        if (isVerified)
-        {
-            asset.DnsVerifiedAt = DateTime.UtcNow;
-            asset.Enabled = true;
-            await assetsRepository.UpdateAsync(asset);
-            return (true, $"Domain {asset.Domain} has been successfully verified.");
-        }
-
-        return (false, $"Domain verification failed for {asset.Domain}. Please ensure the TXT record is correctly set.");
+        await assetsRepository.CreateAsync(asset);
+        return (asset, null);
     }
 
     public async Task<(bool Success, string? ErrorMessage)> UpdateAssetStatusAsync(string assetId, bool enabled)
@@ -196,11 +121,6 @@ public class AssetsService(
         if (asset == null)
         {
             return (false, $"Asset with ID {assetId} not found.");
-        }
-
-        if (asset.Type != AssetType.Ip && asset.DnsVerifiedAt == null)
-        {
-            return (false, $"Domain {asset.Domain} can not be activated, please first verify the domain.");
         }
 
         asset.Enabled = enabled;
@@ -222,31 +142,18 @@ public class AssetsService(
         return (true, null);
     }
 
-    /// <summary>
-    /// True when the org has a pending or running scan. Bound to 24h so an orphaned scan
-    /// record does not block asset changes forever.
-    /// </summary>
-    public Task<bool> IsScanInProgressAsync()
-    {
-        var inProgressCutoff = DateTime.UtcNow.AddHours(-24);
-        return scansRepository.ExistsAsync(
-            s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
-                 && s.CreatedAt >= inProgressCutoff);
-    }
+    public Task<bool> IsScanInProgressAsync() => scanTriggerService.IsScanInProgressAsync();
 
     public async Task<AssetsStatistics> GetStatisticsAsync()
     {
         var allAssets = await assetsRepository.GetAllAsync();
         var assetsList = allAssets.ToList();
 
-        var pending = assetsList.Count(a => !a.Enabled && a.Type == AssetType.Domain && a.DnsVerifiedAt == null);
-
         return new AssetsStatistics
         {
             TotalAssets = assetsList.Count,
             ActiveAssets = assetsList.Count(a => a.Enabled),
-            InactiveAssets = assetsList.Count(a => !a.Enabled),
-            PendingAssets = pending
+            InactiveAssets = assetsList.Count(a => !a.Enabled)
         };
     }
 
@@ -258,8 +165,7 @@ public class AssetsService(
             Name = asset.Type == AssetType.Domain ? asset.Domain! : asset.Ip!,
             Type = asset.Type,
             Enabled = asset.Enabled,
-            AddedOn = asset.AddedOn,
-            DnsVerifiedAt = asset.DnsVerifiedAt
+            AddedOn = asset.AddedOn
         };
     }
 }

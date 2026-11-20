@@ -1,20 +1,16 @@
 using Anthropic;
-using Auth0.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Options;
 using MongoDB.Driver;
-using DnsClient;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Razor;
 using VulWall.Dashboard.Common.Services.AIServices;
-using VulWall.Dashboard.Common.Services.Auth0;
+using VulWall.Dashboard.Account.Services;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Extensions.Configuration;
 using VulWall.Dashboard.Settings.Services;
 using VulWall.Dashboard.Assets.Services;
-using VulWall.Dashboard.Assets.Services.DomainVerifier;
 using VulWall.Dashboard.Reports.Services.ReportGeneration;
 using VulWall.Dashboard.Reports.Services;
 using VulWall.Dashboard.Reports.Services.SharedLinkService;
@@ -22,9 +18,8 @@ using VulWall.Dashboard.Scans.Services;
 using VulWall.Dashboard.Recommendations.Services;
 using VulWall.Dashboard.Dashboard.Services;
 using VulWall.Dashboard.Discoveries.Services;
-using VulWall.Dashboard.Common.Services.NightWatch;
-using VulWall.Dashboard.Common.Services.Email;
-using VulWall.Dashboard.Webhooks.Services;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
+using VulWall.Dashboard.Reports.Services.ExecutiveSummaryJob;
 using VulWall.Dashboard.Common.Services.RateLimiter;
 using VulWall.Dashboard.Common.Services;
 
@@ -47,17 +42,14 @@ public static class ServiceCollectionExtensions
         services.AddHealthChecks();
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
-        services.AddSessionSupport();
         services.AddAntiforgeryConfiguration();
         services.AddCustomViewLocationExpander();
-        services.AddAuth0Authentication();
+        services.AddLocalAuthentication();
         services.AddOrganizationServices();
         services.AddAiServices();
-        services.AddNightWatchServices();
-        services.AddEmailServices();
+        services.AddScanTriggerServices();
         services.AddSingleton<IpRateLimiterService>();
         services.AddSingleton<KnowledgeBaseCacheService>();
-        services.AddExceptionHandler<Middleware.AuthFailureExceptionHandler>();
 
         return services;
     }
@@ -71,7 +63,6 @@ public static class ServiceCollectionExtensions
         services.AddRecommendationsServices();
         services.AddDashboardServices();
         services.AddDiscoveriesServices();
-        services.AddWebhooksServices();
 
         return services;
     }
@@ -98,36 +89,33 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddOrganizationServices(this IServiceCollection services)
     {
         services.AddScoped<IOrganizationContext, OrganizationContext>();
-        services.AddScoped<IOrganizationSyncService, OrganizationSyncService>();
-        services.AddHttpClient(Auth0ManagementService.TokenHttpClientName);
-        services.AddHttpClient(Auth0ManagementService.ManagementHttpClientName);
-        services.AddSingleton<IAuth0ManagementService, Auth0ManagementService>();
         services.AddSingleton<IFeatureAccessService>(
             new FullFeatureAccessService(ServiceSettings.Instance.SharedLinksEnabled));
 
         return services;
     }
 
-    private static IServiceCollection AddSessionSupport(this IServiceCollection services)
+    private static IServiceCollection AddAntiforgeryConfiguration(this IServiceCollection services)
     {
-        services.AddSession(options =>
+        // The app itself only listens on HTTP; with SECURE_COOKIES=true TLS is terminated by a
+        // proxy on the standard port, so plain-HTTP requests are redirected to 443.
+        services.AddHttpsRedirection(options => options.HttpsPort = 443);
+
+        services.AddAntiforgery(options =>
         {
-            options.IdleTimeout = TimeSpan.FromHours(24);
-            options.Cookie.HttpOnly = true;
-            options.Cookie.IsEssential = true;
-            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.SuppressXFrameOptionsHeader = false;
+            options.Cookie.SecurePolicy = CookieSecurePolicyFromSettings();
         });
 
         return services;
     }
 
-    private static IServiceCollection AddAntiforgeryConfiguration(this IServiceCollection services)
-    {
-        services.AddAntiforgery(options => { options.SuppressXFrameOptionsHeader = false; });
-
-        return services;
-    }
+    /// <summary>
+    /// SECURE_COOKIES=true forces the Secure flag. Otherwise the flag follows the request scheme,
+    /// so a plain-HTTP install still works and an HTTPS request still gets a Secure cookie.
+    /// </summary>
+    internal static CookieSecurePolicy CookieSecurePolicyFromSettings() =>
+        ServiceSettings.Instance.SecureCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
 
     private static IServiceCollection AddCustomViewLocationExpander(this IServiceCollection services)
     {
@@ -139,41 +127,34 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddAuth0Authentication(this IServiceCollection services)
+    /// <summary>
+    /// Local cookie authentication against the single admin in the users collection.
+    /// A hosted fork that needs SSO would register an OIDC handler here instead (cookie scheme
+    /// as the sign-in scheme, OpenIdConnect as the challenge scheme) and replace AccountController.
+    /// </summary>
+    private static IServiceCollection AddLocalAuthentication(this IServiceCollection services)
     {
-        var auth0Domain = ServiceSettings.Instance.Auth0Domain;
-        var auth0ClientId = ServiceSettings.Instance.Auth0ClientId;
-        var auth0ClientSecret = ServiceSettings.Instance.Auth0ClientSecret;
+        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie(options =>
+            {
+                options.LoginPath = "/login";
+                options.LogoutPath = "/logout";
+                options.AccessDeniedPath = "/login";
+                options.ExpireTimeSpan = TimeSpan.FromHours(12);
+                options.SlidingExpiration = true;
+                options.Cookie.Name = "vulwall.auth";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.SecurePolicy = CookieSecurePolicyFromSettings();
+            });
 
-        services.AddAuth0WebAppAuthentication(options =>
-        {
-            options.Domain = auth0Domain;
-            options.ClientId = auth0ClientId;
-            options.ClientSecret = auth0ClientSecret;
-            options.Scope = "openid profile email";
-        });
-
-        // Register as IPostConfigureOptions to run AFTER Auth0 SDK's own IPostConfigureOptions,
-        // which overwrites any events set via options.OpenIdConnectEvents or services.PostConfigure.
-        services.AddSingleton<IPostConfigureOptions<OpenIdConnectOptions>, Auth0EventConfiguration>();
+        services.AddScoped<AccountService>();
 
         return services;
     }
 
     private static IServiceCollection AddAssetServices(this IServiceCollection services)
     {
-        // DNS lookup client for domain verification
-        services.AddSingleton<ILookupClient>(_ =>
-        {
-            var options = new LookupClientOptions
-            {
-                UseCache = true,
-                Timeout = TimeSpan.FromSeconds(5)
-            };
-            return new LookupClient(options);
-        });
-
-        services.AddScoped<IDomainVerifier, DomainVerifier>();
         services.AddScoped<AssetsService>();
 
         return services;
@@ -197,6 +178,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TechnicalReportBuilder>();
         services.AddScoped<ReportsService>();
         services.AddScoped<SharedLinkService>();
+        services.AddScoped<ExecutiveSummaryProcessor>();
+        services.AddHostedService<ExecutiveSummaryPoller>();
 
         return services;
     }
@@ -231,21 +214,9 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddNightWatchServices(this IServiceCollection services)
+    private static IServiceCollection AddScanTriggerServices(this IServiceCollection services)
     {
-        services.AddHttpClient<NightWatchService>();
-        return services;
-    }
-
-    private static IServiceCollection AddWebhooksServices(this IServiceCollection services)
-    {
-        services.AddScoped<NightWatchWebhookService>();
-        return services;
-    }
-
-    private static IServiceCollection AddEmailServices(this IServiceCollection services)
-    {
-        services.AddSingleton<IEmailService, NullEmailService>();
+        services.AddScoped<ScanTriggerService>();
         return services;
     }
 

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using VulWall.Dashboard.Common.Utils;
-using VulWall.Dashboard.Middleware;
 
 namespace VulWall.Dashboard.Extensions;
 
@@ -28,9 +27,9 @@ public static class WebApplicationExtensions
 
             context.Response.Headers["Content-Security-Policy"] =
                 "default-src 'self'; " +
-                "script-src 'self' https://cdn.jsdelivr.net; " +
-                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
-                "img-src 'self' data: https://assets.vulwall.com; " +
+                "script-src 'self'; " +
+                "style-src 'self' 'unsafe-inline'; " +
+                "img-src 'self' data:; " +
                 "frame-src 'self'; " +
                 "connect-src 'self'; " +
                 "base-uri 'self'; " +
@@ -42,26 +41,23 @@ public static class WebApplicationExtensions
 
         app.UseExceptionHandler("/Error");
         app.UseStatusCodePagesWithReExecute("/Error/{0}");
-        
-        if (!app.Environment.IsDevelopment())
+
+        // Before the HTTPS redirect so the container healthcheck works over plain HTTP.
+        app.UseHealthChecks("/health");
+
+        // Self-hosted installs often run on plain http://localhost. HSTS and the HTTPS redirect
+        // are only safe once TLS is in place, so they follow SECURE_COOKIES.
+        if (ServiceSettings.Instance.SecureCookies)
         {
             app.UseHsts();
+            app.UseHttpsRedirection();
         }
 
-        app.UseHttpsRedirection();
-        app.UseHealthChecks("/health");
         app.MapStaticAssets();
         app.UseRouting();
 
-        app.UseSession();
         app.UseAuthentication();
         app.UseAuthorization();
-
-        // Log successful logins (must be after UseAuthentication)
-        app.UseMiddleware<LoginAuditMiddleware>();
-
-        // Create an org for authenticated users who don't have one yet
-        app.UseMiddleware<EnsureOrganizationMiddleware>();
 
         app.MapControllerRoute(
             name: "default",

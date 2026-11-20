@@ -30,6 +30,7 @@ public class Scan : IEntity<string>, IOrganizationEntity
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     [BsonElement("completed_at")]
+    [BsonIgnoreIfNull]
     public DateTime? CompletedAt { get; set; }
 
     [BsonElement("targeted_assets")]
@@ -39,5 +40,6 @@ public class Scan : IEntity<string>, IOrganizationEntity
     public ScanStats Stats { get; set; } = new();
 
     [BsonElement("executive_summary")]
+    [BsonIgnoreIfNull]
     public string? ExecutiveSummary { get; set; }
 }

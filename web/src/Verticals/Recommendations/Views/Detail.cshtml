@@ -183,15 +183,56 @@ else if (status == "muted")
         }
         else
         {
-            <div class="no-recommendation">
-                <i class="fas fa-robot"></i>
-                <h4>No Security Recommendation Available</h4>
-                <p>Security recommendation has not been generated for this finding yet.</p>
+            @* No knowledge-base entry for this finding type: show what the scanner itself reported. *@
+            <div class="recommendation-section">
+                <div class="recommendation-section__header">
+                    <span class="section-icon section-icon--explain"><i class="fas fa-info-circle"></i></span>
+                    <h3>What the scanner found</h3>
+                </div>
+                <p>@(string.IsNullOrWhiteSpace(Model.Finding.Description)
+                        ? "The scanner did not include a description for this finding."
+                        : Model.Finding.Description)</p>
             </div>
+
+            @if (Model.Finding.ScannerRemediation is { } remediation)
+            {
+                <div class="recommendation-section">
+                    <div class="recommendation-section__header">
+                        <span class="section-icon section-icon--fix"><i class="fas fa-wrench"></i></span>
+                        <h3>How to fix</h3>
+                    </div>
+                    <p>@remediation</p>
+                </div>
+            }
+
+            @if (Model.Finding.References.Count > 0)
+            {
+                <div class="recommendation-section">
+                    <div class="recommendation-section__header">
+                        <span class="section-icon section-icon--explain"><i class="fas fa-book-open"></i></span>
+                        <h3>References</h3>
+                    </div>
+                    <ul class="reference-list">
+                        @foreach (var reference in Model.Finding.References)
+                        {
+                            <li>
+                                <a href="@reference" target="_blank" rel="noopener noreferrer nofollow">@reference</a>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if (Model.ShowAiKeyHint)
+            {
+                <p class="ai-key-hint">
+                    <i class="fas fa-wand-magic me-1"></i>AI-enriched guidance available when ANTHROPIC_API_KEY is set.
+                </p>
+            }
         }
 
-        <!-- Original scanner output -->
-        @if (!string.IsNullOrEmpty(Model.Finding.Description))
+        @* Original scanner output (the fallback above already shows the description) *@
+        @if (Model.Finding.HasAIRecommendation && !string.IsNullOrEmpty(Model.Finding.Description))
         {
             <div class="scanner-output-section">
                 <div class="scanner-output__eyebrow">

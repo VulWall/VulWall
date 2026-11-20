@@ -1,3 +1,4 @@
+using MongoDB.Bson;
 using MongoDB.Driver;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Base;
@@ -15,10 +16,13 @@ namespace VulWall.Dashboard.Data.Repositories;
 
 // OrganizationRepository uses BaseMongoRepository (not OrgScoped) because:
 // - Organizations ARE the organizational boundary - they don't belong to another org
-// - We find organizations by searching for Auth0 UserId in the user_ids array
 // - The organization's _id becomes the org_id used to scope other entities
 public class OrganizationRepository(IMongoDatabase database)
     : BaseMongoRepository<Entities.Organization.Organization, string>(database, "organizations");
+
+// UsersRepository is global: local logins are not org-scoped (a self-hosted install has one admin).
+public class UsersRepository(IMongoDatabase database)
+    : BaseMongoRepository<Entities.User.User, string>(database, "users");
 
 public class AuditLogRepository(
     IMongoDatabase database,
@@ -62,28 +66,76 @@ public class SharedLinksRepository(
 public class SharedLinksPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<SharedLink, string>(database, "shared_links");
 
-// ScansPublicRepository uses BaseMongoRepository for anonymous access (e.g., webhooks)
+// ScansPublicRepository uses BaseMongoRepository for access outside a user request
+// (shared reports, background jobs).
 public class ScansPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<Scan, string>(database, "scans")
 {
+    private const string SummaryStatusField = "executive_summary_status";
+    private const string SummaryClaimedAtField = "executive_summary_claimed_at";
+
     /// <summary>
-    /// Partial update: sets only the executive_summary field on a scan document.
+    /// Atomically claims one finished scan whose AI executive summary has not been attempted,
+    /// by setting <c>executive_summary_status</c> to "processing". A claim older than
+    /// <paramref name="staleClaimAfter"/> is taken again (the previous worker died).
+    /// Only scans completed after <paramref name="completedAfter"/> qualify, so a database
+    /// with a long scan history does not trigger one AI call per old scan.
+    /// Scans that already carry an executive_summary are never claimed.
     /// </summary>
-    public async Task UpdateExecutiveSummaryAsync(string scanId, string executiveSummary)
+    public Task<Scan?> ClaimNextForExecutiveSummaryAsync(DateTime completedAfter, TimeSpan staleClaimAfter)
     {
-        var filter = Builders<Scan>.Filter.Eq("_id", scanId);
+        var now = DateTime.UtcNow;
+        var f = Builders<Scan>.Filter;
+        var filter = f.And(
+            f.In("status", new[] { "done", "completed" }),
+            f.Gte("completed_at", completedAfter),
+            f.Eq("executive_summary", BsonNull.Value),
+            f.Or(
+                f.Exists(SummaryStatusField, false),
+                f.And(
+                    f.Eq(SummaryStatusField, ExecutiveSummaryStatus.Processing),
+                    f.Lt(SummaryClaimedAtField, now - staleClaimAfter))));
+
         var update = Builders<Scan>.Update
-            .Set("executive_summary", executiveSummary)
+            .Set(SummaryStatusField, ExecutiveSummaryStatus.Processing)
+            .Set(SummaryClaimedAtField, now);
+
+        return FindOneAndUpdateAsync(filter, update, new FindOneAndUpdateOptions<Scan>
+        {
+            ReturnDocument = ReturnDocument.After
+        });
+    }
+
+    /// <summary>
+    /// Records the outcome of a claimed scan. Partial update so the scanner's own fields
+    /// (started_at, last_activity_at, ...) that the Scan entity does not map are kept.
+    /// </summary>
+    public Task CompleteExecutiveSummaryAsync(string scanId, string status, string? executiveSummary = null)
+    {
+        var update = Builders<Scan>.Update
+            .Set(SummaryStatusField, status)
             .Set("updated_at", DateTime.UtcNow);
-        await Database.GetCollection<Scan>("scans").UpdateOneAsync(filter, update);
+        if (executiveSummary != null)
+            update = update.Set("executive_summary", executiveSummary);
+
+        return Database.GetCollection<Scan>("scans")
+            .UpdateOneAsync(Builders<Scan>.Filter.Eq("_id", scanId), update);
     }
 }
 
-// FindingsPublicRepository uses BaseMongoRepository for anonymous access (e.g., webhooks)
+public static class ExecutiveSummaryStatus
+{
+    public const string Processing = "processing";
+    public const string Done = "done";
+    public const string Skipped = "skipped";
+    public const string Failed = "failed";
+}
+
+// FindingsPublicRepository uses BaseMongoRepository for access outside a user request (e.g., background jobs)
 public class FindingsPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<Finding, string>(database, "findings");
 
-// DiscoveriesPublicRepository uses BaseMongoRepository for anonymous access (e.g., webhooks)
+// DiscoveriesPublicRepository uses BaseMongoRepository for access outside a user request (e.g., background jobs)
 public class DiscoveriesPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<Discovery, string>(database, "discoveries");
 

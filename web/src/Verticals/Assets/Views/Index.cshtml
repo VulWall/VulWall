@@ -14,7 +14,7 @@
     <div class="page-header assets-header">
         <div>
             <h1 class="assets-title">Assets</h1>
-            <p class="assets-subtitle">The domains and IPs NightWatch keeps watch over</p>
+            <p class="assets-subtitle">The domains and IPs VulWall keeps watch over</p>
         </div>
         <a href="@Url.Action("Add")" class="btn btn-primary">
             <i class="fa-solid fa-plus me-1"></i>Add Asset
@@ -42,22 +42,13 @@
             <div class="assets-stat-number is-success" id="activeAssetsCount">@Model.ActiveAssets</div>
             <div class="assets-stat-sub">Scanned every cycle</div>
         </div>
-        @* Needs verification *@
-        <div class="assets-stat-card">
-            <div class="assets-stat-eyebrow">
-                <span>Needs verification</span>
-                <i class="fas fa-shield-halved" style="color:var(--severity-medium-solid)"></i>
-            </div>
-            <div class="assets-stat-number is-pending" id="pendingAssetsCount">@Model.PendingAssets</div>
-            <div class="assets-stat-sub">Awaiting DNS proof</div>
-        </div>
         @* Inactive *@
         <div class="assets-stat-card">
             <div class="assets-stat-eyebrow">
                 <span>Inactive</span>
                 <i class="fas fa-circle-pause"></i>
             </div>
-            <div class="assets-stat-number is-muted" id="inactiveAssetsCount">@(Model.InactiveAssets - Model.PendingAssets)</div>
+            <div class="assets-stat-number is-muted" id="inactiveAssetsCount">@Model.InactiveAssets</div>
             <div class="assets-stat-sub">Paused, not scanned</div>
         </div>
     </div>
@@ -76,7 +67,6 @@
         <div class="assets-seg" id="statusFilterGroup">
             <button class="assets-seg-btn is-active" data-filter-status="all">All</button>
             <button class="assets-seg-btn" data-filter-status="active">Active</button>
-            <button class="assets-seg-btn" data-filter-status="pending">Pending</button>
             <button class="assets-seg-btn" data-filter-status="inactive">Inactive</button>
         </div>
     </div>
@@ -103,9 +93,8 @@
             {
                 @foreach (var asset in Model.Assets)
                 {
-                    var isPending = asset.Type == AssetType.Domain && asset.DnsVerifiedAt == null;
-                    var statusClass = isPending ? "is-pending" : (asset.Enabled ? "is-active" : "is-inactive");
-                    var statusLabel = isPending ? "Pending" : (asset.Enabled ? "Active" : "Inactive");
+                    var statusClass = asset.Enabled ? "is-active" : "is-inactive";
+                    var statusLabel = asset.Enabled ? "Active" : "Inactive";
                     var assetTypeStr = asset.Type == AssetType.Domain ? "domain" : "ip";
                     var assetIcon = asset.Type == AssetType.Domain ? "fas fa-globe" : "fas fa-server";
                     var typeLabel = asset.Type == AssetType.Domain ? "Domain" : "IP address";
@@ -131,12 +120,6 @@
                         <span class="asset-date">@asset.AddedOn.ToString("MMM dd, yyyy")</span>
                         @* Actions *@
                         <div class="asset-actions">
-                            @if (isPending)
-                            {
-                                <a href="@Url.Action("Verify", new { id = asset.Id })" class="asset-verify-btn">
-                                    <i class="fas fa-check"></i>Verify
-                                </a>
-                            }
                             <form data-action="@Url.Action("UpdateAssetStatus")">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="assetId" value="@asset.Id" />
@@ -145,8 +128,7 @@
                                     <input class="form-check-input"
                                            type="checkbox"
                                            @(asset.Enabled ? "checked" : null)
-                                           @(isPending ? "disabled" : null)
-                                           title="@(isPending ? "Verify the domain first" : (asset.Enabled ? "Disable scanning" : "Enable scanning"))" />
+                                           title="@(asset.Enabled ? "Disable scanning" : "Enable scanning")" />
                                 </div>
                             </form>
                             <form class="delete-asset-form" data-action="@Url.Action("Delete")">

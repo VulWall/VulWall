@@ -53,36 +53,6 @@ public class ErrorController(ILogger<ErrorController> logger, IWebHostEnvironmen
         return View("Error", model);
     }
 
-    [Route("/Error/AccessDenied")]
-    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public IActionResult AccessDenied()
-    {
-        var model = new ErrorViewModel
-        {
-            StatusCode = 403,
-            Title = "Email Verification Required",
-            Message = "Please confirm your email address before continuing. Check your inbox for a verification link.",
-            PrimaryActionText = "Back to Sign In",
-            PrimaryActionHref = "/Account/Login"
-        };
-        return View("AuthError", model);
-    }
-
-    [Route("/Error/SignupDisabled")]
-    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public IActionResult SignupDisabled()
-    {
-        var model = new ErrorViewModel
-        {
-            StatusCode = 400,
-            Title = "Sign-up Unavailable",
-            Message = "Account registration is currently unavailable. Please sign in with an existing account or contact support if you need access.",
-            PrimaryActionText = "Back to Sign In",
-            PrimaryActionHref = "/Account/Login"
-        };
-        return View("AuthError", model);
-    }
-
     [Route("/Error/{statusCode:int}")]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult HandleStatusCode(int statusCode)

@@ -3,9 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Services.NightWatch;
-using VulWall.Dashboard.Common.Services.NightWatch.Models;
-using VulWall.Dashboard.Common.Services.Organization;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Services;
 
@@ -14,8 +12,7 @@ namespace VulWall.Dashboard.Assets;
 [Authorize]
 public class AssetsController(
     AssetsService assetsService,
-    NightWatchService nightWatchService,
-    IOrganizationContext organizationContext) : Controller
+    ScanTriggerService scanTriggerService) : Controller
 {
     public async Task<IActionResult> Index()
     {
@@ -24,15 +21,9 @@ public class AssetsController(
     }
 
     [HttpGet]
-    public async Task<IActionResult> Add()
+    public IActionResult Add()
     {
-        await PopulateAddViewBagAsync();
         return View(new AddAssetInput());
-    }
-
-    private async Task PopulateAddViewBagAsync()
-    {
-        ViewBag.QuickAddDomain = await assetsService.GetQuickAddDomainAsync(GetVerifiedEmailForOwnership());
     }
 
     [HttpPost]
@@ -41,7 +32,6 @@ public class AssetsController(
     {
         if (!ModelState.IsValid)
         {
-            await PopulateAddViewBagAsync();
             return View(input);
         }
 
@@ -49,22 +39,14 @@ public class AssetsController(
         {
             case AssetType.Domain:
             {
-                var userEmail = GetVerifiedEmailForOwnership();
-                var (asset, error) = await assetsService.CreateDomainAssetAsync(input.DomainName!, userEmail);
+                var (asset, error) = await assetsService.CreateDomainAssetAsync(input.DomainName!);
                 if (error != null)
                 {
                     ModelState.AddModelError(nameof(input.DomainName), error);
-                    await PopulateAddViewBagAsync();
                     return View(input);
                 }
-                // Auto-verified (email domain matched) → scan immediately.
-                // Otherwise the asset is pending: send the user to prove ownership via DNS-TXT.
-                if (asset!.Enabled)
-                {
-                    await TriggerScanAndSetTempData(asset.Domain!);
-                    return RedirectToAction(nameof(Index));
-                }
-                return RedirectToAction(nameof(Verify), new { id = asset.Id });
+                await TriggerScanAndSetTempData(asset!.Domain!);
+                return RedirectToAction(nameof(Index));
             }
             case AssetType.Ip:
             {
@@ -72,7 +54,6 @@ public class AssetsController(
                 if (error != null)
                 {
                     ModelState.AddModelError(nameof(input.IpAddress), error);
-                    await PopulateAddViewBagAsync();
                     return View(input);
                 }
                 await TriggerScanAndSetTempData(asset!.Ip!);
@@ -80,61 +61,8 @@ public class AssetsController(
             }
             default:
                 ModelState.AddModelError(string.Empty, "Invalid asset type.");
-                await PopulateAddViewBagAsync();
                 return View(input);
         }
-    }
-
-    /// <summary>
-    /// One-click add + scan for the user's verified email domain. The domain is re-derived
-    /// server-side from the verified-email claim — never taken from the request body — so this
-    /// endpoint cannot be used to auto-verify an arbitrary domain and bypass DNS-TXT ownership
-    /// proof. The distinct audit action ("Quick-added verified domain") is the activation event
-    /// we query in the auditlogs collection; keep it separate from the normal "Added asset".
-    /// </summary>
-    [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Assets, Action = "Quick-added verified domain")]
-    public async Task<IActionResult> QuickAdd()
-    {
-        // Failure branches invalidate ModelState so AuditLog's ShouldLogAudit skips them:
-        // the "Quick-added verified domain" audit action must count real adds only,
-        // not ineligible / create-error attempts.
-        var domain = await assetsService.GetQuickAddDomainAsync(GetVerifiedEmailForOwnership());
-        if (domain == null)
-        {
-            TempData["Error"] = "This domain isn't eligible for quick-add.";
-            ModelState.AddModelError(string.Empty, "Domain not eligible for quick-add.");
-            return RedirectToAction(nameof(Index));
-        }
-
-        var (asset, error) = await assetsService.CreateDomainAssetAsync(domain, GetVerifiedEmailForOwnership());
-        if (error != null)
-        {
-            TempData["Error"] = error;
-            ModelState.AddModelError(string.Empty, error);
-            return RedirectToAction(nameof(Index));
-        }
-
-        await TriggerScanAndSetTempData(asset!.Domain!);
-        return RedirectToAction(nameof(Index));
-    }
-
-    /// <summary>
-    /// Returns the signed-in user's email only when Auth0 asserts it is verified.
-    /// Ownership auto-verification trusts the email domain, so an unverified email must never
-    /// grant it — an unverified address is attacker-controllable. Returning null makes
-    /// <see cref="AssetsService.CreateDomainAssetAsync"/> fall back to the DNS-TXT flow (fail closed).
-    /// The email_verified claim rides in the Auth0 ID token; if it is absent we also fail closed.
-    /// </summary>
-    private string? GetVerifiedEmailForOwnership()
-    {
-        var emailVerified = User.FindFirst("email_verified")?.Value;
-        if (!string.Equals(emailVerified, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        return User.FindFirst(ClaimTypes.Email)?.Value;
     }
 
     /// <summary>
@@ -147,65 +75,13 @@ public class AssetsController(
         var alreadyRunningMessage =
             $"Asset {assetName} has been added. A scan is already running; the asset will be included in the next scan.";
 
-        if (await assetsService.IsScanInProgressAsync())
-        {
-            TempData["Info"] = alreadyRunningMessage;
-            return;
-        }
-
-        var orgId = await organizationContext.GetCurrentOrgIdAsync();
         var triggeredBy = User.FindFirst(ClaimTypes.Email)?.Value ?? "unknown";
-        var result = await nightWatchService.TriggerScanAsync(orgId, triggeredBy);
+        var result = await scanTriggerService.TriggerAsync(triggeredBy);
 
-        switch (result.Outcome)
-        {
-            case TriggerScanOutcome.Started:
-                TempData["ScanTriggered"] = assetName;
-                break;
-            case TriggerScanOutcome.AlreadyRunning:
-                TempData["Info"] = alreadyRunningMessage;
-                break;
-            default:
-                TempData["Info"] = $"Asset {assetName} has been added successfully.";
-                break;
-        }
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> Verify(string id)
-    {
-        var model = await assetsService.GetVerifyDomainViewModelAsync(id);
-        if (model == null)
-        {
-            TempData["Info"] = "Only domains require verification.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        return View(model);
-    }
-
-    [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Assets, Action = "Verified domain")]
-    public async Task<IActionResult> VerifyDomain(string id)
-    {
-        if (string.IsNullOrEmpty(id))
-        {
-            TempData["Error"] = "Asset ID is required.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        var (success, message) = await assetsService.VerifyDomainAsync(id);
-
-        if (success)
-        {
-            TempData["Info"] = message;
-        }
+        if (result == TriggerScanResult.Started)
+            TempData["ScanTriggered"] = assetName;
         else
-        {
-            TempData["Error"] = message;
-        }
-
-        return RedirectToAction(nameof(Index));
+            TempData["Info"] = alreadyRunningMessage;
     }
 
     [HttpPost]

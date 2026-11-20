@@ -6,7 +6,7 @@ namespace VulWall.Dashboard.Data.Entities.Organization;
 
 /// <summary>
 /// Organization entity - represents a company/organization.
-/// Users (Auth0 IDs) are stored in the user_ids array.
+/// A self-hosted install has a single organization, created at startup.
 /// The organization's _id is used as the org_id for scoping other entities.
 /// </summary>
 [BsonIgnoreExtraElements]
@@ -16,12 +16,6 @@ public class Organization : IEntity<string>
     [BsonElement("_id")]
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; } = ObjectId.GenerateNewId().ToString();
-
-    /// <summary>
-    /// Array of Auth0 User IDs belonging to this organization (e.g., ["auth0|123456789", "auth0|987654321"])
-    /// </summary>
-    [BsonElement("user_ids")]
-    public List<string> UserIds { get; set; } = new();
 
     /// <summary>
     /// Company name (initially empty, filled in settings)
@@ -48,13 +42,7 @@ public class Organization : IEntity<string>
     public byte[]? Logo { get; set; }
 
     /// <summary>
-    /// Auth0 User ID of the organization owner (the user who created the org).
-    /// </summary>
-    [BsonElement("owner_id")]
-    public string? OwnerId { get; set; }
-
-    /// <summary>
-    /// Email address of the organization owner. Updated on each login.
+    /// Email address of the admin, set during first-run setup.
     /// </summary>
     [BsonElement("owner_email")]
     public string? OwnerEmail { get; set; }

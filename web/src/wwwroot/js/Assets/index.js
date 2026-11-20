@@ -36,14 +36,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const totalEl   = document.getElementById('totalAssetsCount');
             const activeEl  = document.getElementById('activeAssetsCount');
-            const pendingEl = document.getElementById('pendingAssetsCount');
             const inactiveEl = document.getElementById('inactiveAssetsCount');
 
             const totalVal = stats.totalAssets;
             if (totalEl)   totalEl.textContent   = totalVal;
             if (activeEl)  activeEl.textContent  = stats.activeAssets;
-            if (pendingEl) pendingEl.textContent = stats.pendingAssets;
-            if (inactiveEl) inactiveEl.textContent = stats.inactiveAssets - stats.pendingAssets;
+            if (inactiveEl) inactiveEl.textContent = stats.inactiveAssets;
 
             const footerTotal = document.getElementById('assets-total');
             if (footerTotal) footerTotal.textContent = totalVal;
@@ -192,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     toggledRow.dataset.assetStatus = newStatus;
                     const pill = toggledRow.querySelector('.asset-status');
                     if (pill) {
-                        pill.classList.remove('is-active', 'is-pending', 'is-inactive');
+                        pill.classList.remove('is-active', 'is-inactive');
                         pill.classList.add(`is-${newStatus}`);
                         const dot = pill.querySelector('.asset-status-dot');
                         const label = newEnabled ? 'Active' : 'Inactive';

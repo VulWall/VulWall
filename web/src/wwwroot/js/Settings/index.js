@@ -66,6 +66,5 @@
 
     initLazyTab('preferences-tab', 'preferences', '/Settings/GetPreferencesData', 'Failed to load preferences. Please refresh the page.');
 
-    initConfirmationModal('saveCompanyBtn', 'confirmCompanyModalConfirm', 'companyForm', 'confirmCompanyModal', true);
     initConfirmationModal('removeLogoBtn', 'confirmRemoveLogoModalConfirm', 'removeLogoForm', 'confirmRemoveLogoModal');
 })();

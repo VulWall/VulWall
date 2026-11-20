@@ -192,66 +192,6 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
     border-color: rgba(251,251,253,0.3);
 }
 
-/* Org switcher button in sidebar */
-.sidebar-org-switcher {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(251, 251, 253, 0.15);
-    color: var(--brand-on);
-    border-radius: 0.5rem;
-    padding: 0.35rem 0.6rem;
-    transition: background 0.2s ease, border-color 0.2s ease;
-}
-.sidebar-org-switcher:hover,
-.sidebar-org-switcher:focus {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(251, 251, 253, 0.3);
-    color: var(--brand-on);
-}
-.sidebar-org-switcher::after {
-    margin-left: 0.3rem;
-}
-
-/* Org switcher dropdown menu */
-.sidebar-org-dropdown {
-    min-width: 200px;
-    background: #1e2a4a;
-    border: 1px solid rgba(251, 251, 253, 0.12);
-    border-radius: 0.5rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    padding: 0.25rem 0;
-}
-.sidebar-org-item {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.8rem;
-    color: rgba(251, 251, 253, 0.85);
-    background: transparent;
-    border: none;
-    text-align: left;
-    transition: background 0.15s ease;
-    white-space: nowrap;
-    overflow: hidden;
-}
-.sidebar-org-item:hover {
-    background: rgba(244, 125, 23, 0.15);
-    color: var(--brand-on);
-}
-.sidebar-org-item.active {
-    color: var(--brand-on);
-    font-weight: 600;
-    cursor: default;
-}
-.sidebar-org-item:disabled {
-    pointer-events: none;
-}
-
-[data-bs-theme="dark"] .sidebar-org-dropdown {
-    background: #1a2035;
-    border-color: rgba(251, 251, 253, 0.1);
-}
-
 /* -------- Next-scan countdown widget -------- */
 .next-scan {
     padding: 12px 14px;

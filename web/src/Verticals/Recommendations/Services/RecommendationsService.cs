@@ -1,6 +1,7 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Common.Services.Mappers;
+using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.Finding;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Recommendations.Models;
@@ -197,6 +198,8 @@ public class RecommendationsService(
             Status = finding.Status,
             Cve = ExtractFirstMetadataValue(finding.Metadata, "cve", "cves"),
             Cwe = ExtractFirstMetadataValue(finding.Metadata, "cwe", "cwes"),
+            ScannerRemediation = string.IsNullOrWhiteSpace(finding.Remediation) ? null : finding.Remediation.Trim(),
+            References = ExtractReferenceUrls(finding.References, finding.Metadata),
             BusinessImpact = BusinessImpactMapper.GetBusinessImpact(finding.FindingType),
             VulnerabilityExplanation = kb?.Technical?.VulnerabilityExplanation,
             PotentialImpact = kb?.Technical?.Impact,
@@ -267,8 +270,39 @@ public class RecommendationsService(
         {
             Finding = findingVm,
             AffectedAssets = affectedAssets,
-            FeatureAccess = featureAccess
+            FeatureAccess = featureAccess,
+            ShowAiKeyHint = string.IsNullOrWhiteSpace(ServiceSettings.Instance.AnthropicApiKey)
         };
+    }
+
+    private const int MaxReferences = 10;
+
+    /// <summary>
+    /// Collects reference URLs from the finding's top-level <c>references</c> field and, for
+    /// findings written before the scanner stored that field, from <c>metadata.reference</c> /
+    /// <c>metadata.references</c> (a string, an array or null). Only absolute http/https URLs are
+    /// returned, because the values are rendered as links.
+    /// </summary>
+    internal static List<string> ExtractReferenceUrls(IEnumerable<string>? references, MongoDB.Bson.BsonDocument? metadata)
+    {
+        var candidates = new List<string>(references ?? []);
+        foreach (var key in metadata == null ? [] : new[] { "reference", "references" })
+        {
+            if (!metadata!.TryGetValue(key, out var value))
+                continue;
+            if (value.IsString)
+                candidates.Add(value.AsString);
+            else if (value.IsBsonArray)
+                candidates.AddRange(value.AsBsonArray.Where(v => v.IsString).Select(v => v.AsString));
+        }
+
+        return candidates
+            .Select(c => c.Trim())
+            .Where(c => Uri.TryCreate(c, UriKind.Absolute, out var uri)
+                        && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(MaxReferences)
+            .ToList();
     }
 
     /// <summary>

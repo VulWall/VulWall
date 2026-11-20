@@ -6,25 +6,19 @@
 @{
     var email = User.FindFirst(ClaimTypes.Email)?.Value ?? User.FindFirst("email")?.Value ?? "user@example.com";
 
-    var organizationName = "My Organization";
-    var currentOrgId = string.Empty;
-    var allOrgs = new List<VulWall.Dashboard.Data.Entities.Organization.Organization>();
+    var organizationName = DefaultOrganization.DefaultName;
 
     VulWall.Dashboard.Common.Services.ScanSchedule.NextScanCalculator.NextScan? nextScan = null;
 
     if (User.Identity?.IsAuthenticated == true)
     {
         var organization = await OrganizationContext.GetCurrentOrganizationAsync();
-        organizationName = organization.CompanyName ?? "My Organization";
-        currentOrgId = organization.Id;
-        allOrgs = (await OrganizationContext.GetUserOrganizationsAsync()).ToList();
+        organizationName = organization.CompanyName ?? DefaultOrganization.DefaultName;
         nextScan = NextScanCalculator.Compute(organization.SubscriptionSettings?.ScanCron);
     }
 
     var ctrl = (ViewContext.RouteData.Values["controller"]?.ToString() ?? "").ToLowerInvariant();
     bool IsActive(string c) => ctrl == c.ToLowerInvariant();
-
-    var hasMultipleOrgs = allOrgs.Count > 1;
 }
 
 <aside class="sidebar d-flex flex-column p-3" role="region" aria-label="Primary" data-tour="sidebar">
@@ -115,45 +109,9 @@
 
         <!-- Organization & User Info -->
         <div class="text-center mb-3" style="font-size: 0.75rem;">
-            @if (hasMultipleOrgs)
-            {
-                <!-- Org switcher dropdown for multi-org users -->
-                <div class="dropdown mb-1">
-                    <button class="btn btn-sm sidebar-org-switcher dropdown-toggle w-100 d-flex align-items-center justify-content-center gap-1"
-                            type="button"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false"
-                            title="Switch organization">
-                        <i class="fas fa-building" style="font-size: 0.7rem; opacity: 0.8;"></i>
-                        <span class="text-truncate" style="max-width: 110px; font-size: 0.8rem; font-weight: 600;">@organizationName</span>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end sidebar-org-dropdown">
-                        @foreach (var org in allOrgs)
-                        {
-                            var orgDisplayName = org.CompanyName ?? "Unnamed Organization";
-                            var isCurrentOrg = org.Id == currentOrgId;
-                            <li>
-                                <form method="post" asp-controller="Settings" asp-action="SwitchOrg">
-                                    <input type="hidden" name="orgId" value="@org.Id" />
-                                    <button type="submit"
-                                            class="dropdown-item sidebar-org-item @(isCurrentOrg ? "active" : "")"
-                                            @(isCurrentOrg ? "disabled" : "")>
-                                        <i class="fas fa-check me-2 @(isCurrentOrg ? "" : "invisible")" style="font-size: 0.7rem;"></i>
-                                        <span class="text-truncate" style="max-width: 140px;" title="@orgDisplayName">@orgDisplayName</span>
-                                    </button>
-                                </form>
-                            </li>
-                        }
-                    </ul>
-                </div>
-            }
-            else
-            {
-                <!-- Single org: static display -->
-                <div class="text-white fw-semibold mb-1 d-flex align-items-center justify-content-center gap-2" style="font-size: 0.8rem;">
-                    <span class="text-truncate" style="max-width: 120px;" title="@organizationName">@organizationName</span>
-                </div>
-            }
+            <div class="text-white fw-semibold mb-1 d-flex align-items-center justify-content-center gap-2" style="font-size: 0.8rem;">
+                <span class="text-truncate" style="max-width: 120px;" title="@organizationName">@organizationName</span>
+            </div>
             <div class="text-white-50" style="font-size: 0.75rem;">
                 <span class="text-truncate d-inline-block" style="max-width: 180px;" title="@email">@email</span>
             </div>
@@ -173,14 +131,16 @@
                 <i class="fa-solid fa-sun theme-icon-light d-none" style="font-size: 0.875rem;"></i>
                 <i class="fa-solid fa-moon theme-icon-dark" style="font-size: 0.875rem;"></i>
             </button>
-            <a class="btn btn-icon rounded-3 d-flex align-items-center justify-content-center"
-               asp-controller="Settings"
-               asp-action="Logout"
-               aria-label="Log out"
-               title="Log out"
-               style="width: 2.5rem; height: 2.5rem; border:1px solid rgba(251,251,253,0.1); color: inherit;">
-                <i class="fa-solid fa-right-from-bracket" style="font-size: 0.875rem;"></i>
-            </a>
+            <form method="post" action="/logout" class="m-0">
+                @Html.AntiForgeryToken()
+                <button type="submit"
+                        class="btn btn-icon rounded-3 d-flex align-items-center justify-content-center"
+                        aria-label="Log out"
+                        title="Log out"
+                        style="width: 2.5rem; height: 2.5rem; border:1px solid rgba(251,251,253,0.1); color: inherit;">
+                    <i class="fa-solid fa-right-from-bracket" style="font-size: 0.875rem;"></i>
+                </button>
+            </form>
         </div>
 
         <!-- Built with love -->

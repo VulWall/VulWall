@@ -5,6 +5,8 @@ using VulWall.Dashboard.Common.Contracts.Enums;
 
 namespace VulWall.Dashboard.Data.Entities.Asset;
 
+// Older documents carry dns_verified_at from the removed DNS ownership check.
+[BsonIgnoreExtraElements]
 public class Asset : IEntity<string>, IOrganizationEntity
 {
     [BsonId]
@@ -20,9 +22,6 @@ public class Asset : IEntity<string>, IOrganizationEntity
 
     [BsonElement("enabled")]
     public bool Enabled { get; set; }
-
-    [BsonElement("dns_verified_at")]
-    public DateTime? DnsVerifiedAt { get; set; }
 
     [BsonElement("domain")]
     [BsonIgnoreIfNull]

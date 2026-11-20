@@ -1,5 +1,6 @@
 using Cronos;
 using VulWall.Dashboard.Common.Contracts.Enums;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.Scan;
 using VulWall.Dashboard.Data.Repositories;
@@ -10,7 +11,8 @@ namespace VulWall.Dashboard.Scans.Services;
 
 public class ScansService(
     ScansRepository scansRepository,
-    FindingsRepository findingsRepository)
+    FindingsRepository findingsRepository,
+    ScanTriggerService scanTriggerService)
 {
     /// <summary>
     /// Gets the complete Index view model with all data.
@@ -116,6 +118,7 @@ public class ScansService(
             Meta = s.Status switch
             {
                 ScanStatus.Running => "Scanning…",
+                ScanStatus.Queued => "Queued",
                 ScanStatus.Done => uniqueIssueCounts != null && uniqueIssueCounts.TryGetValue(s.Id, out var unique)
                     ? $"{unique} issues ({s.Stats.TotalFindings} raw)"
                     : $"{s.Stats.TotalFindings} issues",
@@ -158,11 +161,7 @@ public class ScansService(
     /// </summary>
     public async Task<ScanNowState> GetScanNowStateAsync()
     {
-        // Bound to 24h so an orphaned Running/Pending scan doesn't block forever.
-        var inProgressCutoff = DateTime.UtcNow.AddHours(-24);
-        var hasInProgress = await scansRepository.ExistsAsync(
-            s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
-                 && s.CreatedAt >= inProgressCutoff);
+        var hasInProgress = await scanTriggerService.IsScanInProgressAsync();
 
         return hasInProgress ? ScanNowState.InProgress : ScanNowState.Allowed;
     }
@@ -173,10 +172,8 @@ public class ScansService(
     /// </summary>
     private static ScanNowState EvaluateScanNowState(IList<Scan> scans)
     {
-        // Bound to 24h so an orphaned Running/Pending scan doesn't block Scan Now forever.
-        var inProgressCutoff = DateTime.UtcNow.AddHours(-24);
-        if (scans.Any(s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
-                           && s.CreatedAt >= inProgressCutoff))
+        var isInProgress = ScanTriggerService.InProgressPredicate(DateTime.UtcNow).Compile();
+        if (scans.Any(isInProgress))
             return ScanNowState.InProgress;
 
         return ScanNowState.Allowed;
