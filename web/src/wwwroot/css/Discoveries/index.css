@@ -435,7 +435,11 @@
 }
 .disc-attribution a:hover,
 .disc-attribution a:focus-visible {
-    color: var(--bs-link-hover-color);
+    color: var(--vw-primary);
+}
+[data-bs-theme="dark"] .disc-attribution a:hover,
+[data-bs-theme="dark"] .disc-attribution a:focus-visible {
+    color: var(--vw-link-hover-dark);
 }
 
 /* ---------- Empty / no-results ---------- */
