@@ -2,7 +2,7 @@ name: nw-http-header-scanner
 
 services:
   http-header-scanner:
-    image: ghcr.io/mojtabatajik/nightwatch-http-header-scanner:${IMAGE_TAG:-dev}
+    image: ghcr.io/vulwall/http-header-scanner:${IMAGE_TAG:-dev}
     container_name: nw-http-header-scanner
     restart: unless-stopped
     read_only: true

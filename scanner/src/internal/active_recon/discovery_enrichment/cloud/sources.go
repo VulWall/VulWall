@@ -1,6 +1,6 @@
 package cloud
 
-import "github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/cloud/parsers"
+import "github.com/VulWall/VulWall/scanner/src/internal/active_recon/discovery_enrichment/cloud/parsers"
 
 // CloudSource defines a cloud provider IP range source
 type CloudSource struct {

@@ -3,7 +3,7 @@ package js_dependency_scanner
 import (
 	"time"
 
-	"github.com/vulwall/scanners/internal/shared"
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 )
 
 // ScanTarget is an alias for the shared ScanTarget model

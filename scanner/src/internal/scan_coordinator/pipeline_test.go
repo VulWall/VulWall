@@ -3,7 +3,7 @@ package scan_coordinator
 import (
 	"testing"
 
-	"github.com/vulwall/scanners/internal/shared"
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 )
 
 // TestScanPipelineGroups locks the authoritative completion-coverage set. It is the guard

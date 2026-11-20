@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"github.com/redis/go-redis/v9"
-	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.opentelemetry.io/otel"

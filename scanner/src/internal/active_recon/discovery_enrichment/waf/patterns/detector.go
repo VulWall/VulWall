@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vulwall/scanners/internal/shared"
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"go.uber.org/zap"
 )
 

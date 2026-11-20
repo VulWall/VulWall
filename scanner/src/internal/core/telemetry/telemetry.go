@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vulwall/scanners/internal/core/config"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"github.com/redis/go-redis/v9"
-	"github.com/vulwall/scanners/internal/core/config"
-	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
 

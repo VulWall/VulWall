@@ -2,7 +2,7 @@ name: nw-port-discovery
 
 services:
   port-discovery:
-    image: ghcr.io/mojtabatajik/nightwatch-port-discovery:${IMAGE_TAG:-dev}
+    image: ghcr.io/vulwall/port-discovery:${IMAGE_TAG:-dev}
     container_name: nw-port-discovery
     restart: unless-stopped
     read_only: true

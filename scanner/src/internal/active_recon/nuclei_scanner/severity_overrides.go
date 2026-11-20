@@ -1,6 +1,6 @@
 package nuclei_scanner
 
-import "github.com/vulwall/scanners/internal/shared"
+import "github.com/VulWall/VulWall/scanner/src/internal/shared"
 
 // severityOverrides re-rates specific Nuclei template findings where the
 // default severity doesn't match real-world exploitability.

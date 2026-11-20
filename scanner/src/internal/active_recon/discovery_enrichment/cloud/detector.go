@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vulwall/scanners/internal/active_recon/discovery_enrichment/cloud/parsers"
+	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/discovery_enrichment/cloud/parsers"
 	"go.uber.org/zap"
 )
 

@@ -2,7 +2,7 @@ name: nw-testssl-scanner
 
 services:
   testssl-scanner:
-    image: ghcr.io/mojtabatajik/nightwatch-testssl-scanner:${IMAGE_TAG:-dev}
+    image: ghcr.io/vulwall/testssl-scanner:${IMAGE_TAG:-dev}
     restart: unless-stopped
     read_only: true
     stop_grace_period: 30s

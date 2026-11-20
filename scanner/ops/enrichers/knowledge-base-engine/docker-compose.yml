@@ -2,7 +2,7 @@ name: nw-knowledge-base-engine
 
 services:
   knowledge-base-engine:
-    image: ghcr.io/mojtabatajik/nightwatch-knowledge-base-engine:${IMAGE_TAG:-dev}
+    image: ghcr.io/vulwall/knowledge-base-engine:${IMAGE_TAG:-dev}
     container_name: nw-knowledge-base-engine
     restart: unless-stopped
     read_only: true

@@ -1,10 +1,10 @@
 package main
 
 import (
+	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/testssl_scanner"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/bootstrap"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/redis/go-redis/v9"
-	"github.com/vulwall/scanners/internal/active_recon/testssl_scanner"
-	"github.com/vulwall/scanners/internal/core/bootstrap"
-	"github.com/vulwall/scanners/internal/core/config"
 	"go.uber.org/zap"
 )
 

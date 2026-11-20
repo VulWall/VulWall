@@ -1,6 +1,6 @@
 package scan_coordinator
 
-import "github.com/vulwall/scanners/internal/shared"
+import "github.com/VulWall/VulWall/scanner/src/internal/shared"
 
 // StreamGroup identifies one Redis stream consumer group that participates in the
 // finding-producing path of a scan.

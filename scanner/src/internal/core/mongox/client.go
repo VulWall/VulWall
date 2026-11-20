@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/vulwall/scanners/internal/core/config"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )

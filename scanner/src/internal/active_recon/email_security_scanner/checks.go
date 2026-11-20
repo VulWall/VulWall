@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"github.com/miekg/dns"
-	"github.com/vulwall/scanners/internal/shared"
 )
 
 // Common DKIM selectors to check

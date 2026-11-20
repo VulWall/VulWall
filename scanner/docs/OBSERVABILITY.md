@@ -31,7 +31,7 @@ All services MUST follow this pattern for distributed tracing across Redis strea
 **Before calling `PublishToStream`, inject trace context:**
 
 ```go
-import "github.com/vulwall/scanners/internal/core/telemetry"
+import "github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
 
 func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFinding) error {
     finding.TraceContext = telemetry.InjectTraceContext(ctx)
@@ -46,7 +46,7 @@ func (s *Service) publishFinding(ctx context.Context, finding shared.DiscoveryFi
 **After unmarshaling a message, extract trace context:**
 
 ```go
-import "github.com/vulwall/scanners/internal/core/telemetry"
+import "github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
 
 func (c *Consumer) handleMessage(ctx context.Context, message redis.XMessage) error {
     var finding shared.DiscoveryFinding
@@ -130,7 +130,7 @@ Scan Coordinator (root span, creates trace_id)
 
 ### 1. Publisher
 ```go
-import "github.com/vulwall/scanners/internal/core/telemetry"
+import "github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
 
 // Before PublishToStream:
 message.TraceContext = telemetry.InjectTraceContext(ctx)
@@ -138,7 +138,7 @@ message.TraceContext = telemetry.InjectTraceContext(ctx)
 
 ### 2. Consumer
 ```go
-import "github.com/vulwall/scanners/internal/core/telemetry"
+import "github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
 
 // After json.Unmarshal:
 ctx = telemetry.ExtractTraceContext(ctx, message.TraceContext)

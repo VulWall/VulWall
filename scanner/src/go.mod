@@ -1,4 +1,4 @@
-module github.com/vulwall/scanners
+module github.com/VulWall/VulWall/scanner/src
 
 go 1.26.0
 

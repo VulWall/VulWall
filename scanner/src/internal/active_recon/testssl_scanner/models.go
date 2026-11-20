@@ -1,6 +1,6 @@
 package testssl_scanner
 
-import "github.com/vulwall/scanners/internal/shared"
+import "github.com/VulWall/VulWall/scanner/src/internal/shared"
 
 // ScanTarget is an alias for the shared ScanTarget model
 // All active recon scanners use the same ScanTarget structure

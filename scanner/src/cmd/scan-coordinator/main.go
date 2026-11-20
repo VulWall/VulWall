@@ -6,12 +6,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/vulwall/scanners/internal/core/config"
-	"github.com/vulwall/scanners/internal/core/logger"
-	"github.com/vulwall/scanners/internal/core/mongox"
-	"github.com/vulwall/scanners/internal/core/redisx"
-	"github.com/vulwall/scanners/internal/core/telemetry"
-	"github.com/vulwall/scanners/internal/scan_coordinator"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/logger"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/mongox"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
+	"github.com/VulWall/VulWall/scanner/src/internal/scan_coordinator"
 	"go.uber.org/zap"
 )
 

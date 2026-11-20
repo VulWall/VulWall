@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/core/bootstrap"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
+	"github.com/VulWall/VulWall/scanner/src/internal/enrichers/knowledge_base"
+	"github.com/VulWall/VulWall/scanner/src/internal/enrichers/knowledge_base/anthropic"
 	"github.com/redis/go-redis/v9"
-	"github.com/vulwall/scanners/internal/core/bootstrap"
-	"github.com/vulwall/scanners/internal/core/config"
-	"github.com/vulwall/scanners/internal/enrichers/knowledge_base"
-	"github.com/vulwall/scanners/internal/enrichers/knowledge_base/anthropic"
 	"go.uber.org/zap"
 )
 

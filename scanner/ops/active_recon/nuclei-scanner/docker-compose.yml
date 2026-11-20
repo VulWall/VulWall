@@ -2,7 +2,7 @@ name: nw-nuclei-scanner
 
 services:
   nuclei-scanner:
-    image: ghcr.io/mojtabatajik/nightwatch-nuclei-scanner:${IMAGE_TAG:-dev}
+    image: ghcr.io/vulwall/nuclei-scanner:${IMAGE_TAG:-dev}
     restart: unless-stopped
     stop_grace_period: 30s
     deploy:

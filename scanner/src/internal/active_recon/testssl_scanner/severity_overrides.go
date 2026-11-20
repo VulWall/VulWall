@@ -1,6 +1,6 @@
 package testssl_scanner
 
-import "github.com/vulwall/scanners/internal/shared"
+import "github.com/VulWall/VulWall/scanner/src/internal/shared"
 
 // severityOverrides re-rates specific testssl.sh findings where the generic
 // severity from testssl.sh doesn't match real-world exploitability.

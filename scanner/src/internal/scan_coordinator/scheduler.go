@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"github.com/robfig/cron/v3"
-	"github.com/vulwall/scanners/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.opentelemetry.io/otel"

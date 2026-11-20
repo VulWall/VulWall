@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vulwall/scanners/internal/shared"
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"golang.org/x/net/html"
 	"go.uber.org/zap"
 )

@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"github.com/redis/go-redis/v9"
-	"github.com/vulwall/scanners/internal/core/redisx"
-	"github.com/vulwall/scanners/internal/core/telemetry"
-	"github.com/vulwall/scanners/internal/shared"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )

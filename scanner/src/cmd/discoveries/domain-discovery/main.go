@@ -1,11 +1,11 @@
 package main
 
 import (
+	"github.com/VulWall/VulWall/scanner/src/internal/core/bootstrap"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
+	"github.com/VulWall/VulWall/scanner/src/internal/discoveries/domain_discovery"
+	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"github.com/redis/go-redis/v9"
-	"github.com/vulwall/scanners/internal/core/bootstrap"
-	"github.com/vulwall/scanners/internal/core/config"
-	"github.com/vulwall/scanners/internal/discoveries/domain_discovery"
-	"github.com/vulwall/scanners/internal/shared"
 	"go.uber.org/zap"
 )
 
