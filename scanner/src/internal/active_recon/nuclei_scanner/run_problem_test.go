@@ -27,6 +27,16 @@ func TestRunProblemOnRealLogs(t *testing.T) {
 		// The same log for a bare host: its own addresses are :443 and :80.
 		{"healthy bare host", "172.20.0.3", "nuclei_ok-ip.stderr", true},
 		{"stopped mid-run bare host", "172.20.0.3", "nuclei_mid-nosilent.stderr", false},
+		// Hostname targets (domain triggers), nuclei v3.11.1. nuclei logs the name, not the IP:
+		// "Skipped <host>:<port>".
+		// Healthy nginx on port 80 only, scanned by name: completed; no skip of :443 although
+		// nothing listens there (httpx picked http), only the template probe of :4040.
+		{"healthy hostname", "shop.vwnh.test", "nuclei_ok-host.stderr", true},
+		// example.com behind Cloudflare: connections timed out under scan load, nuclei dropped
+		// "example.com:443" and still reported "Scan completed ... 2 matches found".
+		{"cdn timeout hostname", "example.com", "nuclei_cdn-timeout-host.stderr", false},
+		// A name whose address never answers: "Skipped 1.2.3.4.sslip.io:80", httpx found 0 URLs.
+		{"dead hostname", "1.2.3.4.sslip.io", "nuclei_dead-host.stderr", false},
 	}
 	for _, c := range cases {
 		log, err := os.ReadFile("testdata/" + c.file)

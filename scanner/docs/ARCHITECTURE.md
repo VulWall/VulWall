@@ -328,6 +328,17 @@ error that kept the check from completing. A tool failure is a coverage `error` 
 returns nil (no retry of a slow scan); only a failed publish is returned as a handler error. Be
 strict about "complete": a check that hid an error behind "no findings" resolves real findings.
 
+**nuclei targets:** a domain or subdomain (`domain_scan_triggers`) is scanned by its hostname,
+`-u <host>`, not by the IP it resolved to. nuclei probes https and http for the bare host, so TLS
+SNI and the Host header name the site; behind a CDN, WAF or virtual host the bare IP gets a 403 or
+no certificate and nuclei drops it as unresponsive. Before the run, every A/AAAA answer of the
+host must be public (`shared.ResolvePublicIPs`, unless `ALLOW_PRIVATE_TARGETS`), else the coverage
+is `error` and nuclei does not run; `-lna` repeats the check at dial time. Findings and coverage
+keep the domain discovery's `discovery_id`. nuclei logs a hostname target's drops as
+`Skipped <host>:<port>`, which `runProblem` matches through `reachAddrs` (`<host>:443`,
+`<host>:80`); the root check after the run GETs `https://<host>/` (then `http://`) through the
+SSRF-safe dialer. A port (`port_scan_triggers`) is still scanned as `<scheme>://<ip>:<port>`.
+
 ---
 
 ## Ingestion Architecture

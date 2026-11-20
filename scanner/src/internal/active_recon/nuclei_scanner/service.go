@@ -180,6 +180,24 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		zap.String("exclude_tags", excludeTags),
 	)
 
+	// Every address of the target must be public before nuclei runs: a name with a private
+	// answer is not scanned (coverage error). -lna repeats the check at dial time, which also
+	// covers a DNS answer that changes between this lookup and nuclei's own.
+	if err := publicTarget(ctx, target.Target); err != nil {
+		if ctx.Err() != nil {
+			s.logger.Info("Nuclei scan stopped by shutdown", zap.String("target", target.Target))
+			return ctx.Err()
+		}
+		s.logger.Warn("Nuclei target not scanned",
+			zap.String("target", target.Target),
+			zap.Error(err),
+		)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("scan.success", false))
+		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
+	}
+
 	// Run Nuclei scan
 	findings, err := s.runNucleiScan(ctx, target.Target, "low,medium,high,critical")
 	if err != nil && ctx.Err() != nil {
@@ -237,6 +255,18 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
 	}
 	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
+}
+
+// publicTarget resolves the host of target (a bare host or IP, or a URL) and returns an error
+// unless every address is public (shared.ResolvePublicIPs; ALLOW_PRIVATE_TARGETS lifts the
+// range check). A failed lookup is an error too: there is nothing to scan.
+func publicTarget(ctx context.Context, target string) error {
+	host := target
+	if u, err := url.Parse(target); err == nil && u.Host != "" {
+		host = u.Hostname()
+	}
+	_, err := shared.ResolvePublicIPs(ctx, host)
+	return err
 }
 
 // reachAddrs returns the host:port addresses that show a nuclei target is still up: the URL's
@@ -328,6 +358,10 @@ func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([
 		)
 		return nil, err
 	}
+	s.logger.Info("Nuclei run finished",
+		zap.String("target", target),
+		zap.String("summary", scanSummary(stderr.Bytes())),
+	)
 	return parseNucleiOutput(stdout.Bytes())
 }
 
@@ -379,6 +413,17 @@ func runProblem(target string, stderr []byte) error {
 		return errors.New("nuclei did not report a completed scan")
 	}
 	return nil
+}
+
+// scanSummary returns nuclei's "Scan completed in ..." log line, for the log.
+func scanSummary(stderr []byte) string {
+	summary := ""
+	for _, line := range strings.Split(string(stderr), "\n") {
+		if strings.Contains(line, "Scan completed in") {
+			summary = strings.TrimSpace(line)
+		}
+	}
+	return summary
 }
 
 // logTail returns at most the last 1000 bytes of b, for error messages.

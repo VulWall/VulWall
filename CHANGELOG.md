@@ -117,6 +117,11 @@ First open-source, self-hosted release, under the MIT License.
   positive" and "Accepted risk" labels, page titles, report headings, error
   pages, dialogs and buttons. The design skill no longer says eyebrow labels
   are uppercase.
+- nuclei scans domains and subdomains by hostname instead of the resolved
+  IP, so TLS SNI and the Host header reach sites behind a CDN, WAF or
+  virtual host. Every address of the name must be public before the run
+  (else coverage `error`); `-lna` stays on. Open ports are still scanned by
+  IP and port.
 
 ### Security
 
