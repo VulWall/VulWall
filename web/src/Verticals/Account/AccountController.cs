@@ -29,6 +29,7 @@ public class AccountController(
     // Account-wide login counter ("login:admin"): caps guesses spread across many IPs.
     private const string AccountRateLimitSubject = "admin";
     private const int AccountMaxAttempts = 20;
+    private const string ChangePasswordRateLimitEndpoint = "change-password";
 
     [AllowAnonymous]
     [HttpGet("/setup")]
@@ -121,8 +122,48 @@ public class AccountController(
     [AuditLog(Category = AuditLogCategory.Account, Action = "Logged out")]
     public async Task<IActionResult> Logout()
     {
+        // Rotating the stamp also ends copies of this cookie and sessions on other devices.
+        await accountService.RotateSecurityStampAsync();
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return Redirect("/login");
+    }
+
+    [Authorize]
+    [HttpPost("/account/password")]
+    [AuditLog(Category = AuditLogCategory.Account, Action = "Changed password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordInput input)
+    {
+        if (!ModelState.IsValid)
+        {
+            TempData["Error"] = ModelState.Values.SelectMany(v => v.Errors).First().ErrorMessage;
+            return Redirect("/settings");
+        }
+
+        if (AccountService.ValidatePassword(input.NewPassword) is { } passwordError)
+        {
+            TempData["Error"] = $"New password: {passwordError}";
+            return Redirect("/settings");
+        }
+
+        // Same per-IP limit as login: the current-password check is a password oracle too.
+        if (!rateLimiter.TryReserveAttempt(ChangePasswordRateLimitEndpoint))
+        {
+            TempData["Error"] = "Too many failed attempts. Try again in 15 minutes.";
+            return Redirect("/settings");
+        }
+
+        var (result, user) = await accountService.ChangePasswordAsync(input.CurrentPassword, input.NewPassword);
+        if (result != ChangePasswordResult.Changed)
+        {
+            TempData["Error"] = "The current password is incorrect.";
+            return Redirect("/settings");
+        }
+
+        rateLimiter.ResetAttempts(ChangePasswordRateLimitEndpoint);
+        // The stamp changed, so re-issue this browser's cookie; every other session is signed out.
+        await SignInAsync(user!);
+        TempData["Success"] = "Password changed. Other sessions have been signed out.";
+        return Redirect("/settings");
     }
 
     private async Task SignInAsync(User user)
@@ -131,7 +172,8 @@ public class AccountController(
         {
             new(ClaimTypes.NameIdentifier, user.Id),
             new(ClaimTypes.Email, user.Email),
-            new(ClaimTypes.Name, user.Email)
+            new(ClaimTypes.Name, user.Email),
+            new(AccountService.SecurityStampClaim, user.SecurityStamp ?? string.Empty)
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
 

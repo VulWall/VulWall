@@ -90,6 +90,41 @@
     </div>
 </div>
 
+<div class="vw-section-card">
+    <div class="vw-section-header">
+        <i class="fa-solid fa-key"></i>
+        <h2>Password</h2>
+    </div>
+    <p class="vw-section-desc">Changing the password signs out every other session.</p>
+
+    <form action="/account/password" method="post" asp-antiforgery="true" id="changePasswordForm">
+        <input type="text" name="username" value="@User.Identity?.Name" autocomplete="username" hidden />
+        <div class="vw-fld-grid">
+            <label class="vw-fld-label">
+                <span class="vw-fld-label-text">Current password</span>
+                <input type="password" name="CurrentPassword" class="vw-fld" autocomplete="current-password" required />
+            </label>
+            <label class="vw-fld-label">
+                <span class="vw-fld-label-text">New password</span>
+                <input type="password" name="NewPassword" class="vw-fld" autocomplete="new-password"
+                       minlength="@VulWall.Dashboard.Account.Services.AccountService.MinPasswordLength" required />
+            </label>
+            <label class="vw-fld-label">
+                <span class="vw-fld-label-text">Repeat new password</span>
+                <input type="password" name="ConfirmNewPassword" class="vw-fld" autocomplete="new-password"
+                       minlength="@VulWall.Dashboard.Account.Services.AccountService.MinPasswordLength" required />
+            </label>
+        </div>
+        <p class="vw-logo-meta mb-0 mt-2">At least @VulWall.Dashboard.Account.Services.AccountService.MinPasswordLength characters.</p>
+
+        <div class="d-flex justify-content-end mt-4">
+            <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-key me-2"></i>Change password
+            </button>
+        </div>
+    </form>
+</div>
+
 @{
     var confirmRemoveLogoModalModel = new ConfirmationModalModel
     {

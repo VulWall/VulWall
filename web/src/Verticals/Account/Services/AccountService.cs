@@ -13,6 +13,13 @@ public enum SetupResult
     AlreadySetUp
 }
 
+public enum ChangePasswordResult
+{
+    Changed,
+    WrongCurrentPassword,
+    InvalidNewPassword
+}
+
 /// <summary>
 /// Local single-admin accounts: first-run setup and password login.
 /// </summary>
@@ -35,6 +42,14 @@ public class AccountService(
     // Once an admin exists it is never removed by the app, so a true result can be cached
     // for the process lifetime. False is always re-checked.
     private static volatile bool _adminExists;
+
+    /// <summary>Claim type that carries the security stamp in the auth cookie.</summary>
+    public const string SecurityStampClaim = "vulwall:security_stamp";
+
+    // The cookie handler checks the stamp on every request; cache it briefly so that is not a
+    // database read per request. Rotation clears it, so this process sees a change at once.
+    private static readonly TimeSpan StampCacheTtl = TimeSpan.FromSeconds(30);
+    private static (string? Stamp, DateTime Until)? _stampCache;
 
     public async Task<bool> AdminExistsAsync()
     {
@@ -76,7 +91,8 @@ public class AccountService(
             await usersRepository.CreateAsync(new User
             {
                 Email = normalizedEmail,
-                PasswordHash = HashPassword(password)
+                PasswordHash = HashPassword(password),
+                SecurityStamp = NewSecurityStamp()
             });
         }
         catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
@@ -111,6 +127,70 @@ public class AccountService(
         return emailMatches && passwordMatches ? user : null;
     }
 
-    /// <summary>Test hook: the cached flag outlives a test's throwaway database.</summary>
-    internal static void ResetCacheForTests() => _adminExists = false;
+    /// <summary>
+    /// The admin's current stamp: empty for an account created before stamps existed, null when
+    /// there is no admin (every cookie is then invalid).
+    /// </summary>
+    public async Task<string?> GetSecurityStampAsync()
+    {
+        if (_stampCache is { } cached && cached.Until > DateTime.UtcNow)
+            return cached.Stamp;
+
+        var user = await usersRepository.GetByIdAsync(User.AdminId);
+        var stamp = user == null ? null : user.SecurityStamp ?? string.Empty;
+        _stampCache = (stamp, DateTime.UtcNow + StampCacheTtl);
+        return stamp;
+    }
+
+    /// <summary>Invalidates every auth cookie issued so far. Returns the new stamp.</summary>
+    public async Task<string> RotateSecurityStampAsync()
+    {
+        var stamp = NewSecurityStamp();
+        await usersRepository.FindOneAndUpdateAsync(
+            Builders<User>.Filter.Eq(u => u.Id, User.AdminId),
+            Builders<User>.Update.Set(u => u.SecurityStamp, stamp));
+        _stampCache = null;
+        return stamp;
+    }
+
+    /// <summary>
+    /// Changes the admin password after checking the current one, and rotates the security stamp
+    /// so every other session is signed out.
+    /// </summary>
+    public async Task<(ChangePasswordResult Result, User? User)> ChangePasswordAsync(string currentPassword, string newPassword)
+    {
+        var user = await usersRepository.GetByIdAsync(User.AdminId);
+        if (user == null || !await BcryptGate.VerifyAsync(currentPassword, user.PasswordHash))
+            return (ChangePasswordResult.WrongCurrentPassword, null);
+
+        if (ValidatePassword(newPassword) != null)
+            return (ChangePasswordResult.InvalidNewPassword, null);
+
+        var stamp = NewSecurityStamp();
+        var updated = await usersRepository.FindOneAndUpdateAsync(
+            Builders<User>.Filter.Eq(u => u.Id, User.AdminId),
+            Builders<User>.Update
+                .Set(u => u.PasswordHash, HashPassword(newPassword))
+                .Set(u => u.SecurityStamp, stamp),
+            new FindOneAndUpdateOptions<User> { ReturnDocument = ReturnDocument.After });
+        _stampCache = null;
+        logger.LogInformation("Changed the admin password");
+        return (ChangePasswordResult.Changed, updated);
+    }
+
+    /// <summary>True when the stamp in a cookie still matches the admin's current stamp.</summary>
+    public async Task<bool> IsSecurityStampCurrentAsync(string? cookieStamp)
+    {
+        var current = await GetSecurityStampAsync();
+        return current != null && current == (cookieStamp ?? string.Empty);
+    }
+
+    private static string NewSecurityStamp() => Guid.NewGuid().ToString("N");
+
+    /// <summary>Test hook: the cached values outlive a test's throwaway database.</summary>
+    internal static void ResetCacheForTests()
+    {
+        _adminExists = false;
+        _stampCache = null;
+    }
 }

@@ -115,6 +115,91 @@ public class AccountServiceTests(MongoFixture mongo)
     }
 
     [Fact]
+    public async Task SecurityStamp_IsSetOnCreateAndRotationInvalidatesIt()
+    {
+        var (service, _) = Create();
+        await service.CreateAdminAsync("admin@example.com", "a-long-password", null);
+        var original = (await service.ValidateCredentialsAsync("admin@example.com", "a-long-password"))!.SecurityStamp;
+
+        Assert.False(string.IsNullOrEmpty(original));
+        Assert.True(await service.IsSecurityStampCurrentAsync(original));
+
+        var rotated = await service.RotateSecurityStampAsync();
+
+        Assert.NotEqual(original, rotated);
+        Assert.False(await service.IsSecurityStampCurrentAsync(original));
+        Assert.True(await service.IsSecurityStampCurrentAsync(rotated));
+    }
+
+    [Fact]
+    public async Task SecurityStamp_AccountWithoutStamp_AcceptsCookieWithoutStampUntilRotated()
+    {
+        var (service, db) = Create();
+        await db.GetCollection<BsonDocument>("users").InsertOneAsync(new BsonDocument
+        {
+            { "_id", "admin" }, { "email", "admin@example.com" },
+            { "password_hash", AccountService.HashPassword("a-long-password") }
+        });
+
+        Assert.True(await service.IsSecurityStampCurrentAsync(null));
+
+        await service.RotateSecurityStampAsync();
+
+        Assert.False(await service.IsSecurityStampCurrentAsync(null));
+    }
+
+    [Fact]
+    public async Task SecurityStamp_NoAdmin_RejectsEveryCookie()
+    {
+        var (service, _) = Create();
+
+        Assert.False(await service.IsSecurityStampCurrentAsync(null));
+        Assert.False(await service.IsSecurityStampCurrentAsync(""));
+    }
+
+    [Fact]
+    public async Task ChangePassword_WrongCurrentPassword_ChangesNothing()
+    {
+        var (service, _) = Create();
+        await service.CreateAdminAsync("admin@example.com", "a-long-password", null);
+        var stamp = await service.GetSecurityStampAsync();
+
+        var (result, _) = await service.ChangePasswordAsync("wrong-password", "a-new-long-password");
+
+        Assert.Equal(ChangePasswordResult.WrongCurrentPassword, result);
+        Assert.NotNull(await service.ValidateCredentialsAsync("admin@example.com", "a-long-password"));
+        Assert.True(await service.IsSecurityStampCurrentAsync(stamp));
+    }
+
+    [Fact]
+    public async Task ChangePassword_TooShort_IsRejected()
+    {
+        var (service, _) = Create();
+        await service.CreateAdminAsync("admin@example.com", "a-long-password", null);
+
+        var (result, _) = await service.ChangePasswordAsync("a-long-password", "short");
+
+        Assert.Equal(ChangePasswordResult.InvalidNewPassword, result);
+        Assert.NotNull(await service.ValidateCredentialsAsync("admin@example.com", "a-long-password"));
+    }
+
+    [Fact]
+    public async Task ChangePassword_Correct_ChangesPasswordAndRotatesStamp()
+    {
+        var (service, _) = Create();
+        await service.CreateAdminAsync("admin@example.com", "a-long-password", null);
+        var oldStamp = await service.GetSecurityStampAsync();
+
+        var (result, user) = await service.ChangePasswordAsync("a-long-password", "a-new-long-password");
+
+        Assert.Equal(ChangePasswordResult.Changed, result);
+        Assert.Null(await service.ValidateCredentialsAsync("admin@example.com", "a-long-password"));
+        Assert.NotNull(await service.ValidateCredentialsAsync("admin@example.com", "a-new-long-password"));
+        Assert.False(await service.IsSecurityStampCurrentAsync(oldStamp));
+        Assert.True(await service.IsSecurityStampCurrentAsync(user!.SecurityStamp));
+    }
+
+    [Fact]
     public async Task EnsureDefaultOrganization_CreatesOneOrgWithScanCron()
     {
         var (_, db) = Create();
@@ -333,6 +418,38 @@ public class AccountControllerTests(MongoFixture mongo)
 
         Assert.IsType<ViewResult>(result);
         Assert.Contains(controller.ModelState[string.Empty]!.Errors, e => e.ErrorMessage.Contains("Too many"));
+    }
+
+    [Fact]
+    public async Task Logout_RotatesSecurityStamp()
+    {
+        var (controller, service) = Create();
+        await service.CreateAdminAsync("admin@example.com", "a-long-password", null);
+        var stamp = await service.GetSecurityStampAsync();
+
+        await controller.Logout();
+
+        Assert.False(await service.IsSecurityStampCurrentAsync(stamp));
+    }
+
+    [Fact]
+    public async Task ChangePassword_Success_ReissuesCookieWithNewStamp()
+    {
+        var (controller, service) = Create();
+        await service.CreateAdminAsync("admin@example.com", "a-long-password", null);
+        var oldStamp = await service.GetSecurityStampAsync();
+
+        var result = await controller.ChangePassword(new ChangePasswordInput
+        {
+            CurrentPassword = "a-long-password",
+            NewPassword = "a-new-long-password",
+            ConfirmNewPassword = "a-new-long-password"
+        });
+
+        Assert.Equal("/settings", Assert.IsType<RedirectResult>(result).Url);
+        var cookieStamp = controller.HttpContext.User.FindFirst(AccountService.SecurityStampClaim)?.Value;
+        Assert.NotEqual(oldStamp, cookieStamp);
+        Assert.True(await service.IsSecurityStampCurrentAsync(cookieStamp));
     }
 
     [Fact]

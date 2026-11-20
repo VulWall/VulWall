@@ -27,6 +27,13 @@ public class User : IEntity<string>
     [BsonElement("password_hash")]
     public string PasswordHash { get; set; } = null!;
 
+    /// <summary>
+    /// Random value copied into the auth cookie. Rotating it (logout, password change) invalidates
+    /// every cookie issued before. Null on accounts created before it existed.
+    /// </summary>
+    [BsonElement("security_stamp")]
+    public string? SecurityStamp { get; set; }
+
     [BsonElement("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

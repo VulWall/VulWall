@@ -1,4 +1,5 @@
 using Anthropic;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -153,6 +154,21 @@ public static class ServiceCollectionExtensions
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.Cookie.SecurePolicy = CookieSecurePolicyFromSettings();
+                options.Events = new CookieAuthenticationEvents
+                {
+                    // Logout and password changes rotate the admin's security stamp; a cookie
+                    // carrying an older stamp is rejected even though it has not expired.
+                    OnValidatePrincipal = async context =>
+                    {
+                        var accountService = context.HttpContext.RequestServices.GetRequiredService<AccountService>();
+                        var stamp = context.Principal?.FindFirst(AccountService.SecurityStampClaim)?.Value;
+                        if (!await accountService.IsSecurityStampCurrentAsync(stamp))
+                        {
+                            context.RejectPrincipal();
+                            await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                        }
+                    }
+                };
             });
 
         services.AddScoped<AccountService>();
