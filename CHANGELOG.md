@@ -281,3 +281,5 @@ First open-source, self-hosted release, under the MIT License.
 - The feature-access layer (`IFeatureAccessService`, `FeatureAccess`): trends
   and finding suppression are always on. Shared report links stay behind
   `SHARED_LINKS_ENABLED`.
+- The Settings "Preferences" tab and its "Restart tour" button. The welcome
+  tour still opens on the first visit to the dashboard.

@@ -93,16 +93,4 @@ public class SettingsService(OrganizationRepository organizationRepository)
 
         await organizationRepository.UpdateAsync(organization);
     }
-
-    public async Task ResetTourAsync(string organizationId)
-    {
-        var organization = await organizationRepository.GetByIdAsync(organizationId);
-        if (organization == null)
-            throw new InvalidOperationException($"Organization not found: {organizationId}");
-
-        organization.TourCompleted = false;
-        organization.UpdatedAt = DateTime.UtcNow;
-
-        await organizationRepository.UpdateAsync(organization);
-    }
 }

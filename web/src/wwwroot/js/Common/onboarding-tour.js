@@ -484,13 +484,6 @@ class OnboardingTour {
             this.keyHandler = null;
         }
     }
-
-    /**
-     * Reset tour (for restart from settings)
-     */
-    static reset() {
-        localStorage.removeItem(TOUR_STORAGE_KEY);
-    }
 }
 
 // Initialize tour on Dashboard page

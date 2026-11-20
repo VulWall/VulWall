@@ -144,25 +144,6 @@ public class SettingsController(
         return Ok();
     }
 
-    [Authorize]
-    [HttpPost]
-    public async Task<IActionResult> ResetTour()
-    {
-        var orgId = await organizationContext.GetCurrentOrgIdAsync();
-        await settingsService.ResetTourAsync(orgId);
-
-        TempData["Success"] = "Welcome tour has been reset. Visit the Dashboard to start the tour.";
-        return RedirectToAction(nameof(Index));
-    }
-
-    [Authorize]
-    [HttpGet]
-    public async Task<IActionResult> GetPreferencesData()
-    {
-        var organization = await GetCurrentOrganizationAsync();
-        return PartialView("Partials/_Preferences", organization.TourCompleted);
-    }
-
     private async Task<Data.Entities.Organization.Organization> GetCurrentOrganizationAsync()
     {
         var organization = await organizationContext.GetCurrentOrganizationAsync();
