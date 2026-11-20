@@ -41,8 +41,8 @@
     var $fill  = document.querySelector("[data-next-scan-fill]");
     if (!$time || !$clock || !$fill) return;
 
-    // Set the scheduled clock time once (doesn't change)
-    $clock.textContent = new Date(nextUtc).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    // Set the scheduled day and time once (doesn't change), in the browser's locale and time zone
+    $clock.textContent = new Date(nextUtc).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
 
     function pad(n) { return String(n).padStart(2, "0"); }
 
@@ -58,7 +58,7 @@
         return m + "m " + pad(s) + "s";
     }
 
-    var interval = setInterval(function () {
+    function tick() {
         var now = Date.now();
         var remaining = nextUtc - now;
         var period = nextUtc - periodStartUtc;
@@ -71,5 +71,9 @@
         if (remaining <= 0) {
             clearInterval(interval);
         }
-    }, 1000);
+    }
+
+    // Render at once, then every second: no placeholder dash on page load.
+    var interval = setInterval(tick, 1000);
+    tick();
 })();

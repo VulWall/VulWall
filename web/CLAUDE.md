@@ -128,7 +128,7 @@ Each vertical is self-contained and includes:
 * **Reports**: Report generation (Summary, Technical), shared report links
 * **Scans**: Scan history, results, findings overview
 * **Settings**: User settings, company details, scan schedule, preferences
-* **About**: Data for the About dialog (`Common/Views/_AboutDialog.cshtml`, opened from the sidebar footer): `GET /about/info` (versions from the scanner's `system_info` document, plus a copy-paste system info text with versions and counts only) and `POST /about/check-updates` (server-side GitHub latest-release check, only on click, 1 h cache)
+* **About**: Data for the About dialog (`Common/Views/_AboutDialog.cshtml`, opened from the About button in the sidebar): `GET /about/info` (versions from the scanner's `system_info` document, plus a copy-paste system info text with versions and counts only) and `POST /about/check-updates` (server-side GitHub latest-release check, only on click, 1 h cache)
 
 ### Common Layer (Shared Across Verticals)
 The Common layer contains **only** types needed for cross-vertical communication:
