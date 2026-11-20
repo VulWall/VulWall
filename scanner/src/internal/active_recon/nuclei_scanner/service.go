@@ -224,12 +224,12 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		// (down, or a WAF that banned the scanner). Only a target that still accepts a
 		// connection afterwards makes the run evidence.
 		if rerr := shared.Reachable(ctx, reachAddrs(target.Target)...); rerr != nil {
-			err = fmt.Errorf("target not reachable after the run: %w", rerr)
+			err = targetSide(fmt.Errorf("target not reachable after the run: %w", rerr))
 		} else if berr := rootBlocked(ctx, s.rootClient, target.Target); berr != nil {
 			// nuclei says nothing about a 403 or a WAF challenge on every request: its
 			// templates then met the block, not the application. Its matches may come from
 			// the block or challenge page too, so none of them is published.
-			err = fmt.Errorf("target blocks the scanner: %w", berr)
+			err = targetSide(fmt.Errorf("target blocks the scanner: %w", berr))
 			if len(findings) > 0 {
 				s.logger.Warn("Nuclei matches dropped: target blocks the scanner",
 					zap.String("target", target.Target),
@@ -244,7 +244,11 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		// "error", so the scan resolves no nuclei finding on this target. The matches of an
 		// incomplete or failed run are still real and are published below (not those of a
 		// blocked run, dropped above).
-		s.logger.Error("Nuclei scan failed",
+		logFailure := s.logger.Error
+		if isTargetSide(err) {
+			logFailure = s.logger.Warn // the target did not answer: expected, not a scanner fault
+		}
+		logFailure("Nuclei scan failed",
 			zap.String("target", target.Target),
 			zap.Int("findings_count", len(findings)),
 			zap.Error(err),
@@ -477,7 +481,7 @@ func runProblem(target string, stderr []byte) error {
 		}
 		for _, addr := range reachAddrs(target) {
 			if strings.Contains(line, "Skipped "+addr+" from target list") {
-				return fmt.Errorf("nuclei dropped the target during the run: %s", strings.TrimSpace(line))
+				return targetSide(fmt.Errorf("nuclei dropped the target during the run: %s", strings.TrimSpace(line)))
 			}
 		}
 		if strings.Contains(line, "Scan completed in") {
@@ -488,6 +492,23 @@ func runProblem(target string, stderr []byte) error {
 		return errors.New("nuclei did not report a completed scan")
 	}
 	return nil
+}
+
+// targetSideError marks a run that did not complete because of the target, not the scanner:
+// nuclei dropped it as unresponsive, it stopped accepting connections, or it blocks the
+// scanner. Such a run is still coverage "error", but it is expected (a CDN or WAF in front,
+// a host that went down), so it is logged at Warn. Every other failure (no nuclei binary,
+// no templates, [FTL], a non-zero exit, unreadable output) stays at Error.
+type targetSideError struct{ err error }
+
+func (e targetSideError) Error() string { return e.err.Error() }
+func (e targetSideError) Unwrap() error { return e.err }
+
+func targetSide(err error) error { return targetSideError{err} }
+
+func isTargetSide(err error) bool {
+	var t targetSideError
+	return errors.As(err, &t)
 }
 
 // scanSummary returns nuclei's "Scan completed in ..." log line, for the log.
