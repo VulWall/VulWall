@@ -235,6 +235,11 @@ func coordinatorComponents(ctx context.Context, rdb *redis.Client, db *mongo.Dat
 	if _, err := service.CloseInterruptedScans(ctx); err != nil {
 		return nil, err
 	}
+	// Runs before supervise starts any consumer, so every consumer it removes belongs to
+	// the previous process.
+	if err := scan_coordinator.ReleaseOrphanedPending(ctx, rdb, log); err != nil {
+		return nil, err
+	}
 	scheduler := scan_coordinator.NewScheduler(service, db, scan_coordinator.NewStreamCleaner(rdb, log), log)
 	monitor := scan_coordinator.NewScanMonitor(rdb, db, log)
 

@@ -96,7 +96,7 @@ container health check; the scanner opens no port).
 - Trigger streams use `CreateConsumerGroupFromLatest` (from `$`) — ephemeral
 - Result/job streams use `CreateConsumerGroup` (from `0`) — guaranteed delivery
 - `redisx.ConsumeStream` ACKs after the handler returns, also on handler error and on a recovered panic (logged with stack). A handler that fails because shutdown cancelled its context is NOT ACKed
-- At startup `nightwatch` closes every `pending`/`running` scan as `failed` with `status_reason: "interrupted_by_restart"` (no finding resolution), before the scan monitor starts
+- At startup `nightwatch` closes every `pending`/`running` scan as `failed` with `status_reason: "interrupted_by_restart"` (no finding resolution), then deletes the previous process's consumers (and their pending entries) from the `scanPipelineGroups()` groups (`ReleaseOrphanedPending`), before any component starts
 
 ### Data Rules
 
