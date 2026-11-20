@@ -67,6 +67,10 @@ First open-source, self-hosted release, under the MIT License.
   `upgrade`, `backup`, `restore`, `reset-admin`, `doctor`, `uninstall` and
   `version`. It is a release asset, checked against `SHA256SUMS` like the
   other files.
+- Adding an asset or pressing Scan now while a scan runs queues one
+  follow-up scan that starts right after it and scans every asset there is
+  then. Only one scan waits per organization (a unique partial index on
+  `scans`); further requests say a follow-up is already queued.
 
 ### Changed
 
@@ -84,6 +88,16 @@ First open-source, self-hosted release, under the MIT License.
 - The sidebar footer shows "VulWall <version> · MIT" with a link to the
   GitHub repository. Release images set the version from the tag
   (`VULWALL_VERSION` build argument); other builds show "dev".
+- nuclei runs without `-silent`, with `-nc -duc`. The scanner reads its log
+  to tell a finished run from one that dropped the target.
+- UI labels and eyebrows use sentence case; uppercase is kept for the
+  wordmark and solid severity chips. The onboarding tour and the summary
+  report no longer promise alerts or continuous monitoring.
+- CI runs the MongoDB- and Redis-backed scanner tests and lints the
+  workflow files with actionlint.
+- The FAQ and the configuration page say which lookups
+  `DNS_RECHECK_RESOLVERS` covers: root domains, known subdomains and SPF,
+  DMARC, MX and NS records.
 
 ### Security
 
@@ -120,6 +134,16 @@ First open-source, self-hosted release, under the MIT License.
 - The release compose file pins the scanner and web images by digest, and
   each release image has a signed build provenance attestation
   (`gh attestation verify oci://ghcr.io/vulwall/web:<version> --owner VulWall`).
+- `install.sh` and the `vulwall` helper no longer pass `SETUP_TOKEN` on the
+  `sudo env` command line, where other local users could read it. A token
+  from the environment is written to `.env` instead.
+- `install.sh` makes an existing `.env` readable by its owner only.
+- `vulwall uninstall` refuses the home directory (also through a symlink),
+  any directory above it, and a directory the installer did not create.
+- Coverage values (target, error, finding titles) are stored as
+  `$literal` in the update pipeline, so a value that starts with `$` is
+  not evaluated.
+- The `dead_letter` stream is capped at about 10,000 entries.
 
 ### Fixed
 
@@ -178,6 +202,26 @@ First open-source, self-hosted release, under the MIT License.
   error) is retried 3 times and then moved to the `dead_letter` stream,
   instead of being acknowledged and lost. Scanners no longer skip a finding
   they failed to publish.
+- A scanner no longer reports coverage `ok` for a check that did not
+  complete, so an unfixed finding is not resolved:
+  - testssl.sh: a non-zero exit, a JSON file without a numeric `scanTime`,
+    or a `scanProblem`/`FATAL` entry is `error`.
+  - nuclei: a non-zero exit, no "Scan completed" in the log, `[FTL]`, a
+    "Skipped <target> from target list" line, or a target root that answers
+    403, 429, 5xx or a WAF challenge after the run is `error`.
+  - Header and JS checks: `error` when neither http nor https answered, or
+    when an answer is a block or WAF challenge (403, 429, 5xx,
+    `cf-mitigated`, `x-amzn-waf-action`, known challenge pages). A JS file
+    served as a challenge page counts as not downloaded.
+  - Email check: a nameserver that did not resolve, or an AXFR attempt that
+    timed out before the first record, is `error`.
+- The header, email and JS scanners deduplicate findings by
+  `(finding_type, title)`, the key ingestion uses, so a finding that is
+  still present is always in `reported`.
+- Coverage `reported` keys no longer get stored twice (field order in
+  `$setUnion`).
+- `vulwall reset-admin` writes the new `.env` before it stops the web app,
+  and keeps the old token if deleting the admin fails.
 
 ### Removed
 
