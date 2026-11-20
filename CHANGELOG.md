@@ -111,6 +111,8 @@ First open-source, self-hosted release, under the MIT License.
   to its label. The organization name and email truncate with a tooltip.
   About, theme and log out are icon buttons; the "VulWall <version> · MIT"
   footer line is gone (the version stays in the About dialog).
+- The About dialog is 720px wide; its "Built with" list has three columns
+  on wide screens, two on medium screens and one on phones.
 
 ### Security
 

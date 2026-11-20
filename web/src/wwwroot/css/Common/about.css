@@ -10,6 +10,11 @@
     border-radius: 8px;
 }
 
+/* Wider than Bootstrap's default 500px (modal-lg is 800px). Bootstrap applies it from 576px. */
+.about-dialog {
+    --bs-modal-width: 720px;
+}
+
 .about-dialog .modal-body {
     font-size: 0.875rem;
     color: var(--vw-gray-700);
@@ -105,10 +110,17 @@
     text-align: center;
     color: var(--vw-gray-500);
 }
+/* Three columns when the dialog has its full width, two on medium screens, one on phones. */
 .about-built-with {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    grid-template-columns: 1fr;
     gap: 0.25rem 1rem;
+}
+@media (min-width: 576px) {
+    .about-built-with { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 768px) {
+    .about-built-with { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .about-license {
