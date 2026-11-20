@@ -35,8 +35,10 @@ const (
 	// ScanStuckThreshold is how long a pending entry may go without delivery before the
 	// scan monitor stops treating it as work in flight. A watched group whose youngest
 	// pending entry was delivered less than this ago blocks the idle timeout; older
-	// entries are treated as stuck, and the idle timeout may close the scan. A single
-	// job that legitimately runs longer than this is also treated as stuck.
+	// entries are treated as stuck, and the idle timeout may close the scan. A job whose
+	// handler is still running stays young: redisx.ConsumeStream resets its entry's idle
+	// time every minute (keepPendingFresh). A handler that hangs forever keeps its entry
+	// young too; the safety timeout (ScanSafetyTimeout) still closes that scan.
 	ScanStuckThreshold = 30 * time.Minute
 
 	// ScanSettleGrace is how long ingestion activity must have been quiet before a

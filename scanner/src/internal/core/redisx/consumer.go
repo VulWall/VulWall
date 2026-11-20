@@ -87,6 +87,10 @@ var (
 	handlerRetryDelay = 2 * time.Second
 )
 
+// pendingHeartbeat is how often a message whose handler is still running has its pending
+// entry's idle time reset (keepPendingFresh). A variable so tests can shorten it.
+var pendingHeartbeat = time.Minute
+
 // ackTimeout bounds an ACK sent with a context detached from shutdown.
 const ackTimeout = 5 * time.Second
 
@@ -149,7 +153,9 @@ func ConsumeStream(ctx context.Context, client *redis.Client, cfg ConsumerConfig
 				return PublishDeadLetter(ctx, client, cfg.Stream, cfg.Group, message.ID, data, cause)
 			}
 			for message := range jobs {
+				stop := keepPendingFresh(ctx, client, cfg.Stream, cfg.Group, consumerName, message.ID, log)
 				processMessage(ctx, cfg.Handler, ack, deadLetter, log, message)
+				stop()
 			}
 		}(i)
 	}
@@ -206,6 +212,43 @@ func ConsumeStream(ctx context.Context, client *redis.Client, cfg ConsumerConfig
 				}
 			}
 		}
+	}
+}
+
+// keepPendingFresh resets the idle time of message id's pending entry every pendingHeartbeat
+// until the returned stop is called, so the entry of a handler that is still running (a nuclei
+// run can take over an hour) stays young. The scan monitor reads a young pending entry as
+// work in flight and an old one as stuck (scan_coordinator.freshPendingWork); without the
+// heartbeat a long run looks stuck and the idle timeout closes the scan under it.
+//
+// XCLAIM to the same consumer with min-idle 0 and JUSTID resets the idle time and does not
+// count as a delivery. An entry already ACKed is not claimed, so a late beat is harmless.
+func keepPendingFresh(ctx context.Context, client *redis.Client, stream, group, consumer, id string, logger *zap.Logger) (stop func()) {
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		ticker := time.NewTicker(pendingHeartbeat)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				err := client.XClaimJustID(ctx, &redis.XClaimArgs{
+					Stream: stream, Group: group, Consumer: consumer, MinIdle: 0, Messages: []string{id},
+				}).Err()
+				if err != nil && ctx.Err() == nil {
+					logger.Warn("Failed to refresh pending entry", zap.String("message_id", id), zap.Error(err))
+				}
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-finished
 	}
 }
 
