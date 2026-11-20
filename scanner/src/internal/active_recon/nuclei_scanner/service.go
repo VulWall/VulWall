@@ -6,18 +6,20 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/VulWall/VulWall/scanner/src/internal/core/execx"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
-	"github.com/robfig/cron/v3"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/audit"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/robfig/cron/v3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -114,7 +116,7 @@ func (s *Service) updateTemplates(ctx context.Context) {
 	updateCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(updateCtx, "nuclei", "-update-templates", "-update-template-dir", templatesDir())
+	cmd := execx.Command(updateCtx, "nuclei", "-update-templates", "-update-template-dir", templatesDir())
 	output, err := cmd.CombinedOutput()
 
 	// Get version after update
@@ -147,7 +149,7 @@ func (s *Service) getTemplateVersion(ctx context.Context) string {
 	// TemplateUpdateLockTTL (keeps the TTL-vs-update-timeout invariant true).
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "nuclei", "-tv")
+	cmd := execx.Command(ctx, "nuclei", "-tv")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "unknown"
@@ -262,7 +264,7 @@ func templatesDir() string {
 
 // runNucleiScan executes Nuclei scanner on the target
 func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([]NucleiOutput, error) {
-	cmd := exec.CommandContext(ctx, "nuclei", nucleiArgs(target, severity)...)
+	cmd := execx.Command(ctx, "nuclei", nucleiArgs(target, severity)...)
 
 	// Execute command and capture both stdout and stderr
 	output, err := cmd.CombinedOutput()
@@ -350,9 +352,9 @@ func (s *Service) convertToSecurityFinding(nucleiOutput NucleiOutput, target Sca
 
 	return shared.SecurityFinding{
 		TraceID:     target.TraceID,
-		ScanID:      target.ScanID,  // Pass through scan_id
+		ScanID:      target.ScanID, // Pass through scan_id
 		OrgID:       target.OrgID,
-		Source:     "nuclei",
+		Source:      "nuclei",
 		DiscoveryID: target.DiscoveryID,
 		FindingType: nucleiOutput.TemplateID,
 		Severity:    severity,

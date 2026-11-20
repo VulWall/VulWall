@@ -7,13 +7,15 @@ import (
 	"net"
 	"os"
 	"os/exec"
+
+	"github.com/VulWall/VulWall/scanner/src/internal/core/execx"
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
+	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -118,7 +120,7 @@ func testSSLArgs(jsonPath, severity, ip, target string) []string {
 		"--jsonfile-pretty", jsonPath,
 		"--quiet",
 		"--warnings", "off",
-		"-U", // Vulnerabilities only (BEAST, POODLE, Heartbleed, etc.)
+		"-U",                   // Vulnerabilities only (BEAST, POODLE, Heartbleed, etc.)
 		"--severity", severity, // Configurable minimum severity threshold
 		"--ip", ip,
 		target,
@@ -150,7 +152,7 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string, severity st
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, "testssl.sh", testSSLArgs(tmpPath, severity, ip, target)...)
+	cmd := execx.Command(ctx, "testssl.sh", testSSLArgs(tmpPath, severity, ip, target)...)
 
 	// Execute command and capture stderr/stdout for error reporting
 	output, err := cmd.CombinedOutput()
@@ -286,9 +288,9 @@ func (s *Service) convertToSecurityFinding(testSSLFinding TestSSLFinding, target
 
 	return shared.SecurityFinding{
 		TraceID:     target.TraceID,
-		ScanID:      target.ScanID,      // Optional: scan identifier for linking to UI scans
+		ScanID:      target.ScanID, // Optional: scan identifier for linking to UI scans
 		OrgID:       target.OrgID,
-		Source:     "testssl",
+		Source:      "testssl",
 		DiscoveryID: target.DiscoveryID,
 		FindingType: testSSLFinding.ID, // Use test ID as finding type (e.g., "BREACH", "heartbleed")
 		Severity:    severity,

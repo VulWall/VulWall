@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+
+	"github.com/VulWall/VulWall/scanner/src/internal/core/execx"
 	"path/filepath"
 	"strings"
 	"time"
@@ -76,7 +78,7 @@ type ProcessedVulnerability struct {
 // RunRetireJS executes retire.js CLI and parses output
 func RunRetireJS(ctx context.Context, scanPath string, logger *zap.Logger) (*RetireJSOutput, error) {
 	// Run retire.js with JSON output
-	cmd := exec.CommandContext(ctx, "retire",
+	cmd := execx.Command(ctx, "retire",
 		"--path", scanPath,
 		"--outputformat", "json",
 		"--nocache",
