@@ -307,6 +307,10 @@ expect_not "$work/out" "$bel"
 web_report() { crash_stubs; report_crash web 3; }
 t "crash: web report has no CPU hint" 1 web_report && expect_not "$work/out" "AVX"
 
+mongo_report_mac() { crash_stubs; os=Darwin; report_crash mongo 0; }
+t "crash: no CPU hint on macOS, no exit code 0" 1 mongo_report_mac &&
+    expect_not "$work/out" "AVX" && expect "$work/out" "The mongo container keeps stopping. Its"
+
 wait_crash() { crash_stubs; st_redis="exited 1 0 none"; wait_healthy web 300; }
 t "wait: stops at once on a crash" 1 wait_crash && expect "$work/out" "The redis container keeps stopping"
 
@@ -512,7 +516,7 @@ helper_backup() {
 }
 t "helper: backup writes a private archive and .env copy where you are" 0 helper_backup &&
     expect "$work/out" "^-rw-------$" && expect "$work/out" "ARCHIVE" &&
-    expect "$work/log" "docker compose exec -T mongo mongodump --db vulwall --archive --gzip$"
+    expect "$work/log" "docker compose exec -T mongo mongodump --quiet --db vulwall --archive --gzip$"
 
 helper_backup_exists() { helper_setup; cd "$work/case/elsewhere" && touch b.archive.gz && sh "$inst/vulwall" backup b.archive.gz; }
 t "helper: backup never overwrites a file" 1 helper_backup_exists && expect "$work/out" "already exists"
@@ -523,7 +527,7 @@ helper_restore() {
     cd "$work/case/elsewhere" && sh "$inst/vulwall" -y restore b.archive.gz
 }
 t "helper: restore feeds the archive to mongorestore" 0 helper_restore &&
-    expect "$work/log" "docker compose exec -T mongo mongorestore --drop --archive --gzip$" &&
+    expect "$work/log" "docker compose exec -T mongo mongorestore --quiet --drop --archive --gzip$" &&
     expect "$work/log" "RESTOREDATA"
 
 # Only without a terminal: with one, the helper would ask.

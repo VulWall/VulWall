@@ -482,9 +482,14 @@ log_tail() {
 
 report_crash() { # service exit_code
     logs=$(log_tail "$1")
-    err "The $1 container keeps stopping (exit code $2). Its last log lines:"
+    if [ "$2" = 0 ]; then
+        err "The $1 container keeps stopping. Its last log lines:"
+    else
+        err "The $1 container keeps stopping (exit code $2). Its last log lines:"
+    fi
     printf '%s\n' "$logs" >&2
-    if [ "$1" = mongo ]; then
+    # On macOS, Docker Desktop's VM has a CPU that MongoDB supports.
+    if [ "$1" = mongo ] && [ "$os" = Linux ]; then
         case "$2 $logs" in
             132* | *[Ii]llegal\ instruction* | *"requires a CPU with AVX"* | *ARMv8.2-A*)
                 say "" >&2
@@ -686,12 +691,13 @@ main() {
     say ""
     link_helper
     say "Manage VulWall with the vulwall command:"
-    say "  $helper status       containers, health and URL"
-    say "  $helper logs         follow the logs"
-    say "  $helper backup       back up the database and .env"
-    say "  $helper upgrade      upgrade to the latest release"
-    say "  $helper doctor       check the host and the scanner's internet access"
-    say "  $helper help         all commands, including uninstall"
+    say "  vulwall status       containers, health and URL"
+    say "  vulwall logs         follow the logs"
+    say "  vulwall backup       back up the database and .env"
+    say "  vulwall upgrade      upgrade to the latest release"
+    say "  vulwall doctor       check the host and the scanner's internet access"
+    say "  vulwall help         all commands, including uninstall"
+    [ "$helper" = vulwall ] || say "It is not on your PATH; run it as: $helper"
     say "Settings: edit $qdir/.env, then: cd $qdir && docker compose up -d"
     if [ "$docker_sudo" = 1 ]; then
         say ""

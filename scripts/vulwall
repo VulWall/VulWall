@@ -213,7 +213,7 @@ cmd_backup() {
     [ ! -e "$envfile" ] || die "$envfile already exists."
     # Backups hold findings and secrets: readable by you only.
     umask 077
-    if ! compose exec -T mongo mongodump --db vulwall --archive --gzip >"$file.partial" </dev/null ||
+    if ! compose exec -T mongo mongodump --quiet --db vulwall --archive --gzip >"$file.partial" </dev/null ||
         [ ! -s "$file.partial" ]; then
         rm -f "$file.partial"
         die "mongodump failed. Is VulWall running? Try: vulwall status"
@@ -232,7 +232,7 @@ cmd_restore() {
     file=$(abspath "$1")
     [ -f "$file" ] || die "No such file: $file"
     confirm "This replaces all VulWall data with the backup in $file. Continue?" || die "Cancelled."
-    compose exec -T mongo mongorestore --drop --archive --gzip <"$file" ||
+    compose exec -T mongo mongorestore --quiet --drop --archive --gzip <"$file" ||
         die "mongorestore failed."
     say "Restored $file."
     say "Settings such as SETUP_TOKEN and ANTHROPIC_API_KEY are in .env, not in the database."
