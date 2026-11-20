@@ -10,6 +10,7 @@
 }
 
 <div class="sr-page-wrapper">
+    <partial name="~/Verticals/Reports/Views/Partials/_ReportToolbar.cshtml" />
     <div class="sr-document">
         <partial name="~/Verticals/Reports/Views/Partials/_SummaryHeader.cshtml" model="Model" />
         <partial name="~/Verticals/Reports/Views/Partials/_SummaryVerdict.cshtml" model="Model" />
@@ -19,3 +20,7 @@
         <partial name="~/Verticals/Reports/Views/Partials/_SummaryFooter.cshtml" model="Model" />
     </div>
 </div>
+
+@section Scripts {
+    <script type="module" src="~/js/Reports/print.js" asp-append-version="true"></script>
+}

@@ -38,7 +38,8 @@ As many as your server can handle. More assets mean longer scans and more memory
 ### Can several people use it?
 
 A VulWall install has one organization and one admin account. To share a report, open it and
-use your browser's print dialog to save it as a PDF.
+click **Print / Save as PDF** above the report, then choose "Save as PDF" in your browser's print
+dialog.
 
 ### Can it scan my internal network?
 
