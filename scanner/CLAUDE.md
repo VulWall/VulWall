@@ -95,6 +95,8 @@ container health check; the scanner opens no port).
 - Components get Redis/Mongo/logger from `main.go`; return errors from `Start()` — never `os.Exit` or `logger.Fatal` inside a component
 - Trigger streams use `CreateConsumerGroupFromLatest` (from `$`) — ephemeral
 - Result/job streams use `CreateConsumerGroup` (from `0`) — guaranteed delivery
+- `redisx.ConsumeStream` ACKs after the handler returns, also on handler error and on a recovered panic (logged with stack). A handler that fails because shutdown cancelled its context is NOT ACKed
+- At startup `nightwatch` closes every `pending`/`running` scan as `failed` with `status_reason: "interrupted_by_restart"` (no finding resolution), before the scan monitor starts
 
 ### Data Rules
 

@@ -123,7 +123,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	coordinator := coordinatorComponents(rdb, db, log)
+	coordinator, err := coordinatorComponents(ctx, rdb, db, log)
+	if err != nil {
+		return err
+	}
 
 	return supervise(ctx, log, append(workers, coordinator...))
 }
@@ -223,10 +226,15 @@ func knowledgeBase(rdb *redis.Client, log *zap.Logger) (*component, error) {
 }
 
 // coordinatorComponents builds the scan coordinator: cron scheduler (with
-// stream cleanup), queued-scan poller and scan monitor.
-func coordinatorComponents(rdb *redis.Client, db *mongo.Database, log *zap.Logger) []component {
+// stream cleanup), queued-scan poller and scan monitor. It first closes scans
+// that a previous run left pending or running, before the monitor could
+// finish them from partial results.
+func coordinatorComponents(ctx context.Context, rdb *redis.Client, db *mongo.Database, log *zap.Logger) ([]component, error) {
 	log = log.With(zap.String("component", "scan-coordinator"))
 	service := scan_coordinator.NewService(rdb, db, log)
+	if _, err := service.CloseInterruptedScans(ctx); err != nil {
+		return nil, err
+	}
 	scheduler := scan_coordinator.NewScheduler(service, db, scan_coordinator.NewStreamCleaner(rdb, log), log)
 	monitor := scan_coordinator.NewScanMonitor(rdb, db, log)
 
@@ -234,7 +242,7 @@ func coordinatorComponents(rdb *redis.Client, db *mongo.Database, log *zap.Logge
 		{"scheduler", scheduler.Start},
 		{"queued-scan-poller", func(ctx context.Context) error { service.StartQueuedScans(ctx); return nil }},
 		{"scan-monitor", func(ctx context.Context) error { monitor.Start(ctx); return nil }},
-	}
+	}, nil
 }
 
 // supervise runs all components until ctx is cancelled or one of them fails.

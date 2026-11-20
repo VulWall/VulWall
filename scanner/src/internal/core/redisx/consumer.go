@@ -2,6 +2,9 @@ package redisx
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -51,12 +54,19 @@ type ConsumerConfig struct {
 const defaultBlockDuration = 5 * time.Second
 const errorBackoff = 5 * time.Second
 
+// ackTimeout bounds an ACK sent with a context detached from shutdown.
+const ackTimeout = 5 * time.Second
+
 // ConsumeStream runs a blocking consumer loop that reads messages from a Redis
 // stream and dispatches them to handler workers. It handles:
 //   - Unique consumer name generation (prefix + UUID)
 //   - Worker pool for concurrent processing
-//   - Message ACK after handler returns (always ACKs, even on handler error)
-//   - Graceful shutdown on context cancellation
+//   - Message ACK after handler returns (ACKs on success and on handler error)
+//   - A handler panic is recovered, logged with its stack and ACKed, so one
+//     poisoned message cannot crash the scanner or be retried forever
+//   - Graceful shutdown on context cancellation: a handler that fails because
+//     ctx was cancelled is not ACKed, so the message stays pending
+//     (see processMessage)
 //
 // The caller is responsible for consumer group creation and stale consumer
 // cleanup before calling this function. This keeps ConsumeStream focused on
@@ -94,18 +104,12 @@ func ConsumeStream(ctx context.Context, client *redis.Client, cfg ConsumerConfig
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
+			log := cfg.Logger.With(zap.Int("worker", workerID))
+			ack := func(ctx context.Context, id string) error {
+				return client.XAck(ctx, cfg.Stream, cfg.Group, id).Err()
+			}
 			for message := range jobs {
-				if err := cfg.Handler(ctx, message); err != nil {
-					cfg.Logger.Error("Failed to process message",
-						zap.Int("worker", workerID),
-						zap.String("message_id", message.ID),
-						zap.Error(err),
-					)
-				}
-				// Always ACK after handler returns. Services that need
-				// selective ACK (dead-letter, retry) handle it inside
-				// their handler and return nil to signal "already handled".
-				client.XAck(ctx, cfg.Stream, cfg.Group, message.ID)
+				processMessage(ctx, cfg.Handler, ack, log, message)
 			}
 		}(i)
 	}
@@ -153,9 +157,74 @@ func ConsumeStream(ctx context.Context, client *redis.Client, cfg ConsumerConfig
 
 			for _, stream := range streams {
 				for _, message := range stream.Messages {
-					jobs <- message
+					select {
+					case jobs <- message:
+					case <-ctx.Done():
+						// Not dispatched: the message stays pending, unACKed.
+						return ctx.Err()
+					}
 				}
 			}
 		}
 	}
+}
+
+// processMessage runs the handler for one message and decides whether to ACK it.
+//
+//   - Success or handler error: ACK. Services that need selective ACK
+//     (dead-letter, retry) handle it inside their handler and return nil.
+//   - Handler panic: recover, log with the stack, ACK. Without the ACK a
+//     poisoned message would crash or loop the consumer on every delivery.
+//   - Handler error while ctx is cancelled: do not ACK. The work was cut off by
+//     shutdown, not finished, so the message must stay pending.
+//
+// The ACK uses a context detached from ctx, so a handler that finished just as
+// shutdown began is still ACKed.
+func processMessage(ctx context.Context, handler MessageHandler, ack func(context.Context, string) error, logger *zap.Logger, message redis.XMessage) {
+	err := runHandler(ctx, handler, message)
+
+	var panicErr *handlerPanic
+	switch {
+	case errors.As(err, &panicErr):
+		logger.Error("Message handler panicked; ACKing the message so it is not redelivered",
+			zap.String("message_id", message.ID),
+			zap.Any("panic", panicErr.value),
+			zap.String("stack", panicErr.stack),
+		)
+	case err != nil && ctx.Err() != nil:
+		logger.Warn("Message handler stopped by shutdown; leaving the message unACKed",
+			zap.String("message_id", message.ID),
+			zap.Error(err),
+		)
+		return
+	case err != nil:
+		logger.Error("Failed to process message",
+			zap.String("message_id", message.ID),
+			zap.Error(err),
+		)
+	}
+
+	ackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ackTimeout)
+	defer cancel()
+	if err := ack(ackCtx, message.ID); err != nil {
+		logger.Warn("Failed to ACK message", zap.String("message_id", message.ID), zap.Error(err))
+	}
+}
+
+// handlerPanic carries a recovered handler panic and its stack.
+type handlerPanic struct {
+	value any
+	stack string
+}
+
+func (p *handlerPanic) Error() string { return fmt.Sprintf("handler panic: %v", p.value) }
+
+// runHandler calls handler and turns a panic into a *handlerPanic error.
+func runHandler(ctx context.Context, handler MessageHandler, message redis.XMessage) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = &handlerPanic{value: r, stack: string(debug.Stack())}
+		}
+	}()
+	return handler(ctx, message)
 }

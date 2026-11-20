@@ -122,7 +122,7 @@ public class ScansService(
                 ScanStatus.Done => uniqueIssueCounts != null && uniqueIssueCounts.TryGetValue(s.Id, out var unique)
                     ? $"{unique} issues ({s.Stats.TotalFindings} raw)"
                     : $"{s.Stats.TotalFindings} issues",
-                ScanStatus.Failed => "Failed",
+                ScanStatus.Failed => s.StatusReason == Scan.InterruptedByRestart ? "Interrupted by restart" : "Failed",
                 _ => string.Empty
             },
             IsLive = s.Status == ScanStatus.Running

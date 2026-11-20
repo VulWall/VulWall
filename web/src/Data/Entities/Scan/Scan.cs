@@ -33,6 +33,14 @@ public class Scan : IEntity<string>, IOrganizationEntity
     [BsonIgnoreIfNull]
     public DateTime? CompletedAt { get; set; }
 
+    /// <summary>Why a failed scan failed, e.g. <see cref="InterruptedByRestart"/>. Written by the scanner.</summary>
+    [BsonElement("status_reason")]
+    [BsonIgnoreIfNull]
+    public string? StatusReason { get; set; }
+
+    /// <summary>The scanner restarted while this scan ran; it was closed as failed and resolved no findings.</summary>
+    public const string InterruptedByRestart = "interrupted_by_restart";
+
     [BsonElement("targeted_assets")]
     public List<TargetedAsset> TargetedAssets { get; set; } = new();
 

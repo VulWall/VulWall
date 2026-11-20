@@ -14,6 +14,11 @@ const (
 	StatusDone    = "done"
 	StatusFailed  = "failed"
 
+	// ScanReasonInterruptedByRestart is the status_reason of a scan that was
+	// pending or running when the scanner stopped. Its pipeline state was lost,
+	// so the scan is closed as failed and its findings are left untouched.
+	ScanReasonInterruptedByRestart = "interrupted_by_restart"
+
 	// Scan Type
 	ScanTypeScheduled = "scheduled"
 	ScanTypeRequested = "requested"

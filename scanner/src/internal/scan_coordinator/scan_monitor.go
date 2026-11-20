@@ -320,9 +320,11 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string, timedOut bool
 		},
 	}
 
+	// The status guard keeps a scan that another writer already closed (for
+	// example as failed) from being reopened as done.
 	result, err := m.db.Collection(shared.CollectionScans).UpdateOne(
 		ctx,
-		bson.M{"_id": scanID},
+		bson.M{"_id": scanID, "status": bson.M{"$in": startedStatuses}},
 		update,
 	)
 

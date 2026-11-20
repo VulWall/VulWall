@@ -235,6 +235,7 @@ type Scan struct {
     TriggeredBy    string        `bson:"triggered_by"`  // user ID or "system"
     StartedAt      *time.Time    `bson:"started_at,omitempty"`
     CompletedAt    *time.Time    `bson:"completed_at,omitempty"`
+    StatusReason   string        `bson:"status_reason,omitempty"` // why a scan is "failed", e.g. "interrupted_by_restart"
     CreatedAt      time.Time     `bson:"created_at"`
     UpdatedAt      time.Time     `bson:"updated_at"`
     TargetedAssets []AssetTarget `bson:"targeted_assets"`
@@ -429,6 +430,14 @@ read by the guards for older documents but is no longer written.
 - The scan monitor sets `status: "done"`, `completed_at` and the `stats.*`
   counters when the pipeline is drained. Scan age for the completion timeouts
   is measured from `started_at` (from `created_at` when `started_at` is absent).
+- When the scanner starts, before the scan monitor runs, every `pending` or
+  `running` scan becomes `failed` with `status_reason: "interrupted_by_restart"`
+  and `completed_at`. The restart lost the scan's in-flight work, so the scan
+  does not resolve findings and is not used as the baseline of the next scan.
+  Findings it already wrote stay as they are. Queued scans are not touched.
+  This assumes one scanner process per database.
+- The scan monitor only writes `done` while the scan is still `pending` or
+  `running`, so it never reopens a scan that was closed as `failed`.
 
 ```javascript
 {

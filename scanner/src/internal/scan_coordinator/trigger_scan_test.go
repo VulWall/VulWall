@@ -91,6 +91,19 @@ func (f *fakeStore) setScanFields(ctx context.Context, scanID string, set bson.M
 	return nil
 }
 
+func (f *fakeStore) setStartedScans(ctx context.Context, set bson.M) (int64, error) {
+	var n int64
+	for id, s := range f.scans {
+		if slices.Contains(startedStatuses, s.Status) {
+			if err := f.setScanFields(ctx, id, set); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+	return n, nil
+}
+
 // publishedJob records one call to the jobPublisher.
 type publishedJob struct {
 	stream string
@@ -347,5 +360,45 @@ func TestMarkFailedWritesAfterContextCancelled(t *testing.T) {
 
 	if store.scans["s1"].Status != shared.StatusFailed {
 		t.Fatalf("status = %q, want failed even though ctx was cancelled", store.scans["s1"].Status)
+	}
+}
+
+func TestCloseInterruptedScansFailsOnlyStartedScans(t *testing.T) {
+	store := newFakeStore()
+	for id, status := range map[string]string{
+		"pending": shared.StatusPending,
+		"running": shared.StatusRunning,
+		"queued":  shared.StatusQueued,
+		"done":    shared.StatusDone,
+		"failed":  shared.StatusFailed,
+	} {
+		store.scans[id] = shared.Scan{ID: id, OrgID: "org-1", Status: status}
+	}
+	svc, published := newTestService(store, nil)
+
+	n, err := svc.CloseInterruptedScans(context.Background())
+	if err != nil || n != 2 {
+		t.Fatalf("n = %d err = %v, want 2 closed", n, err)
+	}
+
+	for _, id := range []string{"pending", "running"} {
+		set := store.set[id]
+		if store.scans[id].Status != shared.StatusFailed ||
+			set["status_reason"] != shared.ScanReasonInterruptedByRestart ||
+			set["completed_at"] == nil {
+			t.Errorf("%s: status = %q set = %+v, want failed/interrupted_by_restart with completed_at",
+				id, store.scans[id].Status, set)
+		}
+	}
+	for id, want := range map[string]string{"queued": shared.StatusQueued, "done": shared.StatusDone, "failed": shared.StatusFailed} {
+		if store.scans[id].Status != want {
+			t.Errorf("%s: status = %q, want unchanged %q", id, store.scans[id].Status, want)
+		}
+		if _, touched := store.set[id]; touched {
+			t.Errorf("%s: was written, want untouched", id)
+		}
+	}
+	if len(*published) != 0 {
+		t.Errorf("published %d jobs, want none", len(*published))
 	}
 }

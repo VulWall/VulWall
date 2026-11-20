@@ -236,6 +236,7 @@ type Scan struct {
 	TriggeredBy string     `json:"triggered_by,omitempty" bson:"triggered_by,omitempty"` // User ID or "system"
 	StartedAt      *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty"`
 	CompletedAt    *time.Time `json:"completed_at,omitempty" bson:"completed_at,omitempty"`
+	StatusReason   string     `json:"status_reason,omitempty" bson:"status_reason,omitempty"` // Why a scan ended "failed", e.g. "interrupted_by_restart"
 	LastActivityAt *time.Time `json:"last_activity_at,omitempty" bson:"last_activity_at,omitempty"` // Updated by ingestion services on each batch
 	CreatedAt      time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at" bson:"updated_at"`

@@ -54,6 +54,9 @@ type scanStore interface {
 	// It reports false when another writer changed or deleted the scan first.
 	claimQueuedScan(ctx context.Context, scanID string, set bson.M) (bool, error)
 	setScanFields(ctx context.Context, scanID string, set bson.M) error
+	// setStartedScans applies set to every pending or running scan and
+	// returns how many it changed.
+	setStartedScans(ctx context.Context, set bson.M) (int64, error)
 }
 
 // jobPublisher publishes one discovery job to a Redis stream.
@@ -250,6 +253,36 @@ func (s *Service) markFailed(ctx context.Context, scanID string, cause error) {
 	)
 }
 
+// CloseInterruptedScans closes every scan that was pending or running when the
+// scanner stopped. It must run once at startup, before the scan monitor.
+//
+// A restart loses the scan's in-flight work, so letting the monitor finish it
+// later would compare a partial result with the previous scan and resolve
+// findings that were simply not scanned again. The scan is closed as "failed"
+// with status_reason "interrupted_by_restart", the same outcome the web app
+// already shows for any failed scan; findings are not touched and the next
+// scan compares against the last complete one.
+//
+// This assumes one scanner process per database, which is how the self-hosted
+// stack runs.
+func (s *Service) CloseInterruptedScans(ctx context.Context) (int64, error) {
+	now := time.Now()
+	n, err := s.store.setStartedScans(ctx, bson.M{
+		"status":        shared.StatusFailed,
+		"status_reason": shared.ScanReasonInterruptedByRestart,
+		"completed_at":  now,
+		"updated_at":    now,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("close interrupted scans: %w", err)
+	}
+	if n > 0 {
+		s.logger.Warn("Closed scans interrupted by a restart as failed; their findings are unchanged",
+			zap.Int64("scans", n))
+	}
+	return n, nil
+}
+
 // mongoScanStore implements scanStore against MongoDB.
 type mongoScanStore struct {
 	db *mongo.Database
@@ -345,6 +378,18 @@ func (m mongoScanStore) claimQueuedScan(ctx context.Context, scanID string, set 
 func (m mongoScanStore) setScanFields(ctx context.Context, scanID string, set bson.M) error {
 	_, err := m.db.Collection(shared.CollectionScans).UpdateOne(ctx, bson.M{"_id": scanID}, bson.M{"$set": set})
 	return err
+}
+
+// setStartedScans applies set to every pending or running scan.
+func (m mongoScanStore) setStartedScans(ctx context.Context, set bson.M) (int64, error) {
+	res, err := m.db.Collection(shared.CollectionScans).UpdateMany(ctx,
+		bson.M{"status": bson.M{"$in": startedStatuses}},
+		bson.M{"$set": set},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
 }
 
 // publishDiscoveryJobs publishes discovery jobs to Redis for each asset
