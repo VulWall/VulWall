@@ -48,8 +48,8 @@ curl -fsSL https://vulwall.com/install.sh | sh
 ```
 
 The script installs the latest release into `~/vulwall`, verifies the
-downloaded files, starts the stack and prints the first-run setup link. Run it
-again to upgrade. See the [documentation](https://vulwall.com/docs) for
+downloaded files, adds a random first-run setup token to `.env`, starts the
+stack and prints the setup link. Run it again to upgrade. See the [documentation](https://vulwall.com/docs) for
 options.
 
 Or install from a clone of this repository:
@@ -57,21 +57,22 @@ Or install from a clone of this repository:
 ```bash
 git clone https://github.com/VulWall/VulWall.git && cd VulWall
 cp .env.example .env        # optional: set ANTHROPIC_API_KEY
+echo "SETUP_TOKEN=$(openssl rand -hex 16)" >> .env
 docker compose up -d
 ```
 
-Get the first-run setup link from the web container's log and open it:
+Open `http://localhost:8080/setup?token=<token>` with the token from
+`grep SETUP_TOKEN .env` (if you changed `VULWALL_PORT`, use your port). The
+token protects setup: without it, `/setup` returns 404. Create the admin
+account, add a domain you own, then start a scan.
+
+Without `SETUP_TOKEN`, the web container makes a new random token at each start
+and prints the link in its log. Print it with this command, which shows only the
+real link line and strips control characters:
 
 ```bash
-docker compose logs web | grep "First-run setup" | tail -1
+docker compose logs --no-log-prefix web | grep -a '^ *First-run setup: open http://localhost:[0-9]*/setup?token=[0-9a-f]* ' | tail -1 | tr -cd '[:print:]\n'
 ```
-
-The link looks like `http://localhost:8080/setup?token=...`. It always shows
-the container port 8080; if you changed `VULWALL_PORT`, use your port instead.
-Each start of the web container prints a new token, and only the latest one
-works. The token protects setup, so only someone who can read the server logs can create the
-admin account. Create the admin account, add a domain you own, then start a
-scan.
 
 The web UI listens on `127.0.0.1` only. To use it from another machine, see
 [Exposing VulWall](#exposing-vulwall).
@@ -90,7 +91,7 @@ comments.
 | `ANTHROPIC_API_KEY` | empty | Enables AI remediation guidance and executive summaries |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Model for the scanner's knowledge-base engine |
 | `VULWALL_PORT` | `8080` | Host port of the web UI (bound to `127.0.0.1`) |
-| `SETUP_TOKEN` | empty | Fixed first-run setup token for unattended installs; empty means a random token, printed in the log |
+| `SETUP_TOKEN` | empty | First-run setup token. The install script sets a random one; empty means a new random token at each start, printed in the log |
 | `VULWALL_VERSION` | `latest` | Image tag of `ghcr.io/vulwall/scanner` and `ghcr.io/vulwall/web` |
 | `SECURE_COOKIES` | `false` | Set to `true` when VulWall is served over HTTPS |
 | `TRUSTED_PROXIES` | empty | IPs/CIDRs of reverse proxies whose `X-Forwarded-*` headers are trusted |
@@ -151,6 +152,15 @@ docker compose up -d --build # when you build from source
 Data lives in Docker volumes, so it survives upgrades. Read
 [CHANGELOG.md](CHANGELOG.md) before you upgrade, and back up first.
 
+Release images carry a signed build provenance attestation. To check that an
+image was built from this repository by its release workflow:
+
+```bash
+gh attestation verify oci://ghcr.io/vulwall/web:0.1.0 --owner VulWall
+```
+
+See [Verify a release](https://vulwall.com/docs/operations/upgrade/#verify-a-release).
+
 ## Backup and restore
 
 All application data is in MongoDB (volume `vulwall_mongo-data`). Redis only
@@ -179,10 +189,16 @@ first-run setup again. Your assets, scans and findings stay.
 docker compose stop web
 docker compose exec mongo mongosh vulwall --quiet --eval 'db.users.deleteOne({_id:"admin"})'
 docker compose start web
-docker compose logs web | grep "First-run setup" | tail -1
+grep SETUP_TOKEN .env
 ```
 
-Open the new setup link and create the admin account again.
+Open `http://localhost:8080/setup?token=<token>` with that token (use your
+`VULWALL_PORT` if you changed it) and create the admin account again. If `.env`
+has no `SETUP_TOKEN`, print the new link from the log instead:
+
+```bash
+docker compose logs --no-log-prefix web | grep -a '^ *First-run setup: open http://localhost:[0-9]*/setup?token=[0-9a-f]* ' | tail -1 | tr -cd '[:print:]\n'
+```
 
 ## Scan only what you are allowed to scan
 

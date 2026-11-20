@@ -16,12 +16,14 @@
 
         <div class="claim-card auth-form-card">
             <p class="claim-description">
-                This install has no admin account yet. Finish setup using the link printed in
-                <code>docker compose logs web</code>.
+                This install has no admin account yet. Finish setup using the link the installer
+                printed, or open <code>/setup?token=</code> followed by the <code>SETUP_TOKEN</code>
+                value in the <code>.env</code> file of your install directory.
             </p>
             <p class="claim-description">
-                The link contains a one-time token, so only someone with access to the server logs can
-                create the admin account.
+                Only someone with this token can create the admin account. If you did not set
+                <code>SETUP_TOKEN</code>, the web container prints a new link in
+                <code>docker compose logs web</code> each time it starts.
             </p>
         </div>
     </main>

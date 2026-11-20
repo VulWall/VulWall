@@ -21,9 +21,12 @@ You can [read it](/install.sh) before you run it; the source is
    `SHA256SUMS`. If the check fails, it stops and changes nothing.
 3. Writes `docker-compose.yml` and `.env.example` into the install directory. It creates `.env`
    from `.env.example` only if `.env` does not exist yet, so your settings are never overwritten.
+   If `.env` has no `SETUP_TOKEN`, it adds a random one (32 hex characters). It never changes a
+   `SETUP_TOKEN` you set.
 4. Runs `docker compose pull` and `docker compose up -d`.
-5. Waits until the web app reports healthy, then prints the link to the first-run setup page. If
-   the admin account already exists, it prints the login URL instead.
+5. Waits until the web app reports healthy, then prints the link to the first-run setup page,
+   made from the `SETUP_TOKEN` in `.env`. If the admin account already exists, it prints the
+   login URL instead.
 
 When it is done you see something like this:
 
@@ -33,7 +36,9 @@ VulWall is running. Open this link to create the admin account:
   http://localhost:8080/setup?token=4f0c...
 ```
 
-Open the link and continue with [your first scan](/docs/getting-started/first-scan/).
+Open the link and continue with [your first scan](/docs/getting-started/first-scan/). The link
+works until you create the admin account. To see the token again, run
+`grep SETUP_TOKEN ~/vulwall/.env`.
 
 ## Options
 
@@ -78,3 +83,9 @@ To remove VulWall and **delete all its data**:
 ```sh
 cd ~/vulwall && docker compose down -v && cd && rm -rf ~/vulwall
 ```
+
+## Verify the download
+
+The script checks the downloaded files against `SHA256SUMS`, and the compose file of a release
+pins each image by digest. To check that the images were built by VulWall's release workflow,
+see [Verify a release](/docs/operations/upgrade/#verify-a-release).

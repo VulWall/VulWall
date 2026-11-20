@@ -71,6 +71,18 @@ First open-source, self-hosted release, under the MIT License.
   connect to private addresses unless `ALLOW_PRIVATE_TARGETS=true`.
 - `MongoDB.Driver` 3.14.1 pulls fixed Snappier and SharpCompress versions
   (GHSA-pggp-6c3x-2xmx, GHSA-6c8g-7p36-r338).
+- The install script adds a random `SETUP_TOKEN` to `.env` when none is
+  set and prints the setup link from it. It no longer reads the link from
+  `docker compose logs web`, where a request from anyone could plant a fake
+  link and terminal escape sequences. A `SETUP_TOKEN` you set is kept.
+- The web app logs request paths without control characters, cut at 200
+  characters, and logs requests for missing pages (404) at Debug only.
+- The install script downloads over HTTPS only, also after redirects
+  (`VULWALL_ALLOW_HTTP=1` allows an `http://` `VULWALL_BASE_URL` for local
+  testing), and quotes the install directory in the commands it prints.
+- The release compose file pins the scanner and web images by digest, and
+  each release image has a signed build provenance attestation
+  (`gh attestation verify oci://ghcr.io/vulwall/web:<version> --owner VulWall`).
 
 ### Fixed
 

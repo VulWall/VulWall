@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Recommendations.Constants;
 using VulWall.Dashboard.Recommendations.Models;
 using VulWall.Dashboard.Recommendations.Services;
@@ -46,7 +47,7 @@ public class RecommendationsController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error loading recommendation detail for finding {FindingId}", id);
+            logger.LogError(ex, "Error loading recommendation detail for finding {FindingId}", LogSanitizer.Clean(id));
             return NotFound();
         }
     }

@@ -5,9 +5,11 @@ description: Create the admin account, add a domain and run a scan.
 
 ## 1. Create the admin account
 
-Open the setup link from the installer, or from
-`docker compose logs web | grep "First-run setup" | tail -1`. Enter your email address, a
-password and the name of your organization.
+Open the setup link that the installer printed. To make it again, get the token with
+`grep SETUP_TOKEN .env` in the install directory and open
+`http://localhost:8080/setup?token=<token>`. If you installed from the repository without a
+`SETUP_TOKEN`, see [Open the setup page](/docs/getting-started/manual-install/#open-the-setup-page).
+Enter your email address, a password and the name of your organization.
 
 VulWall has one admin account. After setup, `/setup` is closed and you sign in at `/login`. You
 can change the password later in **Settings**.
