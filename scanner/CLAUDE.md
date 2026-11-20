@@ -188,6 +188,7 @@ Environment variables (`.env`):
 | `HONEYCOMB_API_KEY` | Optional key sent as the `x-honeycomb-team` header to the OTLP trace exporter |
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
+| `ALLOW_PRIVATE_TARGETS` | `true` disables the private/reserved IP guard (SSRF dialer, discovery, port scanner, testssl `--ip` check, nuclei `-lna`). Default `false`; enable only to scan internal networks on purpose |
 | `NIGHTWATCH_API_KEY` | Bearer key callers must send in `X-API-Key` to access `POST /api/scans`. Empty = auth disabled (dev only) |
 | `DASHBOARD_WEBHOOK_URL` | Dashboard webhook endpoint for scan-completion notifications (empty = disabled) |
 | `DASHBOARD_WEBHOOK_SECRET` | HMAC-SHA256 signing secret. Sent as `X-Webhook-Signature: sha256={hex}`. Must match Dashboard's `NIGHTWATCH_WEBHOOK_SECRET` |

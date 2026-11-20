@@ -65,15 +65,18 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 	// Resolve IP for domain (if applicable)
 	var resolvedIP *string
 	if s.isDomain(job.Host) {
-		if ip, err := s.resolveIP(ctx, job.Host); err == nil {
-			// Reject domains that resolve to private/reserved IPs to prevent
-			// SSRF attacks against internal infrastructure via DNS.
-			if isPrivate, checkErr := shared.IsPrivateIP(ip); checkErr == nil && isPrivate {
+		// A root domain that does not resolve is still recorded (without an
+		// IP) so subdomain enumeration and parent links keep working.
+		if ips, err := s.resolveIPs(ctx, job.Host); err == nil {
+			// Reject domains with any private/reserved answer to prevent SSRF
+			// against internal infrastructure via DNS.
+			ip, checkErr := selectPublicIP(ips)
+			if checkErr != nil {
 				s.logger.Warn("Blocking domain job: resolves to private IP",
 					zap.String("trace_id", job.TraceID),
 					zap.String("org_id", job.OrgID),
 					zap.String("host", job.Host),
-					zap.String("resolved_ip", ip),
+					zap.Error(checkErr),
 				)
 				return nil
 			}
@@ -184,24 +187,33 @@ func (s *Service) discoverSubdomains(ctx context.Context, traceID string, scanID
 			fullSubdomain = subdomainName + "." + domain
 		}
 
-		// Resolve IP for subdomain, filtering private IPs to prevent SSRF
-		var resolvedIP *string
-		if ip, err := s.resolveIP(ctx, fullSubdomain); err == nil {
-			if isPrivate, checkErr := shared.IsPrivateIP(ip); checkErr == nil && isPrivate {
-				s.logger.Warn("Skipping subdomain: resolves to private IP",
-					zap.String("trace_id", traceID),
-					zap.String("org_id", orgID),
-					zap.String("subdomain", fullSubdomain),
-					zap.String("resolved_ip", ip),
-				)
-				continue
-			}
-			resolvedIP = &ip
-			s.logger.Debug("Resolved subdomain to IP",
+		// Resolve the subdomain. Drop it when it does not resolve (passive
+		// sources return many stale names, and an unresolved name could later
+		// be pointed at an internal address) or when any answer is private.
+		ips, err := s.resolveIPs(ctx, fullSubdomain)
+		if err != nil {
+			s.logger.Debug("Skipping subdomain: DNS resolution failed",
+				zap.String("trace_id", traceID),
 				zap.String("subdomain", fullSubdomain),
-				zap.String("ip", ip),
+				zap.Error(err),
 			)
+			continue
 		}
+		ip, checkErr := selectPublicIP(ips)
+		if checkErr != nil {
+			s.logger.Warn("Skipping subdomain: resolves to private IP",
+				zap.String("trace_id", traceID),
+				zap.String("org_id", orgID),
+				zap.String("subdomain", fullSubdomain),
+				zap.Error(checkErr),
+			)
+			continue
+		}
+		resolvedIP := &ip
+		s.logger.Debug("Resolved subdomain to IP",
+			zap.String("subdomain", fullSubdomain),
+			zap.String("ip", ip),
+		)
 
 		// Generate deterministic ID for subdomain (org-scoped)
 		subdomainID := shared.GenerateSubdomainID(orgID, fullSubdomain)
@@ -278,15 +290,33 @@ func contains(s, substr string) bool {
 		(s[len(s)-len(substr)-1:] == "."+substr || s[:len(substr)+1] == substr+"."))
 }
 
-// resolveIP resolves a domain name to its IPv4 address using DNS.
+// selectPublicIP checks every resolved address against the shared SSRF guard
+// and returns the address to record: the first IPv4 answer, or the first
+// answer when there is no IPv4 one.
+func selectPublicIP(ips []net.IP) (string, error) {
+	if len(ips) == 0 {
+		return "", fmt.Errorf("no IP addresses")
+	}
+	if err := shared.CheckPublicIPs(ips); err != nil {
+		return "", err
+	}
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			return ip.String(), nil
+		}
+	}
+	return ips[0].String(), nil
+}
+
+// resolveIPs resolves a domain name to all of its A and AAAA addresses.
 // Retries up to dnsRetryAttempts times with dnsRetryDelay between attempts
 // to handle transient DNS failures.
-func (s *Service) resolveIP(ctx context.Context, domain string) (string, error) {
+func (s *Service) resolveIPs(ctx context.Context, domain string) ([]net.IP, error) {
 	resolver := &net.Resolver{}
 	var lastErr error
 
 	for attempt := 1; attempt <= dnsRetryAttempts; attempt++ {
-		ips, err := resolver.LookupIP(ctx, "ip4", domain)
+		ips, err := resolver.LookupIP(ctx, "ip", domain)
 		if err == nil && len(ips) > 0 {
 			if attempt > 1 {
 				s.logger.Info("DNS resolution succeeded after retry",
@@ -294,7 +324,7 @@ func (s *Service) resolveIP(ctx context.Context, domain string) (string, error) 
 					zap.Int("attempt", attempt),
 				)
 			}
-			return ips[0].String(), nil
+			return ips, nil
 		}
 
 		if err != nil {
@@ -313,11 +343,11 @@ func (s *Service) resolveIP(ctx context.Context, domain string) (string, error) 
 		if attempt < dnsRetryAttempts {
 			select {
 			case <-ctx.Done():
-				return "", ctx.Err()
+				return nil, ctx.Err()
 			case <-time.After(dnsRetryDelay):
 			}
 		}
 	}
 
-	return "", lastErr
+	return nil, lastErr
 }

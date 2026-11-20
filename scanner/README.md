@@ -93,6 +93,9 @@ Environment variables (`.env`):
 REDIS_URI=redis://user:pass@host:port/db
 MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/db
 ENVIRONMENT=production
+# Scanners refuse private, loopback and other reserved addresses (including
+# DNS answers that point there). Set to true only to scan internal networks.
+ALLOW_PRIVATE_TARGETS=false
 ```
 
 ## Project Structure

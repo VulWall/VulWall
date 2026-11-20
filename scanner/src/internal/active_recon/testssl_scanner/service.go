@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -97,6 +98,33 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	return nil
 }
 
+// resolveTargetIP resolves the host of a host:port target with the shared SSRF
+// guard and returns the address testssl.sh must connect to.
+func resolveTargetIP(ctx context.Context, target string) (string, error) {
+	host, _, err := net.SplitHostPort(target)
+	if err != nil {
+		return "", fmt.Errorf("invalid testssl target %q: %w", target, err)
+	}
+	ips, err := shared.ResolvePublicIPs(ctx, host)
+	if err != nil {
+		return "", err
+	}
+	return ips[0].String(), nil
+}
+
+// testSSLArgs builds the testssl.sh command line.
+func testSSLArgs(jsonPath, severity, ip, target string) []string {
+	return []string{
+		"--jsonfile-pretty", jsonPath,
+		"--quiet",
+		"--warnings", "off",
+		"-U", // Vulnerabilities only (BEAST, POODLE, Heartbleed, etc.)
+		"--severity", severity, // Configurable minimum severity threshold
+		"--ip", ip,
+		target,
+	}
+}
+
 // runTestSSLScan executes testssl.sh scanner on the target
 func (s *Service) runTestSSLScan(ctx context.Context, target string, severity string) ([]TestSSLFinding, error) {
 	// Create temporary file for JSON output
@@ -116,14 +144,13 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string, severity st
 	// -U: scan for vulnerabilities only (not all checks)
 	// --severity: filter by severity (LOW, MEDIUM, HIGH, CRITICAL)
 	// Target format: host:port
-	cmd := exec.CommandContext(ctx, "testssl.sh",
-		"--jsonfile-pretty", tmpPath,
-		"--quiet",
-		"--warnings", "off",
-		"-U", // Vulnerabilities only (BEAST, POODLE, Heartbleed, etc.)
-		"--severity", severity, // Configurable minimum severity threshold
-		target,
-	)
+	// --ip: test the address we validated here instead of letting testssl.sh
+	// resolve the host again (closes the DNS-rebinding window).
+	ip, err := resolveTargetIP(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, "testssl.sh", testSSLArgs(tmpPath, severity, ip, target)...)
 
 	// Execute command and capture stderr/stdout for error reporting
 	output, err := cmd.CombinedOutput()

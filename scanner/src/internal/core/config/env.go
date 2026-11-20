@@ -78,6 +78,10 @@ const (
 	EnvCloudDetectorEnabled = "CLOUD_DETECTOR_ENABLED"
 	// EnvCloudDataDir is the directory containing cloud provider data files
 	EnvCloudDataDir = "CLOUD_DATA_DIR"
+	// EnvAllowPrivateTargets disables the private/reserved IP guard for scan
+	// targets (true/false, default false). Only enable it for self-hosted
+	// installs that intentionally scan internal networks.
+	EnvAllowPrivateTargets = "ALLOW_PRIVATE_TARGETS"
 
 	// ===========================================
 	// Webhooks

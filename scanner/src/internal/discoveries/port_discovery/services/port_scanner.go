@@ -43,12 +43,14 @@ func (s *Scanner) ScanPort(ctx context.Context, ip string, port int) PortResult 
 	}
 
 	// Reject private/reserved IPs to prevent SSRF against internal infrastructure.
-	if isPrivate, err := shared.IsPrivateIP(ip); err != nil || isPrivate {
-		if err != nil {
-			result.Error = fmt.Errorf("ssrf-guard: invalid IP address %q: %w", ip, err)
-		} else {
-			result.Error = fmt.Errorf("ssrf-guard: refusing to scan private/reserved IP %q", ip)
-		}
+	// ALLOW_PRIVATE_TARGETS=true lifts the reserved-range check.
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		result.Error = fmt.Errorf("ssrf-guard: invalid IP address %q", ip)
+		return result
+	}
+	if err := shared.CheckPublicIPs([]net.IP{parsed}); err != nil {
+		result.Error = fmt.Errorf("ssrf-guard: refusing to scan private/reserved IP %q", ip)
 		return result
 	}
 

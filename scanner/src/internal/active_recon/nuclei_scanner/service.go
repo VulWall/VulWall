@@ -216,15 +216,21 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	return nil
 }
 
-// runNucleiScan executes Nuclei scanner on the target
-func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([]NucleiOutput, error) {
-	// Build Nuclei command args dynamically
+// nucleiArgs builds the nuclei command line for one target.
+func nucleiArgs(target, severity string) []string {
 	args := []string{
 		"-u", target,
 		"-t", "/root/nuclei-templates",
 		"-j",
 		"-silent",
 		"-severity", severity,
+	}
+
+	// -lna (restrict-local-network-access) makes nuclei refuse connections to
+	// local/private networks at dial time, which also covers DNS rebinding
+	// between discovery and scan. Skipped when private targets are allowed.
+	if !shared.PrivateTargetsAllowed() {
+		args = append(args, "-lna")
 	}
 
 	// Append tag filters only when non-empty
@@ -237,7 +243,12 @@ func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([
 		args = append(args, "-etags", excludeTags)
 	}
 
-	cmd := exec.CommandContext(ctx, "nuclei", args...)
+	return args
+}
+
+// runNucleiScan executes Nuclei scanner on the target
+func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([]NucleiOutput, error) {
+	cmd := exec.CommandContext(ctx, "nuclei", nucleiArgs(target, severity)...)
 
 	// Execute command and capture both stdout and stderr
 	output, err := cmd.CombinedOutput()

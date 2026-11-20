@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+
+	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 )
 
 // privateRanges contains all IP networks that must not be scanned.
@@ -64,6 +66,56 @@ func init() {
 	}
 }
 
+// PrivateTargetsAllowed reports whether ALLOW_PRIVATE_TARGETS is enabled.
+// Default false: private, loopback and other reserved addresses are never
+// scanned or dialed. Read on each call so tests can toggle it with t.Setenv.
+func PrivateTargetsAllowed() bool {
+	return config.GetEnvBool(config.EnvAllowPrivateTargets, false)
+}
+
+// CheckPublicIPs returns an error if any address in ips is in a reserved
+// range, unless PrivateTargetsAllowed. Every address is checked: a host with
+// one public and one private answer is rejected, because a later lookup may
+// return the private one.
+func CheckPublicIPs(ips []net.IP) error {
+	if PrivateTargetsAllowed() {
+		return nil
+	}
+	for _, ip := range ips {
+		normalised := ip
+		if v4 := ip.To4(); v4 != nil {
+			normalised = v4
+		}
+		for _, cidr := range privateRanges {
+			if cidr.Contains(normalised) {
+				return fmt.Errorf("ssrf-guard: refusing reserved IP %q", ip.String())
+			}
+		}
+	}
+	return nil
+}
+
+// ResolvePublicIPs resolves host (A and AAAA) and validates every answer with
+// CheckPublicIPs. It fails closed: a DNS error or an empty answer is an error.
+// A numeric host is validated without a lookup.
+func ResolvePublicIPs(ctx context.Context, host string) ([]net.IP, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		ips := []net.IP{ip}
+		return ips, CheckPublicIPs(ips)
+	}
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	if err != nil {
+		return nil, fmt.Errorf("ssrf-guard: DNS resolution failed for %q: %w", host, err)
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("ssrf-guard: DNS returned no addresses for %q", host)
+	}
+	if err := CheckPublicIPs(ips); err != nil {
+		return nil, fmt.Errorf("%w (resolved from %q)", err, host)
+	}
+	return ips, nil
+}
+
 // SSRFSafeDialContext returns a DialContext function that can be used directly
 // as http.Transport.DialContext. It closes the DNS-rebinding TOCTOU gap that
 // exists when an IP is validated before dialing but the OS performs a second
@@ -71,13 +123,14 @@ func init() {
 //
 // For each outbound connection the returned function will:
 //  1. Parse the addr (host:port) produced by the HTTP stack.
-//  2. If host is already a numeric IP, validate it with IsPrivateIP and dial.
-//  3. If host is a name, resolve it (IPv4 + IPv6) via the default resolver.
-//     If DNS fails the dial is rejected (fail-closed).
-//  4. Validate every resolved IP with IsPrivateIP. If any IP is private the
-//     dial is rejected — even if other addresses are public.
-//  5. Dial directly to the first public IP by address (not hostname), so the
-//     OS/Go runtime never performs a second lookup that could be rebound.
+//  2. Resolve and validate the host with ResolvePublicIPs (numeric hosts are
+//     validated without a lookup; DNS failure is rejected, fail-closed; any
+//     reserved answer rejects the dial, even if other answers are public).
+//  3. Dial directly to the first validated IP by address (not hostname), so
+//     the OS/Go runtime never performs a second lookup that could be rebound.
+//
+// ALLOW_PRIVATE_TARGETS=true disables the reserved-range check but keeps the
+// single-resolution dial.
 //
 // The caller-supplied dialer controls timeouts and keep-alive settings.
 func SSRFSafeDialContext(dialer *net.Dialer) func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -87,50 +140,12 @@ func SSRFSafeDialContext(dialer *net.Dialer) func(ctx context.Context, network, 
 			return nil, fmt.Errorf("ssrf-guard: malformed address %q: %w", addr, err)
 		}
 
-		// Fast path — addr already contains a numeric IP (e.g. from a previous
-		// redirect that the HTTP client resolved itself).
-		if ip := net.ParseIP(host); ip != nil {
-			if v4 := ip.To4(); v4 != nil {
-				ip = v4
-			}
-			for _, cidr := range privateRanges {
-				if cidr.Contains(ip) {
-					return nil, fmt.Errorf("ssrf-guard: refusing to connect to reserved IP %q", host)
-				}
-			}
-			// Safe numeric IP — dial directly.
-			return dialer.DialContext(ctx, network, addr)
-		}
-
-		// Slow path — resolve the hostname. Use "ip" to get both A and AAAA
-		// records and validate all of them before connecting.
-		resolver := net.DefaultResolver
-		ips, err := resolver.LookupIP(ctx, "ip", host)
+		ips, err := ResolvePublicIPs(ctx, host)
 		if err != nil {
-			// Fail closed: if we cannot resolve, we cannot verify safety.
-			return nil, fmt.Errorf("ssrf-guard: DNS resolution failed for %q: %w", host, err)
-		}
-		if len(ips) == 0 {
-			return nil, fmt.Errorf("ssrf-guard: DNS returned no addresses for %q", host)
+			return nil, err
 		}
 
-		// Validate every resolved address before we commit to any of them.
-		for _, ip := range ips {
-			normalised := ip
-			if v4 := ip.To4(); v4 != nil {
-				normalised = v4
-			}
-			for _, cidr := range privateRanges {
-				if cidr.Contains(normalised) {
-					return nil, fmt.Errorf("ssrf-guard: %q resolves to reserved IP %q", host, ip.String())
-				}
-			}
-		}
-
-		// Dial directly to the first validated IP — bypass the OS resolver so
-		// a second lookup (which could be rebound) never occurs.
-		firstIP := ips[0]
-		safeAddr := net.JoinHostPort(firstIP.String(), port)
+		safeAddr := net.JoinHostPort(ips[0].String(), port)
 		return dialer.DialContext(ctx, network, safeAddr)
 	}
 }
