@@ -30,7 +30,11 @@ or `fuzz` do not run.
 The templates are downloaded on the first start and updated every night.
 
 nuclei scans a domain or subdomain by its name, as a browser reaches it, so sites behind a CDN,
-WAF or shared hosting are tested too. Open ports are scanned by IP address and port.
+WAF or shared hosting are tested too. Open ports are scanned by IP address and port, except
+on the shared edge addresses of a CDN (Cloudflare, Fastly, CloudFront, Azure Front Door), which
+answer only requests that name a site. There, ports 80 and 443 are left to the scan by name,
+and another open port is scanned by the name that resolved to the address
+(`https://shop.example.com:8443`) when it answers.
 
 ### TLS
 

@@ -163,7 +163,7 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
 | `TESTSSL_CONCURRENCY` | Concurrent testssl.sh scans (default 5) |
-| `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry delivered < 30 min ago). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
+| `SCAN_IDLE_TIMEOUT` | Scan monitor idle timeout, Go duration (default `15m`). Not applied while a scan-pipeline group holds work in flight (a pending entry idle < 30 min; a running handler's entry is refreshed every minute). Not in `docker-compose.yml`: set it with a compose override; mainly for tests |
 | `SCAN_MIN_RUNTIME` | Minimum scan age before a scan can complete, Go duration (default `10m`). Same as above |
 | `DNS_RESOLVE_CONCURRENCY` | Concurrent subdomain DNS lookups in domain discovery (default 50); each name is published as soon as it resolves |
 | `DNS_RECHECK_RESOLVERS` | Public resolvers (comma list, default `1.1.1.1,8.8.8.8`) asked directly when the local resolver says a root domain, a known subdomain, or an email record (SPF, DMARC, MX, NS) does not exist; `off` disables the check (the root then counts as a resolver failure, known subdomains are never confirmed gone, and the local email answer is final) |
