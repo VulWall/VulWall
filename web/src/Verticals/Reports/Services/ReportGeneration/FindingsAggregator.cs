@@ -1,3 +1,4 @@
+using VulWall.Dashboard.Common.Utils;
 using MongoDB.Bson;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.Mappers;
@@ -93,14 +94,15 @@ public class FindingsAggregator
                 detailed["technical_evidence"] = evidence;
             }
 
-            // Add references
-            var references = GetMetadataArray(finding.Metadata, "reference");
-            if (references?.Any() == true)
-            {
-                detailed["references"] = references
-                    .Select(r => new Dictionary<string, string> { ["reference_url"] = r })
-                    .ToList();
-            }
+        }
+
+        // Rendered as links in the technical report: same http/https filter as the finding page.
+        var references = ReferenceUrls.Extract(finding.References, finding.Metadata);
+        if (references.Count > 0)
+        {
+            detailed["references"] = references
+                .Select(r => new Dictionary<string, string> { ["reference_url"] = r })
+                .ToList();
         }
 
         // Wire CWE: testssl stores cwe (string), jsscanner stores cwes (array — take first)

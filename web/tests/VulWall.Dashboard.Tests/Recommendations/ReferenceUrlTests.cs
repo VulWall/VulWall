@@ -1,5 +1,5 @@
 using MongoDB.Bson;
-using VulWall.Dashboard.Recommendations.Services;
+using VulWall.Dashboard.Common.Utils;
 
 namespace VulWall.Dashboard.Tests.Recommendations;
 
@@ -20,32 +20,32 @@ public class ReferenceUrlTests
         });
 
         Assert.Equal(["https://owasp.org/x", "http://example.com/advisory"],
-            RecommendationsService.ExtractReferenceUrls(null, metadata));
+            ReferenceUrls.Extract(null, metadata));
     }
 
     [Fact]
     public void ExtractReferenceUrls_SingleString_IsAccepted() =>
         Assert.Equal(["https://nvd.nist.gov/vuln/detail/CVE-2024-1"],
-            RecommendationsService.ExtractReferenceUrls(null,
+            ReferenceUrls.Extract(null,
                 new BsonDocument("reference", " https://nvd.nist.gov/vuln/detail/CVE-2024-1 ")));
 
     [Fact]
     public void ExtractReferenceUrls_LegacyReferencesKey_IsAccepted() =>
-        Assert.Single(RecommendationsService.ExtractReferenceUrls(null,
+        Assert.Single(ReferenceUrls.Extract(null,
             new BsonDocument("references", new BsonArray { "https://example.com" })));
 
     [Fact]
     public void ExtractReferenceUrls_NullOrMissing_ReturnsEmpty()
     {
-        Assert.Empty(RecommendationsService.ExtractReferenceUrls(null, null));
-        Assert.Empty(RecommendationsService.ExtractReferenceUrls(null, new BsonDocument("reference", BsonNull.Value)));
-        Assert.Empty(RecommendationsService.ExtractReferenceUrls(null, new BsonDocument("other", "https://x.test")));
+        Assert.Empty(ReferenceUrls.Extract(null, null));
+        Assert.Empty(ReferenceUrls.Extract(null, new BsonDocument("reference", BsonNull.Value)));
+        Assert.Empty(ReferenceUrls.Extract(null, new BsonDocument("other", "https://x.test")));
     }
 
     [Fact]
     public void ExtractReferenceUrls_TopLevelReferences_ComeFirstAndMergeWithMetadata() =>
         Assert.Equal(["https://top.example/a", "https://meta.example/b"],
-            RecommendationsService.ExtractReferenceUrls(
+            ReferenceUrls.Extract(
                 ["https://top.example/a", "data:text/html,x"],
                 new BsonDocument("reference", new BsonArray { "https://meta.example/b", "https://top.example/a" })));
 
@@ -57,7 +57,7 @@ public class ReferenceUrlTests
             "https://example.com/0"
         };
 
-        var result = RecommendationsService.ExtractReferenceUrls(null, new BsonDocument("reference", urls));
+        var result = ReferenceUrls.Extract(null, new BsonDocument("reference", urls));
 
         Assert.Equal(10, result.Count);
         Assert.Equal(result.Distinct().Count(), result.Count);
