@@ -32,7 +32,10 @@ to fix.
 - With an Anthropic API key, VulWall also writes business and technical
   remediation guidance for each finding type, and executive summaries. This
   is optional.
-- Scans run on a schedule, and you can start one from the UI at any time.
+- Scans run on the schedule you set in Settings → Scan schedule. Until you
+  change it, VulWall scans once a week at a random time at night, and a
+  change applies within 5 minutes. You can also start a scan from the UI at
+  any time.
 - Everything runs from one `docker compose up` with no external services.
   OpenTelemetry tracing is available but off by default.
 
@@ -240,6 +243,16 @@ The software comes with no warranty (see the license).
 | `scanner/` | Go scanning engine (the `nightwatch` binary). See [scanner/README.md](scanner/README.md). |
 | `web/` | ASP.NET Core MVC dashboard. |
 | `docker-compose.yml` | The self-hosted stack: MongoDB, Redis, scanner, web. |
+
+## Roadmap
+
+Planned work, each tracked in a GitHub issue:
+
+- [Notifications](https://github.com/VulWall/VulWall/issues/1)
+- [OpenAI-compatible and local AI models](https://github.com/VulWall/VulWall/issues/2)
+- [Export and a read-only API](https://github.com/VulWall/VulWall/issues/3)
+- [Multiple users with roles](https://github.com/VulWall/VulWall/issues/4)
+- [Scan profiles](https://github.com/VulWall/VulWall/issues/5)
 
 ## Contributing
 
