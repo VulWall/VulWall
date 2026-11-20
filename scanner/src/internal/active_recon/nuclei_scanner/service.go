@@ -182,6 +182,15 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 
 	// Run Nuclei scan
 	findings, err := s.runNucleiScan(ctx, target.Target, "low,medium,high,critical")
+	if err != nil && ctx.Err() != nil {
+		// Shutdown cut the run off. This is expected: the message stays unACKed and the
+		// next start closes the scan as interrupted.
+		s.logger.Info("Nuclei scan stopped by shutdown",
+			zap.String("target", target.Target),
+		)
+		span.SetAttributes(attribute.Bool("scan.success", false))
+		return err
+	}
 	if err != nil {
 		s.logger.Error("Nuclei scan failed",
 			zap.String("target", target.Target),
