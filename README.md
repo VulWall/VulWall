@@ -252,11 +252,29 @@ The software comes with no warranty (see the license).
 
 Planned work, each tracked in a GitHub issue:
 
-- [Notifications](https://github.com/VulWall/VulWall/issues/1)
-- [OpenAI-compatible and local AI models](https://github.com/VulWall/VulWall/issues/2)
-- [Export and a read-only API](https://github.com/VulWall/VulWall/issues/3)
-- [Multiple users with roles](https://github.com/VulWall/VulWall/issues/4)
-- [Scan profiles](https://github.com/VulWall/VulWall/issues/5)
+- [Notifications for new findings (webhook, Slack/Discord/Teams, email)](https://github.com/VulWall/VulWall/issues/1)
+- [Support OpenAI-compatible and local AI models (Ollama, LM Studio, vLLM)](https://github.com/VulWall/VulWall/issues/2)
+- [Export findings (CSV/JSON) and a read-only API](https://github.com/VulWall/VulWall/issues/3)
+- [Multiple users with admin and viewer roles](https://github.com/VulWall/VulWall/issues/4)
+- [Scan profiles: light, standard, deep](https://github.com/VulWall/VulWall/issues/5)
+- [Change common settings from the web UI (AI key, scanner tuning, DNS re-checks)](https://github.com/VulWall/VulWall/issues/6)
+- [Optional asset import from DNS and cloud providers (Cloudflare, Route 53, Azure, AWS, GCP)](https://github.com/VulWall/VulWall/issues/7)
+- [Ticket integration: Jira, GitHub Issues, GitLab Issues and Linear](https://github.com/VulWall/VulWall/issues/10)
+- [Prioritize by real exploitability with CISA KEV and EPSS](https://github.com/VulWall/VulWall/issues/11)
+- [Record scan authorization when adding assets](https://github.com/VulWall/VulWall/issues/12)
+- [Compliance evidence: map findings to ISO 27001, NIS2 and SOC 2](https://github.com/VulWall/VulWall/issues/13)
+- [Single sign-on with OpenID Connect](https://github.com/VulWall/VulWall/issues/14)
+- [Run new nuclei templates on all assets right after an update](https://github.com/VulWall/VulWall/issues/15)
+- [Easy setup for a self-hosted callback (interactsh) server](https://github.com/VulWall/VulWall/issues/18)
+
+### Ideas
+
+These are not planned yet:
+
+- [Check managed cloud services against CVEs and end-of-life dates](https://github.com/VulWall/VulWall/issues/8)
+- [Scan container images and VMs for vulnerable packages](https://github.com/VulWall/VulWall/issues/9)
+- [Workspaces for MSPs and consultants](https://github.com/VulWall/VulWall/issues/16)
+- [MCP server for AI assistants](https://github.com/VulWall/VulWall/issues/17)
 
 ## Contributing
 
