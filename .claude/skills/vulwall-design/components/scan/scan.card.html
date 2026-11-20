@@ -1,0 +1,67 @@
+<!-- @dsCard group="Components" viewport="700x640" name="Scan" subtitle="Score ring, stats, finding card, heatmap" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-primary); background:var(--surface-sunken); padding:22px; }
+  .lbl { font-size:11px; font-weight:600; letter-spacing:var(--tracking-wider); color:var(--text-faint); margin-bottom:10px; }
+  .sec { margin-bottom:20px; }
+  .toprow { display:flex; gap:16px; align-items:stretch; margin-bottom:20px; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; flex:1; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel" data-presets="react">
+    const { ScoreRing, StatCard, FindingCard, ScanHeatmap } = window.VulWallDesignSystem_2af3fe;
+    function Demo() {
+      return (
+        <div>
+          <div className="toprow">
+            <div style={{background:'var(--surface-card)', border:'1px solid var(--border-default)', borderRadius:'var(--radius-lg)', boxShadow:'var(--shadow-card)', padding:'16px 20px', display:'flex', alignItems:'center', gap:'14px'}}>
+              <ScoreRing score={72} label="/ 100" size={96} />
+              <div>
+                <div style={{fontSize:'13px', color:'var(--text-muted)'}}>Security score</div>
+                <div style={{fontSize:'13px', color:'var(--severity-medium)', fontWeight:600, marginTop:'2px'}}>Needs attention</div>
+              </div>
+            </div>
+            <div className="stats">
+              <StatCard value="2" label="Critical" tone="critical" />
+              <StatCard value="5" label="High" tone="high" />
+              <StatCard value="11" label="Medium" tone="medium" />
+              <StatCard value="23" label="Passed" tone="passed" />
+            </div>
+          </div>
+          <div className="sec">
+            <div className="lbl">FINDING CARD</div>
+            <FindingCard
+              level="high"
+              cve="CVE-2024-3094"
+              host="api.acme.com" port="443"
+              title="Outdated OpenSSL exposes the API to a known RCE"
+              description="The host advertises OpenSSL 3.0.6, which is vulnerable to a remote code execution flaw. Upgrade to 3.0.7 or later — your provider's package mirror already has it."
+              onFix={() => {}}
+              onMute={() => {}}
+            />
+          </div>
+          <div className="sec">
+            <div className="lbl">SCAN ACTIVITY HEATMAP</div>
+            <div style={{background:'var(--surface-card)', border:'1px solid var(--border-default)', borderRadius:'var(--radius-lg)', boxShadow:'var(--shadow-card)', padding:'18px 20px'}}>
+              <ScanHeatmap weeks={24} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+  </script>
+</body>
+</html>

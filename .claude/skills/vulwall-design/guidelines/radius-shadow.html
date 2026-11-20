@@ -1,0 +1,33 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Radius & shadow" subtitle="Corner radii and elevation steps" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-primary); background:var(--surface-sunken); padding:20px; display:flex; gap:28px; align-items:flex-start; }
+  .col { display:flex; gap:14px; }
+  .box { width:64px; height:64px; background:var(--surface-card); border:1px solid var(--border-default); display:flex; align-items:flex-end; justify-content:center; padding:6px; }
+  .lbl { font-family:var(--font-mono); font-size:10px; color:var(--text-muted); }
+  .sbox { width:72px; height:64px; background:var(--surface-card); border-radius:var(--radius-lg); display:flex; align-items:flex-end; justify-content:center; padding:6px; }
+  .sep { width:1px; background:var(--border-default); align-self:stretch; }
+</style>
+</head>
+<body>
+  <div class="col">
+    <div class="box" style="border-radius:var(--radius-sm)"><span class="lbl">6</span></div>
+    <div class="box" style="border-radius:var(--radius-md)"><span class="lbl">8</span></div>
+    <div class="box" style="border-radius:var(--radius-lg)"><span class="lbl">12</span></div>
+    <div class="box" style="border-radius:var(--radius-xl)"><span class="lbl">16</span></div>
+    <div class="box" style="border-radius:var(--radius-pill)"><span class="lbl">pill</span></div>
+  </div>
+  <div class="sep"></div>
+  <div class="col">
+    <div class="sbox" style="box-shadow:var(--shadow-xs)"><span class="lbl">xs</span></div>
+    <div class="sbox" style="box-shadow:var(--shadow-sm)"><span class="lbl">sm</span></div>
+    <div class="sbox" style="box-shadow:var(--shadow-card)"><span class="lbl">card</span></div>
+    <div class="sbox" style="box-shadow:var(--shadow-lg)"><span class="lbl">lg</span></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!-- @dsCard group="Brand" viewport="700x220" name="Logo lockups" subtitle="Mark on light, mark & wordmark on dark" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-primary); background:var(--surface-card); padding:20px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .panel { border-radius:var(--radius-lg); border:1px solid var(--border-default); padding:24px; display:flex; align-items:center; gap:16px; min-height:96px; }
+  .dark { background:var(--brand-very-dark); border-color:transparent; }
+  .word { font-family:var(--font-display); font-weight:600; letter-spacing:.04em; font-size:22px; }
+  .cap { font-size:11px; color:var(--text-faint); margin-top:6px; font-family:var(--font-mono); }
+  .cell { }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="cell">
+      <div class="panel"><img src="../assets/logo-mark.svg" alt="VulWall" style="width:48px;height:auto"><span class="word" style="color:var(--brand-dark-blue)">VULWALL</span></div>
+      <div class="cap">logo-mark.svg · on light</div>
+    </div>
+    <div class="cell">
+      <div class="panel dark"><img src="../assets/logo-mark-white.png" alt="VulWall" style="width:48px;height:auto"><span class="word" style="color:#fff">VULWALL</span></div>
+      <div class="cap">logo-mark-white.png · on dark</div>
+    </div>
+    <div class="cell">
+      <div class="panel dark" style="justify-content:center"><img src="../assets/logo-wordmark-white.png" alt="VulWall" style="height:34px;width:auto"></div>
+      <div class="cap">logo-wordmark-white.png · on dark</div>
+    </div>
+    <div class="cell">
+      <div class="panel" style="background:var(--brand-gradient); border-color:transparent; justify-content:center"><img src="../assets/logo-mark-white.png" alt="VulWall" style="width:40px;height:auto"><span class="word" style="color:#fff">VULWALL</span></div>
+      <div class="cap">on brand gradient</div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!-- @dsCard group="Severity" viewport="700x170" name="Severity scale" subtitle="Maroon → red → amber → gold → slate" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-primary); background:var(--surface-card); padding:20px; }
+  .row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+  .sw { border-radius:var(--radius-lg); overflow:hidden; border:1px solid var(--border-default); }
+  .band { height:64px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:14px; letter-spacing:.02em; }
+  .meta { padding:11px; }
+  .hex { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); line-height:1.7; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="band" style="background:var(--severity-critical-solid)">CRITICAL</div><div class="meta"><div class="hex">text #911D14<br>bg #FEF3F2</div></div></div>
+    <div class="sw"><div class="band" style="background:var(--severity-high-solid)">HIGH</div><div class="meta"><div class="hex">text #D92D20<br>bg #FEF3F2</div></div></div>
+    <div class="sw"><div class="band" style="background:var(--severity-medium-solid)">MEDIUM</div><div class="meta"><div class="hex">text #B54708<br>bg #FFFAEB</div></div></div>
+    <div class="sw"><div class="band" style="background:var(--severity-low-solid)">LOW</div><div class="meta"><div class="hex">text #A16207<br>bg #FEFBE8</div></div></div>
+    <div class="sw"><div class="band" style="background:var(--severity-info-solid)">INFO</div><div class="meta"><div class="hex">text #475569<br>bg #F8FAFC</div></div></div>
+  </div>
+</body>
+</html>
