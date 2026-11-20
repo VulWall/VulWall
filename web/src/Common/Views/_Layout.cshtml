@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="~/css/Common/sections.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Common/loading.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Common/onboarding-tour.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Common/about.css" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
@@ -70,5 +71,10 @@
     <script src="~/js/Common/onboarding-tour.js" asp-append-version="true" defer></script>
 }
 <partial name="~/Common/Views/_ErrorModal.cshtml" />
+@if (User.Identity?.IsAuthenticated == true)
+{
+    <partial name="~/Common/Views/_AboutDialog.cshtml" />
+    <script type="module" src="~/js/Common/about.js" asp-append-version="true"></script>
+}
 </body>
 </html>
