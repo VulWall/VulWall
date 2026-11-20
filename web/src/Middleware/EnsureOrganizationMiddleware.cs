@@ -44,7 +44,7 @@ public class EnsureOrganizationMiddleware(RequestDelegate next)
         {
             UserIds = new List<string> { auth0UserId },
             OwnerEmail = email,
-            CertVisible = true,
+            CertVisible = false, // public certificate is opt-in (Reports > Trust certificate toggle)
             SubscriptionSettings = Plans.GetDefaultSubscriptionSettings(),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow

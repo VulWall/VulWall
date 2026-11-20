@@ -12,7 +12,7 @@ public class RecommendationsService(
     DiscoveriesRepository discoveriesRepository,
     ScansRepository scansRepository,
     KnowledgeBaseCacheService knowledgeBaseCache,
-    FeatureAccessService featureAccessService,
+    IFeatureAccessService featureAccessService,
     FindingSuppressionService suppressionService)
 {
     public async Task<RecommendationsIndexViewModel> GetIndexViewModelAsync()

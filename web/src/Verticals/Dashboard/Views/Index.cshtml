@@ -43,23 +43,6 @@
                     <i class="fas fa-spinner fa-spin me-1"></i>Scanning…
                 </button>
             }
-            else if (Model.ScanNowState == ScanNowState.Cooldown)
-            {
-                <div class="d-flex flex-column align-items-end gap-1">
-                    <button class="btn btn-vw-primary btn-sm overview-rescan-btn" disabled>
-                        <i class="fas fa-clock me-1"></i>Rescan now
-                    </button>
-                    <span class="overview-cooldown-hint">Next scan after midnight UTC</span>
-                </div>
-            }
-            else
-            {
-                <a asp-controller="Settings" asp-action="Index" asp-fragment="billing"
-                   class="btn btn-accent btn-sm overview-rescan-btn"
-                   title="Upgrade to Pro to trigger on-demand scans anytime.">
-                    <i class="fas fa-lock me-1"></i>Rescan now <span class="badge badge-secondary ms-1">Pro</span>
-                </a>
-            }
         </div>
     </div>
 

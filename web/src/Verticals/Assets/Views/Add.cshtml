@@ -76,32 +76,6 @@
 
         <div class="add-context-rail">
             <div class="add-rail-card">
-                <div class="add-rail-eyebrow">ASSET USAGE</div>
-                @{
-                    int used = ViewBag.AssetsUsed ?? 0;
-                    int max = ViewBag.AssetsMax ?? 0;
-                    bool isFull = used >= max;
-                    double pct = max > 0 ? Math.Min(100.0, (double)used / max * 100) : 0;
-                    int remaining = Math.Max(0, max - used);
-                }
-                <div class="add-plan-count">@used <span class="add-plan-sep">/</span> @max</div>
-                <div class="add-plan-bar-track">
-                    <div class="add-plan-bar-fill @(isFull ? "add-plan-bar-full" : "")"
-                         style="width: @pct.ToString("F0")%"></div>
-                </div>
-                <div class="add-plan-note">
-                    @if (isFull)
-                    {
-                        <span class="text-warning"><i class="fas fa-circle-exclamation"></i> Limit reached</span>
-                    }
-                    else
-                    {
-                        <span>@remaining asset slot@(remaining == 1 ? "" : "s") remaining on your plan.</span>
-                    }
-                </div>
-            </div>
-
-            <div class="add-rail-card">
                 <div class="add-rail-eyebrow">WHAT HAPPENS NEXT</div>
                 <div id="stepsForDomain" class="add-steps">
                     @{

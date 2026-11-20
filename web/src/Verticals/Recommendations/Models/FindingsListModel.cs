@@ -8,5 +8,5 @@ namespace VulWall.Dashboard.Recommendations.Models;
 public class FindingsListModel
 {
     public List<GroupedFindingViewModel> Findings { get; set; } = [];
-    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Free;
+    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Full;
 }

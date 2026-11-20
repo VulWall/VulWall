@@ -26,15 +26,6 @@
     --sidebar-link-hover-bg: rgba(244, 125, 23, 0.15);
     --sidebar-link-active-bg: rgba(244, 125, 23, 0.25);
     --sidebar-muted:      rgba(251, 251, 253, 0.65);
-    --sidebar-upgrade-bg: linear-gradient(135deg, rgba(244, 125, 23, 0.15), rgba(244, 125, 23, 0.05));
-    --sidebar-upgrade-border: rgba(244, 125, 23, 0.3);
-    --sidebar-upgrade-btn-bg: var(--accent-orange);
-    --sidebar-upgrade-btn-color: var(--brand-very-dark);
-    --sidebar-badge-muted-bg: rgba(251, 251, 253, 0.15);
-    --sidebar-badge-muted-color: #FBFBFD;
-    --sidebar-badge-expired-bg: rgba(244, 125, 23, 0.15);
-    --sidebar-badge-expired-color: var(--accent-orange);
-    --sidebar-badge-expired-border: rgba(244, 125, 23, 0.3);
 
     /* App */
     --app-bg:             #FBFBFD;
@@ -259,46 +250,6 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
 [data-bs-theme="dark"] .sidebar-org-dropdown {
     background: #1a2035;
     border-color: rgba(251, 251, 253, 0.1);
-}
-
-/* Sidebar upgrade prompt */
-.sidebar-upgrade-prompt {
-    background: var(--sidebar-upgrade-bg) !important;
-    border: 1px solid var(--sidebar-upgrade-border) !important;
-}
-
-.sidebar-upgrade-icon {
-    color: var(--accent-orange);
-}
-
-.sidebar-upgrade-btn {
-    background: var(--sidebar-upgrade-btn-bg);
-    color: var(--sidebar-upgrade-btn-color);
-    font-size: 0.75rem;
-    padding: 0.375rem 0.75rem;
-}
-
-.sidebar-upgrade-btn:hover {
-    background: var(--accent-orange-hover, #E56D07);
-    color: var(--sidebar-upgrade-btn-color);
-}
-
-/* Sidebar plan badges */
-.sidebar-badge-muted {
-    background: var(--sidebar-badge-muted-bg);
-    color: var(--sidebar-badge-muted-color);
-    font-size: 0.65rem;
-    font-weight: 500;
-    padding: 2px 8px;
-}
-
-.sidebar-badge-expired {
-    background: var(--sidebar-badge-expired-bg);
-    color: var(--sidebar-badge-expired-color);
-    border: 1px solid var(--sidebar-badge-expired-border);
-    font-size: 0.65rem;
-    font-weight: 500;
-    padding: 2px 8px;
 }
 
 /* -------- Next-scan countdown widget -------- */

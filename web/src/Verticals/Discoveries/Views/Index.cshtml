@@ -90,28 +90,15 @@
         {
             @foreach (var discovery in Model.Discoveries)
             {
-                var isLocked = !Model.FeatureAccess.CanAccessSubdomainDiscovery && discovery.Type == AssetType.SubDomain;
-                <partial name="~/Verticals/Discoveries/Views/Partials/_DiscoveryRow.cshtml" model="@((discovery, false, isLocked))" />
+                <partial name="~/Verticals/Discoveries/Views/Partials/_DiscoveryRow.cshtml" model="@((discovery, false))" />
                 @foreach (var child in discovery.Children)
                 {
-                    var childLocked = !Model.FeatureAccess.CanAccessSubdomainDiscovery;
-                    <partial name="~/Verticals/Discoveries/Views/Partials/_DiscoveryRow.cshtml" model="@((child, true, childLocked))" />
+                    <partial name="~/Verticals/Discoveries/Views/Partials/_DiscoveryRow.cshtml" model="@((child, true))" />
                 }
             }
         }
     </div>
 </div>
-
-<!-- Upgrade CTA (pro gate) -->
-@if (!Model.FeatureAccess.CanAccessSubdomainDiscovery && Model.SubdomainCount > 0)
-{
-    <div class="mt-3">
-        <partial name="~/Common/Views/_UpgradeCTA.cshtml" model='new UpgradeCTAModel {
-            Text = $"We found {Model.SubdomainCount} subdomains. Upgrade to Pro to see your full attack surface.",
-            Style = "banner"
-        }' />
-    </div>
-}
 
 <!-- Footer count -->
 <div class="disc-footer">

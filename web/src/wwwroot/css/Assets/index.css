@@ -84,21 +84,6 @@
     color: var(--bs-secondary-color);
 }
 
-/* Usage bar */
-.assets-usage-bar {
-    margin-top: 12px;
-    height: 6px;
-    border-radius: var(--radius-pill);
-    background: var(--vw-gray-100);
-    overflow: hidden;
-}
-
-.assets-usage-fill {
-    height: 100%;
-    background: var(--vw-primary);
-    border-radius: var(--radius-pill);
-}
-
 /* Toolbar */
 .assets-toolbar {
     display: flex;

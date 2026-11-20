@@ -2,7 +2,6 @@
 @model VulWall.Dashboard.Assets.Models.IndexViewModel
 @{
     ViewData["Title"] = "Assets";
-    var usagePct = Model.MaxAssets > 0 ? Math.Min(100, Model.TotalAssets * 100 / Model.MaxAssets) : 0;
 }
 
 @section Styles {
@@ -17,24 +16,9 @@
             <h1 class="assets-title">Assets</h1>
             <p class="assets-subtitle">The domains and IPs NightWatch keeps watch over</p>
         </div>
-        @if (Model.CanAddAsset)
-        {
-            <a href="@Url.Action("Add")" class="btn btn-primary">
-                <i class="fa-solid fa-plus me-1"></i>Add Asset
-            </a>
-        }
-        else if (Model.IsPro)
-        {
-            <button class="btn btn-outline-secondary" disabled title="You've reached the asset limit for your plan">
-                <i class="fa-solid fa-layer-group me-1"></i>Asset limit reached
-            </button>
-        }
-        else
-        {
-            <a href="@Url.Action("Index", "Settings")" class="btn btn-primary">
-                <i class="fa-solid fa-arrow-up me-1"></i>Upgrade Plan
-            </a>
-        }
+        <a href="@Url.Action("Add")" class="btn btn-primary">
+            <i class="fa-solid fa-plus me-1"></i>Add Asset
+        </a>
     </div>
 
     @* Stat strip *@
@@ -46,10 +30,7 @@
                 <i class="fas fa-layer-group"></i>
             </div>
             <div class="assets-stat-number">
-                <span id="totalAssetsCount">@Model.TotalAssets</span><span style="font-size:18px; font-weight:500; color:var(--bs-tertiary-color);">/@Model.MaxAssets</span>
-            </div>
-            <div class="assets-usage-bar">
-                <div class="assets-usage-fill" id="usageFill" style="width:@(usagePct)%"></div>
+                <span id="totalAssetsCount">@Model.TotalAssets</span>
             </div>
         </div>
         @* Active *@

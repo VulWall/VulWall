@@ -19,7 +19,7 @@ public class DashboardService(
     ScansRepository scansRepository,
     DiscoveriesRepository discoveriesRepository,
     KnowledgeBaseCacheService knowledgeBaseCache,
-    FeatureAccessService featureAccessService,
+    IFeatureAccessService featureAccessService,
     ISecurityScoreProvider securityScoreProvider,
     ISuppressionFilter suppressionFilter)
 {
@@ -197,7 +197,7 @@ public class DashboardService(
             criticalIssues, highFindings, discoveredAssets);
 
         // ── Header + score hero context ─────────────────────────────────
-        var scanNowState = await GetScanNowStateAsync(featureAccess.IsPro);
+        var scanNowState = await GetScanNowStateAsync();
         var primaryDomain = ResolvePrimaryDomain(allDiscoveries, latestScan);
         var scoreVerdict = ResolveScoreVerdict(scoreResult);
 
@@ -232,30 +232,20 @@ public class DashboardService(
     }
 
     /// <summary>
-    /// Display-only gate for the Overview "Rescan now" button. Mirrors the rules in the Scans
-    /// vertical (Pro-only, no scan in progress, one requested scan per UTC day). This is purely
+    /// Display-only gate for the Overview "Rescan now" button. Mirrors the rule in the Scans
+    /// vertical (no scan in progress). This is purely
     /// presentational — <c>ScansController.TriggerScan</c> re-checks the authoritative state
     /// server-side before any scan is queued, so a stale value here can never trigger a scan.
     /// </summary>
-    private async Task<ScanNowState> GetScanNowStateAsync(bool isPro)
+    private async Task<ScanNowState> GetScanNowStateAsync()
     {
-        if (!isPro)
-            return ScanNowState.ProRequired;
-
         // Bound to 24h so an orphaned Running/Pending scan doesn't disable the button forever.
         var inProgressCutoff = DateTime.UtcNow.AddHours(-24);
         var hasInProgress = await scansRepository.ExistsAsync(
             s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
                  && s.CreatedAt >= inProgressCutoff);
 
-        if (hasInProgress)
-            return ScanNowState.InProgress;
-
-        var todayUtc = DateTime.UtcNow.Date;
-        var hasRequestedToday = await scansRepository.ExistsAsync(
-            s => s.Type == ScanType.Requested && s.CreatedAt >= todayUtc);
-
-        return hasRequestedToday ? ScanNowState.Cooldown : ScanNowState.Allowed;
+        return hasInProgress ? ScanNowState.InProgress : ScanNowState.Allowed;
     }
 
     private static string ResolvePrimaryDomain(

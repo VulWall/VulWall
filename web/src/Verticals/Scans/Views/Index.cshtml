@@ -35,9 +35,7 @@
 {
     var errorMsg = errorCode switch
     {
-        "ProRequired" => "Scan Now is a Pro feature. Upgrade your plan to trigger on-demand scans.",
         "InProgress"  => "A scan is already in progress. Please wait for it to finish.",
-        "Cooldown"    => "You've already run a scan today. Come back tomorrow.",
         "failed"      => "Failed to start the scan. Please try again in a moment.",
         _             => "Something went wrong. Please try again."
     };

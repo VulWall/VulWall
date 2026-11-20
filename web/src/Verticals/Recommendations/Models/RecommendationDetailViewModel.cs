@@ -14,5 +14,5 @@ public class RecommendationDetailViewModel
     /// <summary>
     /// Feature access based on subscription tier
     /// </summary>
-    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Free;
+    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Full;
 }

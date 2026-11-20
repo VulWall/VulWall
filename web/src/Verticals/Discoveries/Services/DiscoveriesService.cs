@@ -9,13 +9,10 @@ namespace VulWall.Dashboard.Discoveries.Services;
 public class DiscoveriesService(
     DiscoveriesRepository discoveriesRepository,
     FindingsRepository findingsRepository,
-    ScansRepository scansRepository,
-    FeatureAccessService featureAccessService)
+    ScansRepository scansRepository)
 {
     public async Task<IndexViewModel> GetIndexViewModelAsync()
     {
-        var featureAccess = await featureAccessService.GetFeatureAccessAsync();
-
         // Get latest completed scan to scope child records (IPs, ports)
         var scans = await scansRepository.GetAllAsync();
         var latestDoneScanId = scans
@@ -73,12 +70,10 @@ public class DiscoveriesService(
         var ipCount = allAssets.Count(a => a.Type == AssetType.Ip);
         var totalPorts = allAssets.Sum(a => a.PortsCount);
 
-        // All users see all assets including subdomain children; state management is Pro-only (locked in UI)
         var visibleAssets = parentAssets;
 
         return new IndexViewModel
         {
-            FeatureAccess = featureAccess,
             Discoveries = visibleAssets,
             // Summary stats (always populated)
             TotalDiscoveries = allAssets.Count,

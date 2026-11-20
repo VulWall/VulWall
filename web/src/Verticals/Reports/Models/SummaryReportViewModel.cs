@@ -5,7 +5,7 @@ namespace VulWall.Dashboard.Reports.Models;
 public class SummaryReportViewModel
 {
     // Feature Access
-    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Free;
+    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Full;
 
     // Header Information
     public string OrgId { get; set; } = string.Empty;
@@ -189,7 +189,6 @@ public class ScanTool
 
 public class ScanCoverage
 {
-    public string Tier { get; set; } = string.Empty;
     public List<string> Exclusions { get; set; } = new();
     public ScanDepth Depth { get; set; } = new();
 }

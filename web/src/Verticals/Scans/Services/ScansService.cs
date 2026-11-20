@@ -1,6 +1,5 @@
 using Cronos;
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.Scan;
 using VulWall.Dashboard.Data.Repositories;
@@ -11,8 +10,7 @@ namespace VulWall.Dashboard.Scans.Services;
 
 public class ScansService(
     ScansRepository scansRepository,
-    FindingsRepository findingsRepository,
-    FeatureAccessService featureAccessService)
+    FindingsRepository findingsRepository)
 {
     /// <summary>
     /// Gets the complete Index view model with all data.
@@ -31,8 +29,6 @@ public class ScansService(
 
         var allScans = (await allScansTask).ToList();
         var allFindings = (await allFindingsTask).ToList();
-
-        var isPro = await featureAccessService.HasProAccessAsync();
 
         var statistics = new ScanOverviewStatistics
         {
@@ -71,8 +67,8 @@ public class ScansService(
             ScheduledScanDates = scheduledDates,
             InitialComparison = initialComparison,
             LastScanAt = allScans.FirstOrDefault()?.CreatedAt,
-            ScanNowState = ComputeScanNowState(allScans, isPro),
-            LiveScanStatus = BuildLiveScanStatus(allScans, scheduledDates, isPro, uniqueIssueCounts)
+            ScanNowState = EvaluateScanNowState(allScans),
+            LiveScanStatus = BuildLiveScanStatus(allScans, scheduledDates, uniqueIssueCounts)
         };
     }
 
@@ -85,7 +81,6 @@ public class ScansService(
             orderByProperty: s => s.CreatedAt,
             sortDirection: SortDirection.Descending,
             limit: 10)).ToList();
-        var isPro = await featureAccessService.HasProAccessAsync();
 
         var doneScanIds = allScans.Take(5).Where(s => s.Status == ScanStatus.Done).Select(s => s.Id).ToList();
         IReadOnlyDictionary<string, int>? uniqueIssueCounts = null;
@@ -96,13 +91,12 @@ public class ScansService(
             uniqueIssueCounts = ComputeUniqueIssueCounts(doneScanIds, findings);
         }
 
-        return BuildLiveScanStatus(allScans, GetScheduledScanDates(scanCron), isPro, uniqueIssueCounts);
+        return BuildLiveScanStatus(allScans, GetScheduledScanDates(scanCron), uniqueIssueCounts);
     }
 
     private static LiveScanStatusViewModel BuildLiveScanStatus(
         List<Scan> allScans,
         List<string> scheduledDates,
-        bool isPro = false,
         IReadOnlyDictionary<string, int>? uniqueIssueCounts = null)
     {
         // allScans is sorted newest-first
@@ -131,7 +125,7 @@ public class ScansService(
             IsLive = s.Status == ScanStatus.Running
         }).ToList();
 
-        var scanNowState = ComputeScanNowState(allScans, isPro);
+        var scanNowState = EvaluateScanNowState(allScans);
 
         if (running is null)
         {
@@ -164,41 +158,18 @@ public class ScansService(
     /// </summary>
     public async Task<ScanNowState> GetScanNowStateAsync()
     {
-        if (!await featureAccessService.HasProAccessAsync())
-            return ScanNowState.ProRequired;
-
         // Bound to 24h so an orphaned Running/Pending scan doesn't block forever.
         var inProgressCutoff = DateTime.UtcNow.AddHours(-24);
         var hasInProgress = await scansRepository.ExistsAsync(
             s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
                  && s.CreatedAt >= inProgressCutoff);
 
-        if (hasInProgress)
-            return ScanNowState.InProgress;
-
-        // Exact per-day query — avoids the top-N limit bypass the in-memory helper is subject to.
-        var todayUtc = DateTime.UtcNow.Date;
-        var hasRequestedToday = await scansRepository.ExistsAsync(
-            s => s.Type == ScanType.Requested && s.CreatedAt >= todayUtc);
-
-        return hasRequestedToday ? ScanNowState.Cooldown : ScanNowState.Allowed;
+        return hasInProgress ? ScanNowState.InProgress : ScanNowState.Allowed;
     }
 
     /// <summary>
     /// Mirrors <see cref="GetScanNowStateAsync"/> but evaluates against an already-loaded scan list
     /// (newest-first) so the Index view model build avoids a second DB round-trip.
-    /// </summary>
-    private static ScanNowState ComputeScanNowState(IList<Scan> allScans, bool isPro)
-    {
-        if (!isPro)
-            return ScanNowState.ProRequired;
-
-        return EvaluateScanNowState(allScans);
-    }
-
-    /// <summary>
-    /// Pro-only gating rules: block when a scan is already queued/running, then enforce one
-    /// requested scan per calendar day (UTC). Assumes the caller has already verified Pro access.
     /// </summary>
     private static ScanNowState EvaluateScanNowState(IList<Scan> scans)
     {
@@ -207,10 +178,6 @@ public class ScansService(
         if (scans.Any(s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
                            && s.CreatedAt >= inProgressCutoff))
             return ScanNowState.InProgress;
-
-        // CreatedAt is UTC (MongoDB driver default) — .Date comparison is safe.
-        if (scans.Any(s => s.Type == ScanType.Requested && s.CreatedAt.Date == DateTime.UtcNow.Date))
-            return ScanNowState.Cooldown;
 
         return ScanNowState.Allowed;
     }

@@ -1,22 +1,16 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Services;
-using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Entities.Asset;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Assets.Constants;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Services.DomainVerifier;
 using VulWall.Dashboard.Assets.Validation;
-using VulWall.Dashboard.Settings.Models;
 
 namespace VulWall.Dashboard.Assets.Services;
 
 public class AssetsService(
     AssetsRepository assetsRepository,
-    OrganizationRepository organizationRepository,
     ScansRepository scansRepository,
-    FeatureAccessService featureAccessService,
-    IOrganizationContext organizationContext,
     IDomainVerifier domainVerifier)
 {
     public async Task<IndexViewModel> GetAssetsAsync()
@@ -24,17 +18,14 @@ public class AssetsService(
         var allAssets = await assetsRepository.GetAllAsync();
         var assets = allAssets.Select(MapAssetToViewModel).ToList();
         var stats = await GetStatisticsAsync();
-        var maxAssets = await GetMaxAssetsAsync();
 
         return new IndexViewModel
         {
             Assets = assets,
             TotalAssets = stats.TotalAssets,
-            MaxAssets = maxAssets,
             ActiveAssets = stats.ActiveAssets,
             InactiveAssets = stats.InactiveAssets,
-            PendingAssets = stats.PendingAssets,
-            IsPro = await featureAccessService.HasProAccessAsync()
+            PendingAssets = stats.PendingAssets
         };
     }
 
@@ -250,44 +241,6 @@ public class AssetsService(
             InactiveAssets = assetsList.Count(a => !a.Enabled),
             PendingAssets = pending
         };
-    }
-
-    public async Task<bool> CanAddAssetAsync()
-    {
-        var stats = await GetStatisticsAsync();
-        var maxAssets = await GetMaxAssetsAsync();
-        return stats.TotalAssets < maxAssets;
-    }
-
-    /// <summary>
-    /// Determines whether an immediate scan should be triggered for this org.
-    /// Pro orgs always get an immediate scan on asset add.
-    /// Free orgs only get one immediate scan — on their very first asset add (onboarding experience).
-    /// Subsequent asset adds on Free simply wait for the monthly cron.
-    /// </summary>
-    public async Task<bool> CanTriggerImmediateScanAsync()
-    {
-        if (await featureAccessService.HasProAccessAsync())
-            return true;
-
-        // Free tier: allow immediate scan only if the org has no prior scans.
-        var hasExistingScans = await scansRepository.ExistsAsync(_ => true);
-        return !hasExistingScans;
-    }
-
-    public async Task<(int Used, int Max)> GetAssetUsageAsync()
-    {
-        var stats = await GetStatisticsAsync();
-        var maxAssets = await GetMaxAssetsAsync();
-        return (stats.TotalAssets, maxAssets);
-    }
-
-    public async Task<int> GetMaxAssetsAsync()
-    {
-        var orgId = await organizationContext.GetCurrentOrgIdAsync();
-        var organization = await organizationRepository.GetByIdAsync(orgId);
-        return organization?.SubscriptionSettings?.MaxAssets
-               ?? Plans.GetDefaultSubscriptionSettings().MaxAssets;
     }
 
     private static AssetItemViewModel MapAssetToViewModel(Asset asset)

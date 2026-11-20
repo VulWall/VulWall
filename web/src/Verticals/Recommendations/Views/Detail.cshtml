@@ -253,8 +253,8 @@ else if (status == "muted")
         @{
             var assetsWithDiscovery = Model.AffectedAssets.Where(a => !string.IsNullOrEmpty(a.DiscoveryId)).ToList();
             var hasSuppressedAssets = assetsWithDiscovery.Any(a => a.IsSuppressed);
-            // Show the panel when the user can suppress (Pro), or when there are already-suppressed
-            // assets that a downgraded user needs to be able to restore.
+            // Show the panel when the user can suppress, or when there are already-suppressed
+            // assets that the user must still be able to restore.
             var showSuppressionPanel = !string.IsNullOrEmpty(Model.Finding.FindingType) &&
                                        (Model.FeatureAccess.CanSuppressFindings || hasSuppressedAssets);
         }
@@ -276,8 +276,7 @@ else if (status == "muted")
                                 <i class="fas fa-check-circle"></i>
                                 @(asset.Target ?? asset.DiscoveryId) — @statusLabel
                             </span>
-                            @* Restore is always available — users who downgrade from Pro must be able
-                               to undo suppressions they created while on Pro. *@
+                            @* Restore is always available, even when suppression is not allowed. *@
                             <form method="post"
                                   action="@Url.Action("UnsuppressFinding", "Recommendations")"
                                   class="d-inline">
@@ -292,7 +291,6 @@ else if (status == "muted")
                     }
                     else if (Model.FeatureAccess.CanSuppressFindings)
                     {
-                        @* Dismiss form is Pro-only *@
                         <form method="post"
                               action="@Url.Action("SuppressFinding", "Recommendations")"
                               class="mb-2 border rounded p-2"

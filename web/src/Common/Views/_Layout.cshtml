@@ -1,7 +1,4 @@
 @using System.Security.Claims
-@using VulWall.Dashboard.Common.Services.Organization
-@using VulWall.Dashboard.Settings.Extensions
-@inject IOrganizationContext OrganizationContext
 @{
     Layout = null;
 }
@@ -20,7 +17,6 @@
     <link rel="stylesheet" href="~/css/Common/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Common/sections.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Common/loading.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/Common/feature-gating.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Common/onboarding-tour.css" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
 </head>
@@ -55,58 +51,6 @@
 
     <div class="content d-flex flex-column">
         <main id="main" class="container-fluid pt-4 px-4" role="main">
-            @if (User.Identity?.IsAuthenticated == true)
-            {
-                var organization = await OrganizationContext.GetCurrentOrganizationAsync();
-                var plan = organization.Plan;
-
-                if (plan != null && plan.SubscriptionPlan?.Equals("Pro", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    var isPastDue = plan.SubscriptionStatus.IsPastDue();
-                    var isExpired = !plan.IsActive && !isPastDue;
-
-                    if (isPastDue)
-                    {
-                        <!-- Payment Past Due Banner -->
-                        <div class="subscription-past-due-banner" role="alert">
-                            <div class="subscription-past-due-banner-content">
-                                <div class="subscription-past-due-banner-icon">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                </div>
-                                <div class="subscription-past-due-banner-text">
-                                    <div class="subscription-past-due-banner-message">
-                                        Your payment could not be processed. Please update your payment method to keep your Pro features.
-                                    </div>
-                                </div>
-                            </div>
-                            <a href="/settings#billing" class="subscription-past-due-banner-action">
-                                <i class="fas fa-credit-card"></i>
-                                <span>Update Payment</span>
-                            </a>
-                        </div>
-                    }
-                    else if (isExpired)
-                    {
-                        <!-- Subscription Expired Banner -->
-                        <div class="subscription-expired-banner" role="alert">
-                            <div class="subscription-expired-banner-content">
-                                <div class="subscription-expired-banner-icon">
-                                    <i class="fas fa-info-circle"></i>
-                                </div>
-                                <div class="subscription-expired-banner-text">
-                                    <div class="subscription-expired-banner-message">
-                                        Your Pro subscription has ended. Your scan data is safe. Resubscribe to restore full access.
-                                    </div>
-                                </div>
-                            </div>
-                            <a href="/settings#plans" class="subscription-expired-banner-action">
-                                <i class="fas fa-crown"></i>
-                                <span>View Plans</span>
-                            </a>
-                        </div>
-                    }
-                }
-            }
             <partial name="~/Common/Views/_FlashAlerts.cshtml" />
             @RenderBody()
         </main>

@@ -730,10 +730,6 @@
 /* ============================================================
    Band 6 — Footer / coverage
    ============================================================ */
-.sr-cta-band {
-    padding: 24px 48px;
-}
-
 .sr-footer {
     background: #F8FAFC;
     display: flex;
@@ -809,8 +805,7 @@
 @media (max-width: 600px) {
     .sr-band,
     .sr-header,
-    .sr-footer,
-    .sr-cta-band {
+    .sr-footer {
         padding-left: 24px;
         padding-right: 24px;
     }

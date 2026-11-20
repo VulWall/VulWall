@@ -313,42 +313,6 @@
     margin-bottom: 10px;
 }
 
-.add-plan-count {
-    font-family: var(--font-mono, monospace);
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--bs-body-color);
-    margin-bottom: 8px;
-}
-
-.add-plan-sep {
-    color: var(--vw-gray-400, #9ca3af);
-}
-
-.add-plan-bar-track {
-    height: 6px;
-    border-radius: 100px;
-    background: var(--vw-gray-100, #f3f4f6);
-    overflow: hidden;
-    margin-bottom: 6px;
-}
-
-.add-plan-bar-fill {
-    height: 100%;
-    border-radius: 100px;
-    background: var(--brand-blue);
-    transition: width 0.3s ease;
-}
-
-.add-plan-bar-fill.add-plan-bar-full {
-    background: var(--brand-orange);
-}
-
-.add-plan-note {
-    font-size: 12px;
-    color: var(--text-muted, var(--vw-gray-500));
-}
-
 .add-steps {
     display: flex;
     flex-direction: column;
@@ -440,10 +404,6 @@
 [data-bs-theme="dark"] .asset-type-radio:checked + .asset-type-tile .tile-icon {
     background: rgba(0, 86, 161, 0.2);
     color: var(--brand-blue);
-}
-
-[data-bs-theme="dark"] .add-plan-bar-track {
-    background: #2d3748;
 }
 
 [data-bs-theme="dark"] .add-step-num {

@@ -75,28 +75,11 @@
                             </form>
                             break;
 
-                        case ScanNowState.ProRequired:
-                            <a asp-controller="Settings" asp-action="Index" asp-fragment="billing"
-                               class="btn btn-accent btn-sm"
-                               title="Upgrade to Pro to trigger on-demand scans anytime.">
-                                <i class="fas fa-lock me-1"></i>Scan Now <span class="badge badge-secondary ms-1">Pro</span>
-                            </a>
-                            break;
-
                         case ScanNowState.InProgress:
                             <button class="btn btn-primary btn-sm" disabled
                                     title="A scan is already running.">
                                 <i class="fas fa-spinner fa-spin me-1"></i>Scanning…
                             </button>
-                            break;
-
-                        case ScanNowState.Cooldown:
-                            <div class="d-flex flex-column align-items-end gap-1">
-                                <button class="btn btn-primary btn-sm" disabled>
-                                    <i class="fas fa-clock me-1"></i>Scan Now
-                                </button>
-                                <span class="live-cooldown-hint">Next scan available after midnight UTC</span>
-                            </div>
                             break;
                     }
                 </div>

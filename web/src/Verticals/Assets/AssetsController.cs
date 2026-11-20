@@ -25,22 +25,12 @@ public class AssetsController(
     [HttpGet]
     public async Task<IActionResult> Add()
     {
-        if (!await assetsService.CanAddAssetAsync())
-        {
-            var maxAssets = await assetsService.GetMaxAssetsAsync();
-            TempData["Error"] = $"You have reached the maximum limit of {maxAssets} asset(s) for your plan. Please upgrade to add more assets.";
-            return RedirectToAction(nameof(Index));
-        }
-
         await PopulateAddViewBagAsync();
         return View(new AddAssetInput());
     }
 
     private async Task PopulateAddViewBagAsync()
     {
-        var (used, max) = await assetsService.GetAssetUsageAsync();
-        ViewBag.AssetsUsed = used;
-        ViewBag.AssetsMax = max;
         ViewBag.QuickAddDomain = await assetsService.GetQuickAddDomainAsync(GetVerifiedEmailForOwnership());
     }
 
@@ -48,13 +38,6 @@ public class AssetsController(
     [AuditLog(Category = AuditLogCategory.Assets, Action = "Added asset")]
     public async Task<IActionResult> Add(AddAssetInput input)
     {
-        if (!await assetsService.CanAddAssetAsync())
-        {
-            var maxAssets = await assetsService.GetMaxAssetsAsync();
-            TempData["Error"] = $"You have reached the maximum limit of {maxAssets} asset(s) for your plan. Please upgrade to add more assets.";
-            return RedirectToAction(nameof(Index));
-        }
-
         if (!ModelState.IsValid)
         {
             await PopulateAddViewBagAsync();
@@ -113,16 +96,8 @@ public class AssetsController(
     public async Task<IActionResult> QuickAdd()
     {
         // Failure branches invalidate ModelState so AuditLog's ShouldLogAudit skips them:
-        // the "Quick-added verified domain" audit action is an activation metric and must
-        // count real adds only, not limit-reached / ineligible / create-error attempts.
-        if (!await assetsService.CanAddAssetAsync())
-        {
-            var maxAssets = await assetsService.GetMaxAssetsAsync();
-            TempData["Error"] = $"You have reached the maximum limit of {maxAssets} asset(s) for your plan. Please upgrade to add more assets.";
-            ModelState.AddModelError(string.Empty, "Asset limit reached.");
-            return RedirectToAction(nameof(Index));
-        }
-
+        // the "Quick-added verified domain" audit action must count real adds only,
+        // not ineligible / create-error attempts.
         var domain = await assetsService.GetQuickAddDomainAsync(GetVerifiedEmailForOwnership());
         if (domain == null)
         {
@@ -163,12 +138,6 @@ public class AssetsController(
 
     private async Task TriggerScanAndSetTempData(string assetName)
     {
-        if (!await assetsService.CanTriggerImmediateScanAsync())
-        {
-            TempData["Info"] = "Asset added successfully. It will be included in your next scheduled scan.";
-            return;
-        }
-
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
         var triggeredBy = User.FindFirst(ClaimTypes.Email)?.Value ?? "unknown";
         var scanId = await nightWatchService.TriggerScanAsync(orgId, triggeredBy);

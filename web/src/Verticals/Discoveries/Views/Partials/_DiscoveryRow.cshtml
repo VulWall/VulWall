@@ -1,6 +1,6 @@
 @using VulWall.Dashboard.Common.Contracts.Enums
 @using VulWall.Dashboard.Common.Utils
-@model (VulWall.Dashboard.Discoveries.Models.DiscoveryItemViewModel Discovery, bool IsChild, bool IsLocked)
+@model (VulWall.Dashboard.Discoveries.Models.DiscoveryItemViewModel Discovery, bool IsChild)
 @removeTagHelper Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
@@ -118,27 +118,18 @@
 
         <!-- 7: Ownership -->
         <div>
-            @if (Model.IsLocked)
-            {
-                <a href="/settings#plans" class="btn btn-sm btn-outline-secondary">
-                    <i class="fas fa-lock me-1"></i> Upgrade
-                </a>
-            }
-            else
-            {
-                <form class="status-change-form" data-action="@Url.Action("UpdateOwnershipStatus")">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="discoveryId" value="@d.Id" />
-                    <select name="ownershipStatus" class="status-select" style="@ownerStyle"
-                            data-discovery-name="@d.Name"
-                            aria-label="Ownership status for @d.Name">
-                        <option value="0" @(d.OwnershipStatus == OwnershipStatus.Verified ? "selected" : null)>Verified</option>
-                        <option value="1" @(d.OwnershipStatus == OwnershipStatus.NotSure ? "selected" : null)>Not sure</option>
-                        <option value="2" @(d.OwnershipStatus == OwnershipStatus.NotMine ? "selected" : null)>Not mine</option>
-                        <option value="3" @(d.OwnershipStatus == OwnershipStatus.Ignore ? "selected" : null)>Ignore</option>
-                    </select>
-                </form>
-            }
+            <form class="status-change-form" data-action="@Url.Action("UpdateOwnershipStatus")">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="discoveryId" value="@d.Id" />
+                <select name="ownershipStatus" class="status-select" style="@ownerStyle"
+                        data-discovery-name="@d.Name"
+                        aria-label="Ownership status for @d.Name">
+                    <option value="0" @(d.OwnershipStatus == OwnershipStatus.Verified ? "selected" : null)>Verified</option>
+                    <option value="1" @(d.OwnershipStatus == OwnershipStatus.NotSure ? "selected" : null)>Not sure</option>
+                    <option value="2" @(d.OwnershipStatus == OwnershipStatus.NotMine ? "selected" : null)>Not mine</option>
+                    <option value="3" @(d.OwnershipStatus == OwnershipStatus.Ignore ? "selected" : null)>Ignore</option>
+                </select>
+            </form>
         </div>
     </div>
 

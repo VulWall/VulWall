@@ -119,7 +119,7 @@ public class SummaryReportBuilder
             TechnicalDetails = BuildTechnicalDetails(discoveriesList, findingsList, mostRecentScan),
 
             // Scan Coverage
-            Coverage = BuildScanCoverage(featureAccess)
+            Coverage = BuildScanCoverage()
         };
     }
 
@@ -546,11 +546,10 @@ public class SummaryReportBuilder
         };
     }
 
-    private static ScanCoverage BuildScanCoverage(FeatureAccess featureAccess)
+    private static ScanCoverage BuildScanCoverage()
     {
         return new ScanCoverage
         {
-            Tier = featureAccess.IsPro ? "Pro" : "Free",
             Exclusions = new List<string>
             {
                 "Internal network infrastructure",

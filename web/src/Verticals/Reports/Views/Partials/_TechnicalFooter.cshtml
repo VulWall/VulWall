@@ -9,7 +9,7 @@
         <p class="tr-eyebrow">SCAN COVERAGE</p>
         <p class="tr-footer-coverage-body">
             External, unauthenticated scan · <span class="tr-mono">@toolCount scanner@(toolCount != 1 ? "s" : "")</span>
-            (@toolNames) · @Model.Coverage.Tier tier.
+            (@toolNames).
             @if (Model.Coverage.Exclusions.Any())
             {
                 <span>Excludes @string.Join(", ", Model.Coverage.Exclusions.Take(3).Select(e => e.ToLower())).</span>

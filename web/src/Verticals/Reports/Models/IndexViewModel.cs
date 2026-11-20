@@ -16,7 +16,7 @@ public class IndexViewModel
     /// <summary>
     /// Feature access based on subscription tier
     /// </summary>
-    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Free;
+    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Full;
 }
 
 public class ScanSelectItem

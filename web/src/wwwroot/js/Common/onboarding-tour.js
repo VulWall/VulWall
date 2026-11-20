@@ -58,8 +58,7 @@ const tourSteps = [
         position: 'top',
         title: 'Security Timeline',
         icon: 'fa-chart-line',
-        description: 'Track your security posture over time. See trends in vulnerabilities and score changes.',
-        showProBadge: true
+        description: 'Track your security posture over time. See trends in vulnerabilities and score changes.'
     },
     {
         id: 'recent-scans',
@@ -239,8 +238,6 @@ class OnboardingTour {
         tooltip.setAttribute('aria-modal', 'true');
         tooltip.setAttribute('data-position', step.position);
 
-        const isFreeUser = this.tourConfig.planType === 'Free';
-        const showProBadge = step.showProBadge && isFreeUser;
         const isLastStep = this.currentStep === tourSteps.length - 1;
 
         tooltip.innerHTML = `
@@ -248,7 +245,6 @@ class OnboardingTour {
                 <h3 class="tour-title">
                     <i class="fas ${step.icon}"></i>
                     ${step.title}
-                    ${showProBadge ? '<span class="tour-pro-badge"><i class="fas fa-crown"></i>Pro</span>' : ''}
                 </h3>
             </div>
             <div class="tour-content">

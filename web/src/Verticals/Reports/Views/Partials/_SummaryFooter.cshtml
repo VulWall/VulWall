@@ -3,19 +3,7 @@
     var tools = Model.TechnicalDetails.Active.Tools;
     var toolCount = tools.Count;
     var toolNames = string.Join(", ", tools.Select(t => t.Name));
-    var tier = string.IsNullOrEmpty(Model.Coverage.Tier) ? "Free" : Model.Coverage.Tier;
     var exclusions = string.Join(", ", Model.Coverage.Exclusions.Select(e => e.ToLowerInvariant()));
-}
-
-@if (!Model.FeatureAccess.IsPro)
-{
-    <div class="sr-band sr-cta-band">
-        <partial name="~/Common/Views/_UpgradeCTA.cshtml" model='new VulWall.Dashboard.Common.Contracts.Models.UpgradeCTAModel {
-            Text = "Share reports with stakeholders, publish your security certificate, and track trends over time",
-            ButtonText = "Go Pro",
-            Style = "banner"
-        }' />
-    </div>
 }
 
 <footer class="sr-band sr-footer">
@@ -23,7 +11,7 @@
         <div class="sr-eyebrow">Scan coverage</div>
         <p class="sr-coverage-text">
             External, unauthenticated scan ·
-            <span class="sr-mono">@toolCount scanner@(toolCount == 1 ? "" : "s")</span>@(string.IsNullOrEmpty(toolNames) ? "" : $" ({toolNames})") · @tier tier.@(string.IsNullOrEmpty(exclusions) ? "" : $" Excludes {exclusions}.")
+            <span class="sr-mono">@toolCount scanner@(toolCount == 1 ? "" : "s")</span>@(string.IsNullOrEmpty(toolNames) ? "" : $" ({toolNames})").@(string.IsNullOrEmpty(exclusions) ? "" : $" Excludes {exclusions}.")
         </p>
     </div>
     <div class="sr-tagline">

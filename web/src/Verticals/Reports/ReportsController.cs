@@ -30,7 +30,7 @@ public class ReportsController(
     SharedLinkService sharedLinkService,
     SharedLinksPublicRepository sharedLinksPublicRepository,
     IpRateLimiterService rateLimiter,
-    FeatureAccessService featureAccessService,
+    IFeatureAccessService featureAccessService,
     ISuppressionFilter suppressionFilter)
     : Controller
 {
@@ -210,7 +210,7 @@ public class ReportsController(
         var featureAccess = await featureAccessService.GetFeatureAccessAsync();
         if (!featureAccess.CanPublishCertificate)
         {
-            return BadRequest(new { success = false, error = "Upgrade to Pro to publish your certificate" });
+            return BadRequest(new { success = false, error = "Publishing the certificate is not enabled" });
         }
 
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
@@ -250,42 +250,10 @@ public class ReportsController(
             return View("CertNotAvailable");
         }
 
-        var isPro = organization.Plan?.IsActive == true &&
-                    string.Equals(organization.Plan.SubscriptionPlan, "Pro", StringComparison.OrdinalIgnoreCase);
+        var certUrl = $"{Request.Scheme}://{Request.Host}/certs/{orgId}";
+        var model = await reportsService.BuildPublicCertificateViewModel(orgId, certUrl);
 
-        if (!isPro)
-        {
-            // Allow the org owner to preview their own cert when logged in
-            if (User.Identity?.IsAuthenticated == true)
-            {
-                try
-                {
-                    var currentOrgId = await organizationContext.GetCurrentOrgIdAsync();
-                    if (currentOrgId == orgId)
-                    {
-                        var certUrl = $"{Request.Scheme}://{Request.Host}/certs/{orgId}";
-                        var model = await reportsService.BuildPublicCertificateViewModel(orgId, certUrl);
-                        return model == null ? View("CertNotAvailable") : View(model);
-                    }
-                }
-                catch
-                {
-                    // Not authenticated or different org — fall through to CTA
-                }
-            }
-
-            return View("CertProRequired");
-        }
-
-        var publicCertUrl = $"{Request.Scheme}://{Request.Host}/certs/{orgId}";
-        var proModel = await reportsService.BuildPublicCertificateViewModel(orgId, publicCertUrl);
-
-        if (proModel == null)
-        {
-            return View("CertNotAvailable");
-        }
-
-        return View(proModel);
+        return model == null ? View("CertNotAvailable") : View(model);
     }
 
     [AllowAnonymous]
@@ -339,7 +307,7 @@ public class ReportsController(
             return BadRequest(new CreateSharedLinkResponse
             {
                 Success = false,
-                Error = "Upgrade to Pro to share reports"
+                Error = "Sharing reports is not enabled"
             });
         }
 
@@ -491,8 +459,8 @@ public class ReportsController(
                 .OrderByDescending(s => s.CreatedAt)
                 .FirstOrDefault();
 
-        // For shared reports, provide Pro-level access to the report content
-        var sharedFeatureAccess = Common.Models.FeatureAccess.Pro;
+        // Shared reports always render full report content
+        var sharedFeatureAccess = Common.Models.FeatureAccess.Full;
 
         var report = await summaryReportBuilder.BuildReportAsync(
             link.OrgId,

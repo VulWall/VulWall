@@ -364,14 +364,6 @@
 [data-bs-theme="dark"] .live-run__meta--scanning { color: #58a6ff; }
 [data-bs-theme="dark"] .live-run__meta--failed   { color: #f87171; }
 
-.live-cooldown-hint {
-    font-size: 11px;
-    color: var(--vw-gray-500);
-    white-space: nowrap;
-}
-
-[data-bs-theme="dark"] .live-cooldown-hint { color: var(--vw-gray-400); }
-
 /* ── Responsive ── */
 @media (max-width: 768px) {
     .live-row {

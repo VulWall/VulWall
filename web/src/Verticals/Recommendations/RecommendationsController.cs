@@ -15,7 +15,7 @@ public class RecommendationsController(
     ILogger<RecommendationsController> logger,
     RecommendationsService recommendationsService,
     FindingSuppressionService suppressionService,
-    FeatureAccessService featureAccessService)
+    IFeatureAccessService featureAccessService)
     : Controller
 {
     public async Task<IActionResult> Index()

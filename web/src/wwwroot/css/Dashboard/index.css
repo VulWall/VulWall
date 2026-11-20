@@ -325,52 +325,6 @@
 
 #securityTimelineChart { width: 100% !important; }
 
-/* Pro lock overlay */
-.chart-locked .chart-canvas-wrapper { filter: blur(6px); opacity: 0.6; pointer-events: none; }
-
-.chart-locked-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-    cursor: pointer;
-    text-decoration: none;
-}
-
-.chart-locked-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 1.5rem 2rem;
-    text-align: center;
-    background: var(--ov-surface);
-    border: 1px solid var(--ov-border);
-    border-radius: 12px;
-    box-shadow: var(--ov-shadow);
-}
-
-.chart-locked-content i { font-size: 1.75rem; color: var(--vw-primary); }
-.chart-locked-content span { font-size: 0.9rem; font-weight: 600; color: var(--ov-heading); }
-
-.pro-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    padding: 0.2rem 0.5rem;
-    border-radius: 6px;
-    background: var(--brand-gradient);
-    color: #fff;
-    text-transform: uppercase;
-    letter-spacing: 0.025em;
-}
-
-.pro-badge i { font-size: 0.55rem; }
-
 /* ════════════════════════════════════════════════════════════
    4. METRIC TILES
    ════════════════════════════════════════════════════════════ */
@@ -744,14 +698,6 @@
     .overview-hero-grid { grid-template-columns: 1fr; }
     .overview-bottom-grid { grid-template-columns: 1fr; }
 }
-
-.overview-cooldown-hint {
-    font-size: 11px;
-    color: var(--vw-gray-500);
-    white-space: nowrap;
-}
-
-[data-bs-theme="dark"] .overview-cooldown-hint { color: var(--vw-gray-400); }
 
 @media (max-width: 768px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
