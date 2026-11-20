@@ -59,6 +59,21 @@ public class IpRateLimiterService(IMemoryCache cache, IHttpContextAccessor httpC
         }
     }
 
+    /// <summary>
+    /// Gives back one reserved attempt, for a check that succeeded but must not clear the whole
+    /// counter (for example a shared-link IP counter: one correct link must not wipe failures
+    /// on other links, but correct views must not use up the limit either).
+    /// </summary>
+    public void RefundAttempt(string endpoint, string? subject = null)
+    {
+        var key = GetKey(endpoint, subject);
+        lock (Gate)
+        {
+            if (cache.Get<Counter>(key) is { Count: > 0 } counter)
+                counter.Count--;
+        }
+    }
+
     public void ResetAttempts(string endpoint, string? subject = null)
     {
         lock (Gate)

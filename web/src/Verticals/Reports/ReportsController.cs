@@ -323,9 +323,11 @@ public class ReportsController(
             });
         }
 
-        // Password correct - reset only this link's counter. The IP counter is left to expire so
-        // a correct password on one link (e.g. the attacker's own) cannot clear failures on another.
+        // Password correct: reset this link's counter and give back this request's IP reservation.
+        // The IP counter is not reset, so a correct password on one link (e.g. the attacker's own)
+        // cannot clear failures on another.
         rateLimiter.ResetAttempts(endpoint, token);
+        rateLimiter.RefundAttempt(endpoint);
 
         // Password correct - build and show report
         var organization = await organizationRepository.GetByIdAsync(link.OrgId);

@@ -119,4 +119,32 @@ public class IpRateLimiterServiceTests
 
         Assert.Equal(IpRateLimiterService.DefaultMaxAttempts, results.Count(r => r));
     }
+
+    [Fact]
+    public void RefundAttempt_CorrectViewsDoNotUseUpTheLimit_ButFailuresStillCount()
+    {
+        var limiter = new Caller(new MemoryCache(new MemoryCacheOptions()), "198.51.100.1").Limiter;
+
+        // Six successful views: reserve, then refund.
+        for (var i = 0; i < 6; i++)
+        {
+            Assert.True(limiter.TryReserveAttempt(Endpoint));
+            limiter.RefundAttempt(Endpoint);
+        }
+
+        // Five failures (kept), then even a correct password is refused.
+        for (var i = 0; i < 5; i++)
+            Assert.True(limiter.TryReserveAttempt(Endpoint));
+        Assert.False(limiter.TryReserveAttempt(Endpoint));
+    }
+
+    [Fact]
+    public void RefundAttempt_WithoutCounter_DoesNothing()
+    {
+        var limiter = new Caller(new MemoryCache(new MemoryCacheOptions()), "198.51.100.1").Limiter;
+
+        limiter.RefundAttempt(Endpoint);
+
+        Assert.Equal(IpRateLimiterService.DefaultMaxAttempts, limiter.GetRemainingAttempts(Endpoint));
+    }
 }
