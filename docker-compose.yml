@@ -13,7 +13,7 @@ name: vulwall
 
 services:
   mongo:
-    image: mongo:7.0.29@sha256:606f8e029603330411a7dd10b5ffd50eefc297fc80cee89f10a455e496a76ae7
+    image: mongo:9.0.8@sha256:b0c835c26e5997413e985000f1013c275377cd9607761c1784d486f6dd620b7f
     restart: unless-stopped
     volumes:
       - mongo-data:/data/db
