@@ -3,6 +3,7 @@ package testssl_scanner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -169,50 +170,42 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string, severity st
 
 	// Execute command and capture stderr/stdout for error reporting
 	output, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	exitCode := 0
 	if err != nil {
-		// Check if it's a context cancellation
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("testssl.sh command failed: %w (output: %s)", err, tail(output))
 		}
-		// testssl.sh may return non-zero exit codes even on successful scans
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			s.logger.Debug("testssl.sh command stderr",
-				zap.String("target", target),
-				zap.Int("exit_code", exitErr.ExitCode()),
-				zap.String("output", string(output)),
-			)
-
-			// Exit codes 240-254 are fatal errors (connection issues, etc.)
-			if exitErr.ExitCode() >= 240 {
-				s.logger.Warn("testssl.sh fatal error",
-					zap.String("target", target),
-					zap.Int("exit_code", exitErr.ExitCode()),
-				)
-				// Return empty findings for fatal errors (target not reachable, etc.)
-				return []TestSSLFinding{}, nil
-			}
-
-			// Try to read JSON file anyway - testssl.sh may have written findings
-			if jsonData, readErr := os.ReadFile(tmpPath); readErr == nil && len(jsonData) > 0 {
-				return s.parseTestSSLOutput(jsonData)
-			}
-
-			// No findings
-			s.logger.Debug("testssl.sh found no issues",
-				zap.String("target", target),
-			)
-			return []TestSSLFinding{}, nil
-		}
-		return nil, fmt.Errorf("testssl.sh command failed: %w (output: %s)", err, string(output))
+		exitCode = exitErr.ExitCode()
 	}
 
-	// Read JSON output from temp file
-	jsonData, err := os.ReadFile(tmpPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read JSON output: %w", err)
+	// testssl.sh writes the JSON file also when it stops early; only a run that provably
+	// checked everything is evidence (runComplete).
+	jsonData, readErr := os.ReadFile(tmpPath)
+	if readErr != nil && exitCode == 0 {
+		return nil, fmt.Errorf("failed to read JSON output: %w", readErr)
+	}
+	if err := runComplete(exitCode, jsonData); err != nil {
+		s.logger.Debug("testssl.sh run incomplete",
+			zap.String("target", target),
+			zap.Int("exit_code", exitCode),
+			zap.String("output", tail(output)),
+		)
+		return nil, err
 	}
 
 	return s.parseTestSSLOutput(jsonData)
+}
+
+// tail returns at most the last 500 bytes of b, for error messages.
+func tail(b []byte) string {
+	if len(b) > 500 {
+		b = b[len(b)-500:]
+	}
+	return string(b)
 }
 
 // parseTestSSLOutput parses testssl.sh JSON output
