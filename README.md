@@ -120,7 +120,7 @@ echo "OTEL_ENABLED=true" >> .env
 docker compose --profile tracing up -d
 ```
 
-Jaeger runs at http://localhost:16686. Any other OTLP backend works too; see
+Jaeger runs at http://localhost:16686 (bound to `127.0.0.1`; traces include your hostnames and findings, so do not publish it). Any other OTLP backend works too; see
 [scanner/docs/OBSERVABILITY.md](scanner/docs/OBSERVABILITY.md).
 
 ## Upgrading

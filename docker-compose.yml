@@ -93,7 +93,7 @@ services:
     profiles: ["tracing"]
     restart: unless-stopped
     ports:
-      - "${JAEGER_UI_PORT:-16686}:16686"
+      - "127.0.0.1:${JAEGER_UI_PORT:-16686}:16686"
 
 volumes:
   mongo-data:
