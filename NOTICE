@@ -1,9 +1,8 @@
 VulWall
 Copyright (C) 2026 Moji Tajik
 
-VulWall is licensed under the GNU Affero General Public License v3.0. See
-LICENSE. The VulWall name and logo are trademarks of Moji Tajik and are not
-licensed under the AGPL.
+VulWall is licensed under the MIT License. See LICENSE. The VulWall name and
+logo are trademarks of Moji Tajik and are not licensed under the MIT License.
 
 This product includes or runs the following third-party software and data.
 Each component keeps its own license. The container images ship the tools

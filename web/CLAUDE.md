@@ -1,7 +1,7 @@
 # Claude Code Context for VulWall Project
 
 ## Project Overview
-VulWall is an open-source (AGPL), self-hosted security scanner with automated asset discovery, continuous vulnerability monitoring, and optional AI-powered security recommendations. This `web/` app is the UI; the Go scanner lives in `../scanner/`. The two share one MongoDB database and nothing else (see "Scanner Link" below).
+VulWall is an open-source (MIT), self-hosted security scanner with automated asset discovery, continuous vulnerability monitoring, and optional AI-powered security recommendations. This `web/` app is the UI; the Go scanner lives in `../scanner/`. The two share one MongoDB database and nothing else (see "Scanner Link" below).
 
 ## Design Skill — MANDATORY for all UI/UX work
 

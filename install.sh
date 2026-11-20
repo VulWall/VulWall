@@ -12,7 +12,7 @@
 #   VULWALL_VERSION   release to install, e.g. 0.1.0 (default: the latest release)
 #   VULWALL_BASE_URL  download the release files from this URL instead of GitHub
 #
-# Source: https://github.com/VulWall/VulWall/blob/main/install.sh (AGPL-3.0)
+# Source: https://github.com/VulWall/VulWall/blob/main/install.sh (MIT)
 
 set -eu
 

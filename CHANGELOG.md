@@ -6,7 +6,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [0.1.0] - Unreleased
 
-First open-source, self-hosted release.
+First open-source, self-hosted release, under the MIT License.
 
 ### Added
 
