@@ -86,7 +86,7 @@ SCAN COORDINATOR FLOW:
 4. Publishes discovery jobs to Redis:
    ├─→ Domain assets → domain_discovery_queue
    └─→ IP assets → ip_discovery_queue
-5. Scan monitor tracks completion via consumer group pending counts
+5. Scan monitor marks the scan done when every pipeline group has drained (`scanPipelineGroups()` in `pipeline.go`)
 ```
 
 ---
@@ -295,7 +295,7 @@ Combines two enrichment types in a single service:
 - Detects: Cloudflare, Akamai, AWS WAF, Azure Front Door, Google Cloud Armor, Imperva, ModSecurity, and 60+ others
 
 **IP Geolocation** (`geolocation/`):
-- MaxMind MMDB database for IP lookups
+- DB-IP Lite country and ASN databases (MMDB format), downloaded when the container starts
 - Extracts continent, country, ISP
 
 **Enrichment routing by asset_type:**
