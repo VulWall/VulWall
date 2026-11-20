@@ -211,16 +211,18 @@ public class DashboardService(
     }
 
     /// <summary>
-    /// Display-only gate for the Overview "Rescan now" button. Mirrors the rule in the Scans
-    /// vertical (no scan in progress). This is purely
-    /// presentational — <c>ScansController.TriggerScan</c> re-checks the authoritative state
-    /// server-side before any scan is queued, so a stale value here can never trigger a scan.
+    /// Display-only state of the Overview "Rescan now" button, by the same rule as the Scans
+    /// vertical. <c>ScansController.TriggerScan</c> goes through <c>ScanTriggerService</c>, which
+    /// decides server-side, so a stale value here can never queue a second scan.
     /// </summary>
     private async Task<ScanNowState> GetScanNowStateAsync()
     {
-        var hasInProgress = await scansRepository.ExistsAsync(ScanTriggerService.InProgressPredicate(DateTime.UtcNow));
+        if (await scansRepository.ExistsAsync(s => s.Status == ScanStatus.Queued))
+            return ScanNowState.Queued;
 
-        return hasInProgress ? ScanNowState.InProgress : ScanNowState.Allowed;
+        return await scansRepository.ExistsAsync(ScanTriggerService.StartedPredicate(DateTime.UtcNow))
+            ? ScanNowState.InProgress
+            : ScanNowState.Allowed;
     }
 
     private static string ResolvePrimaryDomain(

@@ -31,7 +31,7 @@ Docker Compose recreates the containers whose settings changed. Your data is kep
 | `TESTSSL_CONCURRENCY` | `5` | Number of testssl.sh scans that run at the same time. |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scans of private and internal IP ranges. Turn it on only to scan your internal network. |
 | `GEO_DOWNLOAD` | `true` | Download the free DB-IP Lite geolocation databases at start. Set to `false` on hosts without internet access. |
-| `DNS_RECHECK_RESOLVERS` | `1.1.1.1,8.8.8.8` | Public DNS resolvers that the scanner asks directly when your local resolver says a root domain does not exist. Set your own comma-separated resolvers, or `off` to turn the check off. |
+| `DNS_RECHECK_RESOLVERS` | `1.1.1.1,8.8.8.8` | Public DNS resolvers the scanner asks directly when your local resolver says a name does not exist: a root domain, a subdomain an earlier scan found, or a domain's SPF, DMARC, MX or NS record. Set your own comma-separated resolvers, or `off` to stop all of these lookups. With `off` the local answer is final: a missing email record is reported as missing, and a subdomain is never confirmed gone. |
 
 ## AI (optional)
 

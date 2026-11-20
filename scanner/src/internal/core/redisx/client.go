@@ -84,11 +84,18 @@ func PublishToStream(ctx context.Context, client *redis.Client, stream string, m
 	return nil
 }
 
+// deadLetterMaxLen caps the dead-letter stream (approximately, XADD MAXLEN ~): nothing
+// consumes it, so a target that fails every time would otherwise grow it without bound.
+const deadLetterMaxLen = 10000
+
 // PublishDeadLetter sends a permanently failed message to the dead-letter stream.
 // This preserves the original message data alongside error context for debugging and replay.
+// The stream keeps about the last deadLetterMaxLen entries.
 func PublishDeadLetter(ctx context.Context, client *redis.Client, sourceStream, consumerGroup, messageID, data string, err error) error {
 	_, xaddErr := client.XAdd(ctx, &redis.XAddArgs{
 		Stream: shared.StreamDeadLetter,
+		MaxLen: deadLetterMaxLen,
+		Approx: true,
 		Values: map[string]interface{}{
 			"source_stream":  sourceStream,
 			"consumer_group": consumerGroup,

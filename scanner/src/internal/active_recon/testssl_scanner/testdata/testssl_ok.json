@@ -1,0 +1,63 @@
+{
+          "clientProblem1" : [
+                            {
+                                "id"           : "engine_problem",
+                                "severity"     : "WARN",
+                                "finding"      : "No engine or GOST support via engine with your /usr/bin/openssl"
+                           }
+          ],
+          "Invocation"  : "testssl.sh --jsonfile-pretty /tmp/o.json --quiet --warnings off -U --severity LOW --ip 172.20.0.2 vwres-tls:443",
+          "at"          : "b9bc0f18dc57:/usr/bin/openssl",
+          "version"     : "3.2.5 ",
+          "openssl"     : "OpenSSL 3.5.9 from Wed Nov 18 23:31:47 2026",
+          "startTime"   : "1795185245",
+          "scanResult"  : [
+          {
+                    "targetHost"      : "vwres-tls",
+                    "ip"              : "172.20.0.2",
+                    "port"            : "443",
+                    "rDNS"            : "vwres-tls.vwres-net.",
+                    "service"         : "HTTP",
+                    "pretest"           : [
+
+                    ],
+                    "protocols"         : [
+
+                    ],
+                    "grease"            : [
+
+                    ],
+                    "ciphers"           : [
+
+                    ],
+                    "serverPreferences" : [
+
+                    ],
+                    "fs"                : [
+
+                    ],
+                    "serverDefaults"    : [
+
+                    ],
+                    "vulnerabilities"   : [
+                            {
+                                "id"           : "LUCKY13",
+                                "severity"     : "LOW",
+                                "cve"          : "CVE-2013-0169",
+                                "cwe"          : "CWE-310",
+                                "finding"      : "potentially vulnerable, uses obsolete TLS CBC ciphers"
+                           }
+                    ],
+                    "cipherTests"       : [
+
+                    ],
+                    "browserSimulations": [
+
+                    ],
+                    "rating"            : [
+
+                    ]
+          }
+          ],
+                    "scanTime"  : 32
+}

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using MongoDB.Driver;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Data.Entities.Scan;
 using VulWall.Dashboard.Data.Repositories;
@@ -7,8 +8,15 @@ namespace VulWall.Dashboard.Common.Services.ScanTrigger;
 
 public enum TriggerScanResult
 {
+    /// <summary>No scan was in progress: a scan is queued and starts on the scanner's next poll.</summary>
     Started,
-    AlreadyRunning
+
+    /// <summary>A scan is running: a follow-up scan is queued and starts right after it.</summary>
+    QueuedAfterCurrent,
+
+    /// <summary>A follow-up scan was already queued: nothing was inserted. It reads the assets
+    /// when it starts, so it includes assets added since it was queued.</summary>
+    AlreadyQueued
 }
 
 /// <summary>
@@ -25,9 +33,19 @@ public class ScanTriggerService(ScansRepository scansRepository)
     private static readonly TimeSpan InProgressWindow = TimeSpan.FromHours(24);
 
     /// <summary>
+    /// A scan the scanner has started (pending or running) and that is younger than
+    /// <see cref="InProgressWindow"/>.
+    /// </summary>
+    public static Expression<Func<Scan, bool>> StartedPredicate(DateTime utcNow)
+    {
+        var cutoff = utcNow - InProgressWindow;
+        return s => (s.Status == ScanStatus.Pending || s.Status == ScanStatus.Running) && s.CreatedAt >= cutoff;
+    }
+
+    /// <summary>
     /// A scan is in progress while it is queued (waiting for the scanner), pending or running.
     /// A queued scan counts at any age: the scanner will still pick it up (for example when it
-    /// was down for a day), and queuing another one would only run the same scan twice.
+    /// was down for a day).
     /// </summary>
     public static Expression<Func<Scan, bool>> InProgressPredicate(DateTime utcNow)
     {
@@ -40,26 +58,38 @@ public class ScanTriggerService(ScansRepository scansRepository)
         scansRepository.ExistsAsync(InProgressPredicate(DateTime.UtcNow));
 
     /// <summary>
-    /// Queues a scan for the current organization unless one is already in progress.
-    /// The check-then-insert is not atomic; two concurrent requests can both queue a scan.
-    /// With a single admin user this is acceptable, and the scanner handles a queued scan
-    /// that arrives while another one runs.
+    /// Queues a scan for the current organization. While a scan runs, it queues one follow-up
+    /// scan, so assets added during the run are scanned right after it instead of at the next
+    /// scheduled scan. There is never more than one queued scan per organization: a second
+    /// request returns <see cref="TriggerScanResult.AlreadyQueued"/>. The unique partial index
+    /// on <c>scans</c> (<c>org_id</c> where <c>status</c> is <c>queued</c>, see
+    /// <c>MongoDbIndexManager</c>) makes this hold for concurrent requests too.
     /// </summary>
     public async Task<TriggerScanResult> TriggerAsync(string triggeredBy)
     {
-        if (await IsScanInProgressAsync())
-            return TriggerScanResult.AlreadyRunning;
+        if (await scansRepository.ExistsAsync(s => s.Status == ScanStatus.Queued))
+            return TriggerScanResult.AlreadyQueued;
 
         var now = DateTime.UtcNow;
-        await scansRepository.CreateAsync(new Scan
-        {
-            Status = ScanStatus.Queued,
-            Type = ScanType.Requested,
-            TriggeredBy = triggeredBy,
-            CreatedAt = now,
-            UpdatedAt = now
-        });
+        var running = await scansRepository.ExistsAsync(StartedPredicate(now));
 
-        return TriggerScanResult.Started;
+        try
+        {
+            await scansRepository.CreateAsync(new Scan
+            {
+                Status = ScanStatus.Queued,
+                Type = ScanType.Requested,
+                TriggeredBy = triggeredBy,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+        catch (MongoWriteException e) when (e.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            // A concurrent request queued one first.
+            return TriggerScanResult.AlreadyQueued;
+        }
+
+        return running ? TriggerScanResult.QueuedAfterCurrent : TriggerScanResult.Started;
     }
 }

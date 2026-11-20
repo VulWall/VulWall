@@ -61,8 +61,6 @@
 /* ---------- Shared typography ---------- */
 .tr-eyebrow {
     font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
     color: #94A3B8;
     font-weight: 600;
     margin: 0 0 4px;
@@ -241,8 +239,6 @@
 
 .tr-score-label {
     font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: rgba(255, 255, 255, 0.6);
 }
 
@@ -449,8 +445,6 @@
 .tr-table th {
     font-size: 10.5px;
     font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
     color: #94A3B8;
     padding: 10px 14px;
     text-align: left;
@@ -540,7 +534,6 @@
 .tr-owasp-pill {
     font-size: 10.5px;
     font-weight: 700;
-    text-transform: uppercase;
     border-radius: 999px;
     padding: 3px 10px;
     width: 110px;
@@ -647,8 +640,6 @@
 .tr-sev-group-label {
     font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
 }
 
 .tr-sev-group-label--critical { color: var(--severity-critical); }
@@ -783,8 +774,6 @@
 .tr-asset-section-label {
     font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: #94A3B8;
 }
 
@@ -882,8 +871,6 @@
 
 .tr-evidence-label {
     font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
     color: #64748B;
     font-weight: 600;
 }

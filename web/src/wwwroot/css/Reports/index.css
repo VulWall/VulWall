@@ -56,8 +56,6 @@
 .rpt-eyebrow {
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: .08em;
-    text-transform: uppercase;
     color: var(--rpt-faint);
     margin-bottom: 6px;
 }
@@ -515,8 +513,6 @@
     padding: 12px 22px;
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: .06em;
-    text-transform: uppercase;
     color: var(--rpt-faint);
     border-bottom: 1px solid var(--rpt-border);
 }

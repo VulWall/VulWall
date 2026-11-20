@@ -2,6 +2,7 @@ package shared
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 
@@ -73,6 +74,10 @@ func PrivateTargetsAllowed() bool {
 	return config.GetEnvBool(config.EnvAllowPrivateTargets, false)
 }
 
+// ErrReservedIP marks an address that the SSRF guard refuses: a definite answer that the
+// target must not be dialed, not a failed lookup.
+var ErrReservedIP = errors.New("ssrf-guard: refusing reserved IP")
+
 // CheckPublicIPs returns an error if any address in ips is in a reserved
 // range, unless PrivateTargetsAllowed. Every address is checked: a host with
 // one public and one private answer is rejected, because a later lookup may
@@ -88,7 +93,7 @@ func CheckPublicIPs(ips []net.IP) error {
 		}
 		for _, cidr := range privateRanges {
 			if cidr.Contains(normalised) {
-				return fmt.Errorf("ssrf-guard: refusing reserved IP %q", ip.String())
+				return fmt.Errorf("%w %q", ErrReservedIP, ip.String())
 			}
 		}
 	}

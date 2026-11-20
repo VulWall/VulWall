@@ -1,0 +1,76 @@
+{
+          "clientProblem1" : [
+                            {
+                                "id"           : "engine_problem",
+                                "severity"     : "WARN",
+                                "finding"      : "No engine or GOST support via engine with your /usr/bin/openssl"
+                           }
+          ],
+          "Invocation"  : "testssl.sh --jsonfile-pretty /tmp/o.json --quiet --warnings off -U --severity LOW --ip 172.20.0.3 vwres-http:80",
+          "at"          : "670034167f91:/usr/bin/openssl",
+          "version"     : "3.2.5 ",
+          "openssl"     : "OpenSSL 3.5.9 from Wed Nov 18 23:31:47 2026",
+          "startTime"   : "1795185290",
+          "scanResult"  : [
+                            {
+                                "id"           : "optimal_proto",
+                                "severity"     : "WARN",
+                                "finding"      : "172.20.0.3:80 doesn't seem to be a TLS/SSL enabled server."
+                           },          {
+                    "targetHost"      : "vwres-http",
+                    "ip"              : "172.20.0.3",
+                    "port"            : "80",
+                    "rDNS"            : "vwres-http.vwres-net.",
+                    "service"         : "Couldn't determine service, skipping all HTTP checks",
+                    "pretest"           : [
+
+                    ],
+                    "protocols"         : [
+
+                    ],
+                    "grease"            : [
+
+                    ],
+                    "ciphers"           : [
+
+                    ],
+                    "serverPreferences" : [
+
+                    ],
+                    "fs"                : [
+
+                    ],
+                    "serverDefaults"    : [
+
+                    ],
+                    "vulnerabilities"   : [
+                            {
+                                "id"           : "secure_renego",
+                                "severity"     : "WARN",
+                                "cwe"          : "CWE-310",
+                                "finding"      : "OpenSSL handshake didn't succeed"
+                           },{
+                                "id"           : "CRIME_TLS",
+                                "severity"     : "WARN",
+                                "cve"          : "CVE-2012-4929",
+                                "cwe"          : "CWE-310",
+                                "finding"      : "Check failed, couldn't connect"
+                           },{
+                                "id"           : "fallback_SCSV",
+                                "severity"     : "WARN",
+                                "finding"      : "Check failed. (couldn't connect)"
+                           }
+                    ],
+                    "cipherTests"       : [
+
+                    ],
+                    "browserSimulations": [
+
+                    ],
+                    "rating"            : [
+
+                    ]
+          }
+          ],
+                    "scanTime"  : 19
+}

@@ -94,12 +94,6 @@
     flex-shrink: 0;
 }
 
-.live-card__scanning-label {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--vw-gray-500, #475569);
-    font-family: var(--font-mono);
-}
 
 /* ── Scanning pill ── */
 .live-pill {
@@ -116,6 +110,13 @@
     color: var(--brand-blue, #0056A1);
     background: var(--vw-info-bg, #E6F0F9);
     border: 1px solid var(--vw-info-border, #99C2E3);
+}
+
+/* A follow-up scan waits for the running one: neutral, no pulse. */
+.live-pill--queued {
+    color: var(--vw-gray-600, #475569);
+    background: var(--vw-gray-50, #F8FAFC);
+    border: 1px solid var(--vw-gray-200, #E2E8F0);
 }
 
 .live-pill__dot {
@@ -179,9 +180,7 @@
 .live-runs__label {
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.08em;
     color: var(--vw-gray-400, #94A3B8);
-    text-transform: uppercase;
 }
 
 .live-runs__viewall {
@@ -316,6 +315,12 @@
     border-color: #1e4a72;
 }
 
+[data-bs-theme="dark"] .live-pill--queued {
+    color: var(--vw-gray-300);
+    background: #1f2937;
+    border-color: #2d3748;
+}
+
 [data-bs-theme="dark"] .live-pill__dot,
 [data-bs-theme="dark"] .live-dot--scanning {
     background: #58a6ff;
@@ -352,8 +357,7 @@
 
 [data-bs-theme="dark"] .live-run__date,
 [data-bs-theme="dark"] .live-run__meta,
-[data-bs-theme="dark"] .live-card__meta,
-[data-bs-theme="dark"] .live-card__scanning-label {
+[data-bs-theme="dark"] .live-card__meta {
     color: var(--vw-gray-400);
 }
 

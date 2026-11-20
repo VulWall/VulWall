@@ -53,8 +53,6 @@
 /* ---------- Shared typography helpers ---------- */
 .sr-eyebrow {
     font-size: 11px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
     color: #94A3B8;
     font-weight: 600;
 }
@@ -442,8 +440,6 @@
 .sr-sev-label {
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
 }
 
 .sr-sev-count {

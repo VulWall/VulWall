@@ -4,17 +4,17 @@
 
     var groups = new[]
     {
-        new { Severity = "critical", Label = "CRITICAL", Findings = Model.CriticalFindings, DefaultOpen = true  },
-        new { Severity = "high",     Label = "HIGH",     Findings = Model.HighFindings,     DefaultOpen = false },
-        new { Severity = "medium",   Label = "MEDIUM",   Findings = Model.MediumFindings,   DefaultOpen = false },
-        new { Severity = "low",      Label = "LOW",      Findings = Model.LowFindings,      DefaultOpen = false },
+        new { Severity = "critical", Label = "Critical", Findings = Model.CriticalFindings, DefaultOpen = true  },
+        new { Severity = "high",     Label = "High",     Findings = Model.HighFindings,     DefaultOpen = false },
+        new { Severity = "medium",   Label = "Medium",   Findings = Model.MediumFindings,   DefaultOpen = false },
+        new { Severity = "low",      Label = "Low",      Findings = Model.LowFindings,      DefaultOpen = false },
     };
 }
 
 <section class="tr-band" id="findings">
     <div class="tr-section-head">
         <div>
-            <p class="tr-eyebrow">FINDINGS</p>
+            <p class="tr-eyebrow">Findings</p>
             <h2 class="tr-h2">Technical findings</h2>
             @if (totalCount > 0)
             {

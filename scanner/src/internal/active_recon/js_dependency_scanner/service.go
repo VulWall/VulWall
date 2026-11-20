@@ -115,28 +115,25 @@ func (s *Service) scanBothProtocols(ctx context.Context, target ScanTarget) []pr
 // publishUniqueVulnerabilities publishes deduplicated vulnerabilities to Redis and returns
 // their finding keys. It stops at the first failed publish.
 func (s *Service) publishUniqueVulnerabilities(ctx context.Context, results []protocolScanResult, target ScanTarget) ([]shared.FindingKey, error) {
-	// Dedup by component+version+CVE across all protocols
-	seen := make(map[string]bool)
+	// Dedup across protocols by the key ingestion stores findings under, (finding_type,
+	// title): a coarser key would drop a finding that is still present and let the scan
+	// resolve it.
+	seen := make(map[shared.FindingKey]bool)
 	var reported []shared.FindingKey
 
 	for _, result := range results {
 		for _, vuln := range result.vulnerabilities {
-			// Create dedup key
-			cveStr := strings.Join(vuln.CVEs, ",")
-			if cveStr == "" {
-				cveStr = "no-cve"
-			}
-			key := fmt.Sprintf("%s|%s|%s", vuln.Component, vuln.Version, cveStr)
+			finding := convertToSecurityFinding(vuln, result.url, target)
+			key := shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title}
 			if seen[key] {
 				continue
 			}
 			seen[key] = true
 
-			finding := convertToSecurityFinding(vuln, result.url, target)
 			if err := s.publishFinding(ctx, finding); err != nil {
 				return nil, fmt.Errorf("publish JS finding %s %s: %w", vuln.Component, vuln.Version, err)
 			}
-			reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
+			reported = append(reported, key)
 
 			s.logger.Info("Published vulnerability finding",
 				zap.String("component", vuln.Component),

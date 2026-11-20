@@ -59,3 +59,7 @@ change it, that is once a week at a random time on a weekend night (UTC), picked
 start. You can make it daily, weekly or monthly at a time in your time zone, or turn it off. The
 scanner picks up a change within 5 minutes. The sidebar and the **Scans** page show when the next
 scan starts. You can also start a scan at any time with **Scan now**.
+
+If you add an asset or use **Scan now** while a scan is running, VulWall queues one more scan that
+starts as soon as the current one finishes. New assets don't wait for the schedule. Only one scan
+waits at a time, and it scans every asset you have when it starts.

@@ -42,6 +42,10 @@ func FetchHTML(ctx context.Context, targetURL string, httpClient *http.Client, l
 	if err != nil {
 		return "", err
 	}
+	// A WAF challenge page has no application scripts: checking it proves nothing.
+	if err := shared.BlockedResponse(targetURL, resp.StatusCode, resp.Header, body); err != nil {
+		return "", err
+	}
 
 	return string(body), nil
 }

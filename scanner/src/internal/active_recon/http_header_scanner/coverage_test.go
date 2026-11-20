@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -27,6 +29,9 @@ func (f fakeScanner) Scan(_ context.Context, url string) ([]scanner.HeaderCheckR
 	r := f[proto]
 	return r.checks, r.err
 }
+
+// refused is a dial error for a port where nothing listens.
+var refused = &net.OpError{Op: "dial", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
 
 var hsts = scanner.HeaderCheckResult{HeaderName: "Strict-Transport-Security", FindingType: "missing-hsts", Title: "Missing HSTS", Severity: "medium"}
 
@@ -73,6 +78,8 @@ func TestProcessDiscoveryCoverage(t *testing.T) {
 		"both answered":     {fakeScanner{"http": {checks: []scanner.HeaderCheckResult{hsts}}, "https": {}}, shared.CoverageOK},
 		"https timed out":   {fakeScanner{"http": {}, "https": {err: context.DeadlineExceeded}}, shared.CoverageError},
 		"https TLS failure": {fakeScanner{"http": {}, "https": {err: errors.New("tls: handshake failure")}}, shared.CoverageError},
+		"https refused":     {fakeScanner{"http": {checks: []scanner.HeaderCheckResult{hsts}}, "https": {err: refused}}, shared.CoverageOK},
+		"both refused":      {fakeScanner{"http": {err: refused}, "https": {err: refused}}, shared.CoverageError},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rdb.Del(ctx, shared.StreamSecurityFindings)
@@ -94,5 +101,37 @@ func TestProcessDiscoveryCoverage(t *testing.T) {
 				t.Fatalf("reported = %+v, want the one finding", last.Coverage.Reported)
 			}
 		})
+	}
+}
+
+// TestPublishUniqueFindingsKeysByTypeAndTitle: two findings with one finding_type but
+// different titles are two findings for ingestion, so both must be reported; the same
+// (finding_type, title) on http and https is one.
+func TestPublishUniqueFindingsKeysByTypeAndTitle(t *testing.T) {
+	uri := os.Getenv("VULWALL_TEST_REDIS_URI")
+	if uri == "" {
+		t.Skip("VULWALL_TEST_REDIS_URI not set")
+	}
+	opts, err := redis.ParseURL(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rdb := redis.NewClient(opts)
+	defer rdb.Close()
+	ctx := context.Background()
+	rdb.Del(ctx, shared.StreamSecurityFindings)
+
+	weakA := scanner.HeaderCheckResult{FindingType: "weak-csp", Title: "CSP allows unsafe-inline"}
+	weakB := scanner.HeaderCheckResult{FindingType: "weak-csp", Title: "CSP allows unsafe-eval"}
+	results := []protocolScanResult{
+		{protocol: "http", url: "http://x", checks: []scanner.HeaderCheckResult{weakA, hsts}},
+		{protocol: "https", url: "https://x", checks: []scanner.HeaderCheckResult{weakB, hsts}},
+	}
+	reported, err := newService(rdb, nil).publishUniqueFindings(ctx, results, testTarget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reported) != 3 {
+		t.Fatalf("reported = %+v, want weak-csp twice (two titles) and missing-hsts once", reported)
 	}
 }

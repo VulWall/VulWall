@@ -25,7 +25,23 @@
                     </div>
                 </div>
                 <div class="live-card__right">
-                    <span class="live-card__scanning-label">Scanning&hellip;</span>
+                    @switch (Model.ScanNowState)
+                    {
+                        case ScanNowState.Queued:
+                            <span class="live-pill live-pill--queued" title="It starts right after this scan and includes every asset you have then.">
+                                <i class="fas fa-clock"></i>Next scan queued
+                            </span>
+                            break;
+
+                        default:
+                            <form asp-controller="Scans" asp-action="TriggerScan" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-outline-primary btn-sm"
+                                        title="Queue a scan that starts right after this one, for example to include assets you just added.">
+                                    <i class="fas fa-forward me-1"></i>Scan again after this
+                                </button>
+                            </form>
+                            break;
+                    }
                 </div>
             </div>
 
@@ -70,7 +86,7 @@
                         case ScanNowState.Allowed:
                             <form asp-controller="Scans" asp-action="TriggerScan" method="post" class="d-inline">
                                 <button type="submit" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-bolt me-1"></i>Scan Now
+                                    <i class="fas fa-bolt me-1"></i>Scan now
                                 </button>
                             </form>
                             break;
@@ -79,6 +95,13 @@
                             <button class="btn btn-primary btn-sm" disabled
                                     title="A scan is already running.">
                                 <i class="fas fa-spinner fa-spin me-1"></i>Scanning…
+                            </button>
+                            break;
+
+                        case ScanNowState.Queued:
+                            <button class="btn btn-primary btn-sm" disabled
+                                    title="A scan is queued and starts within a minute.">
+                                <i class="fas fa-clock me-1"></i>Scan queued
                             </button>
                             break;
                     }
@@ -90,7 +113,7 @@
     @* Card B — recent runs *@
     <div class="live-card live-card--runs flex-1">
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="live-runs__label">RECENT RUNS</span>
+            <span class="live-runs__label">Recent runs</span>
             @* Pass 2: View all → scan history page *@
             <a href="#" class="live-runs__viewall">View all</a>
         </div>

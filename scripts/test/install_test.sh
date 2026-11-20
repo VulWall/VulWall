@@ -450,8 +450,31 @@ sudo_env() {
     unset VULWALL_PORT
     dk compose ps
 }
-t "docker: sudo passes the Compose variables on" 0 sudo_env &&
-    expect "$work/log" "^sudo env SETUP_TOKEN=abc COMPOSE_PROJECT_NAME=p docker compose ps$"
+t "docker: sudo passes the Compose variables on, but never the setup token" 0 sudo_env &&
+    expect "$work/log" "^sudo env COMPOSE_PROJECT_NAME=p docker compose ps$" &&
+    expect_not "$work/log" "abc"
+
+token_from_env() {
+    dir=$work/case
+    (umask 022 && printf 'A=1\nSETUP_TOKEN=old\n' >.env)
+    SETUP_TOKEN=0123456789abcdef0123456789abcdef
+    export SETUP_TOKEN
+    ensure_setup_token
+    echo "token=$token"
+    echo "env=${SETUP_TOKEN-unset}"
+    ls -l .env | cut -c1-10
+}
+t "env: a setup token from the environment is written to .env" 0 token_from_env &&
+    expect "$work/out" "^token=0123456789abcdef0123456789abcdef$" &&
+    expect "$work/out" "^env=unset$" && expect "$work/out" "^-rw-------$" &&
+    expect "$work/case/.env" "^A=1$" &&
+    expect "$work/case/.env" "^SETUP_TOKEN=0123456789abcdef0123456789abcdef$" &&
+    expect_not "$work/case/.env" "^SETUP_TOKEN=old$"
+
+token_from_env_bad() { dir=$work/case; SETUP_TOKEN='a
+B=1'; ensure_setup_token; }
+t "env: a setup token with a newline is refused" 1 token_from_env_bad &&
+    expect "$work/out" "has characters other than"
 
 # --- Memory and disk ---------------------------------------------------------------------------
 
@@ -483,6 +506,9 @@ env_mode() {
     ls -l .env | cut -c1-10
 }
 t "env: appending keeps .env private" 0 env_mode && expect "$work/out" "^-rw-------$"
+
+env_private() { dir=$work/case; (umask 022 && : >.env); make_env_private; ls -l .env | cut -c1-10; }
+t "env: an existing .env is made private" 0 env_private && expect "$work/out" "^-rw-------$"
 
 # --- Helper link ----------------------------------------------------------------------------
 
@@ -576,6 +602,25 @@ t "helper: reset-admin replaces the setup token" 0 helper_reset &&
     holds [ "$(grep -c '^SETUP_TOKEN=' "$work/env")" = 1 ] &&
     expect "$work/env" "^SETUP_TOKEN=[0-9a-f]\{32\}$" && expect "$work/out" "^-rw-------$"
 
+helper_reset_no_env() { helper_setup; rm "$inst/.env"; sh "$inst/vulwall" -y reset-admin; }
+t "helper: reset-admin without .env changes nothing" 1 helper_reset_no_env &&
+    expect "$work/out" "has no .env" && expect_not "$work/log" "stop web" && expect_not "$work/log" deleteOne
+
+helper_reset_mongo_down() {
+    helper_setup
+    stub_bin docker "echo \"\$PWD: docker \$*\" >>'$work/log'
+case \"\$*\" in *deleteOne*) exit 1 ;; esac"
+    cp "$inst/.env" "$work/env.before"
+    sh "$inst/vulwall" -y reset-admin
+    rc=$?
+    cmp "$inst/.env" "$work/env.before" || echo ".env changed"
+    [ ! -e "$inst/.env.new" ] || echo ".env.new left behind"
+    return "$rc"
+}
+t "helper: reset-admin keeps the old token and restarts web when the delete fails" 1 helper_reset_mongo_down &&
+    expect "$work/out" "Nothing was changed" && expect_not "$work/out" "changed$" &&
+    expect_not "$work/out" "left behind" && expect "$work/log" "docker compose up -d web$"
+
 helper_uninstall() {
     helper_setup
     HOME=$work/case/home sh "$inst/vulwall" -y uninstall
@@ -583,6 +628,41 @@ helper_uninstall() {
 }
 t "helper: uninstall removes the stack, the directory and our symlink" 0 helper_uninstall &&
     expect "$work/log" "docker compose down -v --remove-orphans$"
+
+helper_uninstall_home() {
+    helper_setup
+    # Home is reached through a symlink; the install directory is home itself.
+    ln -s "$inst" "$work/case/homelink"
+    HOME=$work/case/homelink sh "$inst/vulwall" -y uninstall
+}
+t "helper: uninstall refuses the home directory, also through a symlink" 1 helper_uninstall_home &&
+    expect "$work/out" "your home directory" && holds [ -d "$work/case/inst" ] && expect_not "$work/log" "down -v"
+
+helper_uninstall_parent() {
+    helper_setup
+    mkdir -p "$inst/alice"
+    HOME=$inst/alice sh "$inst/vulwall" -y uninstall
+}
+t "helper: uninstall refuses a directory that contains home" 1 helper_uninstall_parent &&
+    expect "$work/out" "your home directory" && holds [ -d "$work/case/inst" ]
+
+helper_uninstall_repo() {
+    helper_setup
+    printf 'services: {}\n' >"$inst/docker-compose.yml"
+    HOME=$work/case/home sh "$inst/vulwall" -y uninstall
+}
+t "helper: uninstall refuses a directory not made by the installer" 1 helper_uninstall_repo &&
+    expect "$work/out" "not a VulWall install made by install.sh" && holds [ -d "$work/case/inst" ] &&
+    expect_not "$work/log" "down -v"
+
+helper_uninstall_release_copy() {
+    helper_setup
+    cp "$inst/docker-compose.yml" "$inst/.docker-compose.release.yml"
+    printf 'services: {}\n' >"$inst/docker-compose.yml"
+    HOME=$work/case/home sh "$inst/vulwall" -y uninstall
+    [ ! -e "$inst" ]
+}
+t "helper: uninstall accepts an install with the release copy" 0 helper_uninstall_release_copy
 
 helper_wrong_dir() { helper_setup; VULWALL_DIR=$work/case/elsewhere sh "$inst/vulwall" -y uninstall; }
 t "helper: refuses a directory without docker-compose.yml" 1 helper_wrong_dir &&

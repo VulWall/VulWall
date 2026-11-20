@@ -1,13 +1,15 @@
 package nuclei_scanner
 
 import (
+	"bytes"
 	"context"
-	"net"
-	"net/url"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
-	"os/exec"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/core/execx"
 	"path/filepath"
@@ -30,18 +32,20 @@ import (
 
 // Service handles Nuclei vulnerability scanning
 type Service struct {
-	redis  *redis.Client
-	logger *zap.Logger
-	tracer trace.Tracer
-	cron   *cron.Cron
+	redis      *redis.Client
+	logger     *zap.Logger
+	tracer     trace.Tracer
+	cron       *cron.Cron
+	rootClient *http.Client // GETs the target root after a run (rootBlocked)
 }
 
 // NewService creates a new Nuclei scanner service
 func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
 	return &Service{
-		redis:  redisClient,
-		logger: logger,
-		tracer: otel.Tracer("nuclei-scanner"),
+		redis:      redisClient,
+		logger:     logger,
+		tracer:     otel.Tracer("nuclei-scanner"),
+		rootClient: newRootClient(),
 	}
 }
 
@@ -193,6 +197,10 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		// connection afterwards makes the run evidence.
 		if rerr := shared.Reachable(ctx, reachAddrs(target.Target)...); rerr != nil {
 			err = fmt.Errorf("target not reachable after the run: %w", rerr)
+		} else if berr := rootBlocked(ctx, s.rootClient, target.Target); berr != nil {
+			// nuclei says nothing about a 403 or a WAF challenge on every request: its
+			// templates then met the block, not the application.
+			err = fmt.Errorf("target blocks the scanner: %w", berr)
 		}
 	}
 	if err != nil {
@@ -253,7 +261,12 @@ func nucleiArgs(target, severity string) []string {
 		"-u", target,
 		"-t", templatesDir(),
 		"-j",
-		"-silent",
+		// Not -silent: it hides the stderr log that tells a finished run from one that
+		// skipped the target (runProblem). -nc keeps that log free of colour codes; -duc
+		// stops nuclei from updating itself or the templates during a scan (the template
+		// updater does that, under a lock).
+		"-nc",
+		"-duc",
 		"-severity", severity,
 	}
 
@@ -291,58 +304,89 @@ func templatesDir() string {
 	return filepath.Join(home, "nuclei-templates")
 }
 
-// runNucleiScan executes Nuclei scanner on the target
+// runNucleiScan executes Nuclei scanner on the target. stdout carries the JSONL results,
+// stderr the log; a run is only evidence when runProblem finds nothing wrong in the log.
 func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([]NucleiOutput, error) {
 	cmd := execx.Command(ctx, "nuclei", nucleiArgs(target, severity)...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-	// Execute command and capture both stdout and stderr
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// Check if it's a context cancellation
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		// Nuclei returns exit code 1 when no findings, which is not an error
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			// Log the stderr output for debugging
-			s.logger.Debug("Nuclei command stderr",
-				zap.String("target", target),
-				zap.Int("exit_code", exitErr.ExitCode()),
-				zap.String("output", string(output)),
-			)
-
-			if exitErr.ExitCode() == 1 && len(output) == 0 {
-				s.logger.Debug("Nuclei found no vulnerabilities",
-					zap.String("target", target),
-				)
-				return []NucleiOutput{}, nil
-			}
-		}
-		return nil, fmt.Errorf("nuclei command failed: %w (output: %s)", err, string(output))
+	err := cmd.Run()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
+	if err != nil {
+		// nuclei exits 0 also when it found nothing; any other exit is a failed run
+		// (for example exit 1 with "[FTL] Could not run nuclei: no templates provided").
+		return nil, fmt.Errorf("nuclei command failed: %w (stderr: %s)", err, logTail(stderr.Bytes()))
+	}
+	if err := runProblem(target, stderr.Bytes()); err != nil {
+		s.logger.Debug("Nuclei run incomplete",
+			zap.String("target", target),
+			zap.String("stderr", logTail(stderr.Bytes())),
+		)
+		return nil, err
+	}
+	return parseNucleiOutput(stdout.Bytes())
+}
 
-	// Parse Nuclei JSON output (JSONL format - one JSON per line)
+// parseNucleiOutput parses nuclei's JSONL results. A line that does not parse may be a lost
+// finding, so it fails the run instead of being skipped.
+func parseNucleiOutput(out []byte) ([]NucleiOutput, error) {
 	var findings []NucleiOutput
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
+	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-
 		var nucleiOutput NucleiOutput
 		if err := json.Unmarshal([]byte(line), &nucleiOutput); err != nil {
-			s.logger.Warn("Failed to parse Nuclei output line",
-				zap.String("line", line),
-				zap.Error(err),
-			)
-			continue
+			return nil, fmt.Errorf("unreadable nuclei result line: %w", err)
 		}
-
 		findings = append(findings, nucleiOutput)
 	}
-
 	return findings, nil
+}
+
+// runProblem returns why a nuclei run that exited 0 is no evidence, or nil. Observed with
+// nuclei v3.11.1 (-j -nc -duc, log on stderr):
+//   - a finished run logs "[INF] Scan completed in <duration>. <N matches found|No results found>."
+//   - a target that stopped answering during the run, or never answered, is dropped with
+//     "[INF] Skipped <host:port> from target list as found unresponsive 30 times" or
+//     "... as found unresponsive permanently: cause=..." and the run still exits 0;
+//   - "[FTL] ..." is fatal.
+//
+// Skip lines for other ports (templates probe for example :4040) do not count: only the
+// target's own addresses (reachAddrs). "[ERR]" and "[WRN]" lines are not checked: nuclei logs
+// harmless ones on every run (a missing .nuclei-ignore file, templates with runtime errors).
+func runProblem(target string, stderr []byte) error {
+	completed := false
+	for _, line := range strings.Split(string(stderr), "\n") {
+		if strings.Contains(line, "[FTL]") {
+			return fmt.Errorf("nuclei failed: %s", strings.TrimSpace(line))
+		}
+		for _, addr := range reachAddrs(target) {
+			if strings.Contains(line, "Skipped "+addr+" from target list") {
+				return fmt.Errorf("nuclei dropped the target during the run: %s", strings.TrimSpace(line))
+			}
+		}
+		if strings.Contains(line, "Scan completed in") {
+			completed = true
+		}
+	}
+	if !completed {
+		return errors.New("nuclei did not report a completed scan")
+	}
+	return nil
+}
+
+// logTail returns at most the last 1000 bytes of b, for error messages.
+func logTail(b []byte) string {
+	if len(b) > 1000 {
+		b = b[len(b)-1000:]
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // convertToSecurityFinding converts Nuclei output to SecurityFinding model

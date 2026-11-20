@@ -24,10 +24,15 @@
     </div>
 </div>
 
-@if (TempData["ScanNowSuccess"] != null)
+@if (TempData["ScanNowSuccess"] is string successCode)
 {
+    var successMsg = successCode switch
+    {
+        "QueuedAfterCurrent" => "A scan is running. Another scan will start right after it finishes.",
+        _                    => "Scan started — results will appear on the heatmap when complete."
+    };
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="fas fa-check-circle me-2"></i>Scan started — results will appear on the heatmap when complete.
+        <i class="fas fa-check-circle me-2"></i>@successMsg
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
@@ -35,8 +40,8 @@
 {
     var errorMsg = errorCode switch
     {
-        "InProgress"  => "A scan is already in progress. Please wait for it to finish.",
-        _             => "Something went wrong. Please try again."
+        "AlreadyQueued" => "A follow-up scan is already queued. It starts right after the current scan finishes.",
+        _               => "Something went wrong. Please try again."
     };
     <div class="alert alert-warning alert-dismissible fade show" role="alert">
         <i class="fas fa-exclamation-triangle me-2"></i>@errorMsg

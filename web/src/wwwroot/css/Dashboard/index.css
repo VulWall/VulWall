@@ -62,8 +62,6 @@
 .overview-header-eyebrow {
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
     color: var(--ov-faint);
     margin-bottom: 6px;
 }
@@ -160,8 +158,6 @@
     margin-bottom: 18px;
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
     color: rgba(251, 251, 253, 0.6);
 }
 

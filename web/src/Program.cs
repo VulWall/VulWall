@@ -19,7 +19,7 @@ var app = builder.Build();
 app.ConfigureDashboardPipeline();
 
 var database = app.Services.GetRequiredService<IMongoDatabase>();
-await MongoDbIndexManager.EnsureIndexesAsync(database);
+await MongoDbIndexManager.EnsureIndexesAsync(database, app.Logger);
 await DefaultOrganization.EnsureExistsAsync(new OrganizationRepository(database));
 
 using (var scope = app.Services.CreateScope())

@@ -1,0 +1,28 @@
+
+                     __     _
+   ____  __  _______/ /__  (_)
+  / __ \/ / / / ___/ / _ \/ /
+ / / / / /_/ / /__/ /  __/ /
+/_/ /_/\__,_/\___/_/\___/_/   v3.11.1
+
+		projectdiscovery.io
+
+[INF] Your current nuclei-templates  are outdated. Latest is v10.5.2
+[INF] Successfully updated nuclei-templates (v10.5.2) to /data/nuclei-templates. GoodLuck!
+
+Nuclei Templates v10.5.2 Changelog
+┌───────┬───────┬──────────┬─────────┐
+│ TOTAL │ ADDED │ MODIFIED │ REMOVED │
+├───────┼───────┼──────────┼─────────┤
+│ 2     │ 0     │ 2        │ 0       │
+└───────┴───────┴──────────┴─────────┘
+[INF] Current nuclei version: v3.11.1 (latest)
+[INF] Current nuclei-templates version: v10.5.2 (latest)
+[INF] New templates added in latest release: 121
+[INF] Templates loaded for current scan: 6563
+[INF] Executing 6563 signed templates from projectdiscovery/nuclei-templates
+[INF] Targets loaded for current scan: 1
+[INF] Templates clustered: 472 (Reduced 405 Requests)
+[INF] Skipped vwres-http:8080 from target list as found unresponsive permanently: cause="port closed or filtered" address=vwres-http:8080 chain="connection refused; got err while executing http://vwres-http:8080/zentao/user-login.html"
+[INF] Using Interactsh Server: oast.live
+[INF] Scan completed in 6.03173167s. No results found.

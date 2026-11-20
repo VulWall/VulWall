@@ -56,24 +56,33 @@ func (s *Service) RecordCoverage(ctx context.Context, msg shared.SecurityFinding
 
 // coverageUpdate is the update pipeline that merges cov into the record: the status stays
 // "error" once any run reported it, and reported is the union of all runs.
+//
+// In an update pipeline a string that starts with "$" is a field path or a variable, not a
+// value. Target, error and finding titles come from the scanned site and its tools, so every
+// value from the message goes in as {$literal: ...}.
 func coverageUpdate(orgID string, cov shared.ScanCoverage, now time.Time) mongo.Pipeline {
+	// bson.D, not bson.M: $setUnion compares documents field by field in order, and a map
+	// would write the two fields in a random order, so one key could be stored twice.
 	reported := bson.A{}
 	for _, k := range cov.Reported {
-		reported = append(reported, bson.M{"finding_type": k.FindingType, "title": k.Title})
+		reported = append(reported, bson.D{{Key: "finding_type", Value: k.FindingType}, {Key: "title", Value: k.Title}})
 	}
 	status := bson.M{"$cond": bson.A{
-		bson.M{"$eq": bson.A{"$status", shared.CoverageError}}, shared.CoverageError, cov.Status,
+		bson.M{"$eq": bson.A{"$status", shared.CoverageError}}, shared.CoverageError, literal(cov.Status),
 	}}
 	set := bson.M{
-		"org_id":     orgID,
+		"org_id":     literal(orgID),
 		"status":     status,
-		"target":     cov.Target,
-		"reported":   bson.M{"$setUnion": bson.A{bson.M{"$ifNull": bson.A{"$reported", bson.A{}}}, reported}},
+		"target":     literal(cov.Target),
+		"reported":   bson.M{"$setUnion": bson.A{bson.M{"$ifNull": bson.A{"$reported", bson.A{}}}, literal(reported)}},
 		"created_at": bson.M{"$ifNull": bson.A{"$created_at", now}},
 		"updated_at": now,
 	}
 	if cov.Error != "" {
-		set["error"] = cov.Error
+		set["error"] = literal(cov.Error)
 	}
 	return mongo.Pipeline{{{Key: "$set", Value: set}}}
 }
+
+// literal makes v a plain value inside an aggregation expression.
+func literal(v any) bson.M { return bson.M{"$literal": v} }

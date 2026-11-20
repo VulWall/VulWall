@@ -22,7 +22,9 @@ func TestProbeErrorTreatsOnlyRefusedAsComplete(t *testing.T) {
 	}{
 		{"both answered", []error{nil, nil}, false},
 		{"one refused", []error{wrappedRefused, nil}, false},
-		{"both refused", []error{wrappedRefused, wrappedRefused}, false},
+		{"both refused", []error{wrappedRefused, wrappedRefused}, true},
+		{"refused and gone", []error{wrappedRefused, fmt.Errorf("HTTP 404: %w", ErrGone)}, false},
+		{"no probe", nil, true},
 		{"one timed out", []error{nil, timeout}, true},
 		{"refused and timed out", []error{wrappedRefused, timeout}, true},
 		{"bad status", []error{errors.New("HTTP 503"), nil}, true},
@@ -31,6 +33,9 @@ func TestProbeErrorTreatsOnlyRefusedAsComplete(t *testing.T) {
 		if got := ProbeError(c.errs...) != nil; got != c.want {
 			t.Errorf("%s: incomplete = %v, want %v", c.name, got, c.want)
 		}
+	}
+	if err := ProbeError(wrappedRefused, wrappedRefused); !errors.Is(err, ErrNoAnswer) {
+		t.Errorf("both refused: err = %v, want ErrNoAnswer", err)
 	}
 }
 

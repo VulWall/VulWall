@@ -414,3 +414,30 @@ func TestCloseInterruptedScansFailsOnlyStartedScans(t *testing.T) {
 		t.Errorf("published %d jobs, want none", len(*published))
 	}
 }
+
+// TestFollowUpScanTargetsAssetsAtClaimTime: a scan queued while another runs reads the assets
+// when it starts, so an asset added after it was queued is scanned too.
+func TestFollowUpScanTargetsAssetsAtClaimTime(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: shared.StatusRunning}
+	store.scans["q1"] = queuedScan("q1", "org-1", time.Now())
+	svc, _ := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background()) // waits for r1
+
+	// An asset is added while the follow-up waits; then the running scan finishes.
+	store.assets["org-1"] = append(store.assets["org-1"], domainAsset("a2", "example.org"))
+	r1 := store.scans["r1"]
+	r1.Status = shared.StatusDone
+	store.scans["r1"] = r1
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["q1"].Status != shared.StatusRunning {
+		t.Fatalf("status = %q, want running", store.scans["q1"].Status)
+	}
+	if n := store.set["q1"]["stats.total_assets"]; n != 2 {
+		t.Fatalf("total_assets = %v, want 2 (both assets, read at claim time)", n)
+	}
+}

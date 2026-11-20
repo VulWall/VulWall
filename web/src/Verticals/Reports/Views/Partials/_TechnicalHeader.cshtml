@@ -16,14 +16,14 @@
             <span class="tr-wordmark">VULWALL</span>
         </div>
         <div class="tr-report-id">
-            <span class="tr-eyebrow tr-eyebrow--light">TECHNICAL REPORT</span>
+            <span class="tr-eyebrow tr-eyebrow--light">Technical report</span>
             <span class="tr-mono tr-report-id-value">@Model.ReportId</span>
         </div>
     </div>
 
     <div class="tr-header-body">
         <div class="tr-header-title">
-            <p class="tr-eyebrow tr-eyebrow--light">EXTERNAL ATTACK-SURFACE ASSESSMENT</p>
+            <p class="tr-eyebrow tr-eyebrow--light">External attack-surface assessment</p>
             @if (!string.IsNullOrEmpty(Model.OrganizationName))
             {
                 <h1 class="tr-org-name">@Model.OrganizationName</h1>
@@ -41,25 +41,25 @@
         <div class="tr-verdict-chip">
             <div class="tr-score-block">
                 <span class="tr-score-value">@Model.SecurityScore</span>
-                <span class="tr-score-label">SCORE</span>
+                <span class="tr-score-label">Score</span>
             </div>
             <div class="tr-verdict-divider"></div>
             <div class="tr-sev-counts">
                 <div class="tr-sev-item">
                     <span class="tr-sev-num tr-sev-num--crit">@Model.CriticalFindings.Count</span>
-                    <span class="tr-sev-label">CRIT</span>
+                    <span class="tr-sev-label">Critical</span>
                 </div>
                 <div class="tr-sev-item">
                     <span class="tr-sev-num tr-sev-num--high">@Model.HighFindings.Count</span>
-                    <span class="tr-sev-label">HIGH</span>
+                    <span class="tr-sev-label">High</span>
                 </div>
                 <div class="tr-sev-item">
                     <span class="tr-sev-num tr-sev-num--med">@Model.MediumFindings.Count</span>
-                    <span class="tr-sev-label">MED</span>
+                    <span class="tr-sev-label">Medium</span>
                 </div>
                 <div class="tr-sev-item">
                     <span class="tr-sev-num tr-sev-num--low">@Model.LowFindings.Count</span>
-                    <span class="tr-sev-label">LOW</span>
+                    <span class="tr-sev-label">Low</span>
                 </div>
             </div>
         </div>

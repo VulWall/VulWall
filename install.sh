@@ -122,8 +122,9 @@ docker_sudo=0
 dk() {
     if [ "$docker_sudo" = 1 ]; then
         # sudo resets the environment: pass on what Docker Compose reads from it.
-        sudo env ${SETUP_TOKEN+"SETUP_TOKEN=$SETUP_TOKEN"} \
-            ${VULWALL_PORT+"VULWALL_PORT=$VULWALL_PORT"} \
+        # Not SETUP_TOKEN: a secret on a command line is visible to every user
+        # (ps). ensure_setup_token puts it in .env, which Compose reads.
+        sudo env ${VULWALL_PORT+"VULWALL_PORT=$VULWALL_PORT"} \
             ${COMPOSE_PROJECT_NAME+"COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME"} \
             docker "$@"
     else
@@ -374,6 +375,31 @@ env_append() { # name value comment
     ) || die "Could not write $1 to $dir/.env."
 }
 
+# Sets variable $1 to $2 in .env with comment line $3: every earlier line of $1
+# is removed. The new file is written next to .env under umask 077 and renamed.
+env_replace() { # name value comment
+    (
+        umask 077
+        if [ -f .env ]; then
+            sed -e "/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}$1[[:space:]]*=/d" .env >.env.new
+        else
+            : >.env.new
+        fi
+        if [ -s .env.new ] && [ -n "$(tail -c 1 .env.new)" ]; then
+            printf '\n' >>.env.new
+        fi
+        printf '\n# %s\n%s=%s\n' "$3" "$1" "$2" >>.env.new
+        mv .env.new .env
+    ) || { rm -f .env.new; die "Could not write $1 to $dir/.env."; }
+}
+
+# .env holds secrets. An install made before the installer used umask 077, or a
+# .env the user created, may be readable by others.
+make_env_private() {
+    chmod 600 .env 2>/dev/null ||
+        warn "Could not make $dir/.env private (chmod 600). It holds secrets: fix its permissions."
+}
+
 is_hex32() {
     [ "${#1}" -eq 32 ] || return 1
     case $1 in *[!0-9a-f]*) return 1 ;; esac
@@ -383,9 +409,17 @@ is_hex32() {
 # print the setup link without reading the container log. Sets $token.
 ensure_setup_token() {
     if [ -n "${SETUP_TOKEN:-}" ]; then
-        # Docker Compose prefers the shell's variable over .env.
         token=$SETUP_TOKEN
+        case $token in
+            *[!A-Za-z0-9._~+/=-]*) die "SETUP_TOKEN in your environment has characters other than letters, digits and ._~+/=-." ;;
+        esac
         say "Using SETUP_TOKEN from your environment"
+        # Compose reads it from .env, never from the command line (see dk).
+        if [ "$token" != "$(env_setup_token)" ]; then
+            env_replace SETUP_TOKEN "$token" "First-run setup token, from SETUP_TOKEN when install.sh ran."
+            say "Saved it in $dir/.env"
+        fi
+        unset SETUP_TOKEN
         return
     fi
     unset SETUP_TOKEN
@@ -654,6 +688,7 @@ main() {
         say "Created $dir/.env (edit it to change settings)"
     fi
     ensure_setup_token
+    make_env_private
     choose_port
 
     say "Pulling images (the first time this takes a few minutes)..."

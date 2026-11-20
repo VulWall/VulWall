@@ -86,7 +86,6 @@
     border-radius: 8px;
     font-size: 1em;
     font-weight: 700;
-    text-transform: uppercase;
     white-space: nowrap;
     background: rgba(255, 255, 255, 0.15);
     border: 2px solid rgba(255, 255, 255, 0.3);
@@ -133,7 +132,7 @@
     border-radius: 4px;
     font-size: 0.75rem;
     font-weight: 700;
-    text-transform: uppercase;
+    text-transform: uppercase; /* severity band chip: the one place UPPERCASE is allowed */
     white-space: nowrap;
 }
 

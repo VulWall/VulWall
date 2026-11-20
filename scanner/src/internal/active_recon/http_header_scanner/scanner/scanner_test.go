@@ -49,3 +49,24 @@ func TestScanIncompleteWhenTargetGoesAway(t *testing.T) {
 		t.Fatal("err = nil, want incomplete: the CORS and redirect checks did not get an answer")
 	}
 }
+
+// TestScanIncompleteOnChallengePage: a WAF challenge served with 200 carries the WAF's
+// headers, not the application's.
+func TestScanIncompleteOnChallengePage(t *testing.T) {
+	t.Setenv(config.EnvAllowPrivateTargets, "true")
+	for name, h := range map[string]http.HandlerFunc{
+		"challenge page": func(w http.ResponseWriter, _ *http.Request) {
+			w.Write([]byte("<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>"))
+		},
+		"cf-mitigated header": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("cf-mitigated", "challenge")
+		},
+	} {
+		srv := httptest.NewServer(h)
+		_, err := NewScanner(zap.NewNop()).Scan(context.Background(), srv.URL)
+		srv.Close()
+		if err == nil {
+			t.Errorf("%s: err = nil, want incomplete", name)
+		}
+	}
+}

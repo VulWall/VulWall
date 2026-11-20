@@ -535,7 +535,7 @@ public class SummaryReportBuilder
             {
                 Start     = scanStart,
                 End       = scanEnd,
-                Frequency = "Continuous",
+                Frequency = "Scheduled",
                 Tools     = tools
             }
         };

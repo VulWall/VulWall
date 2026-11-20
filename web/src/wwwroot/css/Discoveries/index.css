@@ -41,8 +41,6 @@
 }
 .disc-stat-card .stat-label {
     font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
     color: var(--vw-gray-500);
     margin-top: 4px;
 }
@@ -158,8 +156,6 @@
 }
 .disc-table-header > span {
     font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
     color: var(--vw-gray-500);
     font-weight: 600;
 }
@@ -226,8 +222,6 @@
     display: inline-block;
     font-size: 0.625rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
     padding: 1px 5px;
     border-radius: 4px;
     background: var(--accent-orange-bg);
@@ -351,8 +345,6 @@
 }
 .disc-drawer-section h6 {
     font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
     color: var(--vw-gray-400);
     font-weight: 600;
     margin-bottom: 10px;

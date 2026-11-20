@@ -9,11 +9,11 @@ namespace VulWall.Dashboard.Extensions.Configuration;
 /// </summary>
 public static class MongoDbIndexManager
 {
-    public static async Task EnsureIndexesAsync(IMongoDatabase database)
+    public static async Task EnsureIndexesAsync(IMongoDatabase database, ILogger? logger = null)
     {
         await Task.WhenAll(
             CreateFindingIndexes(database),
-            CreateScanIndexes(database),
+            CreateScanIndexes(database, logger),
             CreateSharedLinkIndexes(database),
             CreateAssetIndexes(database),
             CreateTrendIndexes(database),
@@ -51,9 +51,35 @@ public static class MongoDbIndexManager
         ]);
     }
 
-    private static async Task CreateScanIndexes(IMongoDatabase database)
+    /// <summary>Name of the unique partial index that allows one queued scan per organization.</summary>
+    public const string OneQueuedScanPerOrgIndex = "org_id_1_queued_unique";
+
+    private static async Task CreateScanIndexes(IMongoDatabase database, ILogger? logger)
     {
         var collection = database.GetCollection<BsonDocument>("scans");
+
+        // UNIQUE among queued scans: at most one queued scan per organization, so two concurrent
+        // "add asset" or "scan now" requests cannot queue two follow-up scans (ScanTriggerService
+        // reads a duplicate-key error as "already queued"). The scanner claims a queued scan by
+        // changing its status, which takes it out of the index.
+        try
+        {
+            await collection.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("org_id"),
+                new CreateIndexOptions<BsonDocument>
+                {
+                    Name = OneQueuedScanPerOrgIndex,
+                    Unique = true,
+                    PartialFilterExpression = Builders<BsonDocument>.Filter.Eq("status", "queued")
+                }));
+        }
+        catch (MongoCommandException e) when (e.Code == 11000)
+        {
+            // Two queued scans of one organization exist already (queued before this index).
+            // The scanner starts them one after the other; the next start creates the index.
+            logger?.LogWarning("Index {Index} not created yet: an organization has more than one queued scan. It is created on a later start.",
+                OneQueuedScanPerOrgIndex);
+        }
 
         await collection.Indexes.CreateManyAsync([
             // Supports: latest completed scans (dashboard widget)
