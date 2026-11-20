@@ -65,13 +65,14 @@ public class SettingsService(OrganizationRepository organizationRepository)
         await organizationRepository.UpdateAsync(organization);
     }
 
-    public async Task UpdateLogoAsync(string organizationId, byte[] logoBytes)
+    public async Task UpdateLogoAsync(string organizationId, byte[] logoBytes, string contentType)
     {
         var organization = await organizationRepository.GetByIdAsync(organizationId);
         if (organization == null)
             throw new InvalidOperationException($"Organization not found: {organizationId}");
 
         organization.Logo = logoBytes;
+        organization.LogoContentType = contentType;
         organization.UpdatedAt = DateTime.UtcNow;
 
         await organizationRepository.UpdateAsync(organization);
@@ -84,6 +85,7 @@ public class SettingsService(OrganizationRepository organizationRepository)
             throw new InvalidOperationException($"Organization not found: {organizationId}");
 
         organization.Logo = null;
+        organization.LogoContentType = null;
         organization.UpdatedAt = DateTime.UtcNow;
 
         await organizationRepository.UpdateAsync(organization);

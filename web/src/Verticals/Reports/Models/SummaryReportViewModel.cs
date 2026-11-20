@@ -5,7 +5,8 @@ public class SummaryReportViewModel
     // Header Information
     public string OrgId { get; set; } = string.Empty;
     public string OrganizationName { get; set; } = string.Empty;
-    public string? LogoBase64 { get; set; }
+    /// <summary>The company logo as a data: URI, or null.</summary>
+    public string? LogoDataUri { get; set; }
     public DateTime ScanDate { get; set; }
     public string ReportId { get; set; } = string.Empty;
     public string SecurityPosture { get; set; } = string.Empty;

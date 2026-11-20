@@ -124,7 +124,8 @@ public class ReportsController(
                 allFindings,
                 previousScan?.Id,
                 allDiscoveries,
-                organization.Logo
+                organization.Logo,
+                organization.GetLogoContentType()
             );
 
             return View(model);
@@ -182,7 +183,8 @@ public class ReportsController(
                 findings,
                 discoveries,
                 selectedScan,
-                organization.Logo
+                organization.Logo,
+                organization.GetLogoContentType()
             );
 
             return View(model);
@@ -369,7 +371,8 @@ public class ReportsController(
             allFindings,
             previousScan?.Id,
             allDiscoveries,
-            organization.Logo
+            organization.Logo,
+            organization.GetLogoContentType()
         );
 
         return View(new SharedReportViewModel

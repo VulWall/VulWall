@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VulWall.Dashboard.Common.Services.Organization;
+using VulWall.Dashboard.Data.Entities.Organization;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Settings.Models;
 using VulWall.Dashboard.Settings.Services;
@@ -70,22 +71,16 @@ public class SettingsController(
         await logo.CopyToAsync(memoryStream);
         var imageBytes = memoryStream.ToArray();
 
-        // Validate magic bytes to prevent spoofed Content-Type
-        var isPng = imageBytes.Length >= 4
-            && imageBytes[0] == 0x89 && imageBytes[1] == 0x50
-            && imageBytes[2] == 0x4E && imageBytes[3] == 0x47;
-        var isJpeg = imageBytes.Length >= 3
-            && imageBytes[0] == 0xFF && imageBytes[1] == 0xD8
-            && imageBytes[2] == 0xFF;
-
-        if (!isPng && !isJpeg)
+        // Validate magic bytes to prevent spoofed Content-Type; the detected type is stored and served
+        var contentType = LogoImage.Detect(imageBytes);
+        if (contentType is null)
         {
             TempData["Error"] = "Invalid image file. Only PNG and JPG images are allowed.";
             return RedirectToAction(nameof(Index));
         }
 
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
-        await settingsService.UpdateLogoAsync(orgId, imageBytes);
+        await settingsService.UpdateLogoAsync(orgId, imageBytes, contentType);
 
         TempData["Success"] = "Logo uploaded successfully";
         return RedirectToAction(nameof(Index));
@@ -122,10 +117,10 @@ public class SettingsController(
     {
         var organization = await GetCurrentOrganizationAsync();
 
-        if (organization?.Logo == null || organization.Logo.Length == 0)
+        if (organization?.GetLogoContentType() is not { } contentType)
             return NotFound();
 
-        return File(organization.Logo, "image/png");
+        return File(organization.Logo!, contentType);
     }
 
     [Authorize]

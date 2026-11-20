@@ -42,6 +42,24 @@ public class Organization : IEntity<string>
     public byte[]? Logo { get; set; }
 
     /// <summary>
+    /// MIME type of <see cref="Logo"/> (image/png or image/jpeg), detected at upload. Missing on
+    /// logos uploaded before it was stored: use <see cref="GetLogoContentType"/>.
+    /// </summary>
+    [BsonElement("logo_content_type")]
+    [BsonIgnoreIfNull]
+    public string? LogoContentType { get; set; }
+
+    /// <summary>The logo's MIME type: the stored one, else detected from the bytes. Null without a logo.</summary>
+    public string? GetLogoContentType()
+    {
+        if (Logo is not { Length: > 0 })
+            return null;
+        if (LogoContentType is LogoImage.Png or LogoImage.Jpeg)
+            return LogoContentType;
+        return LogoImage.Detect(Logo) ?? LogoImage.Png;
+    }
+
+    /// <summary>
     /// Email address of the admin, set during first-run setup.
     /// </summary>
     [BsonElement("owner_email")]

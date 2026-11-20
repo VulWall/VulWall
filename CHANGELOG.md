@@ -257,6 +257,9 @@ First open-source, self-hosted release, under the MIT License.
   `$setUnion`).
 - `vulwall reset-admin` writes the new `.env` before it stops the web app,
   and keeps the old token if deleting the admin fails.
+- A JPEG company logo was served and embedded in reports as `image/png`.
+  The upload now stores the detected type (`organizations.logo_content_type`);
+  a logo uploaded before that gets its type from its first bytes.
 
 ### Removed
 

@@ -43,7 +43,8 @@ public class SummaryReportBuilder
         IEnumerable<DbFinding> allFindings,
         string? previousScanId,
         IEnumerable<Data.Entities.Discovery.Discovery>? allDiscoveries = null,
-        byte[]? logo = null)
+        byte[]? logo = null,
+        string? logoContentType = null)
     {
         var findingsList = findings.ToList();
         var discoveriesList = discoveries.ToList();
@@ -82,7 +83,7 @@ public class SummaryReportBuilder
             // Header
             OrgId = orgId,
             OrganizationName = organizationName,
-            LogoBase64 = logo != null ? Convert.ToBase64String(logo) : null,
+            LogoDataUri = logo is { Length: > 0 } ? $"data:{logoContentType ?? "image/png"};base64,{Convert.ToBase64String(logo)}" : null,
             ScanDate = scanDate,
             ReportId = $"VW-{DateTime.UtcNow:yyyy-MM}-{Guid.NewGuid().ToString()[..3].ToUpper()}",
             SecurityPosture = securityPosture,
