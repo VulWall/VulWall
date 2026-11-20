@@ -72,4 +72,25 @@ const command = 'curl -fsSL https://vulwall.com/install.sh | sh';
 	.copy:hover {
 		background: rgba(255, 255, 255, 0.1);
 	}
+	/* The box is always dark, so the focus ring is white in both themes */
+	.copy:focus-visible {
+		outline-color: #ffffff;
+	}
+	/* Narrow screens: a smaller font so the command fits on two lines, the button below it */
+	@media (max-width: 30rem) {
+		.install {
+			flex-wrap: wrap;
+			align-items: baseline;
+			padding: 0.75rem;
+			font-size: 0.75rem;
+		}
+		code {
+			white-space: normal;
+			overflow-wrap: anywhere;
+		}
+		.copy {
+			flex-basis: 100%;
+			justify-content: center;
+		}
+	}
 </style>

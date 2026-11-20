@@ -1,0 +1,125 @@
+/* ============================================================
+   VulWall — Color tokens
+   Light theme is the default on :root. Dark theme mirrors the
+   product's [data-bs-theme="dark"] scope. Base brand hues come
+   straight from the logobook; the neutral ramp is navy-tuned
+   slate (NOT generic gray); orange is accent-only.
+   ============================================================ */
+
+:root {
+    /* -------- Brand (from the logobook, unchanged) -------- */
+    --brand-dark-blue:   #212C5E;   /* Delft  — headings, dark UI chrome */
+    --brand-blue:        #0056A1;   /* Cobalt — primary action, interaction */
+    --brand-very-dark:   #101827;   /* Gunmetal — dark surfaces, max contrast */
+    --brand-orange:      #F47D17;   /* Orange — accent only, never body text */
+    --brand-off-white:   #FBFBFD;   /* Ghost  — app background */
+
+    /* Brand gradient (sidebar, hero) */
+    --brand-grad-start:  #212C5E;
+    --brand-grad-end:    #0056A1;
+    --brand-gradient:    linear-gradient(135deg, #212C5E 0%, #0056A1 100%); /* @kind other */
+
+    /* -------- Accent orange — usage-safe variants --------
+       White on #F47D17 is only 2.7:1 (fails AA). Use dark text
+       ON orange fills, or the darkened hue for orange AS text. */
+    --accent-orange:       #F47D17;
+    --accent-orange-hover: #E56D07;
+    --accent-orange-on:    #101827;   /* text/icon placed ON an orange fill (7.8:1) */
+    --accent-orange-text:  #B45309;   /* orange used AS text on light bg (7.0:1) */
+    --accent-orange-bg:    #FFF3E8;   /* light orange tint for pills/badges */
+
+    /* -------- Neutral ramp — navy-tuned slate -------- */
+    --vw-gray-0:    #FFFFFF;
+    --vw-gray-50:   #F8FAFC;
+    --vw-gray-100:  #F1F4F9;
+    --vw-gray-200:  #E4E9F0;
+    --vw-gray-300:  #CBD5E1;
+    --vw-gray-400:  #94A3B8;
+    --vw-gray-500:  #64748B;
+    --vw-gray-600:  #475569;
+    --vw-gray-700:  #334155;
+    --vw-gray-800:  #1E293B;
+    --vw-gray-900:  #0F1729;
+
+    /* -------- Semantic action colors -------- */
+    --vw-primary:         #0056A1;
+    --vw-primary-hover:   #004580;
+    --vw-primary-active:  #003A6D;
+    --vw-secondary:       #334155;   /* neutral slate — Cancel/Back read neutral */
+    --vw-secondary-hover: #1E293B;
+    --vw-secondary-active:#0F172A;
+    --vw-success:         #067647;   /* the only green in the system */
+    --vw-success-hover:   #065F46;
+    --vw-success-bg:      #ECFDF3;
+    --vw-success-border:  #ABEFC6;
+    --vw-warning:         #B54708;
+    --vw-warning-bg:      #FFFAEB;
+    --vw-danger:          #D92D20;
+    --vw-danger-hover:    #B42318;
+    --vw-danger-bg:       #FEF3F2;
+    --vw-info:            #0056A1;   /* cobalt, reused from brand */
+    --vw-info-bg:         #E6F0F9;
+    --vw-info-border:     #99C2E3;
+
+    /* -------- Semantic surface & text aliases -------- */
+    --app-bg:          #FBFBFD;
+    --surface-card:    #FFFFFF;
+    --surface-sunken:  #F8FAFC;
+    --surface-inverse: #101827;
+    --border-default:  #E4E9F0;
+    --border-strong:   #CBD5E1;
+    --border-focus:    #0056A1;
+
+    --text-heading: #212C5E;
+    --text-body:    #334155;
+    --text-muted:   #64748B;
+    --text-faint:   #94A3B8;
+    --text-on-dark: #FBFBFD;
+    --text-link:    #0056A1;
+}
+
+/* ============================================================
+   DARK THEME  — [data-bs-theme="dark"]
+   ============================================================ */
+:root:not([data-theme='light']) {
+    --brand-grad-start: #151B2E;
+    --brand-grad-end:   #0D2847;
+    --brand-gradient:   linear-gradient(180deg, #151B2E 0%, #0D2847 100%); /* @kind other */
+    --brand-blue:       #58A6FF;
+
+    /* Navy-tuned slate, inverted for dark surfaces */
+    --vw-gray-0:    #0F1419;
+    --vw-gray-50:   #1A1F2E;
+    --vw-gray-100:  #1F2937;
+    --vw-gray-200:  #2D3748;
+    --vw-gray-300:  #4A5568;
+    --vw-gray-400:  #718096;
+    --vw-gray-500:  #A0AEC0;
+    --vw-gray-600:  #CBD5E0;
+    --vw-gray-700:  #E2E8F0;
+    --vw-gray-800:  #EDF2F7;
+    --vw-gray-900:  #F7FAFC;
+
+    --vw-primary:       #2D7FD3;
+    --vw-primary-hover: #4A93DE;
+    --vw-secondary:       #94A3B8;
+    --vw-secondary-hover: #CBD5E1;
+    --vw-success-bg:    rgba(6, 118, 71, 0.20);
+    --vw-danger-bg:     rgba(217, 45, 32, 0.20);
+    --vw-info-bg:       rgba(0, 86, 161, 0.25);
+
+    --app-bg:          #0F1419;
+    --surface-card:    #1A1F2E;
+    --surface-sunken:  #1F2937;
+    --surface-inverse: #1A1F2E;
+    --border-default:  #2D3748;
+    --border-strong:   #374151;
+
+    --text-heading: #F3F4F6;
+    --text-body:    #E5E7EB;
+    --text-muted:   #9CA3AF;
+    --text-faint:   #718096;
+    --text-link:    #60A5FA;
+
+    color-scheme: dark;
+}

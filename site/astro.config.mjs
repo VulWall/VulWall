@@ -4,7 +4,7 @@ import starlight from '@astrojs/starlight';
 
 const site = 'https://vulwall.com';
 const description =
-	'Self-hosted external attack surface scanner. Finds your subdomains, open ports and vulnerabilities, and explains what to fix. Free and open source (AGPL-3.0).';
+	'Self-hosted external attack surface scanner. Finds your subdomains, open ports and vulnerabilities, and explains what to fix. Free and open source (MIT).';
 
 export default defineConfig({
 	site,
@@ -27,6 +27,8 @@ export default defineConfig({
 			editLink: { baseUrl: 'https://github.com/VulWall/VulWall/edit/main/site/' },
 			credits: false,
 			components: { Hero: './src/components/Hero.astro' },
+			// One frame style for every code block, and long commands wrap instead of scrolling.
+			expressiveCode: { defaultProps: { frame: 'code', wrap: true, preserveIndent: true } },
 			head: [
 				{ tag: 'meta', attrs: { property: 'og:image', content: `${site}/og.png` } },
 				{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
@@ -45,6 +47,8 @@ export default defineConfig({
 				'@fortawesome/fontawesome-free/css/fontawesome.min.css',
 				'@fortawesome/fontawesome-free/css/solid.min.css',
 				'@fortawesome/fontawesome-free/css/brands.min.css',
+				'./src/styles/tokens/colors.css',
+				'./src/styles/tokens/severity.css',
 				'./src/styles/brand.css',
 			],
 			sidebar: [

@@ -5,15 +5,11 @@ description: Set up a development environment and send changes to VulWall.
 
 Contributions are welcome: bug reports, fixes, new scanners and documentation.
 
-## Contributor License Agreement
+## License of contributions
 
-A signed Contributor License Agreement (CLA) is **required** before a contribution can be merged.
-The CLA lets the project maintainer distribute VulWall under the AGPL-3.0 and under other
-licenses. You keep the copyright to your contribution.
-
-How to sign the CLA will be published in
-[CONTRIBUTING.md](https://github.com/VulWall/VulWall/blob/main/CONTRIBUTING.md). Until then,
-please open an issue before you start work on a pull request.
+VulWall accepts contributions under the
+[MIT License](https://github.com/VulWall/VulWall/blob/main/LICENSE), the license of the project.
+You keep the copyright to your contribution.
 
 ## Development setup
 
