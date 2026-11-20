@@ -33,6 +33,11 @@ First open-source, self-hosted release, under the MIT License.
   11.15.0, CC0) ship with the web app, so the Discoveries page needs no
   external host. Unknown providers keep the generic icon. In dark theme the
   logos sit on a light chip so dark brand marks stay visible.
+- Hosting logos for Hetzner, OVH, Vultr, Scaleway, Alibaba Cloud, IBM Cloud,
+  Vercel, Netlify, Heroku and GitHub (simple-icons 11.15.0), matched from
+  the DB-IP ASN organization name. Linode addresses show the Akamai logo.
+- The Discoveries page shows the "IP geolocation by DB-IP" attribution that
+  the DB-IP Lite license (CC BY 4.0) requires.
 
 ### Changed
 
