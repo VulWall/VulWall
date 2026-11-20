@@ -45,7 +45,7 @@ const (
 
 	// MongoDB Collections
 	CollectionAssets        = "assets"        // User-added assets to be scanned
-	CollectionOrganizations = "organizations" // Organizations with subscription settings
+	CollectionOrganizations = "organizations" // Organizations with the scan schedule (scan_settings)
 	CollectionScans         = "scans"         // Scan execution records
 	CollectionScanResults   = "scan_results"
 	CollectionDiscoveries   = "discoveries" // Org-scoped asset registry (domains, subdomains, IPs, ports)

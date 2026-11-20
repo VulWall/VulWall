@@ -135,7 +135,7 @@ src/
 - **assets** - User-added assets to scan (managed via UI)
 - **discoveries** - Scan results (domains, subdomains, IPs, ports) with `org_id`
 - **findings** - Security vulnerabilities from scanners
-- **organizations** - Org settings with `subscription_settings.scan_cron` (created by the web app)
+- **organizations** - Org settings with `scan_settings.scan_cron` (created by the web app)
 - **scans** - Scan execution records (`queued` by the web app, claimed by the coordinator)
 
 ## Documentation

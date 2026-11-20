@@ -210,7 +210,7 @@ public class AccountServiceTests(MongoFixture mongo)
 
         Assert.Equal(first.Id, second.Id);
         Assert.Equal(DefaultOrganization.DefaultName, first.CompanyName);
-        Assert.False(string.IsNullOrWhiteSpace(first.SubscriptionSettings?.ScanCron));
+        Assert.False(string.IsNullOrWhiteSpace(first.ScanSettings?.ScanCron));
         Assert.Equal(1, await db.GetCollection<BsonDocument>("organizations").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }
 }

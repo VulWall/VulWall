@@ -51,7 +51,7 @@ func (sc *Scheduler) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to load and schedule organizations: %w", err)
 	}
 
-	// Schedule periodic refresh to pick up subscription changes
+	// Schedule periodic refresh to pick up schedule changes
 	if _, err := sc.cron.AddFunc(RefreshCron, func() {
 		sc.refreshOrganizations()
 	}); err != nil {
@@ -115,7 +115,7 @@ func (sc *Scheduler) loadAndScheduleOrganizations(ctx context.Context) error {
 			sc.logger.Error("Failed to schedule organization",
 				zap.String("org_id", org.ID),
 				zap.String("company_name", org.CompanyName),
-				zap.String("scan_cron", org.SubscriptionSettings.ScanCron),
+				zap.String("scan_cron", org.ScanSettings.ScanCron),
 				zap.Error(err),
 			)
 			orgSpan.RecordError(err)
@@ -145,7 +145,7 @@ func (sc *Scheduler) loadAndScheduleOrganizations(ctx context.Context) error {
 
 // scheduleOrganization adds a cron job for a single organization
 func (sc *Scheduler) scheduleOrganization(ctx context.Context, org shared.Organization) error {
-	cronExpr := org.SubscriptionSettings.ScanCron
+	cronExpr := org.ScanSettings.ScanCron
 	if cronExpr == "" {
 		return fmt.Errorf("empty scan_cron for organization %s", org.ID)
 	}
@@ -181,7 +181,7 @@ func (sc *Scheduler) triggerScan(org shared.Organization) {
 		trace.WithAttributes(
 			attribute.String("org.id", org.ID),
 			attribute.String("org.name", org.CompanyName),
-			attribute.String("org.scan_cron", org.SubscriptionSettings.ScanCron),
+			attribute.String("org.scan_cron", org.ScanSettings.ScanCron),
 		),
 	)
 	defer span.End()
@@ -248,7 +248,7 @@ func (sc *Scheduler) getActiveOrganizations(ctx context.Context) ([]shared.Organ
 
 	// Query for organizations with non-empty scan_cron
 	filter := bson.M{
-		"subscription_settings.scan_cron": bson.M{
+		"scan_settings.scan_cron": bson.M{
 			"$exists": true,
 			"$ne":     "",
 		},

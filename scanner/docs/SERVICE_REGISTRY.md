@@ -135,10 +135,10 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 | `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (domain, subdomain, ip, port) | domain-ingestion, port-ingestion, enrichment-ingestion |
 | `findings` | `CollectionFindings` | Security vulnerabilities from scanners | findings-ingestion |
 | `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries keyed by finding_type (~84 entries) | kb-ingestion |
-| `organizations` | `CollectionOrganizations` | Org settings with subscription/scan config | web app |
+| `organizations` | `CollectionOrganizations` | Org settings with the scan schedule (`scan_settings`) | web app |
 | `scans` | `CollectionScans` | Scan execution records | web app (inserts `queued`), scan-coordinator, scan-monitor |
 
-**Read-only access (scanner):** `assets`, `organizations` — written by the web app, read by scan-coordinator. The web app creates the default organization with `subscription_settings.scan_cron`.
+**Read-only access (scanner):** `assets`, `organizations` — written by the web app, read by scan-coordinator. The web app creates the default organization with `scan_settings.scan_cron`.
 
 ---
 

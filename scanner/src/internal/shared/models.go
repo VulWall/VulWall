@@ -226,21 +226,21 @@ type Asset struct {
 	AddedOn       time.Time  `json:"added_on" bson:"added_on"`                                   // When asset was added
 }
 
-// Organization represents an organization with subscription settings
+// Organization represents an organization and its scan schedule
 // Stored in organizations collection
 type Organization struct {
-	ID                   string               `json:"_id" bson:"_id"`
-	UserIDs              []string             `json:"user_ids" bson:"user_ids"`
-	CompanyName          string               `json:"company_name" bson:"company_name"`
-	Industry             string               `json:"industry" bson:"industry"`
-	Website              string               `json:"website" bson:"website"`
-	CreatedAt            time.Time            `json:"created_at" bson:"created_at"`
-	UpdatedAt            time.Time            `json:"updated_at" bson:"updated_at"`
-	SubscriptionSettings SubscriptionSettings `json:"subscription_settings" bson:"subscription_settings"`
+	ID           string       `json:"_id" bson:"_id"`
+	UserIDs      []string     `json:"user_ids" bson:"user_ids"`
+	CompanyName  string       `json:"company_name" bson:"company_name"`
+	Industry     string       `json:"industry" bson:"industry"`
+	Website      string       `json:"website" bson:"website"`
+	CreatedAt    time.Time    `json:"created_at" bson:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at" bson:"updated_at"`
+	ScanSettings ScanSettings `json:"scan_settings" bson:"scan_settings"`
 }
 
-// SubscriptionSettings contains subscription-specific settings for scanning
-type SubscriptionSettings struct {
+// ScanSettings is the organization's scan schedule, written by the web app
+type ScanSettings struct {
 	ScanCron string `json:"scan_cron" bson:"scan_cron"` // Cron expression for scan schedule (e.g., "0 2 * * *" = daily at 2 AM)
 }
 

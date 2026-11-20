@@ -14,7 +14,7 @@
     {
         var organization = await OrganizationContext.GetCurrentOrganizationAsync();
         organizationName = organization.CompanyName ?? DefaultOrganization.DefaultName;
-        nextScan = NextScanCalculator.Compute(organization.SubscriptionSettings?.ScanCron);
+        nextScan = NextScanCalculator.Compute(organization.ScanSettings?.ScanCron);
     }
 
     var ctrl = (ViewContext.RouteData.Values["controller"]?.ToString() ?? "").ToLowerInvariant();

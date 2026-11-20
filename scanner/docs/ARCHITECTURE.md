@@ -98,7 +98,7 @@ SCAN COORDINATOR FLOW:
 - Finding formats: `DiscoveryFinding`, `IPDiscoveryFinding`, `SecurityFinding`, `EnrichmentFinding`
 - KB formats: `KBGenerationJob`, `KBGenerationResult`
 - Asset models: `Asset`, `Discovery`, `ResolutionHistoryEntry`, `ServiceHistoryEntry`
-- Scan models: `Organization`, `SubscriptionSettings`, `Scan`, `ScanStats`, `AssetTarget`
+- Scan models: `Organization`, `ScanSettings`, `Scan`, `ScanStats`, `AssetTarget`
 
 **Put in `src/internal/shared/constants.go`** — constants used by 2+ services:
 - Stream names, collection names, asset types, severities, protocols, statuses

@@ -62,8 +62,8 @@ public class Organization : IEntity<string>
     /// <summary>
     /// Scan schedule (read by the scanner's scan coordinator)
     /// </summary>
-    [BsonElement("subscription_settings")]
-    public SubscriptionSettings? SubscriptionSettings { get; set; }
+    [BsonElement("scan_settings")]
+    public ScanSettings? ScanSettings { get; set; }
 
     /// <summary>
     /// Whether the onboarding tour has been completed by the organization

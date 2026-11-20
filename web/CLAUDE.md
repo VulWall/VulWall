@@ -541,7 +541,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 ## Common Services
 
 ### Organization Context
-- A self-hosted install has exactly one organization. `DefaultOrganization.EnsureExistsAsync` creates it at startup ("My Organization", random weekly `subscription_settings.scan_cron`); `/setup` renames it.
+- A self-hosted install has exactly one organization. `DefaultOrganization.EnsureExistsAsync` creates it at startup ("My Organization", random weekly `scan_settings.scan_cron`); `/setup` renames it.
 - `IOrganizationContext` always resolves that organization for an authenticated user. There is no org switching.
 - Used by org-scoped repositories. Background jobs have no `HttpContext`: they use the `*PublicRepository` classes instead.
 

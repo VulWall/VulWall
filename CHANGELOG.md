@@ -126,6 +126,8 @@ First open-source, self-hosted release, under the MIT License.
   get a summary once it is set, if they are less than 7 days old.
 - The "Scan now" button no longer queues a second scan while an older one is still
   waiting for the scanner.
+- The organization's scan schedule moved from `subscription_settings` to
+  `scan_settings` (`ScanSettings` in the web app and the scanner).
 
 ### Removed
 
