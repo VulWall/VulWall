@@ -81,6 +81,12 @@ VulWall serves plain HTTP on port 8080. To expose it beyond your machine, put
 it behind a TLS-terminating reverse proxy (Caddy, Traefik, nginx), set
 `SECURE_COOKIES=true` and add the proxy's address to `TRUSTED_PROXIES`.
 
+Login and shared-report passwords are rate-limited per client IP (5 failed
+attempts per 15 minutes), and login also has a limit for the admin account (20
+attempts per 15 minutes from all IPs). If `TRUSTED_PROXIES` does not match your
+proxy, VulWall sees every request as coming from the proxy, so all clients
+share one IP limit and a few wrong passwords lock everyone out.
+
 ### Tracing
 
 ```bash

@@ -1,3 +1,4 @@
+using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.SharedLink;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Reports.Models;
@@ -78,7 +79,7 @@ public class SharedLinkService(
             return false;
         }
 
-        return BCrypt.Net.BCrypt.Verify(password, link.PasswordHash);
+        return await BcryptGate.VerifyAsync(password, link.PasswordHash);
     }
 
     public async Task<bool> RevokeSharedLinkAsync(string linkId)

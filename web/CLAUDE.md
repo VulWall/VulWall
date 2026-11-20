@@ -518,7 +518,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 - **Local cookie authentication** (`AddLocalAuthentication` in `Extensions/ServiceCollectionExtensions.cs`, `Verticals/Account/`).
 - One admin per install, stored in the `users` collection under the fixed `_id` `"admin"` with a BCrypt hash. The fixed id makes first-run setup safe against concurrent submissions.
-- `/setup` is reachable only while no admin exists; afterwards it redirects to `/login`. `/login` is rate-limited per IP with `IpRateLimiterService`. `/logout` is a POST.
+- `/setup` is reachable only while no admin exists; afterwards it redirects to `/login`. `/login` is rate-limited per IP (5 / 15 min) and account-wide (`login:admin`, 20 / 15 min) with `IpRateLimiterService.TryReserveAttempt`, which reserves the attempt before the BCrypt check; success resets. BCrypt verifies go through `BcryptGate` (one per core). `/logout` is a POST.
 - Claims: `NameIdentifier` (user id), `Email`, `Name` (email). Audit logging and `triggered_by` read these.
 - All controller actions require `[Authorize]` unless explicitly public. Antiforgery is validated on every POST (global `AutoValidateAntiforgeryTokenAttribute`).
 - Cookie `Secure` flag, HSTS and the HTTPS redirect follow `SECURE_COOKIES` (default `false` so plain `http://localhost` works).

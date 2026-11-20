@@ -293,9 +293,10 @@ public class ReportsController(
             return View(new SharedReportViewModel { RequiresPassword = true, Token = token });
         }
 
-        // Check rate limiting before verifying password. Failures count against both the caller's
-        // IP and the link token, so rotating IPs does not allow unlimited guesses on one link.
-        if (rateLimiter.IsRateLimited(endpoint) || rateLimiter.IsRateLimited(endpoint, token))
+        // Reserve the attempt before the BCrypt check so concurrent guesses cannot all slip past the
+        // limit. Attempts count against both the caller's IP and the link token, so rotating IPs
+        // does not allow unlimited guesses on one link.
+        if (!rateLimiter.TryReserveAttempt(endpoint) || !rateLimiter.TryReserveAttempt(endpoint, token))
         {
             return View(new SharedReportViewModel
             {
@@ -305,12 +306,9 @@ public class ReportsController(
             });
         }
 
-        // Verify password
         var isValidPassword = await sharedLinkService.VerifyPasswordAsync(token, password);
         if (!isValidPassword)
         {
-            rateLimiter.RecordAttempt(endpoint);
-            rateLimiter.RecordAttempt(endpoint, token);
             var remaining = Math.Min(
                 rateLimiter.GetRemainingAttempts(endpoint),
                 rateLimiter.GetRemainingAttempts(endpoint, token));

@@ -25,6 +25,10 @@ public class AccountController(
 {
     private const string LoginRateLimitEndpoint = "login";
 
+    // Account-wide login counter ("login:admin"): caps guesses spread across many IPs.
+    private const string AccountRateLimitSubject = "admin";
+    private const int AccountMaxAttempts = 20;
+
     [AllowAnonymous]
     [HttpGet("/setup")]
     public async Task<IActionResult> Setup()
@@ -78,25 +82,28 @@ public class AccountController(
         if (!await accountService.AdminExistsAsync())
             return Redirect("/setup");
 
-        if (rateLimiter.IsRateLimited(LoginRateLimitEndpoint))
+        if (!ModelState.IsValid)
+            return View(input);
+
+        // Reserve the attempt before the BCrypt check so concurrent guesses cannot all slip past
+        // the limit. Per IP, plus one account-wide counter so many IPs cannot share the work.
+        if (!rateLimiter.TryReserveAttempt(LoginRateLimitEndpoint)
+            || !rateLimiter.TryReserveAttempt(LoginRateLimitEndpoint, AccountRateLimitSubject, AccountMaxAttempts))
         {
             logger.LogWarning("Rate-limited login attempt from {Ip}", HttpContext.Connection.RemoteIpAddress);
             ModelState.AddModelError(string.Empty, "Too many failed attempts. Try again in 15 minutes.");
             return View(input);
         }
 
-        if (!ModelState.IsValid)
-            return View(input);
-
         var user = await accountService.ValidateCredentialsAsync(input.Email, input.Password);
         if (user == null)
         {
-            rateLimiter.RecordAttempt(LoginRateLimitEndpoint);
             ModelState.AddModelError(string.Empty, "The email or password is incorrect.");
             return View(input);
         }
 
         rateLimiter.ResetAttempts(LoginRateLimitEndpoint);
+        rateLimiter.ResetAttempts(LoginRateLimitEndpoint, AccountRateLimitSubject);
         await SignInAsync(user);
         return LocalRedirect(SafeReturnUrl(input.ReturnUrl));
     }

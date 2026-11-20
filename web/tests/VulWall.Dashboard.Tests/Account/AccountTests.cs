@@ -155,10 +155,11 @@ public class AccountControllerTests(MongoFixture mongo)
         public void SaveTempData(HttpContext context, IDictionary<string, object> values) { }
     }
 
-    private (AccountController Controller, AccountService Service) Create()
+    private (AccountController Controller, AccountService Service) Create(
+        IMongoDatabase? db = null, IMemoryCache? cache = null, string ip = "203.0.113.7")
     {
         AccountService.ResetCacheForTests();
-        var db = mongo.NewDatabase();
+        db ??= mongo.NewDatabase();
         var service = new AccountService(new UsersRepository(db), new OrganizationRepository(db),
             NullLogger<AccountService>.Instance);
         var httpContext = new DefaultHttpContext
@@ -167,10 +168,10 @@ public class AccountControllerTests(MongoFixture mongo)
                 .AddSingleton<IAuthenticationService, NoopAuthService>()
                 .BuildServiceProvider()
         };
-        httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.7");
+        httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(ip);
         var accessor = new FixedAccessor(httpContext);
         var controller = new AccountController(service,
-            new IpRateLimiterService(new MemoryCache(new MemoryCacheOptions()), accessor),
+            new IpRateLimiterService(cache ?? new MemoryCache(new MemoryCacheOptions()), accessor),
             NullLogger<AccountController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext },
@@ -266,5 +267,27 @@ public class AccountControllerTests(MongoFixture mongo)
 
         Assert.IsType<ViewResult>(result);
         Assert.Contains(controller.ModelState[string.Empty]!.Errors, e => e.ErrorMessage.Contains("Too many"));
+    }
+
+    [Fact]
+    public async Task LoginPost_FailuresFromManyIps_HitTheAccountLimit()
+    {
+        var db = mongo.NewDatabase();
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var (_, service) = Create(db, cache);
+        await service.CreateAdminAsync("admin@example.com", "a-long-password", null);
+
+        // 20 failures spread over 10 IPs: no IP reaches its own limit of 5.
+        for (var i = 0; i < 20; i++)
+        {
+            var (c, _) = Create(db, cache, $"198.51.100.{i % 10}");
+            await c.Login(new LoginInput { Email = "admin@example.com", Password = "wrong-password" });
+        }
+
+        var (fresh, _) = Create(db, cache, "192.0.2.1");
+        var result = await fresh.Login(new LoginInput { Email = "admin@example.com", Password = "a-long-password" });
+
+        Assert.IsType<ViewResult>(result);
+        Assert.Contains(fresh.ModelState[string.Empty]!.Errors, e => e.ErrorMessage.Contains("Too many"));
     }
 }

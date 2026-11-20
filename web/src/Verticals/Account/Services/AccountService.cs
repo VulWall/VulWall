@@ -1,6 +1,7 @@
 using System.Text;
 using MongoDB.Driver;
 using VulWall.Dashboard.Common.Services.Organization;
+using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.User;
 using VulWall.Dashboard.Data.Repositories;
 
@@ -106,7 +107,7 @@ public class AccountService(
         var user = await usersRepository.GetByIdAsync(User.AdminId);
         var emailMatches = user != null && user.Email == normalizedEmail;
 
-        var passwordMatches = VerifyPassword(password, emailMatches ? user!.PasswordHash : DummyHash);
+        var passwordMatches = await BcryptGate.VerifyAsync(password, emailMatches ? user!.PasswordHash : DummyHash);
         return emailMatches && passwordMatches ? user : null;
     }
 
