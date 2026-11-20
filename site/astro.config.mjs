@@ -45,6 +45,8 @@ export default defineConfig({
 				'@fortawesome/fontawesome-free/css/fontawesome.min.css',
 				'@fortawesome/fontawesome-free/css/solid.min.css',
 				'@fortawesome/fontawesome-free/css/brands.min.css',
+				'./src/styles/tokens/colors.css',
+				'./src/styles/tokens/severity.css',
 				'./src/styles/brand.css',
 			],
 			sidebar: [

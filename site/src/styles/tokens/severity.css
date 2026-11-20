@@ -1,0 +1,62 @@
+/* ============================================================
+   VulWall — Severity scale
+   A scanner's whole job is ranking risk, so severity owns its
+   own ramp: maroon → red → amber → gold → slate. Deliberately
+   kept SEPARATE from brand orange so "warning" never reads as
+   "brand". Each band has: text color (-…), tint bg (-…-bg),
+   border (-…-border), and vivid solid (-…-solid) for dots/rings.
+   ============================================================ */
+
+:root {
+    --severity-critical:        #911D14;   /* deep maroon */
+    --severity-critical-bg:     #FEF3F2;
+    --severity-critical-border: #FDA29B;
+    --severity-critical-solid:  #7A271A;
+
+    --severity-high:            #D92D20;   /* red */
+    --severity-high-bg:         #FEF3F2;
+    --severity-high-border:     #FDA29B;
+    --severity-high-solid:      #D92D20;
+
+    --severity-medium:          #B54708;   /* amber */
+    --severity-medium-bg:       #FFFAEB;
+    --severity-medium-border:   #FEDF89;
+    --severity-medium-solid:    #DC6803;
+
+    --severity-low:             #A16207;   /* gold */
+    --severity-low-bg:          #FEFBE8;
+    --severity-low-border:      #FEEE95;
+    --severity-low-solid:       #CA8A04;
+
+    --severity-info:            #475569;   /* slate — Info / None */
+    --severity-info-bg:         #F8FAFC;
+    --severity-info-border:     #E4E9F0;
+    --severity-info-solid:      #475569;
+}
+
+:root:not([data-theme='light']) {
+    --severity-critical:        #FCA5A5;
+    --severity-critical-bg:     rgba(180, 35, 24, 0.20);
+    --severity-critical-border: rgba(180, 35, 24, 0.45);
+    --severity-critical-solid:  #F26257;
+
+    --severity-high:            #FCA5A5;
+    --severity-high-bg:         rgba(217, 45, 32, 0.20);
+    --severity-high-border:     rgba(217, 45, 32, 0.45);
+    --severity-high-solid:      #F26257;
+
+    --severity-medium:          #FBBF24;
+    --severity-medium-bg:       rgba(220, 104, 3, 0.20);
+    --severity-medium-border:   rgba(220, 104, 3, 0.45);
+    --severity-medium-solid:    #F0B454;
+
+    --severity-low:             #FDE047;
+    --severity-low-bg:          rgba(202, 138, 4, 0.20);
+    --severity-low-border:      rgba(202, 138, 4, 0.45);
+    --severity-low-solid:       #EAC54F;
+
+    --severity-info:            #CBD5E1;
+    --severity-info-bg:         rgba(100, 116, 139, 0.25);
+    --severity-info-border:     rgba(100, 116, 139, 0.45);
+    --severity-info-solid:      #94A3B8;
+}
