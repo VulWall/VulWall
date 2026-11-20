@@ -37,9 +37,6 @@ public class ServiceSettings : EnvLoader
     [Env(Name = "DEFAULT_AI_MODEL", Default = "claude-sonnet-4-6")]
     public string DefaultAIModel = string.Empty;
 
-    [Env(Name = "NIGHTWATCH_WEBHOOK_SECRET", Required = false)]
-    public string NightWatchWebhookSecret = string.Empty;
-
     /// <summary>
     /// Comma-separated IPs/CIDR ranges of reverse proxies whose X-Forwarded-* headers are trusted.
     /// Empty means only loopback is trusted.

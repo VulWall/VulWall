@@ -23,8 +23,7 @@ using VulWall.Dashboard.Recommendations.Services;
 using VulWall.Dashboard.Dashboard.Services;
 using VulWall.Dashboard.Discoveries.Services;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
-using VulWall.Dashboard.Common.Services.Email;
-using VulWall.Dashboard.Webhooks.Services;
+using VulWall.Dashboard.Reports.Services.ExecutiveSummaryJob;
 using VulWall.Dashboard.Common.Services.RateLimiter;
 using VulWall.Dashboard.Common.Services;
 
@@ -54,7 +53,6 @@ public static class ServiceCollectionExtensions
         services.AddOrganizationServices();
         services.AddAiServices();
         services.AddScanTriggerServices();
-        services.AddEmailServices();
         services.AddSingleton<IpRateLimiterService>();
         services.AddSingleton<KnowledgeBaseCacheService>();
         services.AddExceptionHandler<Middleware.AuthFailureExceptionHandler>();
@@ -71,7 +69,6 @@ public static class ServiceCollectionExtensions
         services.AddRecommendationsServices();
         services.AddDashboardServices();
         services.AddDiscoveriesServices();
-        services.AddWebhooksServices();
 
         return services;
     }
@@ -208,6 +205,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TechnicalReportBuilder>();
         services.AddScoped<ReportsService>();
         services.AddScoped<SharedLinkService>();
+        services.AddScoped<ExecutiveSummaryProcessor>();
+        services.AddHostedService<ExecutiveSummaryPoller>();
 
         return services;
     }
@@ -245,18 +244,6 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddScanTriggerServices(this IServiceCollection services)
     {
         services.AddScoped<ScanTriggerService>();
-        return services;
-    }
-
-    private static IServiceCollection AddWebhooksServices(this IServiceCollection services)
-    {
-        services.AddScoped<NightWatchWebhookService>();
-        return services;
-    }
-
-    private static IServiceCollection AddEmailServices(this IServiceCollection services)
-    {
-        services.AddSingleton<IEmailService, NullEmailService>();
         return services;
     }
 
