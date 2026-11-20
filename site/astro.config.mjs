@@ -4,7 +4,7 @@ import starlight from '@astrojs/starlight';
 
 const site = 'https://vulwall.com';
 const description =
-	'Self-hosted external attack surface scanner. Finds your subdomains, open ports and vulnerabilities, and explains what to fix. Free and open source (AGPL-3.0).';
+	'Self-hosted external attack surface scanner. Finds your subdomains, open ports and vulnerabilities, and explains what to fix. Free and open source (MIT).';
 
 export default defineConfig({
 	site,

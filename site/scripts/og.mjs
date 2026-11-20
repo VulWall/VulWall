@@ -34,7 +34,7 @@ code { font: 400 24px 'JetBrains Mono'; padding: 14px 22px; border-radius: 8px; 
 </style></head><body>
 <div class="brand">${logo}<span>VulWall</span></div>
 <h1>See your attack surface the way an attacker does</h1>
-<div class="foot"><span><span class="dot"></span>Self-hosted &middot; Open source &middot; AGPL-3.0</span><code>vulwall.com</code></div>
+<div class="foot"><span><span class="dot"></span>Self-hosted &middot; Open source &middot; MIT</span><code>vulwall.com</code></div>
 </body></html>`;
 
 const dir = mkdtempSync(join(tmpdir(), 'vulwall-og-'));

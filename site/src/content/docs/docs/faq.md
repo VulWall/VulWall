@@ -126,7 +126,7 @@ It does not replace security leadership, secure architecture or internal securit
 
 ### Is VulWall free?
 
-Yes. VulWall is free and open-source software under the AGPL-3.0. See
+Yes. VulWall is free and open-source software under the MIT License. See
 [License and trademark](/docs/license/).
 
 ### Where do I report a bug or ask a question?
