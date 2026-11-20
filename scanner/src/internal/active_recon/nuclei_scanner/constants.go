@@ -28,6 +28,12 @@ const (
 	// both trigger streams. Override with NUCLEI_WORKERS.
 	DefaultWorkers = 2
 
+	// DefaultRateLimit is nuclei's request rate per process (-rl, requests per second).
+	// nuclei's own default of 150 saturates a home or office uplink: dials time out,
+	// nuclei drops the target as "unresponsive permanently" and its matches are lost.
+	// Override with NUCLEI_RATE_LIMIT.
+	DefaultRateLimit = 50
+
 	// DefaultTemplateUpdateCron is the default cron schedule for template updates
 	// Default: 2:00 AM UTC daily ("0 2 * * *")
 	// Can be overridden with NUCLEI_TEMPLATE_UPDATE_CRON environment variable

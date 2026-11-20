@@ -78,6 +78,10 @@ First open-source, self-hosted release, under the MIT License.
   follow-up scan that starts right after it and scans every asset there is
   then. Only one scan waits per organization (a unique partial index on
   `scans`); further requests say a follow-up is already queued.
+- `NUCLEI_RATE_LIMIT` (default 50) sets the requests per second of each
+  nuclei process. At nuclei's own default of 150 a home or office
+  connection timed out, nuclei dropped the target and the scan lost its
+  findings.
 
 ### Changed
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/VulWall/VulWall/scanner/src/internal/core/execx"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +42,12 @@ type Service struct {
 
 // NewService creates a new Nuclei scanner service
 func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
+	if _, ok := rateLimit(); !ok {
+		logger.Warn("NUCLEI_RATE_LIMIT must be a positive integer; using the default",
+			zap.String("value", config.GetEnv(config.EnvNucleiRateLimit, "")),
+			zap.Int("default", DefaultRateLimit),
+		)
+	}
 	return &Service{
 		redis:      redisClient,
 		logger:     logger,
@@ -299,6 +306,8 @@ func nucleiArgs(target, severity string) []string {
 		"-duc",
 		"-severity", severity,
 	}
+	rl, _ := rateLimit()
+	args = append(args, "-rl", strconv.Itoa(rl))
 
 	// -lna (restrict-local-network-access) makes nuclei refuse connections to
 	// local/private networks at dial time, which also covers DNS rebinding
@@ -318,6 +327,21 @@ func nucleiArgs(target, severity string) []string {
 	}
 
 	return args
+}
+
+// rateLimit returns the nuclei request rate (-rl) from NUCLEI_RATE_LIMIT, or DefaultRateLimit
+// when it is unset. ok is false when the variable is set but not a positive integer; the
+// default is used then too.
+func rateLimit() (rl int, ok bool) {
+	v := strings.TrimSpace(config.GetEnv(config.EnvNucleiRateLimit, ""))
+	if v == "" {
+		return DefaultRateLimit, true
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return DefaultRateLimit, false
+	}
+	return n, true
 }
 
 // templatesDir is where nuclei templates are installed and read from.

@@ -115,6 +115,7 @@ comments.
 | `TRUSTED_PROXIES` | empty | IPs/CIDRs of reverse proxies whose `X-Forwarded-*` headers are trusted |
 | `SHARED_LINKS_ENABLED` | `false` | Password-protected shared report links |
 | `NUCLEI_WORKERS` | `2` | Concurrent nuclei processes |
+| `NUCLEI_RATE_LIMIT` | `50` | Requests per second for each nuclei process |
 | `TESTSSL_CONCURRENCY` | `5` | Concurrent testssl.sh scans |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow scanning private/internal IP ranges |
 | `GEO_DOWNLOAD` | `true` | Download DB-IP Lite databases on start |

@@ -156,6 +156,7 @@ Environment variables (the repo-root `.env.example` lists the ones users set):
 | `ANTHROPIC_MODEL` | Anthropic model for the KB engine (default: `claude-sonnet-4-6`) |
 | `ENVIRONMENT` | `development` (console logs) / `production` (JSON logs; the image default) |
 | `NUCLEI_WORKERS` | Concurrent nuclei processes across both trigger streams (default 2) |
+| `NUCLEI_RATE_LIMIT` | nuclei `-rl`, requests per second per process (default 50; not a positive integer = default, with a warning). nuclei's own 150 saturates a home/office uplink: it drops the target as "unresponsive permanently" and the run is coverage `error` |
 | `NUCLEI_TEMPLATES_DIR` | nuclei templates directory (default `$HOME/nuclei-templates`; image: `/data/nuclei-templates`) |
 | `NUCLEI_INCLUDE_TAGS` | Nuclei template include tags (default: cve,vuln,exposure,...; empty = no filter) |
 | `NUCLEI_EXCLUDE_TAGS` | Nuclei template exclude tags (default: intrusive,dos,fuzz; empty = no filter) |
