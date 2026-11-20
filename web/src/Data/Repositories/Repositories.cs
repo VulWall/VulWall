@@ -73,32 +73,62 @@ public class ScansPublicRepository(IMongoDatabase database)
 {
     private const string SummaryStatusField = "executive_summary_status";
     private const string SummaryClaimedAtField = "executive_summary_claimed_at";
+    private const string SummaryAttemptsField = "executive_summary_attempts";
+
+    /// <summary>Claims of one scan (first try included) before a failure is final.</summary>
+    public const int MaxExecutiveSummaryAttempts = 3;
+
+    /// <summary>Wait after the first and the second failed attempt before the next claim.</summary>
+    public static readonly TimeSpan[] ExecutiveSummaryRetryBackoff = [TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30)];
 
     /// <summary>
-    /// Atomically claims one finished scan whose AI executive summary has not been attempted,
-    /// by setting <c>executive_summary_status</c> to "processing". A claim older than
-    /// <paramref name="staleClaimAfter"/> is taken again (the previous worker died).
+    /// Atomically claims one finished scan whose AI executive summary is due, by setting
+    /// <c>executive_summary_status</c> to "processing" and counting the attempt. Due means:
+    /// <list type="bullet">
+    /// <item>never attempted;</item>
+    /// <item>"processing" for longer than <paramref name="staleClaimAfter"/> (the worker died);</item>
+    /// <item>"failed" with fewer than <see cref="MaxExecutiveSummaryAttempts"/> attempts, once the
+    /// backoff since the last claim has passed;</item>
+    /// <item>"skipped" (AI was off when the scan finished) while <paramref name="aiEnabled"/>.</item>
+    /// </list>
     /// Only scans completed after <paramref name="completedAfter"/> qualify, so a database
     /// with a long scan history does not trigger one AI call per old scan.
     /// Scans that already carry an executive_summary are never claimed.
     /// </summary>
-    public Task<Scan?> ClaimNextForExecutiveSummaryAsync(DateTime completedAfter, TimeSpan staleClaimAfter)
+    public Task<Scan?> ClaimNextForExecutiveSummaryAsync(DateTime completedAfter, TimeSpan staleClaimAfter, bool aiEnabled = true)
     {
         var now = DateTime.UtcNow;
         var f = Builders<Scan>.Filter;
+
+        var due = new List<FilterDefinition<Scan>>
+        {
+            f.Exists(SummaryStatusField, false),
+            f.And(
+                f.Eq(SummaryStatusField, ExecutiveSummaryStatus.Processing),
+                f.Lt(SummaryClaimedAtField, now - staleClaimAfter)),
+            // Failed before attempts were counted, or after the first attempt.
+            f.And(
+                f.Eq(SummaryStatusField, ExecutiveSummaryStatus.Failed),
+                f.Or(f.Exists(SummaryAttemptsField, false), f.Lte(SummaryAttemptsField, 1)),
+                f.Lt(SummaryClaimedAtField, now - ExecutiveSummaryRetryBackoff[0])),
+            f.And(
+                f.Eq(SummaryStatusField, ExecutiveSummaryStatus.Failed),
+                f.Eq(SummaryAttemptsField, 2),
+                f.Lt(SummaryClaimedAtField, now - ExecutiveSummaryRetryBackoff[1]))
+        };
+        if (aiEnabled)
+            due.Add(f.Eq(SummaryStatusField, ExecutiveSummaryStatus.Skipped));
+
         var filter = f.And(
             f.In("status", new[] { "done", "completed" }),
             f.Gte("completed_at", completedAfter),
             f.Eq("executive_summary", BsonNull.Value),
-            f.Or(
-                f.Exists(SummaryStatusField, false),
-                f.And(
-                    f.Eq(SummaryStatusField, ExecutiveSummaryStatus.Processing),
-                    f.Lt(SummaryClaimedAtField, now - staleClaimAfter))));
+            f.Or(due));
 
         var update = Builders<Scan>.Update
             .Set(SummaryStatusField, ExecutiveSummaryStatus.Processing)
-            .Set(SummaryClaimedAtField, now);
+            .Set(SummaryClaimedAtField, now)
+            .Inc(SummaryAttemptsField, 1);
 
         return FindOneAndUpdateAsync(filter, update, new FindOneAndUpdateOptions<Scan>
         {
@@ -115,6 +145,9 @@ public class ScansPublicRepository(IMongoDatabase database)
         var update = Builders<Scan>.Update
             .Set(SummaryStatusField, status)
             .Set("updated_at", DateTime.UtcNow);
+        // A skip is not a failed attempt: give the scan its full retry budget once AI is on.
+        if (status == ExecutiveSummaryStatus.Skipped)
+            update = update.Set(SummaryAttemptsField, 0);
         if (executiveSummary != null)
             update = update.Set("executive_summary", executiveSummary);
 

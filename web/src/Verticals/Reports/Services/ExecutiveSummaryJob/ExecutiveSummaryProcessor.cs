@@ -10,7 +10,8 @@ namespace VulWall.Dashboard.Reports.Services.ExecutiveSummaryJob;
 /// Writes the AI executive summary onto finished scans, once per scan. Each scan is claimed
 /// atomically, so several app instances can run this without doing the same scan twice.
 /// Without ANTHROPIC_API_KEY the scan is marked "skipped" and the report renders without
-/// the AI section.
+/// the AI section; once a key is set, skipped scans of the last 7 days are summarized. A failed
+/// attempt is retried with backoff, up to ScansPublicRepository.MaxExecutiveSummaryAttempts.
 /// </summary>
 public class ExecutiveSummaryProcessor(
     ScansPublicRepository scansRepository,
@@ -32,7 +33,7 @@ public class ExecutiveSummaryProcessor(
         while (!cancellationToken.IsCancellationRequested)
         {
             var scan = await scansRepository.ClaimNextForExecutiveSummaryAsync(
-                DateTime.UtcNow - MaxScanAge, StaleClaimAfter);
+                DateTime.UtcNow - MaxScanAge, StaleClaimAfter, aiEnabled);
             if (scan is null)
                 break;
 

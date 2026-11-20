@@ -161,6 +161,73 @@ public class ExecutiveSummaryProcessorTests(MongoFixture mongo)
         Assert.Equal("done", (await Get(s, stale))["executive_summary_status"].AsString);
     }
 
+    [Fact]
+    public async Task ProcessPending_FailedAttempt_IsRetriedAfterBackoffUpToThreeAttempts()
+    {
+        var s = Create(aiResponse: null);
+        var id = await InsertScan(s, "done");
+        var processor = s.NewProcessor();
+
+        await processor.ProcessPendingAsync(true, CancellationToken.None);
+        Assert.Equal(1, s.Ai.Calls);
+        // Not again before the backoff has passed.
+        Assert.Equal(0, await processor.ProcessPendingAsync(true, CancellationToken.None));
+
+        await AgeClaim(s, id, TimeSpan.FromMinutes(6));
+        Assert.Equal(1, await processor.ProcessPendingAsync(true, CancellationToken.None));
+        Assert.Equal(2, s.Ai.Calls);
+
+        // Second retry waits 30 minutes, not 5.
+        await AgeClaim(s, id, TimeSpan.FromMinutes(6));
+        Assert.Equal(0, await processor.ProcessPendingAsync(true, CancellationToken.None));
+        await AgeClaim(s, id, TimeSpan.FromMinutes(31));
+        Assert.Equal(1, await processor.ProcessPendingAsync(true, CancellationToken.None));
+        Assert.Equal(3, s.Ai.Calls);
+
+        // Three attempts used: the failure is final.
+        await AgeClaim(s, id, TimeSpan.FromDays(1));
+        Assert.Equal(0, await processor.ProcessPendingAsync(true, CancellationToken.None));
+        var doc = await Get(s, id);
+        Assert.Equal("failed", doc["executive_summary_status"].AsString);
+        Assert.Equal(3, doc["executive_summary_attempts"].ToInt32());
+    }
+
+    [Fact]
+    public async Task ProcessPending_LegacyFailedWithoutAttemptCount_IsRetried()
+    {
+        var s = Create();
+        var id = await InsertScan(s, "done", extra: new BsonDocument
+        {
+            ["executive_summary_status"] = "failed",
+            ["executive_summary_claimed_at"] = DateTime.UtcNow.AddHours(-1)
+        });
+
+        Assert.Equal(1, await s.NewProcessor().ProcessPendingAsync(true, CancellationToken.None));
+        Assert.Equal("done", (await Get(s, id))["executive_summary_status"].AsString);
+    }
+
+    [Fact]
+    public async Task ProcessPending_SkippedScan_IsSummarizedOnceAiIsEnabled()
+    {
+        var s = Create();
+        var id = await InsertScan(s, "done");
+        var processor = s.NewProcessor();
+
+        await processor.ProcessPendingAsync(aiEnabled: false, CancellationToken.None);
+        // Still skipped while AI stays off: no busy loop over skipped scans.
+        Assert.Equal(0, await processor.ProcessPendingAsync(aiEnabled: false, CancellationToken.None));
+
+        Assert.Equal(1, await processor.ProcessPendingAsync(aiEnabled: true, CancellationToken.None));
+        var doc = await Get(s, id);
+        Assert.Equal("done", doc["executive_summary_status"].AsString);
+        Assert.Equal(1, doc["executive_summary_attempts"].ToInt32());
+        Assert.Equal(0, await processor.ProcessPendingAsync(aiEnabled: true, CancellationToken.None));
+    }
+
+    private static Task AgeClaim(Setup s, string id, TimeSpan age) =>
+        s.Scans.UpdateOneAsync(new BsonDocument("_id", id),
+            new BsonDocument("$set", new BsonDocument("executive_summary_claimed_at", DateTime.UtcNow - age)));
+
     private static async Task<string> InsertScan(Setup s, string status, DateTime? completedAt = null,
         BsonDocument? extra = null)
     {
