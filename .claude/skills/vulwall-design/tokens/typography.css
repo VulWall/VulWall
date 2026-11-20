@@ -41,5 +41,5 @@
     --tracking-tight:  -0.02em;
     --tracking-normal: 0;
     --tracking-wide:   0.04em;
-    --tracking-wider:  0.06em;   /* eyebrow / overline labels */
+    --tracking-wider:  0.06em;   /* small labels; never paired with uppercase */
 }

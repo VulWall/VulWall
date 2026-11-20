@@ -144,7 +144,7 @@ public class FindingSuppressionService(
                 DiscoveryId = s.DiscoveryId,
                 FindingType = s.FindingType,
                 Status = s.Status,
-                StatusLabel = s.Status == SuppressionStatus.FalsePositive ? "False Positive" : "Accepted Risk",
+                StatusLabel = s.Status == SuppressionStatus.FalsePositive ? "False positive" : "Accepted risk",
                 Note = s.Note,
                 SuppressedBy = s.SuppressedBy,
                 SuppressedAt = s.SuppressedAt,

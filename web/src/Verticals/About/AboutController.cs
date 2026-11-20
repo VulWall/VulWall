@@ -5,7 +5,7 @@ using VulWall.Dashboard.Common.Utils;
 
 namespace VulWall.Dashboard.About;
 
-/// <summary>Data for the About dialog in the sidebar footer (Common/Views/_AboutDialog.cshtml).</summary>
+/// <summary>Data for the About dialog, opened from the sidebar (Common/Views/_AboutDialog.cshtml).</summary>
 [Authorize]
 public class AboutController(AboutService aboutService, UpdateCheckService updateCheckService) : Controller
 {

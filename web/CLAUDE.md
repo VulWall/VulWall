@@ -128,7 +128,7 @@ Each vertical is self-contained and includes:
 * **Reports**: Report generation (Summary, Technical), shared report links
 * **Scans**: Scan history, results, findings overview
 * **Settings**: User settings, company details, scan schedule, preferences
-* **About**: Data for the About dialog (`Common/Views/_AboutDialog.cshtml`, opened from the sidebar footer): `GET /about/info` (versions from the scanner's `system_info` document, plus a copy-paste system info text with versions and counts only) and `POST /about/check-updates` (server-side GitHub latest-release check, only on click, 1 h cache)
+* **About**: Data for the About dialog (`Common/Views/_AboutDialog.cshtml`, opened from the About button in the sidebar): `GET /about/info` (versions from the scanner's `system_info` document, plus a copy-paste system info text with versions and counts only) and `POST /about/check-updates` (server-side GitHub latest-release check, only on click, 1 h cache)
 
 ### Common Layer (Shared Across Verticals)
 The Common layer contains **only** types needed for cross-vertical communication:
@@ -564,7 +564,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 - Use `EnvLoader` utility to load environment variables (`Common/Utils/ServiceSettings.cs`)
 - Never commit secrets to version control; `src/Properties/launchSettings.json` is git-ignored (copy `launchSettings.example.json`)
-- Variables: `MONGO_URI`, `MONGO_DB`, `PORT`, `ANTHROPIC_API_KEY` (optional), `DEFAULT_AI_MODEL`, `SECURE_COOKIES`, `TRUSTED_PROXIES`, `SHARED_LINKS_ENABLED`, `SETUP_TOKEN`, `DATA_PROTECTION_KEYS_DIR` (image: `/data/keys` on the web-only `web-keys` volume; keys are deliberately not in MongoDB, which the scanner shares), `VULWALL_VERSION` (sidebar footer; a Dockerfile build arg, release images pass the tag, default `dev`). See `README.md`.
+- Variables: `MONGO_URI`, `MONGO_DB`, `PORT`, `ANTHROPIC_API_KEY` (optional), `DEFAULT_AI_MODEL`, `SECURE_COOKIES`, `TRUSTED_PROXIES`, `SHARED_LINKS_ENABLED`, `SETUP_TOKEN`, `DATA_PROTECTION_KEYS_DIR` (image: `/data/keys` on the web-only `web-keys` volume; keys are deliberately not in MongoDB, which the scanner shares), `VULWALL_VERSION` (shown in the About dialog; a Dockerfile build arg, release images pass the tag, default `dev`). See `README.md`.
 
 ## Testing
 

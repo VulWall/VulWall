@@ -1,24 +1,4 @@
-/* About dialog (Common/Views/_AboutDialog.cshtml) and its sidebar-footer trigger. */
-
-.sidebar-footer .about-trigger {
-    background: none;
-    border: 0;
-    padding: 0;
-    font: inherit;
-    color: var(--sidebar-muted);
-    cursor: pointer;
-    transition: color 0.2s ease;
-}
-.sidebar-footer .about-trigger:hover,
-.sidebar-footer .about-trigger:focus-visible {
-    color: var(--brand-on);
-    text-decoration: underline;
-}
-.sidebar-footer .about-trigger:focus-visible {
-    outline: 2px solid var(--brand-on);
-    outline-offset: 2px;
-    border-radius: 2px;
-}
+/* About dialog (Common/Views/_AboutDialog.cshtml), opened from the About button in the sidebar. */
 
 /* VW_Logo.png is the white mark, so it sits on the brand gradient tile in both themes. */
 .about-logo {
@@ -28,6 +8,11 @@
     object-fit: contain;
     background: var(--brand-gradient);
     border-radius: 8px;
+}
+
+/* Wider than Bootstrap's default 500px (modal-lg is 800px). Bootstrap applies it from 576px. */
+.about-dialog {
+    --bs-modal-width: 720px;
 }
 
 .about-dialog .modal-body {
@@ -125,10 +110,17 @@
     text-align: center;
     color: var(--vw-gray-500);
 }
+/* Three columns when the dialog has its full width, two on medium screens, one on phones. */
 .about-built-with {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    grid-template-columns: 1fr;
     gap: 0.25rem 1rem;
+}
+@media (min-width: 576px) {
+    .about-built-with { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 768px) {
+    .about-built-with { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .about-license {

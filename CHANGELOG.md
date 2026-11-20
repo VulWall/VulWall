@@ -105,6 +105,23 @@ First open-source, self-hosted release, under the MIT License.
 - The FAQ and the configuration page say which lookups
   `DNS_RECHECK_RESOLVERS` covers: root domains, known subdomains and SPF,
   DMARC, MX and NS records.
+- Sidebar bottom: everything is left-aligned with the nav items. The active
+  nav item has a white tint (no orange background) and keeps the orange bar.
+  The "Next scan" card is smaller and shows the scheduled day and time next
+  to its label. The organization name and email truncate with a tooltip.
+  About, theme and log out are icon buttons; the "VulWall <version> · MIT"
+  footer line is gone (the version stays in the About dialog).
+- The About dialog is 720px wide; its "Built with" list has three columns
+  on wide screens, two on medium screens and one on phones.
+- More UI text uses sentence case: onboarding tour titles, the "False
+  positive" and "Accepted risk" labels, page titles, report headings, error
+  pages, dialogs and buttons. The design skill no longer says eyebrow labels
+  are uppercase.
+- nuclei scans domains and subdomains by hostname instead of the resolved
+  IP, so TLS SNI and the Host header reach sites behind a CDN, WAF or
+  virtual host. Every address of the name must be public before the run
+  (else coverage `error`); `-lna` stays on. Open ports are still scanned by
+  IP and port.
 
 ### Security
 

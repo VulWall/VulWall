@@ -86,7 +86,7 @@
             </a>
         </li>
     </ul>
-    <div class="mt-auto pt-3">
+    <div class="sidebar-bottom mt-auto pt-3">
         @if (nextScan is not null)
         {
             <!-- Next-scan countdown widget — data passed CSP-safe via JSON block -->
@@ -94,57 +94,58 @@
                 nextUtc = nextScan.NextUtc.ToString("o"),
                 periodStartUtc = nextScan.PeriodStartUtc.ToString("o")
             }))</script>
-            <div class="next-scan mb-3">
-                <div class="next-scan__label">
-                    <span class="next-scan__dot" aria-hidden="true"></span>
-                    <span>Next scan</span>
+            <div class="next-scan">
+                <div class="next-scan__head">
+                    <span class="next-scan__label">
+                        <span class="next-scan__dot" aria-hidden="true"></span>
+                        <span>Next scan</span>
+                    </span>
+                    <span class="next-scan__when" data-next-scan-clock>—</span>
                 </div>
                 <div class="next-scan__time" data-next-scan-countdown>—</div>
-                <div class="next-scan__sub">Scheduled for <span data-next-scan-clock>—</span></div>
                 <div class="next-scan__bar" role="progressbar" aria-label="Time elapsed since last scan">
                     <div class="next-scan__fill" data-next-scan-fill></div>
                 </div>
             </div>
         }
 
-        <!-- Organization & User Info -->
-        <div class="text-center mb-3" style="font-size: 0.75rem;">
-            <div class="text-white fw-semibold mb-1 d-flex align-items-center justify-content-center gap-2" style="font-size: 0.8rem;">
-                <span class="text-truncate" style="max-width: 120px;" title="@organizationName">@organizationName</span>
-            </div>
-            <div class="text-white-50" style="font-size: 0.75rem;">
-                <span class="text-truncate d-inline-block" style="max-width: 180px;" title="@email">@email</span>
-            </div>
+        <!-- Organization & user -->
+        <div class="sidebar-account">
+            <div class="sidebar-account__org text-truncate" title="@organizationName">@organizationName</div>
+            <div class="sidebar-account__email text-truncate" title="@email">@email</div>
         </div>
 
-        <hr class="mb-3" style="border-top: 1px solid rgba(251, 251, 253, 0.15); opacity: 1;" />
+        <div class="sidebar-divider" role="presentation"></div>
 
-        <!-- Theme Toggle & Logout -->
-        <div class="d-flex gap-2 justify-content-center">
+        <!-- About, theme, log out -->
+        <div class="sidebar-actions">
+            <button type="button"
+                    class="sidebar-action"
+                    data-bs-toggle="modal"
+                    data-bs-target="#aboutDialog"
+                    aria-haspopup="dialog"
+                    aria-label="About VulWall"
+                    title="About VulWall">
+                <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+            </button>
             <button id="themeToggle"
-                    class="btn btn-icon rounded-3"
                     type="button"
+                    class="sidebar-action"
                     aria-pressed="false"
                     aria-label="Toggle color theme"
-                    title="Toggle color theme"
-                    style="width: 2.5rem; height: 2.5rem; border:1px solid rgba(251,251,253,0.1);">
-                <i class="fa-solid fa-sun theme-icon-light d-none" style="font-size: 0.875rem;"></i>
-                <i class="fa-solid fa-moon theme-icon-dark" style="font-size: 0.875rem;"></i>
+                    title="Toggle color theme">
+                <i class="fa-solid fa-sun theme-icon-light d-none" aria-hidden="true"></i>
+                <i class="fa-solid fa-moon theme-icon-dark" aria-hidden="true"></i>
             </button>
-            <form method="post" action="/logout" class="m-0">
+            <form method="post" action="/logout" class="sidebar-actions__logout">
                 @Html.AntiForgeryToken()
                 <button type="submit"
-                        class="btn btn-icon rounded-3 d-flex align-items-center justify-content-center"
+                        class="sidebar-action sidebar-action--muted"
                         aria-label="Log out"
-                        title="Log out"
-                        style="width: 2.5rem; height: 2.5rem; border:1px solid rgba(251,251,253,0.1); color: inherit;">
-                    <i class="fa-solid fa-right-from-bracket" style="font-size: 0.875rem;"></i>
+                        title="Log out">
+                    <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
                 </button>
             </form>
-        </div>
-
-        <div class="sidebar-footer text-center mt-3">
-            <button type="button" class="about-trigger" data-bs-toggle="modal" data-bs-target="#aboutDialog" aria-haspopup="dialog">VulWall @VulWall.Dashboard.Common.Utils.ServiceSettings.Instance.Version · MIT</button>
         </div>
     </div>
 </aside>

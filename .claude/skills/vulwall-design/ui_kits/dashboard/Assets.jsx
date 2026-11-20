@@ -7,7 +7,7 @@ function Assets() {
     <div>
       {window.PageHeader ? <window.PageHeader title="Assets" subtitle={`${assets.length} discovered hosts · 1 apex domain`} action={<BtnA variant="primary" icon="fas fa-plus">Add asset</BtnA>} /> : null}
       <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1.4fr 0.8fr', gap: '12px', padding: '12px 18px', borderBottom: '1px solid var(--border-default)', background: 'var(--surface-sunken)', fontSize: '11px', fontWeight: 600, letterSpacing: 'var(--tracking-wider)', color: 'var(--text-faint)', textTransform: 'uppercase' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1.4fr 0.8fr', gap: '12px', padding: '12px 18px', borderBottom: '1px solid var(--border-default)', background: 'var(--surface-sunken)', fontSize: '11px', fontWeight: 600, letterSpacing: 'var(--tracking-wider)', color: 'var(--text-faint)' }}>
           <span>Host</span><span>Type</span><span>Status</span><span>Technology</span><span style={{ textAlign: 'right' }}>Findings</span>
         </div>
         {assets.map((a, i) => (

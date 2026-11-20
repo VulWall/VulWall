@@ -18,13 +18,13 @@ public class ErrorViewModel
             404 => new ErrorViewModel
             {
                 StatusCode = 404,
-                Title = "Page Not Found",
+                Title = "Page not found",
                 Message = "The page you're looking for doesn't exist or has been moved."
             },
             403 => new ErrorViewModel
             {
                 StatusCode = 403,
-                Title = "Access Denied",
+                Title = "Access denied",
                 Message = "You don't have permission to access this resource."
             },
             401 => new ErrorViewModel
@@ -36,7 +36,7 @@ public class ErrorViewModel
             500 => new ErrorViewModel
             {
                 StatusCode = 500,
-                Title = "Internal Server Error",
+                Title = "Internal server error",
                 Message = "Something went wrong on our end. We're working to fix it."
             },
             _ => new ErrorViewModel

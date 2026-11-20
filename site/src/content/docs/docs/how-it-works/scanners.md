@@ -29,6 +29,9 @@ or `fuzz` do not run.
 
 The templates are downloaded on the first start and updated every night.
 
+nuclei scans a domain or subdomain by its name, as a browser reaches it, so sites behind a CDN,
+WAF or shared hosting are tested too. Open ports are scanned by IP address and port.
+
 ### TLS
 
 [testssl.sh](https://testssl.sh) checks the TLS setup of your HTTPS services: protocol versions,

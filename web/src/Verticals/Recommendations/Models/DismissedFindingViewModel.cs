@@ -12,7 +12,7 @@ public class DismissedFindingViewModel
     public string Status { get; set; } = string.Empty;
 
     /// <summary>
-    /// Human-readable label ("False Positive" / "Accepted Risk").
+    /// Human-readable label ("False positive" / "Accepted risk").
     /// </summary>
     public string StatusLabel { get; set; } = string.Empty;
 

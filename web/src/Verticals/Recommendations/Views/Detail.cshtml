@@ -1,7 +1,7 @@
 @model VulWall.Dashboard.Recommendations.Models.RecommendationDetailViewModel
 @using VulWall.Dashboard.Recommendations.Constants
 @{
-    ViewData["Title"] = "Security Recommendation";
+    ViewData["Title"] = "Security recommendation";
     var sev = Model.Finding.Severity.ToString().ToLower();
     var status = Model.Finding.Status;
     var activeCount = Model.AffectedAssets.Count;
@@ -22,7 +22,7 @@
 
 <div class="mb-3">
     <a href="@Url.Action("Index", "Recommendations")" class="btn btn-sm btn-outline-secondary">
-        <i class="fas fa-arrow-left"></i> Back to Recommendations
+        <i class="fas fa-arrow-left"></i> Back to recommendations
     </a>
 </div>
 
@@ -298,7 +298,7 @@ else if (status == "muted")
         @if (showSuppressionPanel)
         {
             <div class="sidebar-card suppression-panel">
-                <h5><i class="fas fa-eye-slash"></i> Mark as Dismissed</h5>
+                <h5><i class="fas fa-eye-slash"></i> Mark as dismissed</h5>
                 <p class="text-muted small mb-2">
                     Per-asset dismissal — pick an asset below to suppress that specific instance of this finding.
                 </p>
@@ -307,7 +307,7 @@ else if (status == "muted")
                     @if (asset.IsSuppressed)
                     {
                         var badgeClass = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "false-positive" : "accepted-risk";
-                        var statusLabel = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "False Positive" : "Accepted Risk";
+                        var statusLabel = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "False positive" : "Accepted risk";
                         <div class="mb-2 d-flex align-items-center justify-content-between gap-2">
                             <span class="suppressed-badge @badgeClass small">
                                 <i class="fas fa-check-circle"></i>
@@ -342,8 +342,8 @@ else if (status == "muted")
                                     class="form-select form-select-sm mb-1"
                                     data-suppress-status>
                                 <option value="">— Select reason —</option>
-                                <option value="@SuppressionStatus.FalsePositive">False Positive</option>
-                                <option value="@SuppressionStatus.AcceptedRisk">Accepted Risk</option>
+                                <option value="@SuppressionStatus.FalsePositive">False positive</option>
+                                <option value="@SuppressionStatus.AcceptedRisk">Accepted risk</option>
                             </select>
                             <div data-note-wrapper style="display:none">
                                 <input type="text"
@@ -365,7 +365,7 @@ else if (status == "muted")
         @if (Model.AffectedAssets.Any())
         {
             <div class="sidebar-card affected-assets-card">
-                <h4><i class="fas fa-server"></i> Affected Assets (@Model.AffectedAssets.Count)</h4>
+                <h4><i class="fas fa-server"></i> Affected assets (@Model.AffectedAssets.Count)</h4>
                 <div class="affected-assets-list">
                     @foreach (var asset in Model.AffectedAssets)
                     {
@@ -378,7 +378,7 @@ else if (status == "muted")
                                 @if (asset.IsSuppressed)
                                 {
                                     var badgeClass = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "false-positive" : "accepted-risk";
-                                    var statusLabel = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "False Positive" : "Accepted Risk";
+                                    var statusLabel = asset.SuppressionStatus == SuppressionStatus.FalsePositive ? "False positive" : "Accepted risk";
                                     <span class="suppressed-badge @badgeClass ms-2">
                                         <i class="fas fa-eye-slash"></i> @statusLabel
                                     </span>

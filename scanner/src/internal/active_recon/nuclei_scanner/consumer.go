@@ -128,40 +128,33 @@ func (c *Consumer) handleDomainMessage(ctx context.Context, message redis.XMessa
 		return nil
 	}
 
-	// Build target URL based on discovery type
-	var target string
-	if finding.IP != nil && *finding.IP != "" {
-		// If we have an IP, scan the IP
-		if finding.Port != nil && *finding.Port > 0 {
-			// Port-specific scan
-			protocol := "http"
-			if *finding.Port == 443 {
-				protocol = "https"
-			}
-			target = fmt.Sprintf("%s://%s:%d", protocol, *finding.IP, *finding.Port)
-		} else {
-			// IP-only scan
-			target = *finding.IP
-		}
-	} else {
-		// Domain/subdomain scan
-		target = finding.Host
+	if finding.Host == "" {
+		c.logger.Warn("Skipping finding without host",
+			zap.String("message_id", message.ID),
+		)
+		return nil
 	}
 
-	// Create scan target using the discovery_id from the finding
-	// The discovery service already generated a deterministic ID for this asset
-	scanTarget := ScanTarget{
-		Target:      target,
-		AssetType:   finding.AssetType,   // Asset type (domain, subdomain, ip, port)
-		DiscoveryID: finding.DiscoveryID, // Use the ID from the finding
+	return c.service.ProcessDiscovery(ctx, domainScanTarget(finding))
+}
+
+// domainScanTarget is the nuclei target of a domain or subdomain discovery.
+//
+// It is the hostname, not the IP it resolved to: behind a CDN, WAF or virtual host only a
+// request that names the site (TLS SNI and Host header) reaches it; the bare IP gets a 403 or
+// no TLS certificate, and nuclei drops it as unresponsive. nuclei probes https and http for a
+// bare host itself. ProcessDiscovery checks that every address of the name is public before
+// the run, and -lna refuses private addresses at dial time.
+func domainScanTarget(finding shared.DiscoveryFinding) ScanTarget {
+	return ScanTarget{
+		Target:      finding.Host,
+		AssetType:   finding.AssetType,   // domain or subdomain
+		DiscoveryID: finding.DiscoveryID, // findings and coverage keep the domain discovery's id
 		TraceID:     finding.TraceID,
-		ScanID:      finding.ScanID,      // Pass through scan_id
+		ScanID:      finding.ScanID,
 		OrgID:       finding.OrgID,
 		Unresolved:  finding.IP == nil || *finding.IP == "",
 	}
-
-	// Process the scan
-	return c.service.ProcessDiscovery(ctx, scanTarget)
 }
 
 // handleIPMessage processes a single IP discovery finding message
