@@ -8,7 +8,7 @@ to fix.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/overview-dark.png">
-  <img src="docs/screenshots/overview-light.png" alt="VulWall overview page: security score 49 out of 100, open issues by severity falling over six weekly scans, counts of critical and high issues, and the three issues to fix first">
+  <img src="docs/screenshots/overview-light.png" alt="VulWall overview page: security score 49 out of 100 and rising, open issues by severity falling over six weekly scans, counts of critical and high issues, and the three issues to fix first">
 </picture>
 
 | | |
