@@ -27,7 +27,9 @@ public static class MongoDbConfiguration
             BsonSerializer.RegisterSerializer(new CaseInsensitiveEnumSerializer<AssetStatus>());
             BsonSerializer.RegisterSerializer(new CaseInsensitiveEnumSerializer<Severity>());
             BsonSerializer.RegisterSerializer(new CaseInsensitiveEnumSerializer<OwnershipStatus>());
-            BsonSerializer.RegisterSerializer(new CaseInsensitiveEnumSerializer<ScanStatus>());
+            // The scanner writes "done"; accept "completed" too so either spelling reads as Done.
+            BsonSerializer.RegisterSerializer(new CaseInsensitiveEnumSerializer<ScanStatus>(
+                new Dictionary<string, ScanStatus> { ["completed"] = ScanStatus.Done }));
             BsonSerializer.RegisterSerializer(new CaseInsensitiveEnumSerializer<ScanType>());
         }
         catch (BsonSerializationException)

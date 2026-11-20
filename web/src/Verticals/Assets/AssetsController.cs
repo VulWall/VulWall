@@ -3,9 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Services.NightWatch;
-using VulWall.Dashboard.Common.Services.NightWatch.Models;
-using VulWall.Dashboard.Common.Services.Organization;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Services;
 
@@ -14,8 +12,7 @@ namespace VulWall.Dashboard.Assets;
 [Authorize]
 public class AssetsController(
     AssetsService assetsService,
-    NightWatchService nightWatchService,
-    IOrganizationContext organizationContext) : Controller
+    ScanTriggerService scanTriggerService) : Controller
 {
     public async Task<IActionResult> Index()
     {
@@ -147,28 +144,13 @@ public class AssetsController(
         var alreadyRunningMessage =
             $"Asset {assetName} has been added. A scan is already running; the asset will be included in the next scan.";
 
-        if (await assetsService.IsScanInProgressAsync())
-        {
-            TempData["Info"] = alreadyRunningMessage;
-            return;
-        }
-
-        var orgId = await organizationContext.GetCurrentOrgIdAsync();
         var triggeredBy = User.FindFirst(ClaimTypes.Email)?.Value ?? "unknown";
-        var result = await nightWatchService.TriggerScanAsync(orgId, triggeredBy);
+        var result = await scanTriggerService.TriggerAsync(triggeredBy);
 
-        switch (result.Outcome)
-        {
-            case TriggerScanOutcome.Started:
-                TempData["ScanTriggered"] = assetName;
-                break;
-            case TriggerScanOutcome.AlreadyRunning:
-                TempData["Info"] = alreadyRunningMessage;
-                break;
-            default:
-                TempData["Info"] = $"Asset {assetName} has been added successfully.";
-                break;
-        }
+        if (result == TriggerScanResult.Started)
+            TempData["ScanTriggered"] = assetName;
+        else
+            TempData["Info"] = alreadyRunningMessage;
     }
 
     [HttpGet]

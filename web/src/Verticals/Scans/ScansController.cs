@@ -3,8 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Services.NightWatch;
-using VulWall.Dashboard.Common.Services.NightWatch.Models;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Scans.Models;
@@ -17,7 +16,7 @@ public class ScansController(
     ScansService scansService,
     IOrganizationContext organizationContext,
     OrganizationRepository organizationRepository,
-    NightWatchService nightWatchService) : Controller
+    ScanTriggerService scanTriggerService) : Controller
 {
     public async Task<IActionResult> Index()
     {
@@ -64,22 +63,13 @@ public class ScansController(
             return RedirectToAction(nameof(Index));
         }
 
-        var orgId = await organizationContext.GetCurrentOrgIdAsync();
         var triggeredBy = User.FindFirst(ClaimTypes.Email)?.Value ?? "unknown";
-        var result = await nightWatchService.TriggerScanAsync(orgId, triggeredBy);
+        var result = await scanTriggerService.TriggerAsync(triggeredBy);
 
-        switch (result.Outcome)
-        {
-            case TriggerScanOutcome.Started:
-                TempData["ScanNowSuccess"] = "started";
-                break;
-            case TriggerScanOutcome.AlreadyRunning:
-                TempData["ScanNowError"] = ScanNowState.InProgress.ToString();
-                break;
-            default:
-                TempData["ScanNowError"] = "failed";
-                break;
-        }
+        if (result == TriggerScanResult.Started)
+            TempData["ScanNowSuccess"] = "started";
+        else
+            TempData["ScanNowError"] = ScanNowState.InProgress.ToString();
 
         return RedirectToAction(nameof(Index));
     }

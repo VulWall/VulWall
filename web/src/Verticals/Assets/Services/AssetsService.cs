@@ -1,4 +1,5 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Data.Entities.Asset;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Assets.Constants;
@@ -10,7 +11,7 @@ namespace VulWall.Dashboard.Assets.Services;
 
 public class AssetsService(
     AssetsRepository assetsRepository,
-    ScansRepository scansRepository,
+    ScanTriggerService scanTriggerService,
     IDomainVerifier domainVerifier)
 {
     public async Task<IndexViewModel> GetAssetsAsync()
@@ -222,17 +223,7 @@ public class AssetsService(
         return (true, null);
     }
 
-    /// <summary>
-    /// True when the org has a pending or running scan. Bound to 24h so an orphaned scan
-    /// record does not block asset changes forever.
-    /// </summary>
-    public Task<bool> IsScanInProgressAsync()
-    {
-        var inProgressCutoff = DateTime.UtcNow.AddHours(-24);
-        return scansRepository.ExistsAsync(
-            s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
-                 && s.CreatedAt >= inProgressCutoff);
-    }
+    public Task<bool> IsScanInProgressAsync() => scanTriggerService.IsScanInProgressAsync();
 
     public async Task<AssetsStatistics> GetStatisticsAsync()
     {

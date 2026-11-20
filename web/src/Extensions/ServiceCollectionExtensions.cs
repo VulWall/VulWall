@@ -22,7 +22,7 @@ using VulWall.Dashboard.Scans.Services;
 using VulWall.Dashboard.Recommendations.Services;
 using VulWall.Dashboard.Dashboard.Services;
 using VulWall.Dashboard.Discoveries.Services;
-using VulWall.Dashboard.Common.Services.NightWatch;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Services.Email;
 using VulWall.Dashboard.Webhooks.Services;
 using VulWall.Dashboard.Common.Services.RateLimiter;
@@ -53,7 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddAuth0Authentication();
         services.AddOrganizationServices();
         services.AddAiServices();
-        services.AddNightWatchServices();
+        services.AddScanTriggerServices();
         services.AddEmailServices();
         services.AddSingleton<IpRateLimiterService>();
         services.AddSingleton<KnowledgeBaseCacheService>();
@@ -242,9 +242,9 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddNightWatchServices(this IServiceCollection services)
+    private static IServiceCollection AddScanTriggerServices(this IServiceCollection services)
     {
-        services.AddHttpClient<NightWatchService>();
+        services.AddScoped<ScanTriggerService>();
         return services;
     }
 

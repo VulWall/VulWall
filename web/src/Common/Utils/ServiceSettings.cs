@@ -37,12 +37,6 @@ public class ServiceSettings : EnvLoader
     [Env(Name = "DEFAULT_AI_MODEL", Default = "claude-sonnet-4-6")]
     public string DefaultAIModel = string.Empty;
 
-    [Env(Name = "NIGHTWATCH_BASE_URL", Required = false)]
-    public string NightWatchBaseUrl = string.Empty;
-
-    [Env(Name = "NIGHTWATCH_API_KEY", Required = false)]
-    public string NightWatchApiKey = string.Empty;
-
     [Env(Name = "NIGHTWATCH_WEBHOOK_SECRET", Required = false)]
     public string NightWatchWebhookSecret = string.Empty;
 

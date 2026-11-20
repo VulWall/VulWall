@@ -1,5 +1,6 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.KnowledgeBase;
 using VulWall.Dashboard.Data.Repositories;
@@ -239,11 +240,7 @@ public class DashboardService(
     /// </summary>
     private async Task<ScanNowState> GetScanNowStateAsync()
     {
-        // Bound to 24h so an orphaned Running/Pending scan doesn't disable the button forever.
-        var inProgressCutoff = DateTime.UtcNow.AddHours(-24);
-        var hasInProgress = await scansRepository.ExistsAsync(
-            s => (s.Status == ScanStatus.Running || s.Status == ScanStatus.Pending)
-                 && s.CreatedAt >= inProgressCutoff);
+        var hasInProgress = await scansRepository.ExistsAsync(ScanTriggerService.InProgressPredicate(DateTime.UtcNow));
 
         return hasInProgress ? ScanNowState.InProgress : ScanNowState.Allowed;
     }

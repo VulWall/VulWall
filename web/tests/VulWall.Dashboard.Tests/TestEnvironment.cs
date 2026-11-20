@@ -9,8 +9,6 @@ namespace VulWall.Dashboard.Tests;
 /// </summary>
 internal static class TestEnvironment
 {
-    public const string NightWatchBaseUrl = "http://nightwatch.test";
-
     [ModuleInitializer]
     internal static void Initialize()
     {
@@ -18,7 +16,6 @@ internal static class TestEnvironment
         SetIfMissing("AUTH0_MANAGEMENT_DOMAIN", "auth.example.test");
         SetIfMissing("AUTH0_CLIENTID", "test-client");
         SetIfMissing("AUTH0_CLIENTSECRET", "test-secret");
-        Environment.SetEnvironmentVariable("NIGHTWATCH_BASE_URL", NightWatchBaseUrl);
     }
 
     private static void SetIfMissing(string name, string value)
