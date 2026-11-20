@@ -6,6 +6,9 @@ const (
 	IngestionBatchSize = 10
 
 	// Scan Status
+	// StatusQueued is written by the web UI when a user requests a scan. The
+	// scan coordinator claims queued scans and moves them to running.
+	StatusQueued  = "queued"
 	StatusPending = "pending"
 	StatusRunning = "running"
 	StatusDone    = "done"

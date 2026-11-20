@@ -1,0 +1,42 @@
+/* ============================================================
+   VulWall — Spacing, radius, shadow, motion tokens
+   ============================================================ */
+
+:root {
+    /* Spacing — 4px base scale */
+    --space-1:  4px;
+    --space-2:  8px;
+    --space-3:  12px;
+    --space-4:  16px;
+    --space-5:  20px;
+    --space-6:  24px;
+    --space-8:  32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+    --space-20: 80px;
+
+    /* Corner radius */
+    --radius-sm:   6px;    /* small buttons, tags */
+    --radius-md:   8px;    /* buttons, inputs */
+    --radius-lg:   12px;   /* cards */
+    --radius-xl:   16px;   /* large panels, modals */
+    --radius-pill: 999px;  /* badges, status pills */
+
+    /* Shadows — soft, navy-tinted */
+    --shadow-xs:   0 1px 2px rgba(16, 24, 39, 0.06);
+    --shadow-sm:   0 1px 3px rgba(16, 24, 39, 0.08);
+    --shadow-card: 0 8px 24px rgba(16, 24, 40, 0.06);
+    --shadow-lg:   0 16px 48px rgba(16, 24, 39, 0.12);
+    --shadow-focus: 0 0 0 3px rgba(0, 86, 161, 0.18);
+
+    /* Motion */
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+    --dur-fast:   0.15s; /* @kind other */
+    --dur-normal: 0.2s; /* @kind other */
+}
+
+[data-bs-theme="dark"] {
+    --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --shadow-lg:   0 20px 60px rgba(0, 0, 0, 0.6);
+}

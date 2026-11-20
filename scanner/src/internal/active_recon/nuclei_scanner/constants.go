@@ -21,6 +21,10 @@ const (
 	// Keep low (1) because Nuclei scans are slow
 	ConsumerBatchSize = 1
 
+	// DefaultWorkers is how many nuclei processes run at the same time across
+	// both trigger streams. Override with NUCLEI_WORKERS.
+	DefaultWorkers = 2
+
 	// DefaultTemplateUpdateCron is the default cron schedule for template updates
 	// Default: 2:00 AM UTC daily ("0 2 * * *")
 	// Can be overridden with NUCLEI_TEMPLATE_UPDATE_CRON environment variable

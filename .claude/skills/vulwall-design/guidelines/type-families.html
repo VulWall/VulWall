@@ -1,0 +1,40 @@
+<!-- @dsCard group="Type" viewport="700x200" name="Font families" subtitle="Chakra Petch · Inter · JetBrains Mono" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-primary); background:var(--surface-card); padding:20px; }
+  .row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .card { border:1px solid var(--border-default); border-radius:var(--radius-lg); padding:18px; }
+  .eyebrow { font-size:11px; color:var(--text-faint); font-weight:600; letter-spacing:var(--tracking-wider); margin-bottom:12px; }
+  .aa { font-size:38px; line-height:1; color:var(--text-heading); }
+  .samp { font-size:16px; color:var(--text-body); margin-top:10px; }
+  .role { font-size:11px; color:var(--text-faint); margin-top:12px; line-height:1.5; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="card">
+      <div class="eyebrow">DISPLAY · CHAKRA PETCH</div>
+      <div class="aa" style="font-family:var(--font-display); font-weight:600;">Aa</div>
+      <div class="samp" style="font-family:var(--font-display); font-weight:500;">Find what attackers see</div>
+      <div class="role">Wordmark &amp; rare hero headlines. Used sparingly.</div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">SANS · INTER</div>
+      <div class="aa" style="font-family:var(--font-primary); font-weight:700;">Aa</div>
+      <div class="samp" style="font-family:var(--font-primary);">All UI, body copy &amp; labels</div>
+      <div class="role">The workhorse — every screen, every control.</div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">MONO · JETBRAINS MONO</div>
+      <div class="aa" style="font-family:var(--font-mono); font-weight:500;">Aa</div>
+      <div class="samp" style="font-family:var(--font-mono); font-size:14px;">tcp/443 · CVE-2024-3094</div>
+      <div class="role">Scan output, ports, CVEs, fingerprints.</div>
+    </div>
+  </div>
+</body>
+</html>

@@ -166,6 +166,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 			"first_detected": now,
 			"last_detected":  now,
 		}
+		setFindingText(findingDoc, finding)
 
 		// Add scan_ids array if present
 		if len(scanIDs) > 0 {
@@ -199,6 +200,7 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 			"description":   finding.Description, // Update description
 		},
 	}
+	setFindingText(update["$set"].(bson.M), finding)
 
 	// Add scan_id to array if present
 	if finding.ScanID != nil {
@@ -230,6 +232,18 @@ func (s *Service) upsertFinding(ctx context.Context, finding shared.SecurityFind
 	)
 
 	return nil
+}
+
+// setFindingText adds the scanner's own remediation and reference text to a
+// finding document, so the finding is readable without a knowledge-base entry.
+// Empty values are left out; an update never clears text a scanner once gave.
+func setFindingText(doc bson.M, finding shared.SecurityFinding) {
+	if finding.Remediation != "" {
+		doc["remediation"] = finding.Remediation
+	}
+	if len(finding.References) > 0 {
+		doc["references"] = finding.References
+	}
 }
 
 // buildFindingDocument converts SecurityFinding to BSON, excluding nil fields

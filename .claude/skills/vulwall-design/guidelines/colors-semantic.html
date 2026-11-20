@@ -1,0 +1,27 @@
+<!-- @dsCard group="Colors" viewport="700x130" name="Semantic actions" subtitle="Primary, neutral, success, danger, info" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-primary); background:var(--surface-card); padding:20px; }
+  .row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+  .sw { border-radius:var(--radius-md); overflow:hidden; border:1px solid var(--border-default); }
+  .chip { height:60px; }
+  .meta { padding:9px 11px; }
+  .name { font-size:13px; font-weight:600; color:var(--text-heading); }
+  .hex { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); margin-top:3px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--vw-primary)"></div><div class="meta"><div class="name">Primary</div><div class="hex">#0056A1</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--vw-secondary)"></div><div class="meta"><div class="name">Neutral</div><div class="hex">#334155</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--vw-success)"></div><div class="meta"><div class="name">Success</div><div class="hex">#067647</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--vw-danger)"></div><div class="meta"><div class="name">Danger</div><div class="hex">#D92D20</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--vw-info)"></div><div class="meta"><div class="name">Info</div><div class="hex">#0056A1</div></div></div>
+  </div>
+</body>
+</html>

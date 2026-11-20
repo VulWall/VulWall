@@ -28,6 +28,7 @@ type NucleiInfo struct {
 	Tags        []string            `json:"tags"`
 	Description string              `json:"description"`
 	Reference   []string            `json:"reference,omitempty"`
+	Remediation string              `json:"remediation,omitempty"`
 	Severity    string              `json:"severity"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }

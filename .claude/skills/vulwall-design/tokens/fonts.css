@@ -1,0 +1,9 @@
+/* ============================================================
+   VulWall — Webfonts
+   Three roles: Chakra Petch (display / wordmark), Inter (UI &
+   body), JetBrains Mono (scan data — ports, CVEs, hashes).
+   Hosted on Google Fonts; the @import below pulls the real
+   @font-face rules into the design-system closure.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');

@@ -1,0 +1,45 @@
+/* ============================================================
+   VulWall — Typography tokens
+   Three roles: Chakra Petch (display, used sparingly), Inter
+   (all UI + body), JetBrains Mono (scan data). Inter handles
+   the vast majority of screen work for legibility.
+   ============================================================ */
+
+:root {
+    /* Families */
+    --font-display: 'Chakra Petch', 'Inter', sans-serif;
+    --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono:    'JetBrains Mono', 'SFMono-Regular', 'Courier New', monospace;
+
+    /* Type scale (px) */
+    --text-display-lg: 44px;   /* hero headline */
+    --text-display:    36px;   /* big numbers, section opener */
+    --text-h1:         28px;
+    --text-h2:         24px;
+    --text-h3:         20px;
+    --text-h4:         17px;
+    --text-body-lg:    18px;
+    --text-body:       16px;
+    --text-sm:         14px;
+    --text-caption:    13px;
+    --text-xs:         12px;
+
+    /* Weights */
+    --weight-regular:  400;
+    --weight-medium:   500;
+    --weight-semibold: 600;
+    --weight-bold:     700;
+    --weight-extra:    800;
+
+    /* Line heights */
+    --leading-tight:   1.1;
+    --leading-snug:    1.3;
+    --leading-normal:  1.5;
+    --leading-relaxed: 1.6;
+
+    /* Letter spacing */
+    --tracking-tight:  -0.02em;
+    --tracking-normal: 0;
+    --tracking-wide:   0.04em;
+    --tracking-wider:  0.06em;   /* eyebrow / overline labels */
+}

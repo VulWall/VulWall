@@ -1,0 +1,34 @@
+<!-- @dsCard group="Colors" viewport="700x180" name="Using orange safely" subtitle="White-on-orange fails AA — use dark text" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-primary); background:var(--surface-card); padding:20px; }
+  .row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .card { border-radius:var(--radius-lg); overflow:hidden; border:1px solid var(--border-default); }
+  .demo { padding:24px; text-align:center; font-size:17px; font-weight:700; }
+  .note { padding:10px 12px; font-size:12px; }
+  .verdict { font-weight:700; font-size:12px; display:flex; align-items:center; gap:5px; }
+  .desc { color:var(--text-muted); font-size:11px; margin-top:4px; line-height:1.45; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="card" style="border-color:var(--severity-critical-border)">
+      <div class="demo" style="background:var(--accent-orange); color:#fff;">Get Started</div>
+      <div class="note" style="background:var(--severity-critical-bg)"><div class="verdict" style="color:var(--vw-danger-hover)">✗ AVOID</div><div class="desc">White on orange — 2.7:1, fails AA.</div></div>
+    </div>
+    <div class="card" style="border-color:var(--vw-success-border)">
+      <div class="demo" style="background:var(--accent-orange); color:var(--accent-orange-on);">Get Started</div>
+      <div class="note" style="background:var(--vw-success-bg)"><div class="verdict" style="color:var(--vw-success)">✓ DO</div><div class="desc">Gunmetal on orange — 7.8:1, passes.</div></div>
+    </div>
+    <div class="card" style="border-color:var(--vw-success-border)">
+      <div class="demo" style="background:var(--surface-card); color:var(--accent-orange-text); border-bottom:1px solid var(--border-default)">Learn more →</div>
+      <div class="note" style="background:var(--vw-success-bg)"><div class="verdict" style="color:var(--vw-success)">✓ DO</div><div class="desc">Orange as text → darkened #B45309, 7.0:1.</div></div>
+    </div>
+  </div>
+</body>
+</html>

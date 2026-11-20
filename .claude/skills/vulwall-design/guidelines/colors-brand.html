@@ -1,0 +1,29 @@
+<!-- @dsCard group="Colors" viewport="700x180" name="Brand palette" subtitle="Five core hues from the logobook" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-primary); background:var(--surface-card); padding:20px; }
+  .row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+  .sw { border-radius:var(--radius-lg); overflow:hidden; border:1px solid var(--border-default); }
+  .chip { height:84px; position:relative; }
+  .meta { padding:10px 12px; }
+  .name { font-size:14px; font-weight:600; color:var(--text-heading); }
+  .hex { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); margin-top:3px; }
+  .use { font-size:11px; color:var(--text-faint); margin-top:5px; }
+  .tag { position:absolute; top:7px; right:7px; background:rgba(16,24,39,.55); color:#fff; font-size:9px; font-weight:600; padding:2px 6px; border-radius:var(--radius-pill); letter-spacing:.03em; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--brand-dark-blue)"></div><div class="meta"><div class="name">Delft</div><div class="hex">#212C5E</div><div class="use">Headings · dark UI</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--brand-blue)"></div><div class="meta"><div class="name">Cobalt</div><div class="hex">#0056A1</div><div class="use">Interactive · primary</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--brand-orange)"><span class="tag">ACCENT ONLY</span></div><div class="meta"><div class="name">Orange</div><div class="hex">#F47D17</div><div class="use">Accent · highlight</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--brand-very-dark)"></div><div class="meta"><div class="name">Gunmetal</div><div class="hex">#101827</div><div class="use">Dark surfaces</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--brand-off-white); border-bottom:1px solid var(--border-default)"></div><div class="meta"><div class="name">Ghost</div><div class="hex">#FBFBFD</div><div class="use">App background</div></div></div>
+  </div>
+</body>
+</html>

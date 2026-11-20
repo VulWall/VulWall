@@ -1,0 +1,30 @@
+<!-- @dsCard group="Severity" viewport="700x130" name="Severity & status pills" subtitle="Tint bg + readable text + status dot" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-primary); background:var(--surface-card); padding:20px; }
+  .group { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; padding:4px 11px; border-radius:var(--radius-pill); border:1px solid; }
+  .dot { width:6px; height:6px; border-radius:50%; }
+</style>
+</head>
+<body>
+  <div class="group">
+    <span class="pill" style="background:var(--severity-critical-bg); border-color:var(--severity-critical-border); color:var(--severity-critical)"><span class="dot" style="background:var(--severity-critical-solid)"></span>Critical</span>
+    <span class="pill" style="background:var(--severity-high-bg); border-color:var(--severity-high-border); color:var(--severity-high)"><span class="dot" style="background:var(--severity-high-solid)"></span>High</span>
+    <span class="pill" style="background:var(--severity-medium-bg); border-color:var(--severity-medium-border); color:var(--severity-medium)"><span class="dot" style="background:var(--severity-medium-solid)"></span>Medium</span>
+    <span class="pill" style="background:var(--severity-low-bg); border-color:var(--severity-low-border); color:var(--severity-low)"><span class="dot" style="background:var(--severity-low-solid)"></span>Low</span>
+    <span class="pill" style="background:var(--severity-info-bg); border-color:var(--severity-info-border); color:var(--severity-info)"><span class="dot" style="background:var(--severity-info-solid)"></span>Info</span>
+  </div>
+  <div class="group">
+    <span class="pill" style="background:var(--vw-success-bg); border-color:var(--vw-success-border); color:var(--vw-success)"><span class="dot" style="background:var(--vw-success)"></span>Secure</span>
+    <span class="pill" style="background:var(--vw-info-bg); border-color:var(--vw-info-border); color:var(--vw-primary)"><span class="dot" style="background:var(--vw-primary)"></span>Scanning</span>
+    <span class="pill" style="background:var(--vw-gray-50); border-color:var(--border-default); color:var(--text-muted)"><span class="dot" style="background:var(--vw-gray-400)"></span>Resolved</span>
+    <span class="pill" style="background:var(--severity-high-bg); border-color:var(--severity-high-border); color:var(--vw-danger-hover)"><span class="dot" style="background:var(--vw-danger)"></span>Open</span>
+  </div>
+</body>
+</html>

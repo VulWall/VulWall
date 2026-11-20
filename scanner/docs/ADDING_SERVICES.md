@@ -10,13 +10,11 @@ Before merging any new service, verify ALL of the following:
 - [ ] `source` field set on all published findings
 - [ ] TraceContext injected before publishing (see [OBSERVABILITY.md](OBSERVABILITY.md))
 - [ ] TraceContext extracted after consuming (see [OBSERVABILITY.md](OBSERVABILITY.md))
-- [ ] **Scan monitor updated** — add consumer group to `isComplete()` in `src/internal/scan_coordinator/scan_monitor.go`
+- [ ] **Scan monitor updated** — add the (stream, group) pair to `scanPipelineGroups()` in `src/internal/scan_coordinator/pipeline.go` and to `TestScanPipelineGroups`
 - [ ] **Stream cleanup updated** — add new result streams to `streamsToClean()` in `src/internal/scan_coordinator/stream_cleanup.go`
 - [ ] **SERVICE_REGISTRY.md updated** — add service to all relevant tables
-- [ ] Entry point created in `src/cmd/`
-- [ ] Makefile targets added (build, run, docker-scale)
-- [ ] Dockerfile created in `ops/`
-- [ ] docker-compose.yml created in service's `ops/` directory
+- [ ] Component registered in `src/cmd/nightwatch/main.go` (and its group in `createConsumerGroups()` for job queues and trigger streams) — see [Wiring a Component](#wiring-a-component-into-nightwatch)
+- [ ] External tools (if any) installed and pinned in `scanner/Dockerfile`
 
 ---
 
@@ -60,22 +58,11 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 }
 ```
 
-### 4. Create entry point
+### 4. Register it in `nightwatch`
 
-```go
-// src/cmd/discoveries/[service-name]/main.go
-func main() {
-    bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
-        ServiceName: "[service-name]",
-        Streams: []bootstrap.StreamConfig{
-            {StreamName: shared.StreamDomainDiscoveryQueue, ConsumerGroup: [pkg].Group[ServiceName]},
-        },
-        Factory: func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (bootstrap.ConsumerStarter, error) {
-            return [pkg].NewConsumer(redisClient, logger), nil
-        },
-    })
-}
-```
+Add the consumer to `consumers()` and its job-queue group (from `0`) to
+`createConsumerGroups()` in `src/cmd/nightwatch/main.go`. See
+[Wiring a Component](#wiring-a-component-into-nightwatch).
 
 ### 5. Update scan monitor & registry
 
@@ -132,17 +119,10 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 
 ### 4. Choose consumer pattern
 
-**Single-stream (most scanners):**
-```go
-// Consumes only from domain_scan_triggers
-bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
-    ServiceName: "[scanner-name]",
-    Factory: func(...) (bootstrap.ConsumerStarter, error) {
-        return [pkg].NewConsumer(redisClient, logger), nil
-    },
-})
-```
-Service handles consumer group creation internally using `CreateConsumerGroupFromLatest`.
+**Single-stream (most scanners):** consume only from `domain_scan_triggers`.
+The consumer creates its group in `Start()` with `CreateConsumerGroupFromLatest`;
+also add the group to `createConsumerGroups()` in `src/cmd/nightwatch/main.go`
+and register the consumer in `consumers()`.
 
 **Dual-stream (nuclei):**
 Consumer creates groups on both `domain_scan_triggers` and `port_scan_triggers`.
@@ -238,74 +218,47 @@ Add the new slice to the service inventory and stream tables.
 
 ---
 
-## Bootstrap Reference
+## Wiring a Component into `nightwatch`
 
-### Decision Matrix
+Every component runs inside the single `nightwatch` process
+(`src/cmd/nightwatch/main.go`). There is no per-service entry point, Dockerfile
+or compose file. To add a component:
 
-| Condition | Bootstrap | Example |
-|-----------|-----------|---------|
-| Single stream + MongoDB | `bootstrap.Run()` | js-dependency-scanner |
-| Single stream + no MongoDB | `bootstrap.RunSimple()` with `Streams` | domain-discovery, port-discovery |
-| Multi-stream + no MongoDB | `bootstrap.RunSimple()` without `Streams` | nuclei-scanner |
-| Custom init (scheduler, orchestrator) | Manual | scan-coordinator, ingestion |
+1. **Constructor.** Give the consumer a `NewConsumer(...)` and a
+   `Start(ctx context.Context) error` that blocks until `ctx` is cancelled.
+   Return errors; never call `os.Exit` or `logger.Fatal` — one failing
+   component must not kill the process without a clean shutdown.
+2. **Register it** in `consumers()` (stream consumers) or
+   `coordinatorComponents()` (coordinator goroutines):
 
-### bootstrap.Run() — Single-stream with MongoDB
+   ```go
+   myScanner, err := my_scanner.NewConsumer(rdb, named("my-scanner"))
+   if err != nil {
+       return nil, fmt.Errorf("my-scanner: %w", err)
+   }
+   list = append(list, component{"my-scanner", myScanner.Start})
+   ```
+3. **Consumer groups.** A consumer of a job queue or a trigger stream also gets
+   an entry in `createConsumerGroups()`, so the group exists before the scan
+   coordinator can publish to that stream. Job queues start at `0`
+   (`CreateConsumerGroup`), trigger streams at `$`
+   (`CreateConsumerGroupFromLatest`). Keep the call inside the consumer's
+   `Start()` too (it is idempotent), so the consumer works on its own in tests.
+4. **Configuration.** Read service-specific settings with `config.GetEnv*`
+   and constants in `src/internal/core/config/env.go`. Add new variables to
+   the root `.env.example` and `docker-compose.yml` when users should set them.
+5. **External tools.** If the component runs a CLI tool, install a pinned,
+   checksum-verified version in `scanner/Dockerfile`. The image runs as a
+   non-root user; write only to `$HOME`, the temp dir or `/data/*` volumes.
 
-```go
-func main() {
-    bootstrap.Run(bootstrap.ServiceConfig{
-        ServiceName:   "my-service",
-        StreamName:    shared.StreamDomainDiscoveryResults,
-        ConsumerGroup: my_pkg.GroupMyService,
-        Factory: func(cfg *config.Config, redisClient *redis.Client, mongoDB *mongo.Database, logger *zap.Logger) bootstrap.ConsumerStarter {
-            return my_pkg.NewConsumer(redisClient, mongoDB, logger)
-        },
-    })
-}
-```
+### What `main.go` provides
 
-### bootstrap.RunSimple() — No MongoDB
-
-**Mode A: Single-stream (bootstrap creates consumer group):**
-```go
-func main() {
-    bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
-        ServiceName: "my-service",
-        Streams: []bootstrap.StreamConfig{
-            {StreamName: shared.StreamDomainDiscoveryQueue, ConsumerGroup: my_pkg.GroupMyService},
-        },
-        Factory: func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (bootstrap.ConsumerStarter, error) {
-            return my_pkg.NewConsumer(redisClient, logger), nil
-        },
-    })
-}
-```
-
-**Mode B: Multi-stream (service handles own consumer groups):**
-
-Services listed as "RunSimple (manual)" in SERVICE_REGISTRY.md use this mode. The service creates its own consumer groups inside `consumer.go`'s `Start()` method. Use when:
-- Service consumes from multiple streams (nuclei)
-- Different start positions per stream (`$` on triggers, `0` on results)
-
-```go
-func main() {
-    bootstrap.RunSimple(bootstrap.SimpleServiceConfig{
-        ServiceName: "my-scanner",
-        Factory: func(cfg *config.Config, redisClient *redis.Client, logger *zap.Logger) (bootstrap.ConsumerStarter, error) {
-            return my_pkg.NewConsumer(redisClient, logger), nil
-        },
-    })
-}
-```
-
-### What bootstrap provides
-
-| Feature | Run() | RunSimple() |
-|---------|-------|-------------|
-| Config loading | Yes | Yes |
-| Zap logger | Yes | Yes |
-| OpenTelemetry | Yes | Yes |
-| Redis client | Yes | Yes |
-| MongoDB | Yes | No |
-| Consumer group creation | Yes | If `Streams` specified |
-| Graceful shutdown | Yes | Yes |
+| Feature | Notes |
+|---------|-------|
+| Config loading | `config.Load()` (reads `.env` when present) |
+| Zap logger | one logger; each component gets a `component` field |
+| OpenTelemetry | `telemetry.InitTracing()` once; opt-in via `OTEL_ENABLED` |
+| Redis client | one shared `*redis.Client` |
+| MongoDB | one shared `*mongo.Database`; only ingestion and the scan coordinator write |
+| Indexes | `mongox.EnsureIndexes()` before any component starts |
+| Graceful shutdown | SIGINT/SIGTERM cancel the shared context; `main` waits for every component |

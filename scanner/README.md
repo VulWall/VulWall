@@ -1,6 +1,12 @@
-# VulWall NightWatch
+# VulWall scanner (NightWatch)
 
-Security asset discovery and vulnerability scanning platform built with Go microservices.
+Security asset discovery and vulnerability scanning engine for VulWall. All
+components run in one Go binary, `nightwatch`, and talk to each other over
+Redis streams. Results are stored in MongoDB and shown by the web app in
+`../web`.
+
+To run the whole product, use the repository-root `docker-compose.yml` (see
+the root README). This file is for working on the scanner itself.
 
 ## Architecture
 
@@ -9,7 +15,7 @@ Security asset discovery and vulnerability scanning platform built with Go micro
 │                         NightWatch Pipeline                              │
 └─────────────────────────────────────────────────────────────────────────┘
 
-SCAN COORDINATOR (automated scheduling)
+SCAN COORDINATOR (cron schedule + scans queued by the web app in MongoDB)
     │
     ├─→ domain_discovery_queue ─→ Domain Discovery (subfinder)
     │                                    │
@@ -34,65 +40,72 @@ SCAN COORDINATOR (automated scheduling)
                                          └─→ port_scan_triggers
 
 ACTIVE RECON SCANNERS (consume from scan triggers)
-    ├─→ Nuclei Scanner ─→ security_findings ─→ Findings Ingestion
-    ├─→ TestSSL Scanner ─→ security_findings ─→ Findings Ingestion
-    └─→ JS Dependency Scanner ─→ security_findings ─→ Findings Ingestion
+    ├─→ Nuclei, TestSSL, JS Dependency, HTTP Header, Email Security
+    └─→ security_findings ─→ Findings Ingestion ─→ findings (MongoDB)
+                                    └─→ kb_generation_queue ─→ KB engine (optional)
 
-DISCOVERY ENRICHMENT (WAF + IP Geolocation)
+DISCOVERY ENRICHMENT (WAF, cloud, IP geolocation)
     └─→ discovery_enrichment_queue ─→ Enrichment ─→ Enrichment Ingestion
 ```
 
-## Services
+## Components
 
-| Service | Purpose | Input Stream | Output Stream |
+All of these run as goroutines in the `nightwatch` process
+(`src/cmd/nightwatch/main.go`).
+
+| Component | Purpose | Input Stream | Output Stream |
 |---------|---------|--------------|---------------|
-| **scan-coordinator** | Automated scan scheduling | - | domain/ip queues |
+| **scan-coordinator** | Cron scans, queued-scan poller, scan monitor | MongoDB `scans` | domain/ip queues |
 | **domain-discovery** | Subdomain discovery (subfinder) | domain_discovery_queue | domain_discovery_results |
 | **port-discovery** | TCP port scanning | ip_discovery_queue | ip_discovery_results |
-| **ingestion** | MongoDB persistence (5 slices) | multiple | multiple |
+| **ingestion** | MongoDB persistence (6 slices) | multiple | multiple |
 | **nuclei-scanner** | Vulnerability scanning | domain/port_scan_triggers | security_findings |
 | **testssl-scanner** | TLS/SSL analysis | domain_scan_triggers | security_findings |
-| **js-dependency-scanner** | JS library vulnerabilities | domain_scan_triggers | security_findings |
-| **discovery-enrichment** | WAF + IP geolocation | discovery_enrichment_queue | discovery_enrichment_results |
+| **js-dependency-scanner** | JS library vulnerabilities (retire.js) | domain_scan_triggers | security_findings |
+| **http-header-scanner** | Security header checks | domain_scan_triggers | security_findings |
+| **email-security-scanner** | SPF / DMARC / DKIM checks | domain_scan_triggers | security_findings |
+| **discovery-enrichment** | WAF, cloud and IP geolocation (DB-IP Lite) | discovery_enrichment_queue | discovery_enrichment_results |
+| **knowledge-base-engine** | AI remediation guidance (only with `ANTHROPIC_API_KEY`) | kb_generation_queue | kb_generation_results |
 
-## Quick Start
+## Development
 
 ### Prerequisites
 
-- Go 1.23+
-- Docker & Docker Compose
-- Cloud Redis (Redis Cloud, etc.)
-- Cloud MongoDB (Atlas, etc.)
+- Go (version in `src/go.mod`)
+- Redis 7 and MongoDB 7 (for example `docker compose up -d mongo redis` from the
+  repo root, with ports published by an override file, or local installs)
+- For a full local scan: `nuclei`, `testssl.sh` and `retire` on `PATH`. The
+  container image has all of them; without them the matching scanners log
+  errors and the rest of the pipeline still runs.
 
-### Run Locally
+### Build, test, run
 
 ```bash
-# Build all services
-make build
-
-# Run discovery services
-make run-domain-discovery
-make run-port-discovery
-
-# Run ingestion (required)
-make run-ingestion
-
-# Run active recon scanners
-make run-nuclei-scanner
-make run-testssl-scanner
-
-# Run scan coordinator (automated scans)
-make run-scan-coordinator
+make build          # src/bin/nightwatch
+make test
+make vet
+make run            # go run ./cmd/nightwatch (reads .env in src/ if present)
 ```
+
+### Container image
+
+```bash
+docker build -t ghcr.io/vulwall/scanner ./     # from scanner/
+```
+
+The image runs as a non-root user. Volumes: `/data/nuclei-templates` and
+`/data/geo` (DB-IP Lite country and ASN databases, downloaded on start).
+`nightwatch healthcheck` is the container health check.
 
 ## Configuration
 
-Environment variables (`.env`):
+See the Configuration table in [CLAUDE.md](CLAUDE.md) and the repo-root
+`.env.example`. Minimal local `.env`:
 
 ```bash
-REDIS_URI=redis://user:pass@host:port/db
-MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/db
-ENVIRONMENT=production
+REDIS_URI=redis://localhost:6379/0
+MONGO_URI=mongodb://localhost:27017
+MONGO_DB=vulwall
 # Scanners refuse private, loopback and other reserved addresses (including
 # DNS answers that point there). Set to true only to scan internal networks.
 ALLOW_PRIVATE_TARGETS=false
@@ -101,28 +114,20 @@ ALLOW_PRIVATE_TARGETS=false
 ## Project Structure
 
 ```
-src/                         # Go source code
-├── cmd/
-│   ├── discoveries/
-│   │   ├── domain-discovery/    # subfinder subdomain discovery
-│   │   └── port-discovery/      # TCP port scanner
-│   ├── active_recon/
-│   │   ├── nuclei-scanner/      # Nuclei vulnerability scanner
-│   │   ├── testssl-scanner/     # TLS/SSL scanner
-│   │   ├── js-dependency-scanner/  # JS vulnerability scanner
-│   │   └── discovery-enrichment/   # WAF + geolocation
-│   ├── ingestion/               # MongoDB persistence orchestrator
-│   └── scan-coordinator/        # Automated scan scheduler
+Dockerfile                   # The scanner image
+docker/entrypoint.sh         # Geo DB download, then exec nightwatch
+src/
+├── cmd/nightwatch/          # The single binary
 ├── internal/
-│   ├── core/                    # Shared infrastructure (bootstrap, config, redis, mongo)
-│   ├── shared/                  # Shared models and constants
-│   ├── discoveries/             # Discovery service implementations
-│   ├── active_recon/            # Active recon scanner implementations
-│   ├── ingestion/               # Ingestion slice implementations
-│   └── scan_coordinator/        # Scan coordinator implementation
+│   ├── core/                # config, logger, redis, mongo, telemetry
+│   ├── shared/              # Shared models and constants
+│   ├── scan_coordinator/    # Scheduler, queued-scan poller, scan monitor
+│   ├── discoveries/         # Domain and port discovery
+│   ├── active_recon/        # Scanners and discovery enrichment
+│   ├── enrichers/           # Knowledge-base engine
+│   └── ingestion/           # MongoDB persistence slices
 ├── go.mod
 └── go.sum
-ops/                         # Dockerfiles and per-service compose files
 ```
 
 ## MongoDB Collections
@@ -130,23 +135,14 @@ ops/                         # Dockerfiles and per-service compose files
 - **assets** - User-added assets to scan (managed via UI)
 - **discoveries** - Scan results (domains, subdomains, IPs, ports) with `org_id`
 - **findings** - Security vulnerabilities from scanners
-- **organizations** - Org settings with `scan_interval_days`
-- **scans** - Scan execution records
+- **organizations** - Org settings with `subscription_settings.scan_cron` (created by the web app)
+- **scans** - Scan execution records (`queued` by the web app, claimed by the coordinator)
 
 ## Documentation
 
 - **[CLAUDE.md](CLAUDE.md)** — Compact entry point with critical rules and quick reference
-- **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** — All services, streams, consumer groups, scan monitor coverage
+- **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** — All components, streams, consumer groups, scan monitor coverage
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — Communication flows, design patterns, model ownership
-- **[docs/DATABASE.md](docs/DATABASE.md)** — Go models, MongoDB schemas, query examples
-- **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** — OpenTelemetry tracing patterns
-- **[docs/ADDING_SERVICES.md](docs/ADDING_SERVICES.md)** — How to add new services, scanners, enrichment types
-
-## Development
-
-```bash
-make build          # Build all services
-make test           # Run tests
-make fmt            # Format code
-make lint           # Run linter
-```
+- **[docs/DATABASE.md](docs/DATABASE.md)** — Go models, MongoDB schemas, scan lifecycle, finding fields
+- **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** — Optional OpenTelemetry tracing, logging
+- **[docs/ADDING_SERVICES.md](docs/ADDING_SERVICES.md)** — How to add new components, scanners, enrichment types

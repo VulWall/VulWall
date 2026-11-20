@@ -1,0 +1,8 @@
+# Build context is scanner/. Keep it small and free of local artefacts.
+**/.DS_Store
+**/.env
+src/bin/
+src/coverage.*
+src/data/
+**/*.mmdb
+docs/

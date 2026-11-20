@@ -11,7 +11,7 @@ const (
 	EnvRedisURI = "REDIS_URI"
 	// EnvMongoURI is the MongoDB connection string (e.g., mongodb://localhost:27017)
 	EnvMongoURI = "MONGO_URI"
-	// EnvMongoDB is the MongoDB database name (e.g., VulWall-Dev)
+	// EnvMongoDB is the MongoDB database name (default: vulwall)
 	EnvMongoDB = "MONGO_DB"
 
 	// ===========================================
@@ -36,16 +36,16 @@ const (
 	// OpenTelemetry / Tracing
 	// ===========================================
 
-	// EnvOTELEnabled enables/disables distributed tracing (true/false)
+	// EnvOTELEnabled enables distributed tracing (true/false, default false)
 	EnvOTELEnabled = "OTEL_ENABLED"
 	// EnvOTELTraceSampler is the sampling strategy (e.g., parentbased_always_on)
 	EnvOTELTraceSampler = "OTEL_TRACES_SAMPLER"
 	// EnvOTELTraceSamplerArg is the sampler argument (e.g., 0.1 for 10% sampling)
 	EnvOTELTraceSamplerArg = "OTEL_TRACES_SAMPLER_ARG"
-	// EnvOTELExporterEndpoint is the OTLP endpoint (e.g., api.honeycomb.io)
+	// EnvOTELExporterEndpoint is the OTLP/HTTP base endpoint (e.g., http://jaeger:4318).
+	// The exporter reads it, and OTEL_EXPORTER_OTLP_HEADERS, directly; it is
+	// listed here for logging only.
 	EnvOTELExporterEndpoint = "OTEL_EXPORTER_OTLP_ENDPOINT"
-	// EnvHoneycombAPIKey is the Honeycomb API key for observability
-	EnvHoneycombAPIKey = "HONEYCOMB_API_KEY"
 
 	// OpenTelemetry Batch Span Processor Configuration
 
@@ -64,14 +64,20 @@ const (
 
 	// EnvNucleiTemplateUpdateCron is the cron schedule for Nuclei template updates (default: 0 2 * * *)
 	EnvNucleiTemplateUpdateCron = "NUCLEI_TEMPLATE_UPDATE_CRON"
+	// EnvNucleiTemplatesDir is where nuclei templates are installed (default: $HOME/nuclei-templates)
+	EnvNucleiTemplatesDir = "NUCLEI_TEMPLATES_DIR"
+	// EnvNucleiWorkers is the number of concurrent nuclei processes, shared by both trigger streams (default: 2)
+	EnvNucleiWorkers = "NUCLEI_WORKERS"
 	// EnvNucleiIncludeTags is the comma-separated list of Nuclei template tags to include (empty = no filter)
 	EnvNucleiIncludeTags = "NUCLEI_INCLUDE_TAGS"
 	// EnvNucleiExcludeTags is the comma-separated list of Nuclei template tags to exclude (empty = no filter)
 	EnvNucleiExcludeTags = "NUCLEI_EXCLUDE_TAGS"
 	// EnvTestSSLConcurrency is the number of concurrent testssl.sh workers (default: 5)
 	EnvTestSSLConcurrency = "TESTSSL_CONCURRENCY"
-	// EnvIPEnrichmentDBPath is the path to MaxMind GeoIP MMDB file
+	// EnvIPEnrichmentDBPath is the path to the country MMDB file (e.g., DB-IP IP to Country Lite)
 	EnvIPEnrichmentDBPath = "IP_ENRICHMENT_DB_PATH"
+	// EnvIPASNDBPath is the path to the optional ASN MMDB file (e.g., DB-IP IP to ASN Lite); fills the ISP field
+	EnvIPASNDBPath = "IP_ASN_DB_PATH"
 	// EnvWAFRulesPath is the path to WAF detection rules JSON file
 	EnvWAFRulesPath = "WAF_RULES_PATH"
 	// EnvCloudDetectorEnabled enables/disables cloud provider detection (true/false)
@@ -82,24 +88,4 @@ const (
 	// targets (true/false, default false). Only enable it for self-hosted
 	// installs that intentionally scan internal networks.
 	EnvAllowPrivateTargets = "ALLOW_PRIVATE_TARGETS"
-
-	// ===========================================
-	// Webhooks
-	// ===========================================
-
-	// EnvDashboardWebhookURL is the Dashboard webhook URL for scan completion notifications (optional, empty = disabled)
-	EnvDashboardWebhookURL = "DASHBOARD_WEBHOOK_URL"
-	// EnvDashboardWebhookSecret is the shared HMAC secret used to sign webhook payloads.
-	// The signature is computed as HMAC-SHA256(secret, body) and sent in X-Webhook-Signature: sha256={hex}.
-	EnvDashboardWebhookSecret = "DASHBOARD_WEBHOOK_SECRET"
-
-	// ===========================================
-	// API Configuration
-	// ===========================================
-
-	// EnvAPIPort is the HTTP API server port (default: 8080)
-	EnvAPIPort = "API_PORT"
-	// EnvAPIKey is the bearer secret that callers must supply in the X-API-Key header
-	// to access protected endpoints (e.g. POST /api/scans). Empty = auth disabled (dev only).
-	EnvAPIKey = "NIGHTWATCH_API_KEY"
 )
