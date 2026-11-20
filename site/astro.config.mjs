@@ -27,6 +27,8 @@ export default defineConfig({
 			editLink: { baseUrl: 'https://github.com/VulWall/VulWall/edit/main/site/' },
 			credits: false,
 			components: { Hero: './src/components/Hero.astro' },
+			// One frame style for every code block, and long commands wrap instead of scrolling.
+			expressiveCode: { defaultProps: { frame: 'code', wrap: true, preserveIndent: true } },
 			head: [
 				{ tag: 'meta', attrs: { property: 'og:image', content: `${site}/og.png` } },
 				{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
