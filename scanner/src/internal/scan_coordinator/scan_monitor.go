@@ -189,7 +189,7 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 			}
 		}
 
-		complete, reason, timedOut := p.decideCompletion(scanAge, scan.LastActivityAt, quiescent, inFlight, now)
+		complete, reason := p.decideCompletion(scanAge, scan.LastActivityAt, quiescent, inFlight, now)
 		if !complete {
 			continue
 		}
@@ -202,8 +202,8 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 		if scan.LastActivityAt != nil {
 			logFields = append(logFields, zap.Duration("idle_for", now.Sub(*scan.LastActivityAt)))
 		}
-		if timedOut {
-			m.logger.Warn("Scan safety timeout reached, marking as done", logFields...)
+		if reason != shared.ScanCompletionPipelineQuiescent {
+			m.logger.Warn("Scan closed by a timeout before its pipeline drained; marking as done without reconciling findings", logFields...)
 		} else {
 			m.logger.Info("Scan complete, marking as done", logFields...)
 		}
@@ -215,7 +215,7 @@ func (m *ScanMonitor) checkAndMarkComplete(ctx context.Context) error {
 				attribute.String("scan.duration", scanAge.String()),
 			),
 		)
-		m.markDone(ctx, scan.ID, timedOut)
+		m.markDone(ctx, scan.ID, reason)
 	}
 
 	span.SetStatus(codes.Ok, "")
@@ -236,8 +236,7 @@ func scanStartTime(scan shared.Scan) time.Time {
 // decideCompletion is the pure completion decision for a single scan, factored out so the
 // full truth table can be unit-tested without Redis or MongoDB. Paths, in precedence order:
 //
-//  1. safety_timeout   — scanAge > safetyTimeout (3h). Force-complete; timedOut=true so
-//     finding resolution is skipped (ingestion may still be incomplete).
+//  1. safety_timeout   — scanAge > safetyTimeout (3h). Force-complete.
 //  2. pipeline_quiescent — the scan has run past minRuntime, ingestion has produced work
 //     and been quiet for settleGrace, AND every scan-pipeline stream/group has drained
 //     (no pending AND no undelivered entries).
@@ -248,22 +247,44 @@ func scanStartTime(scan shared.Scan) time.Time {
 //     in-flight guard it was closed here, and its late results arrived after finding
 //     resolution.
 //
+// Only pipeline_quiescent means the scan saw everything it was going to see. Both timeouts
+// close a scan whose pipeline had not drained, so they never reconcile findings (see
+// reconcileFindings).
+//
 // A scan that never produced any activity (LastActivityAt == nil) is intentionally closed only
 // by the safety timeout — we never want to complete a scan that has shown no sign of work.
-func (p completionPolicy) decideCompletion(scanAge time.Duration, lastActivityAt *time.Time, quiescent, workInFlight bool, now time.Time) (complete bool, reason string, timedOut bool) {
+func (p completionPolicy) decideCompletion(scanAge time.Duration, lastActivityAt *time.Time, quiescent, workInFlight bool, now time.Time) (complete bool, reason string) {
 	if scanAge > p.safetyTimeout {
-		return true, "safety_timeout", true
+		return true, shared.ScanCompletionSafetyTimeout
 	}
 
 	if quiescent && p.quiescenceGuardsMet(scanAge, lastActivityAt, now) {
-		return true, "pipeline_quiescent", false
+		return true, shared.ScanCompletionPipelineQuiescent
 	}
 
 	if !workInFlight && p.idleGuardsMet(scanAge, lastActivityAt, now) {
-		return true, "idle_timeout", false
+		return true, shared.ScanCompletionIdleTimeout
 	}
 
-	return false, "", false
+	return false, ""
+}
+
+// reconcileFindings decides whether a closing scan may resolve the findings it did not see
+// again. A false resolution tells a customer an unfixed vulnerability is fixed, so every
+// doubt keeps findings open: only a pipeline_quiescent close of a scan that no stage marked
+// degraded and that discovered something reconciles. skip names the reason when it does not.
+func reconcileFindings(completionReason, degradedReason string, totalDiscoveries int) (ok bool, skip string) {
+	switch {
+	case completionReason != shared.ScanCompletionPipelineQuiescent:
+		return false, "closed by " + completionReason + " before the pipeline drained"
+	case degradedReason != "":
+		return false, "scan degraded: " + degradedReason
+	case totalDiscoveries == 0:
+		// A scan with zero discoveries produced no evidence and must never mass-resolve the
+		// previous scan's real findings.
+		return false, "scan has zero discoveries"
+	}
+	return true, ""
 }
 
 // quiescenceGuardsMet reports whether a scan is old enough and has been quiet long enough that
@@ -440,26 +461,41 @@ func isNoSuchKeyErr(err error) bool {
 	return err != nil && err.Error() == "ERR no such key"
 }
 
-// markDone marks a scan as done and resolves disappeared findings. The web UI
-// polls the scan document for the status change.
-// When timedOut is true, finding resolution is skipped because ingestion may be incomplete.
-func (m *ScanMonitor) markDone(ctx context.Context, scanID string, timedOut bool) error {
-	// Compute scan statistics before marking as done
-	stats, resolvedFindingIDs, err := m.computeStats(ctx, scanID)
+// markDone marks a scan as done with its completion reason and, when reconcileFindings
+// allows it, resolves the findings the scan did not see again. The web UI polls the scan
+// document for the status change.
+func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error {
+	// Read the scan now, not from the monitor tick's listing: a degraded_reason that ingestion
+	// recorded after that listing, but before the pipeline read as drained, must count.
+	var scan shared.Scan
+	stats, resolvedFindingIDs := &shared.ScanStats{}, []string(nil)
+	err := m.db.Collection(shared.CollectionScans).FindOne(ctx, bson.M{"_id": scanID}).Decode(&scan)
+	if err == nil {
+		stats, resolvedFindingIDs, err = m.computeStats(ctx, scan)
+	}
 	if err != nil {
 		m.logger.Error("Failed to compute scan statistics",
 			zap.String("scan_id", scanID),
 			zap.Error(err),
 		)
-		// Continue with marking scan as done even if stats computation fails
-		stats = &shared.ScanStats{} // Use empty stats as fallback
+		// Continue with marking scan as done even if stats computation fails. The empty
+		// stats have zero discoveries, so the findings are not reconciled.
+		stats = &shared.ScanStats{}
 		resolvedFindingIDs = nil
+	}
+
+	reconcile, skip := reconcileFindings(reason, scan.DegradedReason, stats.TotalDiscoveries)
+	if !reconcile {
+		// The resolved count would only say what a complete scan might have resolved.
+		stats.ResolvedFindings = 0
 	}
 
 	now := time.Now()
 	update := bson.M{
 		"$set": bson.M{
 			"status":                     shared.StatusDone,
+			"completion_reason":          reason,
+			"findings_reconciled":        reconcile,
 			"completed_at":               now,
 			"updated_at":                 now,
 			"stats.total_discoveries":    stats.TotalDiscoveries,
@@ -487,41 +523,44 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID string, timedOut bool
 		return err
 	}
 
-	if result.ModifiedCount > 0 {
-		m.logger.Info("Scan marked as done",
-			zap.String("scan_id", scanID),
-			zap.Time("completed_at", now),
-		)
+	if result.ModifiedCount == 0 {
+		return nil
+	}
+	m.logger.Info("Scan marked as done",
+		zap.String("scan_id", scanID),
+		zap.String("completion_reason", reason),
+		zap.Bool("findings_reconciled", reconcile),
+		zap.Time("completed_at", now),
+	)
 
-		// Mark disappeared findings as resolved. Skip on timeout (ingestion may be
-		// incomplete) and skip when the scan discovered nothing — a scan with zero
-		// discoveries has produced no evidence and must never mass-resolve the prior
-		// scan's real findings (belt-and-suspenders against a premature completion).
-		switch {
-		case timedOut:
-			m.logger.Warn("Skipping finding resolution for timed-out scan",
-				zap.String("scan_id", scanID),
-				zap.Int("would_resolve", len(resolvedFindingIDs)),
-			)
-		case stats.TotalDiscoveries == 0:
-			m.logger.Warn("Skipping finding resolution for scan with zero discoveries",
-				zap.String("scan_id", scanID),
-				zap.Int("would_resolve", len(resolvedFindingIDs)),
-			)
-		default:
-			m.resolveDisappearedFindings(ctx, scanID, resolvedFindingIDs)
-		}
+	if !reconcile {
+		m.logger.Warn("Skipping finding resolution",
+			zap.String("scan_id", scanID),
+			zap.String("why", skip),
+			zap.Int("would_resolve", len(resolvedFindingIDs)),
+		)
+		return nil
 	}
 
+	if err := m.resolveDisappearedFindings(ctx, scanID, resolvedFindingIDs); err != nil {
+		// The findings stay open; do not claim the scan reconciled them.
+		if _, uerr := m.db.Collection(shared.CollectionScans).UpdateOne(ctx,
+			bson.M{"_id": scanID},
+			bson.M{"$set": bson.M{"findings_reconciled": false, "stats.resolved_findings": 0}},
+		); uerr != nil {
+			m.logger.Error("Failed to record that findings were not reconciled",
+				zap.String("scan_id", scanID), zap.Error(uerr))
+		}
+	}
 	return nil
 }
 
 // resolveDisappearedFindings bulk-updates findings that were present in the previous scan
 // but absent in the current scan, marking them as resolved. This is best-effort: errors
-// are logged but do not fail the scan completion.
-func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scanID string, resolvedFindingIDs []string) {
+// are logged and returned, but do not fail the scan completion.
+func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scanID string, resolvedFindingIDs []string) error {
 	if len(resolvedFindingIDs) == 0 {
-		return
+		return nil
 	}
 
 	ctx, span := m.tracer.Start(ctx, "resolve_disappeared_findings",
@@ -550,7 +589,7 @@ func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scanID str
 		)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to resolve findings")
-		return
+		return err
 	}
 
 	m.logger.Info("Marked findings as resolved",
@@ -567,4 +606,5 @@ func (m *ScanMonitor) resolveDisappearedFindings(ctx context.Context, scanID str
 		),
 	)
 	span.SetStatus(codes.Ok, "")
+	return nil
 }

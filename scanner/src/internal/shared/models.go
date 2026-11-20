@@ -238,6 +238,14 @@ type Scan struct {
 	CompletedAt    *time.Time `json:"completed_at,omitempty" bson:"completed_at,omitempty"`
 	StatusReason   string     `json:"status_reason,omitempty" bson:"status_reason,omitempty"` // Why a scan ended "failed", e.g. "interrupted_by_restart"
 	LastActivityAt *time.Time `json:"last_activity_at,omitempty" bson:"last_activity_at,omitempty"` // Updated by ingestion services on each batch
+	// CompletionReason is how the scan was closed: ScanCompletion* or ScanReasonInterruptedByRestart.
+	CompletionReason string `json:"completion_reason,omitempty" bson:"completion_reason,omitempty"`
+	// FindingsReconciled is true only when the close resolved the findings this scan did not
+	// see again. Nil on scans closed before the field existed.
+	FindingsReconciled *bool `json:"findings_reconciled,omitempty" bson:"findings_reconciled,omitempty"`
+	// DegradedReason is set by ingestion when a stage reported that the scan's view is
+	// incomplete (e.g. ScanDegradedDNSFailures); such a scan does not reconcile findings.
+	DegradedReason string `json:"degraded_reason,omitempty" bson:"degraded_reason,omitempty"`
 	CreatedAt      time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at" bson:"updated_at"`
 

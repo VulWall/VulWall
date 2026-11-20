@@ -13,13 +13,8 @@ import (
 // computeStats computes scan statistics by comparing current scan results with the previous completed scan.
 // Returns the stats and the list of finding IDs that were resolved (present in previous scan but absent in current).
 // The resolved finding IDs are used by markDone to bulk-update their status in MongoDB.
-func (m *ScanMonitor) computeStats(ctx context.Context, scanID string) (*shared.ScanStats, []string, error) {
-	// 1. Fetch current scan to get org_id and created_at
-	var currentScan shared.Scan
-	err := m.db.Collection(shared.CollectionScans).FindOne(ctx, bson.M{"_id": scanID}).Decode(&currentScan)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch current scan: %w", err)
-	}
+func (m *ScanMonitor) computeStats(ctx context.Context, currentScan shared.Scan) (*shared.ScanStats, []string, error) {
+	scanID := currentScan.ID
 
 	m.logger.Debug("Computing stats for scan",
 		zap.String("scan_id", scanID),
@@ -38,11 +33,15 @@ func (m *ScanMonitor) computeStats(ctx context.Context, scanID string) (*shared.
 		return nil, nil, fmt.Errorf("failed to get current finding IDs: %w", err)
 	}
 
-	// 4. Find previous completed scan for this organization
+	// 4. Find previous completed scan for this organization. A scan that did not reconcile
+	// findings saw only part of the attack surface, so it is no baseline: comparing with it
+	// would leave findings it missed open forever and count them as new. Scans closed before
+	// findings_reconciled existed have no field and still match.
 	filter := bson.M{
-		"org_id":     currentScan.OrgID,
-		"status":     shared.StatusDone,
-		"created_at": bson.M{"$lt": currentScan.CreatedAt},
+		"org_id":              currentScan.OrgID,
+		"status":              shared.StatusDone,
+		"findings_reconciled": bson.M{"$ne": false},
+		"created_at":          bson.M{"$lt": currentScan.CreatedAt},
 	}
 	opts := options.FindOne().SetSort(bson.D{{Key: "created_at", Value: -1}})
 

@@ -58,7 +58,6 @@ func TestDecideCompletion(t *testing.T) {
 		inFlight     bool
 		wantComplete bool
 		wantReason   string
-		wantTimedOut bool
 	}{
 		{
 			name:         "safety timeout dominates regardless of everything else",
@@ -67,7 +66,6 @@ func TestDecideCompletion(t *testing.T) {
 			quiescent:    false,
 			wantComplete: true,
 			wantReason:   "safety_timeout",
-			wantTimedOut: true,
 		},
 		{
 			name:         "REGRESSION: young scan reading quiescent is NOT completed",
@@ -83,7 +81,6 @@ func TestDecideCompletion(t *testing.T) {
 			quiescent:    true,
 			wantComplete: true,
 			wantReason:   "pipeline_quiescent",
-			wantTimedOut: false,
 		},
 		{
 			name:         "quiescent but activity within settle grace -> not complete",
@@ -99,7 +96,6 @@ func TestDecideCompletion(t *testing.T) {
 			quiescent:    false,
 			wantComplete: true,
 			wantReason:   "idle_timeout",
-			wantTimedOut: false,
 		},
 		{
 			name:         "idle past timeout but a discovery job is in flight -> not complete",
@@ -116,7 +112,6 @@ func TestDecideCompletion(t *testing.T) {
 			inFlight:     true,
 			wantComplete: true,
 			wantReason:   "safety_timeout",
-			wantTimedOut: true,
 		},
 		{
 			name:         "not quiescent, idle below timeout -> not complete",
@@ -138,7 +133,7 @@ func TestDecideCompletion(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			complete, reason, timedOut := defaultCompletionPolicy().decideCompletion(tt.scanAge, tt.lastActivity, tt.quiescent, tt.inFlight, now)
+			complete, reason := defaultCompletionPolicy().decideCompletion(tt.scanAge, tt.lastActivity, tt.quiescent, tt.inFlight, now)
 			if complete != tt.wantComplete {
 				t.Fatalf("complete = %v, want %v (reason=%q)", complete, tt.wantComplete, reason)
 			}
@@ -148,10 +143,58 @@ func TestDecideCompletion(t *testing.T) {
 			if reason != tt.wantReason {
 				t.Errorf("reason = %q, want %q", reason, tt.wantReason)
 			}
-			if timedOut != tt.wantTimedOut {
-				t.Errorf("timedOut = %v, want %v", timedOut, tt.wantTimedOut)
+		})
+	}
+}
+
+// TestReconcileFindings pins which closes may resolve findings. Only a drained pipeline of a
+// scan that no stage marked degraded and that discovered something reconciles; a timeout
+// close (the pipeline had NOT drained) must never resolve a finding it merely did not reach.
+func TestReconcileFindings(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		reason      string
+		degraded    string
+		discoveries int
+		want        bool
+	}{
+		{"pipeline quiescent reconciles", shared.ScanCompletionPipelineQuiescent, "", 12, true},
+		{"idle timeout never reconciles", shared.ScanCompletionIdleTimeout, "", 12, false},
+		{"safety timeout never reconciles", shared.ScanCompletionSafetyTimeout, "", 12, false},
+		{"degraded quiescent scan does not reconcile", shared.ScanCompletionPipelineQuiescent, shared.ScanDegradedDNSFailures, 12, false},
+		{"zero discoveries does not reconcile", shared.ScanCompletionPipelineQuiescent, "", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, skip := reconcileFindings(tt.reason, tt.degraded, tt.discoveries)
+			if got != tt.want {
+				t.Fatalf("reconcileFindings(%q, %q, %d) = %v (%s), want %v",
+					tt.reason, tt.degraded, tt.discoveries, got, skip, tt.want)
+			}
+			if !got && skip == "" {
+				t.Errorf("no skip reason for a scan that does not reconcile")
 			}
 		})
+	}
+}
+
+// TestIdleTimeoutCloseDoesNotReconcile ties the two decisions together: the idle backstop
+// fires only when the pipeline has not drained, and that close must leave findings open.
+func TestIdleTimeoutCloseDoesNotReconcile(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
+	idleSince := now.Add(-(ScanIdleTimeout + time.Minute))
+	complete, reason := defaultCompletionPolicy().decideCompletion(
+		ScanMinRuntime+ScanIdleTimeout+time.Minute, &idleSince, false, false, now)
+	if !complete || reason != shared.ScanCompletionIdleTimeout {
+		t.Fatalf("decideCompletion = %v %q, want an idle_timeout close", complete, reason)
+	}
+	if ok, _ := reconcileFindings(reason, "", 50); ok {
+		t.Fatal("an idle_timeout close reconciles findings, want it to leave them open")
 	}
 }
 

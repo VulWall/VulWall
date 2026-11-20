@@ -19,6 +19,19 @@ const (
 	// so the scan is closed as failed and its findings are left untouched.
 	ScanReasonInterruptedByRestart = "interrupted_by_restart"
 
+	// Scan completion reasons, stored in scans.completion_reason. Only a
+	// pipeline_quiescent close can reconcile findings (resolve the ones the
+	// scan did not see again); every other close leaves findings untouched.
+	ScanCompletionPipelineQuiescent = "pipeline_quiescent"
+	ScanCompletionIdleTimeout       = "idle_timeout"
+	ScanCompletionSafetyTimeout     = "safety_timeout"
+
+	// ScanDegradedDNSFailures is the scans.degraded_reason recorded when
+	// domain discovery could not resolve enough names (or the root domain)
+	// to trust the scan's view of the attack surface. A degraded scan does
+	// not reconcile findings.
+	ScanDegradedDNSFailures = "dns_failures"
+
 	// Scan Type
 	ScanTypeScheduled = "scheduled"
 	ScanTypeRequested = "requested"

@@ -385,6 +385,8 @@ func TestCloseInterruptedScansFailsOnlyStartedScans(t *testing.T) {
 		set := store.set[id]
 		if store.scans[id].Status != shared.StatusFailed ||
 			set["status_reason"] != shared.ScanReasonInterruptedByRestart ||
+			set["completion_reason"] != shared.ScanReasonInterruptedByRestart ||
+			set["findings_reconciled"] != false ||
 			set["completed_at"] == nil {
 			t.Errorf("%s: status = %q set = %+v, want failed/interrupted_by_restart with completed_at",
 				id, store.scans[id].Status, set)
