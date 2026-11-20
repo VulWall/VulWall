@@ -96,7 +96,7 @@ public class ScansService(
         return BuildLiveScanStatus(allScans, GetScheduledScanDates(scanCron), uniqueIssueCounts);
     }
 
-    private static LiveScanStatusViewModel BuildLiveScanStatus(
+    internal static LiveScanStatusViewModel BuildLiveScanStatus(
         List<Scan> allScans,
         List<string> scheduledDates,
         IReadOnlyDictionary<string, int>? uniqueIssueCounts = null)
@@ -119,12 +119,16 @@ public class ScansService(
             {
                 ScanStatus.Running => "Scanning…",
                 ScanStatus.Queued => "Queued",
-                ScanStatus.Done => uniqueIssueCounts != null && uniqueIssueCounts.TryGetValue(s.Id, out var unique)
+                ScanStatus.Done => (uniqueIssueCounts != null && uniqueIssueCounts.TryGetValue(s.Id, out var unique)
                     ? $"{unique} issues ({s.Stats.TotalFindings} raw)"
-                    : $"{s.Stats.TotalFindings} issues",
+                    : $"{s.Stats.TotalFindings} issues")
+                    + (s.FindingsReconciled == false ? " · partial scan" : string.Empty),
                 ScanStatus.Failed => s.StatusReason == Scan.InterruptedByRestart ? "Interrupted by restart" : "Failed",
                 _ => string.Empty
             },
+            MetaHint = s.Status == ScanStatus.Done && s.FindingsReconciled == false
+                ? "This scan did not check everything, so issues it did not see were left open."
+                : null,
             IsLive = s.Status == ScanStatus.Running
         }).ToList();
 

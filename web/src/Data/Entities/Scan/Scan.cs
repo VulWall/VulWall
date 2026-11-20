@@ -41,6 +41,24 @@ public class Scan : IEntity<string>, IOrganizationEntity
     /// <summary>The scanner restarted while this scan ran; it was closed as failed and resolved no findings.</summary>
     public const string InterruptedByRestart = "interrupted_by_restart";
 
+    /// <summary>How the scanner closed the scan: pipeline_quiescent, idle_timeout, safety_timeout or interrupted_by_restart.</summary>
+    [BsonElement("completion_reason")]
+    [BsonIgnoreIfNull]
+    public string? CompletionReason { get; set; }
+
+    /// <summary>
+    /// True when the scan resolved the findings it did not see again. False for a partial scan
+    /// (timeout, restart, DNS failures): its findings were left open. Null on older scans.
+    /// </summary>
+    [BsonElement("findings_reconciled")]
+    [BsonIgnoreIfNull]
+    public bool? FindingsReconciled { get; set; }
+
+    /// <summary>Why the scanner judged the scan's view incomplete, e.g. "dns_failures".</summary>
+    [BsonElement("degraded_reason")]
+    [BsonIgnoreIfNull]
+    public string? DegradedReason { get; set; }
+
     [BsonElement("targeted_assets")]
     public List<TargetedAsset> TargetedAssets { get; set; } = new();
 
