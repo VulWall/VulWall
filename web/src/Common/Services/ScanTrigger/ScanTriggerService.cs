@@ -19,19 +19,21 @@ public enum TriggerScanResult
 public class ScanTriggerService(ScansRepository scansRepository)
 {
     /// <summary>
-    /// Bound on how old an unfinished scan may be and still count as in progress, so an
-    /// orphaned scan record (scanner crashed mid-scan) does not block new scans forever.
+    /// Bound on how old a pending or running scan may be and still count as in progress, so an
+    /// orphaned scan record does not block new scans forever.
     /// </summary>
     private static readonly TimeSpan InProgressWindow = TimeSpan.FromHours(24);
 
     /// <summary>
     /// A scan is in progress while it is queued (waiting for the scanner), pending or running.
+    /// A queued scan counts at any age: the scanner will still pick it up (for example when it
+    /// was down for a day), and queuing another one would only run the same scan twice.
     /// </summary>
     public static Expression<Func<Scan, bool>> InProgressPredicate(DateTime utcNow)
     {
         var cutoff = utcNow - InProgressWindow;
-        return s => (s.Status == ScanStatus.Queued || s.Status == ScanStatus.Pending || s.Status == ScanStatus.Running)
-                    && s.CreatedAt >= cutoff;
+        return s => s.Status == ScanStatus.Queued
+                    || ((s.Status == ScanStatus.Pending || s.Status == ScanStatus.Running) && s.CreatedAt >= cutoff);
     }
 
     public Task<bool> IsScanInProgressAsync() =>

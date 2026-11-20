@@ -547,7 +547,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 ### Scanner Link
 - **Trigger**: `ScanTriggerService` (Common) inserts a `scans` document with `status: "queued"`, `type: "requested"` and a string UUID `_id`. The scanner picks it up. There is no HTTP call to the scanner.
-- **In progress**: a scan for the org with status `queued`, `pending` or `running`, created in the last 24 hours (`ScanTriggerService.InProgressPredicate`). Use it for every "scan running" check.
+- **In progress**: a scan for the org with status `queued` (any age: the scanner always claims it eventually), or `pending`/`running` created in the last 24 hours (`ScanTriggerService.InProgressPredicate`). Use it for every "scan running" check.
 - **Completion**: the scanner sets `status: "done"` (`"completed"` is also read as `Done`). `ExecutiveSummaryPoller` checks every 30s, claims each finished scan atomically (`executive_summary_status`: `processing` → `done` | `skipped` | `failed`) and writes `executive_summary` when `ANTHROPIC_API_KEY` is set. `failed` is retried up to 3 attempts (`executive_summary_attempts`, backoff 5 then 30 min from `executive_summary_claimed_at`); `skipped` is claimed again once AI is enabled (within the 7-day window). Scans with scan `status: "failed"` (including `status_reason: "interrupted_by_restart"`) never get a summary. There is no webhook.
 
 ### AI Services

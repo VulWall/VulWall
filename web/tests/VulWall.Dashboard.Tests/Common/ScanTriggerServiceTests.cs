@@ -89,6 +89,16 @@ public class ScanTriggerServiceTests(MongoFixture mongo)
     }
 
     [Fact]
+    public async Task TriggerAsync_QueuedScanOlderThan24h_StillBlocks()
+    {
+        var (service, scans) = Create();
+        await scans.InsertOneAsync(ScanDoc("queued", DateTime.UtcNow.AddHours(-30)));
+
+        Assert.Equal(TriggerScanResult.AlreadyRunning, await service.TriggerAsync("a"));
+        Assert.Equal(1, await scans.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
+    }
+
+    [Fact]
     public async Task TriggerAsync_ScanInProgressForOtherOrg_DoesNotBlock()
     {
         var (service, scans) = Create();
