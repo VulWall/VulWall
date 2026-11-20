@@ -2,6 +2,8 @@ package nuclei_scanner
 
 import (
 	"context"
+	"net"
+	"net/url"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -191,6 +193,14 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		span.SetAttributes(attribute.Bool("scan.success", false))
 		return err
 	}
+	if err == nil {
+		// nuclei reports "no findings" also when the target stopped answering during the run
+		// (down, or a WAF that banned the scanner). Only a target that still accepts a
+		// connection afterwards makes the run evidence.
+		if rerr := shared.Reachable(ctx, reachAddrs(target.Target)...); rerr != nil {
+			err = fmt.Errorf("target not reachable after the run: %w", rerr)
+		}
+	}
 	if err != nil {
 		// A failed run is a result, not a handler error: it is recorded as coverage
 		// "error", so the scan resolves no nuclei finding on this target.
@@ -225,6 +235,22 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
 	}
 	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
+}
+
+// reachAddrs returns the host:port addresses that show a nuclei target is still up: the URL's
+// own port, or 443 and 80 for a bare host or IP.
+func reachAddrs(target string) []string {
+	if u, err := url.Parse(target); err == nil && u.Host != "" {
+		port := u.Port()
+		if port == "" {
+			port = map[string]string{"https": "443"}[u.Scheme]
+			if port == "" {
+				port = "80"
+			}
+		}
+		return []string{net.JoinHostPort(u.Hostname(), port)}
+	}
+	return []string{net.JoinHostPort(target, "443"), net.JoinHostPort(target, "80")}
 }
 
 // nucleiArgs builds the nuclei command line for one target.

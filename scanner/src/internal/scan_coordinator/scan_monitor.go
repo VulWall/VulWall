@@ -477,7 +477,10 @@ func (m *ScanMonitor) markDone(ctx context.Context, scanID, reason string) error
 
 	reconcile, skip := reconcileFindings(reason)
 	var decision resolutionDecision
-	if reconcile && scan.ID != "" {
+	if reconcile && scan.ID != "" && !slices.Contains(startedStatuses, scan.Status) {
+		// Another writer closed the scan (for example as failed): it resolves nothing.
+		reconcile, skip = false, "scan was already closed as "+scan.Status
+	} else if reconcile && scan.ID != "" {
 		decision, err = m.findingsToResolve(ctx, scan)
 		if err != nil {
 			m.logger.Error("Failed to select the findings to resolve",

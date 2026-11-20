@@ -56,7 +56,8 @@ func TestDegradedReason(t *testing.T) {
 		{"enumeration failed", "", subdomainResult{enumErr: enumErr}, shared.ScanDegradedSubdomainEnumFailed},
 		{"exactly 20% is tolerated", "", subdomainResult{names: 200, failures: 40}, ""},
 		{"just over 20% degrades", "", subdomainResult{names: 200, failures: 41}, shared.ScanDegradedDNSFailures},
-		{"small domain: no floor on the name count", "", subdomainResult{names: 2, failures: 1}, shared.ScanDegradedDNSFailures},
+		{"small domain: one stale new name is tolerated", "", subdomainResult{names: 2, failures: 1}, ""},
+		{"11 names, 3 failed degrades", "", subdomainResult{names: 11, failures: 3}, shared.ScanDegradedDNSFailures},
 		{"any failed known name degrades", "", subdomainResult{names: 200, failures: 1, knownFailures: 1}, shared.ScanDegradedDNSFailures},
 	}
 	for _, tt := range tests {

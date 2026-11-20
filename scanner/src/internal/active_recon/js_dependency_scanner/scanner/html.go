@@ -34,7 +34,7 @@ func FetchHTML(ctx context.Context, targetURL string, httpClient *http.Client, l
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+		return "", statusError(resp)
 	}
 
 	// Read entire response body (no limit per user requirements)
@@ -153,4 +153,14 @@ func SanitizeFilename(jsURL string) string {
 	}
 
 	return filename
+}
+
+// statusError is the error of a non-200 response. 404 and 410 are a definite "no such page"
+// (shared.ErrGone); any other status (403, 429, 5xx) may be a block or an outage, so it
+// leaves the check incomplete.
+func statusError(resp *http.Response) error {
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+		return fmt.Errorf("HTTP %d: %w", resp.StatusCode, shared.ErrGone)
+	}
+	return fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 }

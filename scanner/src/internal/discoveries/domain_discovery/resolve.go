@@ -15,10 +15,14 @@ import (
 // DNS_RESOLVE_CONCURRENCY is not set.
 const defaultDNSResolveConcurrency = 50
 
-// dnsDegradedFailurePercent: a discovery in which more than this percent of the lookups
-// failed is shown as degraded. Degradation is information for the user only (finding
-// resolution needs positive evidence), so there is no floor on the name count.
-const dnsDegradedFailurePercent = 20
+// A discovery is shown as degraded when a name that earlier scans saw failed to resolve, or
+// when more than dnsDegradedFailurePercent of more than dnsDegradedMinNames lookups failed.
+// Degradation is information for the user only (finding resolution needs positive evidence);
+// the floor keeps one broken passive-source name on a small domain from flagging every scan.
+const (
+	dnsDegradedMinNames       = 10
+	dnsDegradedFailurePercent = 20
+)
 
 // degradedReason picks the one reason a domain discovery reports for its root asset, or ""
 // when the discovery saw the whole attack surface. One reason per job keeps the signal
@@ -31,7 +35,8 @@ func degradedReason(rootReason string, res subdomainResult) string {
 		return shared.ScanDegradedPublishFailed
 	case res.enumErr != nil:
 		return shared.ScanDegradedSubdomainEnumFailed
-	case res.knownFailures > 0 || res.failures*100 > res.names*dnsDegradedFailurePercent:
+	case res.knownFailures > 0 ||
+		res.names > dnsDegradedMinNames && res.failures*100 > res.names*dnsDegradedFailurePercent:
 		return shared.ScanDegradedDNSFailures
 	}
 	return ""

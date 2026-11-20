@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -28,7 +29,8 @@ type downloadResult struct {
 	err      error
 }
 
-// DownloadFiles downloads JavaScript files in parallel using a worker pool
+// DownloadFiles downloads JavaScript files in parallel using a worker pool. It also returns
+// how many files failed to download for a reason other than a definite 404 or 410.
 // Uses 20 concurrent goroutines for maximum throughput
 // Implements retry logic with exponential backoff for transient failures
 func DownloadFiles(ctx context.Context, jsFiles []string, httpClient *http.Client, logger *zap.Logger) (string, []JSFileMetadata, int, error) {
@@ -86,7 +88,10 @@ func DownloadFiles(ctx context.Context, jsFiles []string, httpClient *http.Clien
 	failed := 0
 	for result := range results {
 		if result.err != nil {
-			failed++
+			// A script that is gone (404, 410) was checked: there is nothing to scan.
+			if !errors.Is(result.err, shared.ErrGone) {
+				failed++
+			}
 			logger.Debug("Failed to download JS file",
 				zap.String("url", result.metadata.URL),
 				zap.Error(result.err),
@@ -190,7 +195,7 @@ func downloadFile(ctx context.Context, url, filePath string, httpClient *http.Cl
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
+		return statusError(resp)
 	}
 
 	// Create file

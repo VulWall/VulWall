@@ -68,6 +68,12 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		span.SetAttributes(attribute.Bool("scan.success", false))
 		return err
 	}
+	if err == nil {
+		// Like nuclei, only a target that still answers after the run makes it evidence.
+		if rerr := shared.Reachable(ctx, target.Target); rerr != nil {
+			err = fmt.Errorf("target not reachable after the run: %w", rerr)
+		}
+	}
 	if err != nil {
 		// A failed run is a result, not a handler error: coverage "error" keeps every
 		// testssl finding on this target open.
