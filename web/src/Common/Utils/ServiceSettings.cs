@@ -39,4 +39,11 @@ public class ServiceSettings : EnvLoader
 
     [Env(Name = "NIGHTWATCH_WEBHOOK_SECRET", Required = false)]
     public string NightWatchWebhookSecret = string.Empty;
+
+    /// <summary>
+    /// Comma-separated IPs/CIDR ranges of reverse proxies whose X-Forwarded-* headers are trusted.
+    /// Empty means only loopback is trusted.
+    /// </summary>
+    [Env(Name = "TRUSTED_PROXIES", Required = false)]
+    public string TrustedProxies = string.Empty;
 }

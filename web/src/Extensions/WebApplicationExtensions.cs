@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.HttpOverrides;
+using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Middleware;
 
 namespace VulWall.Dashboard.Extensions;
@@ -17,9 +18,10 @@ public static partial class WebApplicationExtensions
             ForwardLimit = 1
         };
         // A reverse proxy is expected to terminate TLS and forward X-Forwarded-Proto/For headers.
-        // Known proxies/networks are cleared so any single upstream proxy is trusted (ForwardLimit=1).
-        forwardedHeadersOptions.KnownProxies.Clear();
-        forwardedHeadersOptions.KnownNetworks.Clear();
+        // Only loopback (the framework default) and the TRUSTED_PROXIES ranges are trusted, so a
+        // client that reaches the app directly cannot spoof its IP (rate limiting keys on it).
+        foreach (var network in TrustedProxies.Parse(ServiceSettings.Instance.TrustedProxies))
+            forwardedHeadersOptions.KnownIPNetworks.Add(network);
         app.UseForwardedHeaders(forwardedHeadersOptions);
 
         app.Use(async (context, next) =>

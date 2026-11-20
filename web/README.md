@@ -81,6 +81,7 @@ Environment variables:
 | `AUTH0_CLIENT_ID` | Auth0 application client ID |
 | `AUTH0_CLIENT_SECRET` | Auth0 application client secret |
 | `MONGO_URI` | MongoDB connection string (include DB name in path, e.g. `mongodb+srv://host/VulWall-Dev`) |
+| `TRUSTED_PROXIES` | Comma-separated IPs or CIDR ranges of reverse proxies whose `X-Forwarded-For`/`X-Forwarded-Proto` headers are trusted (e.g. `10.0.0.0/8`). Empty: only loopback is trusted |
 
 ## Documentation
 
