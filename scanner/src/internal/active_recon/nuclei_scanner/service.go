@@ -230,29 +230,29 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	}
 	if err != nil {
 		// A failed run is a result, not a handler error: it is recorded as coverage
-		// "error", so the scan resolves no nuclei finding on this target.
+		// "error", so the scan resolves no nuclei finding on this target. The matches the
+		// run did report are still real and are published below.
 		s.logger.Error("Nuclei scan failed",
 			zap.String("target", target.Target),
+			zap.Int("findings_count", len(findings)),
 			zap.Error(err),
 		)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(attribute.Bool("scan.success", false))
-		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
+	} else {
+		span.SetAttributes(attribute.Bool("scan.success", true))
+		span.SetStatus(codes.Ok, "")
+		s.logger.Info("Nuclei scan completed",
+			zap.String("target", target.Target),
+			zap.Int("findings_count", len(findings)),
+		)
 	}
-
 	span.SetAttributes(attribute.Int("findings.count", len(findings)))
-	span.SetAttributes(attribute.Bool("scan.success", true))
-	span.SetStatus(codes.Ok, "")
 
-	s.logger.Info("Nuclei scan completed",
-		zap.String("target", target.Target),
-		zap.Int("findings_count", len(findings)),
-	)
-
-	// Publish each finding, then the coverage that lists them. A failed publish is returned
-	// before the coverage, so the consumer retries the target and the scan never holds an
-	// "ok" for findings it did not receive.
+	// Publish each finding, then the coverage. A failed publish is returned before the
+	// coverage, so the consumer retries the target and the scan never holds an "ok" for
+	// findings it did not receive. Coverage "ok" lists the findings only for a complete run.
 	reported := make([]shared.FindingKey, 0, len(findings))
 	for _, nucleiOutput := range findings {
 		finding := s.convertToSecurityFinding(nucleiOutput, target)
@@ -260,6 +260,9 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 			return fmt.Errorf("publish nuclei finding %s: %w", nucleiOutput.TemplateID, err)
 		}
 		reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
+	}
+	if err != nil {
+		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
 	}
 	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
 }
@@ -360,6 +363,8 @@ func templatesDir() string {
 
 // runNucleiScan executes Nuclei scanner on the target. stdout carries the JSONL results,
 // stderr the log; a run is only evidence when runProblem finds nothing wrong in the log.
+// The results that parse are returned also with an error: a match from a run that did not
+// finish is still a match.
 func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([]NucleiOutput, error) {
 	cmd := execx.Command(ctx, "nuclei", nucleiArgs(target, severity)...)
 	var stdout, stderr bytes.Buffer
@@ -370,29 +375,31 @@ func (s *Service) runNucleiScan(ctx context.Context, target, severity string) ([
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	findings, parseErr := parseNucleiOutput(stdout.Bytes())
 	if err != nil {
 		// nuclei exits 0 also when it found nothing; any other exit is a failed run
 		// (for example exit 1 with "[FTL] Could not run nuclei: no templates provided").
-		return nil, fmt.Errorf("nuclei command failed: %w (stderr: %s)", err, logTail(stderr.Bytes()))
+		return findings, fmt.Errorf("nuclei command failed: %w (stderr: %s)", err, logTail(stderr.Bytes()))
 	}
 	if err := runProblem(target, stderr.Bytes()); err != nil {
 		s.logger.Debug("Nuclei run incomplete",
 			zap.String("target", target),
 			zap.String("stderr", logTail(stderr.Bytes())),
 		)
-		return nil, err
+		return findings, err
 	}
 	s.logger.Info("Nuclei run finished",
 		zap.String("target", target),
 		zap.String("summary", scanSummary(stderr.Bytes())),
 	)
-	return parseNucleiOutput(stdout.Bytes())
+	return findings, parseErr
 }
 
-// parseNucleiOutput parses nuclei's JSONL results. A line that does not parse may be a lost
-// finding, so it fails the run instead of being skipped.
+// parseNucleiOutput parses nuclei's JSONL results. It returns every line that parses; a line
+// that does not may be a lost finding, so it also returns an error that fails the run.
 func parseNucleiOutput(out []byte) ([]NucleiOutput, error) {
 	var findings []NucleiOutput
+	var firstErr error
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -400,11 +407,14 @@ func parseNucleiOutput(out []byte) ([]NucleiOutput, error) {
 		}
 		var nucleiOutput NucleiOutput
 		if err := json.Unmarshal([]byte(line), &nucleiOutput); err != nil {
-			return nil, fmt.Errorf("unreadable nuclei result line: %w", err)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("unreadable nuclei result line: %w", err)
+			}
+			continue
 		}
 		findings = append(findings, nucleiOutput)
 	}
-	return findings, nil
+	return findings, firstErr
 }
 
 // runProblem returns why a nuclei run that exited 0 is no evidence, or nil. Observed with

@@ -1,10 +1,12 @@
 package testssl_scanner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -77,28 +79,29 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 	}
 	if err != nil {
 		// A failed run is a result, not a handler error: coverage "error" keeps every
-		// testssl finding on this target open.
+		// testssl finding on this target open. The findings the run did write are still
+		// real and are published below.
 		s.logger.Error("testssl.sh scan failed",
 			zap.String("target", target.Target),
+			zap.Int("findings_count", len(findings)),
 			zap.Error(err),
 		)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(attribute.Bool("scan.success", false))
-		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
+	} else {
+		span.SetAttributes(attribute.Bool("scan.success", true))
+		span.SetStatus(codes.Ok, "")
+		s.logger.Info("testssl.sh scan completed",
+			zap.String("target", target.Target),
+			zap.Int("findings_count", len(findings)),
+		)
 	}
-
 	span.SetAttributes(attribute.Int("findings.count", len(findings)))
-	span.SetAttributes(attribute.Bool("scan.success", true))
-	span.SetStatus(codes.Ok, "")
 
-	s.logger.Info("testssl.sh scan completed",
-		zap.String("target", target.Target),
-		zap.Int("findings_count", len(findings)),
-	)
-
-	// Publish each finding, then the coverage that lists them. A failed publish is returned
-	// before the coverage, so the consumer retries the target.
+	// Publish each finding, then the coverage. A failed publish is returned before the
+	// coverage, so the consumer retries the target. Coverage "ok" lists the findings only
+	// for a complete run.
 	var reported []shared.FindingKey
 	for _, testSSLFinding := range findings {
 		finding := s.convertToSecurityFinding(testSSLFinding, target)
@@ -110,6 +113,9 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 			return fmt.Errorf("publish testssl finding %s: %w", testSSLFinding.ID, err)
 		}
 		reported = append(reported, shared.FindingKey{FindingType: finding.FindingType, Title: finding.Title})
+	}
+	if err != nil {
+		return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, nil, err))
 	}
 	return s.publishFinding(ctx, shared.TargetCoverage(findingSource, target, reported, nil))
 }
@@ -183,21 +189,22 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string, severity st
 	}
 
 	// testssl.sh writes the JSON file also when it stops early; only a run that provably
-	// checked everything is evidence (runComplete).
+	// checked everything is evidence (runComplete). The findings it wrote before it stopped
+	// are returned also then.
 	jsonData, readErr := os.ReadFile(tmpPath)
 	if readErr != nil && exitCode == 0 {
 		return nil, fmt.Errorf("failed to read JSON output: %w", readErr)
 	}
+	findings, parseErr := s.parseTestSSLOutput(jsonData)
 	if err := runComplete(exitCode, jsonData); err != nil {
 		s.logger.Debug("testssl.sh run incomplete",
 			zap.String("target", target),
 			zap.Int("exit_code", exitCode),
 			zap.String("output", tail(output)),
 		)
-		return nil, err
+		return findings, err
 	}
-
-	return s.parseTestSSLOutput(jsonData)
+	return findings, parseErr
 }
 
 // tail returns at most the last 500 bytes of b, for error messages.
@@ -208,32 +215,21 @@ func tail(b []byte) string {
 	return string(b)
 }
 
-// parseTestSSLOutput parses testssl.sh JSON output
+// parseTestSSLOutput returns the security issues (LOW and up) in the vulnerabilities and
+// headerResponse lists of testssl.sh's JSON output. It also returns the issues it read
+// before an error, so a file cut off mid-run still gives the findings written before the cut.
 func (s *Service) parseTestSSLOutput(output []byte) ([]TestSSLFinding, error) {
-	// testssl.sh with --jsonfile-pretty outputs JSON with metadata + scanResult array
-	// Format: { "Invocation": "...", "scanResult": [ { "vulnerabilities": [...], "headerResponse": [...] } ] }
-	if len(output) == 0 {
-		return []TestSSLFinding{}, nil
+	if len(bytes.TrimSpace(output)) == 0 {
+		return nil, nil
 	}
-
-	// Parse the full testssl.sh output structure
-	var testsslOutput TestSSLOutput
-	if err := json.Unmarshal(output, &testsslOutput); err != nil {
+	allFindings, err := readFindingLists(output)
+	if err != nil {
 		s.logger.Warn("Failed to parse testssl.sh JSON output",
 			zap.Error(err),
+			zap.Int("findings_read", len(allFindings)),
 			zap.String("output_preview", string(output[:min(len(output), 500)])),
 		)
-		return nil, fmt.Errorf("failed to parse testssl.sh JSON: %w", err)
-	}
-
-	// Collect findings from all scan results
-	var allFindings []TestSSLFinding
-	for _, scanResult := range testsslOutput.ScanResult {
-		// Extract vulnerabilities (BEAST, POODLE, Heartbleed, etc.)
-		allFindings = append(allFindings, scanResult.Vulnerabilities...)
-
-		// Extract HTTP header security issues (HSTS, missing headers, etc.)
-		allFindings = append(allFindings, scanResult.HeaderResponse...)
+		err = fmt.Errorf("failed to parse testssl.sh JSON: %w", err)
 	}
 
 	// Filter findings: only include actual security issues
@@ -252,7 +248,87 @@ func (s *Service) parseTestSSLOutput(output []byte) ([]TestSSLFinding, error) {
 		zap.Int("security_issues", len(filteredFindings)),
 	)
 
-	return filteredFindings, nil
+	return filteredFindings, err
+}
+
+// readFindingLists reads the findings of the vulnerabilities and headerResponse lists of every
+// scanResult entry. testssl.sh output is { ..., "scanResult": [ { "vulnerabilities": [...],
+// "headerResponse": [...], ... } ], "scanTime": ... }. It reads the JSON as a stream and
+// returns the findings it read before the first error.
+func readFindingLists(data []byte) ([]TestSSLFinding, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	var found []TestSSLFinding
+	// eachKey calls fn for every key of the object that starts at the next token. fn must
+	// consume the value.
+	eachKey := func(fn func(key string) error) error {
+		if err := expectDelim(dec, '{'); err != nil {
+			return err
+		}
+		for dec.More() {
+			tok, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			if err := fn(tok.(string)); err != nil {
+				return err
+			}
+		}
+		return expectDelim(dec, '}')
+	}
+	// eachElem calls fn for every element of the array that starts at the next token.
+	eachElem := func(fn func() error) error {
+		if err := expectDelim(dec, '['); err != nil {
+			return err
+		}
+		for dec.More() {
+			if err := fn(); err != nil {
+				return err
+			}
+		}
+		return expectDelim(dec, ']')
+	}
+	skip := func() error {
+		var v json.RawMessage
+		return dec.Decode(&v)
+	}
+
+	err := eachKey(func(key string) error {
+		if key != "scanResult" {
+			return skip()
+		}
+		return eachElem(func() error {
+			return eachKey(func(key string) error {
+				if key != "vulnerabilities" && key != "headerResponse" {
+					return skip()
+				}
+				return eachElem(func() error {
+					var f TestSSLFinding
+					if err := dec.Decode(&f); err != nil {
+						return err
+					}
+					found = append(found, f)
+					return nil
+				})
+			})
+		})
+	})
+	return found, err
+}
+
+// expectDelim reads the next token and returns an error unless it is the delimiter d. At the
+// end of a cut-off input the error is io.ErrUnexpectedEOF.
+func expectDelim(dec *json.Decoder, d json.Delim) error {
+	tok, err := dec.Token()
+	if err == io.EOF {
+		return io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		return err
+	}
+	if tok != d {
+		return fmt.Errorf("unexpected %v in testssl.sh JSON, want %v", tok, d)
+	}
+	return nil
 }
 
 // min returns the minimum of two integers

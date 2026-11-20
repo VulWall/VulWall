@@ -267,6 +267,11 @@ First open-source, self-hosted release, under the MIT License.
 - On small screens the opened sidebar sat in the page and pushed the content
   down. It is now a full-height panel over the page, scrolls when the screen
   is short, and the menu button no longer covers the page heading.
+- nuclei and testssl.sh runs that did not complete (target dropped mid-run,
+  checks that could not run, a cut-off JSON file, or the target unreachable
+  or blocking after the run) dropped the findings they did report. Those
+  findings are now published; the coverage stays `error`, so the run still
+  resolves nothing.
 
 ### Removed
 

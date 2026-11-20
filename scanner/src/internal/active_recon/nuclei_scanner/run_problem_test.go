@@ -77,8 +77,12 @@ func TestParseNucleiOutput(t *testing.T) {
 	if err != nil || len(got) != 2 || got[0].TemplateID != "waf-detect" {
 		t.Fatalf("parse = %+v, %v", got, err)
 	}
-	if _, err := parseNucleiOutput([]byte(out + "{cut off")); err == nil {
+	got, err = parseNucleiOutput([]byte(out + "{cut off"))
+	if err == nil {
 		t.Fatal("a broken line must fail the run: it may be a lost finding")
+	}
+	if len(got) != 2 {
+		t.Fatalf("parse with a broken line = %+v, want the 2 lines that parse", got)
 	}
 }
 
