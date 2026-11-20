@@ -30,7 +30,9 @@ COPY src/ ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags="-s -w" -o /out/nightwatch ./cmd/nightwatch
+    go build -trimpath -ldflags="-s -w" -o /out/nightwatch ./cmd/nightwatch && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w" -o /out/demo-seed ./cmd/demo-seed
 
 # ---------------------------------------------------------------------------
 # Third-party tools, downloaded and verified
@@ -89,6 +91,8 @@ COPY --from=tools /out/bin/nuclei /usr/local/bin/nuclei
 COPY --from=tools /out/testssl /opt/testssl
 RUN ln -s /opt/testssl/testssl.sh /usr/local/bin/testssl.sh
 COPY --from=build /out/nightwatch /usr/local/bin/nightwatch
+# Sample data for demos and screenshots: scripts/demo-seed runs it (see "Demo data" in README.md).
+COPY --from=build /out/demo-seed /usr/local/bin/demo-seed
 COPY src/internal/active_recon/discovery_enrichment/waf/patterns/waf_rules.json /etc/vulwall/waf_rules.json
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
