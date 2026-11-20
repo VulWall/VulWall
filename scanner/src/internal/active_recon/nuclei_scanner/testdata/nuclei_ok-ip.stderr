@@ -1,0 +1,22 @@
+
+                     __     _
+   ____  __  _______/ /__  (_)
+  / __ \/ / / / ___/ / _ \/ /
+ / / / / /_/ / /__/ /  __/ /
+/_/ /_/\__,_/\___/_/\___/_/   v3.11.1
+
+		projectdiscovery.io
+
+[ERR] Could not read nuclei-ignore file: open /home/vulwall/.config/nuclei/.nuclei-ignore: no such file or directory
+[ERR] Could not read nuclei-ignore file: open /home/vulwall/.config/nuclei/.nuclei-ignore: no such file or directory
+[INF] Current nuclei version: v3.11.1 (unknown) - remove '-duc' flag to enable update checks
+[INF] Current nuclei-templates version:  (unknown) - remove '-duc' flag to enable update checks
+[INF] New templates added in latest release: 121
+[INF] Templates loaded for current scan: 6566
+[INF] Executing 6566 signed templates from projectdiscovery/nuclei-templates
+[INF] Targets loaded for current scan: 1
+[INF] Templates clustered: 472 (Reduced 405 Requests)
+[INF] Using Interactsh Server: oast.pro
+[INF] Skipped 172.20.0.3:4040 from target list as found unresponsive permanently: cause="port closed or filtered" address=172.20.0.3:4040 chain="connection refused; got err while executing https://172.20.0.3:4040/jobs/?\"'><script>alert(document.domain)</script>"
+[INF] Scan completed in 1m. 0 matches found.
+[INF] HTTP connections: 9999 total, 1759 new, 8240 reused (82.4%)

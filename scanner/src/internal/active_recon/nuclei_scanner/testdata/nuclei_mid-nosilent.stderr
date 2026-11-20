@@ -1,0 +1,27 @@
+
+                     __     _
+   ____  __  _______/ /__  (_)
+  / __ \/ / / / ___/ / _ \/ /
+ / / / / /_/ / /__/ /  __/ /
+/_/ /_/\__,_/\___/_/\___/_/   v3.11.1
+
+		projectdiscovery.io
+
+[ERR] Could not read nuclei-ignore file: open /home/vulwall/.config/nuclei/.nuclei-ignore: no such file or directory
+[ERR] Could not read nuclei-ignore file: open /home/vulwall/.config/nuclei/.nuclei-ignore: no such file or directory
+[INF] Current nuclei version: v3.11.1 (unknown) - remove '-duc' flag to enable update checks
+[INF] Current nuclei-templates version:  (unknown) - remove '-duc' flag to enable update checks
+[INF] New templates added in latest release: 121
+[INF] Templates loaded for current scan: 6566
+[INF] Executing 6566 signed templates from projectdiscovery/nuclei-templates
+[INF] Targets loaded for current scan: 1
+[INF] Templates clustered: 472 (Reduced 405 Requests)
+[INF] Using Interactsh Server: oast.pro
+[INF] Skipped 172.20.0.3:80 from target list as found unresponsive 30 times
+[INF] Skipped 172.20.0.3:80 from target list as found unresponsive 30 times
+[INF] Skipped 172.20.0.3:80 from target list as found unresponsive permanently: cause="i/o timeout" address=172.20.0.3:80 chain="got err while executing http://172.20.0.3/setup/setup-s/%u002e%u002e/%u002e%u002e/log.jsp"
+[INF] Skipped 172.20.0.3:80 from target list as found unresponsive permanently: cause="i/o timeout" address=172.20.0.3:80 chain="got err while executing http://172.20.0.3/machine.aspx"
+[INF] Skipped 172.20.0.3:80 from target list as found unresponsive permanently: Get "http://172.20.0.3/?rest_route=/wp/v2/users": cause="i/o timeout" address=172.20.0.3:80
+[INF] Skipped 172.20.0.3:80 from target list as found unresponsive permanently: cause="i/o timeout" address=172.20.0.3:80 chain="got err while executing http://172.20.0.3/resources/qmc/fonts/CVE-2023-41265.ttf"
+[INF] Scan completed in 1m. 0 matches found.
+[INF] HTTP connections: 1333 total, 218 new, 1115 reused (83.6%)
