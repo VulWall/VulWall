@@ -2,23 +2,60 @@
 
 ## Tracing Infrastructure
 
+Tracing is **optional and off by default**. Without it the scanner only writes
+logs to the console (`docker compose logs scanner`). When enabled, the scanner
+exports OpenTelemetry traces over OTLP/HTTP to any compatible backend: Jaeger,
+Grafana Tempo, an OpenTelemetry Collector, or a hosted vendor.
+
 **Location:** `src/internal/core/telemetry/`
 
 | File | Purpose |
 |------|---------|
-| `telemetry.go` | OpenTelemetry initialization (Honeycomb OTLP exporter) |
+| `telemetry.go` | OpenTelemetry initialization (OTLP/HTTP exporter, sampler, resource) |
 | `propagation.go` | W3C TraceContext injection/extraction utilities |
 
-**Environment variables:**
+The `nightwatch` binary calls `telemetry.InitTracing()` once at startup. If the
+exporter cannot be created, the scanner logs a warning and runs without traces.
+
+**Environment variables** (standard OpenTelemetry names):
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `OTEL_ENABLED` | Enable/disable tracing | enabled |
-| `HONEYCOMB_API_KEY` | Honeycomb API key | — |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint | `api.honeycomb.io` |
-| `OTEL_TRACES_SAMPLER` | Sampler strategy | `parentbased_always_on` |
+| `OTEL_ENABLED` | Turn tracing on (`true`) | `false` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL; `/v1/traces` is appended | `http://localhost:4318` |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Full traces URL (overrides the base URL) | — |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Extra headers, e.g. an API key: `key1=value1,key2=value2` | — |
+| `OTEL_SERVICE_NAME` | `service.name` resource attribute | `vulwall-scanner` |
+| `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes | — |
+| `OTEL_TRACES_SAMPLER` | `always_on`, `always_off`, `probabilistic`, `parentbased_always_on`, `parentbased_probabilistic` | `parentbased_always_on` |
+| `OTEL_TRACES_SAMPLER_ARG` | Ratio for the probabilistic samplers | `0.1` |
+| `OTEL_BSP_*` | Batch span processor tuning | SDK defaults |
 
-**Note:** The bootstrap pattern (`Run`/`RunSimple`) automatically initializes OpenTelemetry. Services using manual initialization must call `telemetry.InitTracing()` explicitly.
+### Example: Jaeger with Docker Compose
+
+The root `docker-compose.yml` has a `tracing` profile with Jaeger all-in-one.
+Set this in `.env`:
+
+```bash
+OTEL_ENABLED=true
+```
+
+and start with the profile:
+
+```bash
+docker compose --profile tracing up -d
+```
+
+The compose file points the scanner at `http://jaeger:4318`. Open the Jaeger
+UI at http://localhost:16686 and select the `vulwall-scanner` service.
+
+### Example: a hosted OTLP backend
+
+```bash
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.example.com
+OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer <token>
+```
 
 ---
 
@@ -122,7 +159,7 @@ Scan Coordinator (root span, creates trace_id)
                                     └─ Enrichment Ingestion (extract)
 ```
 
-**Result:** Hierarchical waterfall in Honeycomb showing full causality chain with timing data.
+**Result:** A hierarchical waterfall in your tracing UI that shows the full causality chain with timing data.
 
 ---
 
@@ -154,21 +191,16 @@ span.SetAttributes(attribute.String("key", "value"))
 
 ---
 
-## Querying Traces in Honeycomb
+## Useful Span Attributes
 
-```
-# All spans for a scan
-trace.trace_id = "abc-123-def-456"
+Search on these in the tracing UI:
 
-# Slow operations
-duration_ms > 5000
-
-# Errors
-error = true
-
-# Group by service
-VISUALIZE COUNT GROUP BY service.name
-```
+| Attribute | Example |
+|-----------|---------|
+| `scan.id` | all spans of one scan |
+| `org.id` | all work for one organization |
+| `discovery.id` | all work on one discovered asset |
+| `target` | one scanned host or URL |
 
 ---
 
@@ -178,6 +210,6 @@ VISUALIZE COUNT GROUP BY service.name
 
 **Location:** `src/internal/core/logger/`
 
-All services use structured logging initialized via bootstrap. Log levels and format vary by `ENVIRONMENT`:
+The `nightwatch` binary initializes one zap logger at startup. Log levels and format vary by `ENVIRONMENT`:
 - `development` — human-readable console output
 - `production` — JSON structured output

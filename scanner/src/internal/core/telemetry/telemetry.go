@@ -20,7 +20,13 @@ type TracerProvider struct {
 	tp *sdktrace.TracerProvider
 }
 
-// InitTracing initializes OpenTelemetry with Honeycomb OTLP exporter
+// InitTracing initializes OpenTelemetry tracing with an OTLP/HTTP exporter.
+//
+// Tracing is off unless OTEL_ENABLED=true. The exporter reads the standard
+// OpenTelemetry variables itself (OTEL_EXPORTER_OTLP_ENDPOINT,
+// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS, ...), so any
+// OTLP backend works: Jaeger, Grafana Tempo, an OpenTelemetry Collector, or a
+// hosted vendor. OTEL_SERVICE_NAME overrides serviceName.
 func InitTracing(ctx context.Context, serviceName, environment string, logger *zap.Logger) (*TracerProvider, error) {
 	if !isTracingEnabled() {
 		logger.Info("OpenTelemetry tracing is disabled")
@@ -32,14 +38,8 @@ func InitTracing(ctx context.Context, serviceName, environment string, logger *z
 		zap.String("environment", environment),
 	)
 
-	// Create OTLP HTTP exporter for Honeycomb
+	// Endpoint, headers, TLS and timeout come from the standard OTEL_EXPORTER_OTLP_* variables.
 	exporter, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(getOTLPEndpoint()),
-		otlptracehttp.WithURLPath("/v1/traces"), // Honeycomb requires this path
-		otlptracehttp.WithHeaders(map[string]string{
-			"x-honeycomb-team": getHoneycombAPIKey(),
-		}),
-		otlptracehttp.WithTimeout(30*time.Second),
 		otlptracehttp.WithCompression(otlptracehttp.GzipCompression),
 	)
 	if err != nil {
@@ -47,12 +47,15 @@ func InitTracing(ctx context.Context, serviceName, environment string, logger *z
 	}
 
 	// Create resource describing the service
+	// WithFromEnv is applied last so OTEL_SERVICE_NAME and
+	// OTEL_RESOURCE_ATTRIBUTES override the defaults.
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
 			semconv.DeploymentEnvironmentKey.String(environment),
 			attribute.String("service.namespace", "vulwall"),
 		),
+		resource.WithFromEnv(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
@@ -83,7 +86,7 @@ func InitTracing(ctx context.Context, serviceName, environment string, logger *z
 	))
 
 	logger.Info("OpenTelemetry initialized successfully",
-		zap.String("endpoint", getOTLPEndpoint()),
+		zap.String("endpoint", config.GetEnv(config.EnvOTELExporterEndpoint, "http://localhost:4318")),
 		zap.String("sampler", getSamplerName()),
 	)
 
@@ -121,23 +124,13 @@ func buildSampler() sdktrace.Sampler {
 	}
 }
 
-// getOTLPEndpoint returns the OTLP endpoint (Honeycomb by default)
-func getOTLPEndpoint() string {
-	return config.GetEnv(config.EnvOTELExporterEndpoint, "api.honeycomb.io")
-}
-
-// getHoneycombAPIKey returns the Honeycomb API key
-func getHoneycombAPIKey() string {
-	return config.GetEnv(config.EnvHoneycombAPIKey, "")
-}
-
 // getSamplerName returns the sampler name from environment
 func getSamplerName() string {
 	return config.GetEnv(config.EnvOTELTraceSampler, "parentbased_always_on")
 }
 
-// isTracingEnabled returns true if tracing is enabled
+// isTracingEnabled reports whether OTEL_ENABLED is set to a true value.
+// Tracing is opt-in: a self-hosted install has no collector by default.
 func isTracingEnabled() bool {
-	enabled := config.GetEnv(config.EnvOTELEnabled, "")
-	return enabled != "false" && enabled != "0"
+	return config.GetEnvBool(config.EnvOTELEnabled, false)
 }

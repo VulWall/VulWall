@@ -36,16 +36,16 @@ const (
 	// OpenTelemetry / Tracing
 	// ===========================================
 
-	// EnvOTELEnabled enables/disables distributed tracing (true/false)
+	// EnvOTELEnabled enables distributed tracing (true/false, default false)
 	EnvOTELEnabled = "OTEL_ENABLED"
 	// EnvOTELTraceSampler is the sampling strategy (e.g., parentbased_always_on)
 	EnvOTELTraceSampler = "OTEL_TRACES_SAMPLER"
 	// EnvOTELTraceSamplerArg is the sampler argument (e.g., 0.1 for 10% sampling)
 	EnvOTELTraceSamplerArg = "OTEL_TRACES_SAMPLER_ARG"
-	// EnvOTELExporterEndpoint is the OTLP endpoint (e.g., api.honeycomb.io)
+	// EnvOTELExporterEndpoint is the OTLP/HTTP base endpoint (e.g., http://jaeger:4318).
+	// The exporter reads it, and OTEL_EXPORTER_OTLP_HEADERS, directly; it is
+	// listed here for logging only.
 	EnvOTELExporterEndpoint = "OTEL_EXPORTER_OTLP_ENDPOINT"
-	// EnvHoneycombAPIKey is the Honeycomb API key for observability
-	EnvHoneycombAPIKey = "HONEYCOMB_API_KEY"
 
 	// OpenTelemetry Batch Span Processor Configuration
 
