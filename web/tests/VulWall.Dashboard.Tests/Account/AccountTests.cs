@@ -210,7 +210,7 @@ public class AccountServiceTests(MongoFixture mongo)
 
         Assert.Equal(first.Id, second.Id);
         Assert.Equal(DefaultOrganization.DefaultName, first.CompanyName);
-        Assert.False(string.IsNullOrWhiteSpace(first.SubscriptionSettings?.ScanCron));
+        Assert.False(string.IsNullOrWhiteSpace(first.ScanSettings?.ScanCron));
         Assert.Equal(1, await db.GetCollection<BsonDocument>("organizations").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }
 }
@@ -218,13 +218,19 @@ public class AccountServiceTests(MongoFixture mongo)
 [Collection(MongoCollection.Name)]
 public class AccountControllerTests(MongoFixture mongo)
 {
+    private const string SignedInPrincipalKey = "test:signed-in-principal";
+
     private sealed class NoopAuthService : IAuthenticationService
     {
         public Task<AuthenticateResult> AuthenticateAsync(HttpContext context, string? scheme) =>
             Task.FromResult(AuthenticateResult.NoResult());
         public Task ChallengeAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => Task.CompletedTask;
         public Task ForbidAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => Task.CompletedTask;
-        public Task SignInAsync(HttpContext context, string? scheme, ClaimsPrincipal principal, AuthenticationProperties? properties) => Task.CompletedTask;
+        public Task SignInAsync(HttpContext context, string? scheme, ClaimsPrincipal principal, AuthenticationProperties? properties)
+        {
+            context.Items[SignedInPrincipalKey] = principal; // the principal the cookie would carry
+            return Task.CompletedTask;
+        }
         public Task SignOutAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => Task.CompletedTask;
     }
 
@@ -447,7 +453,8 @@ public class AccountControllerTests(MongoFixture mongo)
         });
 
         Assert.Equal("/settings", Assert.IsType<RedirectResult>(result).Url);
-        var cookieStamp = controller.HttpContext.User.FindFirst(AccountService.SecurityStampClaim)?.Value;
+        var signedIn = Assert.IsType<ClaimsPrincipal>(controller.HttpContext.Items[SignedInPrincipalKey]);
+        var cookieStamp = signedIn.FindFirst(AccountService.SecurityStampClaim)?.Value;
         Assert.NotEqual(oldStamp, cookieStamp);
         Assert.True(await service.IsSecurityStampCurrentAsync(cookieStamp));
     }

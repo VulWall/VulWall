@@ -77,7 +77,7 @@
                 }
             </div>
             <div class="finding-card__footer-actions">
-                @if (Model.FeatureAccess.CanSuppressFindings && !string.IsNullOrEmpty(finding.FindingType))
+                @if (!string.IsNullOrEmpty(finding.FindingType))
                 {
                     var dismissibleAssets = finding.AffectedAssets
                         .Where(a => !string.IsNullOrEmpty(a.DiscoveryId))

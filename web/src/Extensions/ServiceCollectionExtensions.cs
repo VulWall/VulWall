@@ -97,8 +97,6 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddOrganizationServices(this IServiceCollection services)
     {
         services.AddScoped<IOrganizationContext, OrganizationContext>();
-        services.AddSingleton<IFeatureAccessService>(
-            new FullFeatureAccessService(ServiceSettings.Instance.SharedLinksEnabled));
 
         return services;
     }

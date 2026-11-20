@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VulWall.Dashboard.Attributes;
-using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Settings.Models;
@@ -27,7 +25,8 @@ public class SettingsController(
             Website = organization.Website,
             OwnerEmail = organization.OwnerEmail,
             OrgId = organization.Id,
-            HasLogo = organization.Logo is { Length: > 0 }
+            HasLogo = organization.Logo is { Length: > 0 },
+            ScanSchedule = Services.SettingsService.BuildScanSchedule(organization.ScanSettings, DateTime.UtcNow)
         };
 
         return View(vm);
@@ -35,7 +34,6 @@ public class SettingsController(
 
     [Authorize]
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Updated company information")]
     public async Task<IActionResult> UpdateCompanyInfo(string? companyName, string? industry, string? website)
     {
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
@@ -49,7 +47,6 @@ public class SettingsController(
 
     [Authorize]
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Uploaded company logo")]
     public async Task<IActionResult> UploadLogo(IFormFile? logo)
     {
         if (logo == null || logo.Length == 0)
@@ -95,6 +92,31 @@ public class SettingsController(
     }
 
     [Authorize]
+    [HttpPost]
+    public async Task<IActionResult> UpdateScanSchedule(ScanScheduleInput input)
+    {
+        string? error;
+        if (!ModelState.IsValid)
+        {
+            error = "Check the schedule fields and try again.";
+        }
+        else
+        {
+            var orgId = await organizationContext.GetCurrentOrgIdAsync();
+            error = await settingsService.UpdateScanScheduleAsync(orgId, input);
+        }
+
+        if (error != null)
+            TempData["Error"] = error;
+        else
+            TempData["Success"] = input.Frequency == ScanFrequency.Off
+                ? "Scheduled scans are off."
+                : "Scan schedule saved.";
+
+        return Redirect(Url.Action(nameof(Index)) + "#schedule");
+    }
+
+    [Authorize]
     [HttpGet]
     public async Task<IActionResult> GetLogo()
     {
@@ -108,7 +130,6 @@ public class SettingsController(
 
     [Authorize]
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Removed company logo")]
     public async Task<IActionResult> RemoveLogo()
     {
         var orgId = await organizationContext.GetCurrentOrgIdAsync();

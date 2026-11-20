@@ -12,7 +12,6 @@ import (
 	"github.com/VulWall/VulWall/scanner/src/internal/discoveries/domain_discovery"
 	"github.com/VulWall/VulWall/scanner/src/internal/discoveries/port_discovery"
 	"github.com/VulWall/VulWall/scanner/src/internal/enrichers/knowledge_base"
-	"github.com/VulWall/VulWall/scanner/src/internal/ingestion/audit_ingestion"
 	"github.com/VulWall/VulWall/scanner/src/internal/ingestion/domain_ingestion"
 	"github.com/VulWall/VulWall/scanner/src/internal/ingestion/enrichment_ingestion"
 	"github.com/VulWall/VulWall/scanner/src/internal/ingestion/findings_ingestion"
@@ -41,7 +40,6 @@ func TestOwnedGroups(t *testing.T) {
 		{shared.StreamSecurityFindings, findings_ingestion.GroupFindingsIngestion}:               true,
 		{shared.StreamDiscoveryEnrichmentResults, enrichment_ingestion.GroupEnrichmentIngestion}: true,
 		{shared.StreamKBGenerationResults, kb_ingestion.GroupKBIngestion}:                        true,
-		{shared.StreamSystemAuditLogs, audit_ingestion.GroupAuditIngestion}:                      true,
 	}
 
 	got := ownedGroups()

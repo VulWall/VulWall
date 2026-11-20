@@ -14,7 +14,7 @@
 <div class="page-header page-header--stacked vw-settings-header">
     <div class="vw-settings-eyebrow">VulWall · NightWatch</div>
     <h1 class="vw-settings-title">Settings</h1>
-    <p class="vw-settings-subtitle">Manage your organization profile and preferences.</p>
+    <p class="vw-settings-subtitle">Manage your organization profile, scan schedule and preferences.</p>
 </div>
 
 <ul class="nav vw-settings-tabs" id="accountTabs" role="tablist">
@@ -22,6 +22,12 @@
         <button class="nav-link active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info"
                 type="button" role="tab" aria-controls="info" aria-selected="true">
             <i class="fa-solid fa-building"></i>Account
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="schedule-tab" data-bs-toggle="tab" data-bs-target="#schedule"
+                type="button" role="tab" aria-controls="schedule" aria-selected="false">
+            <i class="fa-solid fa-calendar-days"></i>Scan schedule
         </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -35,6 +41,9 @@
 <div class="tab-content" id="accountTabsContent">
     <div class="tab-pane fade show active" id="info" role="tabpanel" aria-labelledby="info-tab">
         @await Html.PartialAsync("Partials/_AccountInfo", Model)
+    </div>
+    <div class="tab-pane fade" id="schedule" role="tabpanel" aria-labelledby="schedule-tab">
+        @await Html.PartialAsync("Partials/_ScanSchedule", Model.ScanSchedule)
     </div>
     <div class="tab-pane fade" id="preferences" role="tabpanel" aria-labelledby="preferences-tab">
         <partial name="~/Verticals/Settings/Views/Partials/_TabLoadingPlaceholder.cshtml" model='("preferences-loading", "Loading preferences...")' />

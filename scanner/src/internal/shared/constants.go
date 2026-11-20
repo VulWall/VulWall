@@ -45,7 +45,7 @@ const (
 
 	// MongoDB Collections
 	CollectionAssets        = "assets"        // User-added assets to be scanned
-	CollectionOrganizations = "organizations" // Organizations with subscription settings
+	CollectionOrganizations = "organizations" // Organizations with the scan schedule (scan_settings)
 	CollectionScans         = "scans"         // Scan execution records
 	CollectionScanResults   = "scan_results"
 	CollectionDiscoveries   = "discoveries" // Org-scoped asset registry (domains, subdomains, IPs, ports)
@@ -77,14 +77,8 @@ const (
 	StreamDomainScanTriggers = "domain_scan_triggers" // Triggers for active recon scanners on domains/subdomains (published by domain_ingestion)
 	StreamPortScanTriggers   = "port_scan_triggers"   // Triggers for active recon scanners on ports (published by port_ingestion)
 
-	// Redis Streams - System Audit Logs
-	StreamSystemAuditLogs = "system_audit_logs" // System-level audit events (template updates, service events, etc.)
-
 	// Redis Streams - Dead Letter
 	StreamDeadLetter = "dead_letter" // Messages that failed processing permanently (poison messages)
-
-	// MongoDB Collections - Audit
-	CollectionAuditLogs = "audit_logs" // Existing audit logs collection (shared with Dashboard)
 
 	// Asset Types (for Discovery.AssetType)
 	AssetTypeDomain    = "domain"

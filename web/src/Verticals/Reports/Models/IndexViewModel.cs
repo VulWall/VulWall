@@ -1,5 +1,3 @@
-using VulWall.Dashboard.Common.Models;
-
 namespace VulWall.Dashboard.Reports.Models;
 
 public class IndexViewModel
@@ -13,9 +11,9 @@ public class IndexViewModel
     public string? SelectedScanId { get; set; }
 
     /// <summary>
-    /// Feature access based on subscription tier
+    /// SHARED_LINKS_ENABLED: whether the shared report links UI is shown.
     /// </summary>
-    public FeatureAccess FeatureAccess { get; set; } = FeatureAccess.Full;
+    public bool SharedLinksEnabled { get; set; }
 }
 
 public class ScanSelectItem

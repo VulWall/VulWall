@@ -5,7 +5,7 @@
         ? Model.ScoreBand.ToLowerInvariant().Replace(" ", "-")
         : "pending";
     var trendUp = Model.SecurityScoreTrend >= 0;
-    var showTrend = Model.HasScanData && Model.FeatureAccess.CanViewTrends && Model.SecurityScoreTrend != 0;
+    var showTrend = Model.HasScanData && Model.SecurityScoreTrend != 0;
 }
 
 <div class="score-panel" data-tour="security-score">

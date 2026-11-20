@@ -39,7 +39,7 @@ func scanPipelineGroups() []StreamGroup {
 }
 
 // ownedGroups is every (stream, consumer-group) pair the nightwatch binary consumes: the
-// scan-pipeline groups plus the terminal enrichment, KB and audit groups. At startup
+// scan-pipeline groups plus the terminal enrichment and KB groups. At startup
 // ReleaseOrphanedPending deletes the previous process's consumers from all of them.
 // Mirrors the Component Inventory in docs/SERVICE_REGISTRY.md (pipeline_test.go checks it).
 func ownedGroups() []StreamGroup {
@@ -48,6 +48,5 @@ func ownedGroups() []StreamGroup {
 		StreamGroup{shared.StreamDiscoveryEnrichmentResults, "enrichment_ingestion_service"},
 		StreamGroup{shared.StreamKBGenerationQueue, "knowledge_base_engine_service"},
 		StreamGroup{shared.StreamKBGenerationResults, "kb_ingestion_service"},
-		StreamGroup{shared.StreamSystemAuditLogs, "audit_ingestion_service"},
 	)
 }

@@ -1,0 +1,117 @@
+@using VulWall.Dashboard.Settings.Models
+@model ScanScheduleViewModel
+
+@{
+    var input = Model.Input;
+    var frequency = input.Frequency;
+    var days = new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday };
+}
+
+<div class="vw-section-card">
+    <div class="vw-section-header">
+        <i class="fa-solid fa-calendar-days"></i>
+        <h2>Scan schedule</h2>
+    </div>
+    <p class="vw-section-desc">When VulWall scans your assets on its own. "Scan now" on the Scans page works either way.</p>
+
+    <div class="vw-schedule-status">
+        @if (Model.NextScanUtc is { } nextUtc && Model.NextScanLocal is { } nextLocal)
+        {
+            <span class="vw-schedule-dot vw-schedule-dot--on" aria-hidden="true"></span>
+            <div>
+                <div class="vw-schedule-status-title">
+                    Next scan: <span class="mono">@nextLocal.ToString("ddd d MMM yyyy, HH:mm")</span>
+                    @if (input.TimeZone != "UTC")
+                    {
+                        <span class="vw-schedule-zone">@input.TimeZone</span>
+                    }
+                </div>
+                <div class="vw-schedule-status-meta">
+                    <span class="mono">@nextUtc.ToString("ddd d MMM yyyy, HH:mm")</span> UTC
+                </div>
+            </div>
+        }
+        else
+        {
+            <span class="vw-schedule-dot" aria-hidden="true"></span>
+            <div>
+                <div class="vw-schedule-status-title">Scheduled scans are off</div>
+                <div class="vw-schedule-status-meta">Pick how often to scan below to turn them on.</div>
+            </div>
+        }
+    </div>
+
+    @if (Model.IsCustom)
+    {
+        <div class="alert alert-warning small" role="status">
+            <i class="fa-solid fa-circle-info me-1"></i>
+            The current schedule is the cron <span class="mono">@Model.Cron</span> (UTC), which this form cannot show.
+            Saving replaces it.
+        </div>
+    }
+
+    <form asp-controller="Settings" asp-action="UpdateScanSchedule" method="post" id="scanScheduleForm">
+        <div class="vw-fld-grid">
+            <label class="vw-fld-label">
+                <span class="vw-fld-label-text">How often</span>
+                <select name="Frequency" class="vw-fld" id="scheduleFrequency">
+                    <option value="Off" selected="@(frequency == ScanFrequency.Off)">Off</option>
+                    <option value="Daily" selected="@(frequency == ScanFrequency.Daily)">Daily</option>
+                    <option value="Weekly" selected="@(frequency == ScanFrequency.Weekly)">Weekly</option>
+                    <option value="Monthly" selected="@(frequency == ScanFrequency.Monthly)">Monthly</option>
+                </select>
+            </label>
+
+            <label class="vw-fld-label" data-schedule-for="Weekly" hidden="@(frequency != ScanFrequency.Weekly)">
+                <span class="vw-fld-label-text">Day of the week</span>
+                <select name="DayOfWeek" class="vw-fld">
+                    @foreach (var day in days)
+                    {
+                        <option value="@day" selected="@(input.DayOfWeek == day)">@day</option>
+                    }
+                </select>
+            </label>
+
+            <label class="vw-fld-label" data-schedule-for="Monthly" hidden="@(frequency != ScanFrequency.Monthly)">
+                <span class="vw-fld-label-text">Day of the month</span>
+                <select name="DayOfMonth" class="vw-fld">
+                    @for (var d = 1; d <= 28; d++)
+                    {
+                        <option value="@d" selected="@(input.DayOfMonth == d)">@d</option>
+                    }
+                </select>
+            </label>
+
+            <label class="vw-fld-label" data-schedule-for="Daily Weekly Monthly" hidden="@(frequency == ScanFrequency.Off)">
+                <span class="vw-fld-label-text">Time</span>
+                <input type="time" name="Time" class="vw-fld mono" value="@input.Time" step="60" required />
+            </label>
+
+            <label class="vw-fld-label" data-schedule-for="Daily Weekly Monthly" hidden="@(frequency == ScanFrequency.Off)">
+                <span class="vw-fld-label-text">Time zone</span>
+                <select name="TimeZone" class="vw-fld">
+                    @foreach (var zone in Model.TimeZones)
+                    {
+                        <option value="@zone.Id" selected="@(zone.Id == input.TimeZone)">@zone.Label</option>
+                    }
+                </select>
+            </label>
+        </div>
+
+        <p class="vw-schedule-note" data-schedule-for="Daily Weekly Monthly" hidden="@(frequency == ScanFrequency.Off)">
+            <i class="fa-solid fa-circle-info"></i>
+            The scanner keeps the schedule in UTC.
+            @if (Model.ZoneHasDaylightSaving)
+            {
+                <text>When daylight saving time starts or ends, the local time moves by one hour.</text>
+            }
+            Changes reach the scanner within 5 minutes.
+        </p>
+
+        <div class="d-flex justify-content-end mt-4">
+            <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-floppy-disk me-2"></i>Save schedule
+            </button>
+        </div>
+    </form>
+</div>

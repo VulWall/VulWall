@@ -38,6 +38,11 @@ First open-source, self-hosted release, under the MIT License.
   the DB-IP ASN organization name. Linode addresses show the Akamai logo.
 - The Discoveries page shows the "IP geolocation by DB-IP" attribution that
   the DB-IP Lite license (CC BY 4.0) requires.
+- Settings → Scan schedule: turn scheduled scans off, or run them daily,
+  weekly or monthly at a time in a chosen time zone (stored as a UTC cron
+  in `scan_settings`). The Settings page, sidebar and Scans page show the
+  next scan. The scanner reloads schedules every 5 minutes instead of every
+  hour, and keeps the current schedules when the reload fails.
 
 ### Changed
 
@@ -126,6 +131,8 @@ First open-source, self-hosted release, under the MIT License.
   get a summary once it is set, if they are less than 7 days old.
 - The "Scan now" button no longer queues a second scan while an older one is still
   waiting for the scanner.
+- The organization's scan schedule moved from `subscription_settings` to
+  `scan_settings` (`ScanSettings` in the web app and the scanner).
 
 ### Removed
 
@@ -133,3 +140,10 @@ First open-source, self-hosted release, under the MIT License.
   scan-completion webhook (`DASHBOARD_WEBHOOK_URL`, `DASHBOARD_WEBHOOK_SECRET`).
 - Honeycomb-specific tracing settings (`HONEYCOMB_API_KEY`).
 - Per-service scanner binaries, Dockerfiles and compose files.
+- The audit log: the `[AuditLog]` filter, the dashboard "Recent activity"
+  card, and the scanner's `system_audit_logs` stream and audit ingestion
+  slice. Nothing writes or reads the `audit_logs` collection any more; an
+  existing one is left in place and is safe to drop.
+- The feature-access layer (`IFeatureAccessService`, `FeatureAccess`): trends
+  and finding suppression are always on. Shared report links stay behind
+  `SHARED_LINKS_ENABLED`.

@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VulWall.Dashboard.Attributes;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Assets.Models;
@@ -27,7 +26,6 @@ public class AssetsController(
     }
 
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Assets, Action = "Added asset")]
     public async Task<IActionResult> Add(AddAssetInput input)
     {
         if (!ModelState.IsValid)
@@ -85,7 +83,6 @@ public class AssetsController(
     }
 
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Assets, Action = "Updated asset status")]
     public async Task<IActionResult> UpdateAssetStatus(string assetId, bool enabled)
     {
         if (string.IsNullOrEmpty(assetId))
@@ -108,7 +105,6 @@ public class AssetsController(
     }
 
     [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Assets, Action = "Deleted asset")]
     public async Task<IActionResult> Delete(string id)
     {
         if (string.IsNullOrEmpty(id))

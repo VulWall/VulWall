@@ -2,7 +2,7 @@ namespace VulWall.Dashboard.Common.Services.ScanSchedule;
 
 /// <summary>
 /// Generates the scan schedule for a new organization. The scanner's scan coordinator reads
-/// it from <c>organizations.subscription_settings.scan_cron</c>.
+/// it from <c>organizations.scan_settings.scan_cron</c>.
 /// </summary>
 public static class ScanCronGenerator
 {

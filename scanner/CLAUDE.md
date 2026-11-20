@@ -10,7 +10,7 @@ The VulWall scanner (formerly NightWatch) is a **vertically-sliced Go monorepo**
 **Core rules:**
 - All jobs MUST include `org_id` (organization GUID) or they will be skipped
 - Discovery services publish to Redis streams — **NO MongoDB access**
-- The **ingestion service** is the ONLY writer of scan data (`discoveries`, `findings`, `knowledge_base`, `audit_logs`); the scan coordinator writes only `scans`
+- The **ingestion service** is the ONLY writer of scan data (`discoveries`, `findings`, `knowledge_base`); the scan coordinator writes only `scans`
 - The web app and the scanner share **no HTTP API**: the web app inserts a `scans` doc with `status: "queued"`, the coordinator claims it and the web app polls it for `done`/`failed`
 - Two asset collections: `assets` (user-added, UI-managed) and `discoveries` (scan results)
 - Type discrimination via `asset_type` field: domain, subdomain, ip, port
@@ -30,13 +30,13 @@ scanner/
     ├── cmd/
     │   └── nightwatch/      # The single binary: wires and supervises every component
     ├── internal/
-    │   ├── core/            # config, logger, mongox, redisx, telemetry, subfinderx, audit
+    │   ├── core/            # config, logger, mongox, redisx, telemetry, subfinderx
     │   ├── shared/          # models.go, constants.go (cross-component)
     │   ├── scan_coordinator/  # scheduler, queued-scan poller, scan monitor, stream cleanup
     │   ├── discoveries/     # domain_discovery, port_discovery
     │   ├── active_recon/    # nuclei, testssl, js_dep, http_header, email_security, discovery_enrichment
     │   ├── enrichers/       # knowledge_base (optional Anthropic Claude KB engine)
-    │   └── ingestion/       # orchestrator + 6 slices (domain, port, findings, enrichment, kb, audit)
+    │   └── ingestion/       # orchestrator + 5 slices (domain, port, findings, enrichment, kb)
     ├── go.mod
     └── go.sum
 ```
@@ -45,7 +45,7 @@ scanner/
 
 | Document | Purpose |
 |----------|---------|
-| **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** | All 16 components, Redis streams, consumer groups, scan monitor coverage — **the ground truth** |
+| **[docs/SERVICE_REGISTRY.md](docs/SERVICE_REGISTRY.md)** | All 15 components, Redis streams, consumer groups, scan monitor coverage — **the ground truth** |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Communication flows, design patterns, model ownership rules |
 | **[docs/DATABASE.md](docs/DATABASE.md)** | Go models, MongoDB schemas, scan lifecycle, finding text fields |
 | **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** | Optional OpenTelemetry tracing (any OTLP backend), logging |
@@ -122,7 +122,6 @@ container health check; the scanner opens no port).
 | `discovery_enrichment_results` | result |
 | `kb_generation_queue` | job |
 | `kb_generation_results` | result |
-| `system_audit_logs` | audit |
 
 ### MongoDB Collections
 | Collection | Purpose |
@@ -133,7 +132,6 @@ container health check; the scanner opens no port).
 | `knowledge_base` | Shared KB entries by finding_type (only when the KB engine runs) |
 | `organizations` | Org settings with scan_cron |
 | `scans` | Scan execution records (web app inserts `queued`; coordinator claims) |
-| `audit_logs` | System audit events |
 
 ### Key Constants Location
 - Stream/collection names: `src/internal/shared/constants.go`

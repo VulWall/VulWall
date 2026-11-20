@@ -8,9 +8,8 @@
 | `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (4 asset types) | Ingestion |
 | `findings` | `CollectionFindings` | Security vulnerabilities from scanners | Ingestion |
 | `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries by finding_type (~84 entries) | Ingestion |
-| `organizations` | `CollectionOrganizations` | Org settings with subscription config | Dashboard |
+| `organizations` | `CollectionOrganizations` | Org settings with the scan schedule (`scan_settings`) | Dashboard |
 | `scans` | `CollectionScans` | Scan execution records | Scan coordinator |
-| `audit_logs` | `CollectionAuditLogs` | System audit events | Ingestion |
 
 ---
 
@@ -213,18 +212,19 @@ type Discovery struct {
 
 ```go
 type Organization struct {
-    ID                   string               `bson:"_id"`
-    UserIDs              []string             `bson:"user_ids"`
-    CompanyName          string               `bson:"company_name"`
-    Industry             string               `bson:"industry"`
-    Website              string               `bson:"website"`
-    CreatedAt            time.Time            `bson:"created_at"`
-    UpdatedAt            time.Time            `bson:"updated_at"`
-    SubscriptionSettings SubscriptionSettings `bson:"subscription_settings"`
+    ID           string       `bson:"_id"`
+    UserIDs      []string     `bson:"user_ids"`
+    CompanyName  string       `bson:"company_name"`
+    Industry     string       `bson:"industry"`
+    Website      string       `bson:"website"`
+    CreatedAt    time.Time    `bson:"created_at"`
+    UpdatedAt    time.Time    `bson:"updated_at"`
+    ScanSettings ScanSettings `bson:"scan_settings"`
 }
 
-type SubscriptionSettings struct {
-    ScanCron string `bson:"scan_cron"` // 6-field cron (e.g., "0 0 2 * * *")
+type ScanSettings struct {
+    ScanCron string `bson:"scan_cron"`         // 5-field cron in UTC (e.g., "0 2 * * *")
+    Enabled  *bool  `bson:"enabled,omitempty"` // false = no scheduled scans; missing = on
 }
 
 type Scan struct {
@@ -507,8 +507,10 @@ read by the guards for older documents but is no longer written.
   website: "https://example.com",
   created_at: ISODate("..."),
   updated_at: ISODate("..."),
-  subscription_settings: {
-    scan_cron: "0 0 2 * * *"      // Daily at 2 AM (6-field: sec min hour day month weekday)
+  scan_settings: {
+    scan_cron: "0 2 * * *",       // Daily at 02:00 UTC (5-field: min hour day month weekday)
+    enabled: true,                // false turns scheduled scans off
+    timezone: "Europe/Amsterdam"  // Web app only: the zone the Settings form shows the time in
   }
 }
 ```

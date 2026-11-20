@@ -14,6 +14,7 @@ public sealed record AccountUserViewModel
     public string? OwnerEmail  { get; init; }
     public string? OrgId       { get; init; }
     public bool HasLogo        { get; init; }
+    public ScanScheduleViewModel? ScanSchedule { get; init; }
 
     public static AccountUserViewModel FromClaims(ClaimsPrincipal user)
     {

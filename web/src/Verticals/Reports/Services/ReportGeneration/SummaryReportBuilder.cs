@@ -1,5 +1,4 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Models;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Common.Services.Mappers;
 using VulWall.Dashboard.Common.Utils;
@@ -40,7 +39,6 @@ public class SummaryReportBuilder
         IEnumerable<DbFinding> findings,
         IEnumerable<Data.Entities.Discovery.Discovery> discoveries,
         Data.Entities.Scan.Scan? mostRecentScan,
-        FeatureAccess featureAccess,
         IEnumerable<Data.Entities.Scan.Scan> allDoneScans,
         IEnumerable<DbFinding> allFindings,
         string? previousScanId,
@@ -81,9 +79,6 @@ public class SummaryReportBuilder
 
         return new SummaryReportViewModel
         {
-            // Feature Access
-            FeatureAccess = featureAccess,
-
             // Header
             OrgId = orgId,
             OrganizationName = organizationName,

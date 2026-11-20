@@ -78,7 +78,9 @@ Behind a TLS-terminating reverse proxy, set `SECURE_COOKIES=true` and add the pr
   Login is rate-limited per IP. Data-protection keys (cookie encryption) are kept in MongoDB, so
   sessions survive restarts.
 - **Organization**: a self-hosted install has one organization. The app creates it at startup with
-  a random weekly scan schedule (`subscription_settings.scan_cron`), which the scanner reads.
+  a random weekly scan schedule (`scan_settings.scan_cron`, UTC), which the scanner reads. Settings →
+  Scan schedule changes it (Off, daily, weekly or monthly, at a time in a chosen time zone); the
+  scanner picks up a change within 5 minutes.
 - **Scans**: "Scan now" and adding an asset insert a `scans` document with `status: "queued"`. The
   scanner picks it up. A scan counts as in progress while it is `queued`, `pending` or `running`
   (for at most 24 hours).

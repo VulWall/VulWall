@@ -122,25 +122,25 @@ else
         {
             <partial name="~/Verticals/Recommendations/Views/Partials/_SeverityDivider.cshtml" model='("critical", "Critical", Model.CriticalFindings.Count)' />
             <partial name="~/Verticals/Recommendations/Views/Partials/_FindingsList.cshtml"
-                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.CriticalFindings, FeatureAccess = Model.FeatureAccess }' />
+                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.CriticalFindings }' />
         }
         @if (Model.HighFindings.Any())
         {
             <partial name="~/Verticals/Recommendations/Views/Partials/_SeverityDivider.cshtml" model='("high", "High", Model.HighFindings.Count)' />
             <partial name="~/Verticals/Recommendations/Views/Partials/_FindingsList.cshtml"
-                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.HighFindings, FeatureAccess = Model.FeatureAccess }' />
+                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.HighFindings }' />
         }
         @if (Model.MediumFindings.Any())
         {
             <partial name="~/Verticals/Recommendations/Views/Partials/_SeverityDivider.cshtml" model='("medium", "Medium", Model.MediumFindings.Count)' />
             <partial name="~/Verticals/Recommendations/Views/Partials/_FindingsList.cshtml"
-                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.MediumFindings, FeatureAccess = Model.FeatureAccess }' />
+                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.MediumFindings }' />
         }
         @if (Model.LowFindings.Any())
         {
             <partial name="~/Verticals/Recommendations/Views/Partials/_SeverityDivider.cshtml" model='("low", "Low", Model.LowFindings.Count)' />
             <partial name="~/Verticals/Recommendations/Views/Partials/_FindingsList.cshtml"
-                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.LowFindings, FeatureAccess = Model.FeatureAccess }' />
+                     model='new VulWall.Dashboard.Recommendations.Models.FindingsListModel { Findings = Model.LowFindings }' />
         }
     </div>
 }

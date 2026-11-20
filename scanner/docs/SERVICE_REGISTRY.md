@@ -28,12 +28,11 @@ whole scanner.
 | 12 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | `kb_generation_queue` | `consumers()` → ingestion orchestrator | Yes |
 | 13 | **enrichment-ingestion** | `enrichment_ingestion_service` | `discovery_enrichment_results` | MongoDB `discoveries` | `consumers()` → ingestion orchestrator | Yes |
 | 14 | **kb-ingestion** | `kb_ingestion_service` | `kb_generation_results` | MongoDB `knowledge_base` | `consumers()` → ingestion orchestrator | Yes |
-| 15 | **audit-ingestion** | `audit_ingestion_service` | `system_audit_logs` | MongoDB `audit_logs` | `consumers()` → ingestion orchestrator | Yes |
-| 16 | **scan-coordinator** | _(not a consumer)_ | MongoDB `scans` (status `queued`) | `domain_discovery_queue`, `ip_discovery_queue` | `coordinatorComponents()` | Yes (`scans` only) |
+| 15 | **scan-coordinator** | _(not a consumer)_ | MongoDB `scans` (status `queued`) | `domain_discovery_queue`, `ip_discovery_queue` | `coordinatorComponents()` | Yes (`scans` only) |
 
 **Notes:**
-- Ingestion slices (#10–15) run inside the ingestion orchestrator (`src/internal/ingestion/orchestrator.go`).
-- The scan coordinator (#16) is three goroutines: the cron **scheduler** (per-org `scan_cron`, plus stream cleanup), the **queued-scan poller** (every 5 s, claims scans the web app queued), and the **scan monitor** (marks scans `done`). It writes only the `scans` collection; see the scan lifecycle in [DATABASE.md](DATABASE.md#scans-collection).
+- Ingestion slices (#10–14) run inside the ingestion orchestrator (`src/internal/ingestion/orchestrator.go`).
+- The scan coordinator (#15) is three goroutines: the cron **scheduler** (per-org `scan_cron`, plus stream cleanup), the **queued-scan poller** (every 5 s, claims scans the web app queued), and the **scan monitor** (marks scans `done`). It writes only the `scans` collection; see the scan lifecycle in [DATABASE.md](DATABASE.md#scans-collection).
 - Without `ANTHROPIC_API_KEY` the KB engine (#9) does not start. `kb_generation_queue` keeps its jobs until the key is set.
 - `main.go` creates the job-queue groups (`0`) and every trigger-stream group (`$`) before any component starts.
 
@@ -54,10 +53,9 @@ whole scanner.
 | `discovery_enrichment_results` | `StreamDiscoveryEnrichmentResults` | result | discovery-enrichment | enrichment-ingestion | `0` |
 | `kb_generation_queue` | `StreamKBGenerationQueue` | job | findings-ingestion | knowledge-base-engine | `0` |
 | `kb_generation_results` | `StreamKBGenerationResults` | result | knowledge-base-engine | kb-ingestion | `0` |
-| `system_audit_logs` | `StreamSystemAuditLogs` | audit | various | audit-ingestion | `0` |
 
 **Start Position Key:**
-- `0` = CreateConsumerGroup (from beginning) — guaranteed delivery for results, jobs, audits
+- `0` = CreateConsumerGroup (from beginning) — guaranteed delivery for results and jobs
 - `$` = CreateConsumerGroupFromLatest — ephemeral triggers, only process new messages
 
 ---
@@ -137,11 +135,10 @@ These 5 result/finding streams are trimmed on a cron schedule (`5 */6 * * *` = e
 | `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (domain, subdomain, ip, port) | domain-ingestion, port-ingestion, enrichment-ingestion |
 | `findings` | `CollectionFindings` | Security vulnerabilities from scanners | findings-ingestion |
 | `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries keyed by finding_type (~84 entries) | kb-ingestion |
-| `organizations` | `CollectionOrganizations` | Org settings with subscription/scan config | web app |
+| `organizations` | `CollectionOrganizations` | Org settings with the scan schedule (`scan_settings`) | web app |
 | `scans` | `CollectionScans` | Scan execution records | web app (inserts `queued`), scan-coordinator, scan-monitor |
-| `audit_logs` | `CollectionAuditLogs` | System audit events | audit-ingestion |
 
-**Read-only access (scanner):** `assets`, `organizations` — written by the web app, read by scan-coordinator. The web app creates the default organization with `subscription_settings.scan_cron`.
+**Read-only access (scanner):** `assets`, `organizations` — written by the web app, read by scan-coordinator. The web app creates the default organization with `scan_settings.scan_cron` (UTC) and `scan_settings.enabled`, and changes them from Settings → Scan schedule; the scheduler reloads organizations every 5 minutes.
 
 ---
 
@@ -165,6 +162,5 @@ Each service defines its consumer group constant in its own `constants.go`:
 | findings-ingestion | `src/internal/ingestion/findings_ingestion/constants.go` | `GroupFindingsIngestion` |
 | enrichment-ingestion | `src/internal/ingestion/enrichment_ingestion/constants.go` | `GroupEnrichmentIngestion` |
 | kb-ingestion | `src/internal/ingestion/kb_ingestion/constants.go` | `GroupKBIngestion` |
-| audit-ingestion | `src/internal/ingestion/audit_ingestion/constants.go` | `GroupAuditIngestion` |
 
 Shared stream/collection constants live in `src/internal/shared/constants.go`.

@@ -64,6 +64,31 @@
         });
     }
 
+    // Show only the schedule fields that apply to the chosen frequency.
+    function initScheduleForm() {
+        const frequency = document.getElementById('scheduleFrequency');
+        if (!frequency) return;
+        const fields = document.querySelectorAll('#scanScheduleForm [data-schedule-for]');
+        const sync = () => {
+            fields.forEach(el => {
+                el.hidden = !el.dataset.scheduleFor.split(' ').includes(frequency.value);
+            });
+        };
+        frequency.addEventListener('change', sync);
+        sync();
+    }
+
+    // Open the tab named in the URL hash (e.g. /Settings#schedule after saving the schedule).
+    function openTabFromHash() {
+        const id = window.location.hash.slice(1);
+        if (!/^[a-z-]+$/.test(id)) return;
+        const tab = document.getElementById(`${id}-tab`);
+        if (tab && window.bootstrap) bootstrap.Tab.getOrCreateInstance(tab).show();
+    }
+
+    initScheduleForm();
+    openTabFromHash();
+
     initLazyTab('preferences-tab', 'preferences', '/Settings/GetPreferencesData', 'Failed to load preferences. Please refresh the page.');
 
     initConfirmationModal('removeLogoBtn', 'confirmRemoveLogoModalConfirm', 'removeLogoForm', 'confirmRemoveLogoModal');

@@ -14,7 +14,6 @@ public static class MongoDbIndexManager
         await Task.WhenAll(
             CreateFindingIndexes(database),
             CreateScanIndexes(database),
-            CreateAuditLogIndexes(database),
             CreateSharedLinkIndexes(database),
             CreateAssetIndexes(database),
             CreateTrendIndexes(database),
@@ -72,19 +71,6 @@ public static class MongoDbIndexManager
                     .Descending("created_at"),
                 new CreateIndexOptions { Name = "org_id_1_created_at_-1", Background = true })
         ]);
-    }
-
-    private static async Task CreateAuditLogIndexes(IMongoDatabase database)
-    {
-        var collection = database.GetCollection<BsonDocument>("audit_logs");
-
-        // Supports: recent activities widget sorted by date
-        await collection.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
-            Builders<BsonDocument>.IndexKeys
-                .Ascending("org_id")
-                .Descending("created_at"),
-            new CreateIndexOptions { Name = "org_id_1_created_at_-1", Background = true }
-        ));
     }
 
     private static async Task CreateSharedLinkIndexes(IMongoDatabase database)

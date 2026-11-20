@@ -1,8 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VulWall.Dashboard.Attributes;
-using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Repositories;
@@ -22,7 +20,7 @@ public class ScansController(
     {
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
         var organization = await organizationRepository.GetByIdAsync(orgId);
-        var scanCron = organization?.SubscriptionSettings?.ScanCron;
+        var scanCron = organization?.ScanSettings?.ActiveCron;
 
         var model = await scansService.GetIndexViewModelAsync(scanCron);
         return View(model);
@@ -46,14 +44,13 @@ public class ScansController(
     {
         var orgId = await organizationContext.GetCurrentOrgIdAsync();
         var organization = await organizationRepository.GetByIdAsync(orgId);
-        var scanCron = organization?.SubscriptionSettings?.ScanCron;
+        var scanCron = organization?.ScanSettings?.ActiveCron;
         var vm = await scansService.GetLiveScanStatusAsync(scanCron);
         return PartialView("Partials/_LiveScanStatus", vm);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    [AuditLog(Category = AuditLogCategory.Scans, Action = "Triggered scan")]
     public async Task<IActionResult> TriggerScan()
     {
         var state = await scansService.GetScanNowStateAsync();

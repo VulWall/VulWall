@@ -80,7 +80,7 @@ KNOWLEDGE BASE FLOW:
 6. The web app reads from knowledge_base collection (shared across all orgs, ~84 entries)
 
 SCAN COORDINATOR FLOW:
-1. Runs on cron schedule per organization (scan_cron field)
+1. Runs on cron schedule per organization (`scan_settings.scan_cron`, skipped when `scan_settings.enabled` is false)
 2. Creates Scan record (status=running, type=scheduled)
 3. Queries enabled user-added assets from assets collection
 4. Publishes discovery jobs to Redis:
@@ -98,7 +98,7 @@ SCAN COORDINATOR FLOW:
 - Finding formats: `DiscoveryFinding`, `IPDiscoveryFinding`, `SecurityFinding`, `EnrichmentFinding`
 - KB formats: `KBGenerationJob`, `KBGenerationResult`
 - Asset models: `Asset`, `Discovery`, `ResolutionHistoryEntry`, `ServiceHistoryEntry`
-- Scan models: `Organization`, `SubscriptionSettings`, `Scan`, `ScanStats`, `AssetTarget`
+- Scan models: `Organization`, `ScanSettings`, `Scan`, `ScanStats`, `AssetTarget`
 
 **Put in `src/internal/shared/constants.go`** — constants used by 2+ services:
 - Stream names, collection names, asset types, severities, protocols, statuses
@@ -145,8 +145,8 @@ The web app and the scanner share no HTTP API. The web app inserts a `scans`
 document with `status: "queued"` and polls the document for `done`/`failed`.
 
 **Cron schedules:**
-- Per-org scan: `scan_cron` field (6-field: `sec min hour day month weekday`)
-- Org refresh: `0 * * * *` (hourly)
+- Per-org scan: `scan_settings.scan_cron` (5-field, UTC: `min hour day month weekday`). No scan when `scan_settings.enabled` is `false` or the cron is empty
+- Org refresh: `*/5 * * * *` (every 5 minutes; only organizations whose schedule changed are rescheduled, and a failed load keeps the current schedules)
 - Stream cleanup: `5 */6 * * *` (every 6 hours)
 - Scan monitor: every 5 minutes
 - Queued-scan poll: every 5 seconds (ticker, not cron)
@@ -310,7 +310,6 @@ The orchestrator runs all consumer slices concurrently:
 | findings_ingestion | `security_findings` | `findings` | `kb_generation_queue` |
 | enrichment_ingestion | `discovery_enrichment_results` | `discoveries` | — |
 | kb_ingestion | `kb_generation_results` | `knowledge_base` | — |
-| audit_ingestion | `system_audit_logs` | `audit_logs` | — |
 
 ---
 

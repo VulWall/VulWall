@@ -14,20 +14,16 @@ using VulWall.Dashboard.Scans.Models;
 namespace VulWall.Dashboard.Dashboard.Services;
 
 public class DashboardService(
-    AuditLogRepository auditLogRepository,
     AssetsRepository assetsRepository,
     FindingsRepository findingsRepository,
     ScansRepository scansRepository,
     DiscoveriesRepository discoveriesRepository,
     KnowledgeBaseCacheService knowledgeBaseCache,
-    IFeatureAccessService featureAccessService,
     ISecurityScoreProvider securityScoreProvider,
     ISuppressionFilter suppressionFilter)
 {
     public async Task<Models.IndexViewModel> GetIndexViewModelAsync()
     {
-        var featureAccess = await featureAccessService.GetFeatureAccessAsync();
-
         // ── Fetch shared data once ──────────────────────────────────────
         var allFindingsTask = findingsRepository.GetAllAsync();
         var allDiscoveriesTask = discoveriesRepository.GetAllAsync();
@@ -38,15 +34,9 @@ public class DashboardService(
         );
         var totalAssetsTask = assetsRepository.CountAsync(_ => true);
         var kbEntriesTask = knowledgeBaseCache.GetAllAsync();
-        var logsTask = auditLogRepository.FindAsync(
-            predicate: log => !log.IsAdminAction,
-            orderByProperty: log => log.CreatedAt,
-            sortDirection: SortDirection.Descending,
-            limit: 5
-        );
         var suppressedKeysTask = suppressionFilter.GetActiveSuppressionKeysAsync();
 
-        await Task.WhenAll(allFindingsTask, allDiscoveriesTask, doneScansTask, totalAssetsTask, kbEntriesTask, logsTask, suppressedKeysTask);
+        await Task.WhenAll(allFindingsTask, allDiscoveriesTask, doneScansTask, totalAssetsTask, kbEntriesTask, suppressedKeysTask);
 
         var suppressedKeys = await suppressedKeysTask;
         var allFindingsRaw = (await allFindingsTask).ToList();
@@ -56,7 +46,6 @@ public class DashboardService(
         var doneScans = (await doneScansTask).ToList();
         var totalAssets = await totalAssetsTask;
         var kbEntries = await kbEntriesTask;
-        var logs = await logsTask;
 
         var latestScan = doneScans.FirstOrDefault();
         var recentScans = doneScans.Take(5).ToList();
@@ -181,15 +170,6 @@ public class DashboardService(
             };
         }).ToList();
 
-        // ── Recent activities ───────────────────────────────────────────
-        var recentActivities = logs.Select(log => new RecentActivityViewModel
-        {
-            Action = log.Action,
-            UserName = log.UserName,
-            AdditionalInfo = log.AdditionalInfo,
-            TimeAgo = log.CreatedAt.ToRelativeTime()
-        }).ToList();
-
         // ── Chart data & trends (use pre-fetched data) ──────────────────
         var chartData = await GetIssuesTimelineChartData(allFindings, doneScans, allDiscoveries);
 
@@ -204,7 +184,6 @@ public class DashboardService(
 
         var model = new Models.IndexViewModel
         {
-            FeatureAccess = featureAccess,
             HasScanData = latestScan != null,
             PrimaryDomain = primaryDomain,
             LastScanTimeAgo = latestScan?.CreatedAt.ToRelativeTime() ?? "never",
@@ -213,20 +192,19 @@ public class DashboardService(
             ScoreVerdict = scoreVerdict,
             TotalAssets = (int)totalAssets,
             CriticalIssues = criticalIssues,
-            CriticalIssuesTrend = featureAccess.CanViewTrends ? criticalTrend : 0,
+            CriticalIssuesTrend = criticalTrend,
             HighIssues = highFindings,
-            HighIssuesTrend = featureAccess.CanViewTrends ? highTrend : 0,
+            HighIssuesTrend = highTrend,
             DiscoveredAssets = (int)discoveredAssets,
-            DiscoveredAssetsTrend = featureAccess.CanViewTrends ? discoveredTrend : 0,
+            DiscoveredAssetsTrend = discoveredTrend,
             SecurityScore = scoreResult.Score,
-            SecurityScoreTrend = featureAccess.CanViewTrends ? scoreResult.Trend : 0,
+            SecurityScoreTrend = scoreResult.Trend,
             SecurityScoreBreakdown = scoreResult.Breakdown,
             SecurityScoreSummary = scoreResult.Summary,
             SecurityScoreCap = scoreResult.AppliedCap,
             ChartData = chartData,
             CriticalVulnerabilities = criticalVulnerabilities,
-            RecentScans = recentScanViewModels,
-            RecentActivities = recentActivities
+            RecentScans = recentScanViewModels
         };
 
         return model;

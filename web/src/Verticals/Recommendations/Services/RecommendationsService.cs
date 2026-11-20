@@ -13,12 +13,10 @@ public class RecommendationsService(
     DiscoveriesRepository discoveriesRepository,
     ScansRepository scansRepository,
     KnowledgeBaseCacheService knowledgeBaseCache,
-    IFeatureAccessService featureAccessService,
     FindingSuppressionService suppressionService)
 {
     public async Task<RecommendationsIndexViewModel> GetIndexViewModelAsync()
     {
-        var featureAccessTask = featureAccessService.GetFeatureAccessAsync();
         var allFindingsTask = findingsRepository.GetAllAsync();
         var scansTask = scansRepository.FindAsync(
             predicate: s => s.Status == ScanStatus.Done,
@@ -31,10 +29,9 @@ public class RecommendationsService(
         var activeSuppressionsTask = suppressionService.GetActiveSuppressionsAsync();
 
         await Task.WhenAll(
-            featureAccessTask, allFindingsTask, scansTask,
+            allFindingsTask, scansTask,
             discoveriesTask, kbEntriesTask, suppressedKeysTask, activeSuppressionsTask);
 
-        var featureAccess = await featureAccessTask;
         var allFindings = await allFindingsTask;
         var latestScan = (await scansTask).FirstOrDefault();
         var findings = latestScan != null
@@ -48,10 +45,7 @@ public class RecommendationsService(
         var discoveryDict = (await discoveriesTask).ToDictionary(d => d.Id, d => d);
         var kbByType = (await kbEntriesTask).ToDictionary(kb => kb.FindingType, kb => kb);
 
-        var viewModel = new RecommendationsIndexViewModel
-        {
-            FeatureAccess = featureAccess
-        };
+        var viewModel = new RecommendationsIndexViewModel();
 
         viewModel.LastScanAt = latestScan?.CreatedAt;
 
@@ -159,7 +153,6 @@ public class RecommendationsService(
 
     public async Task<RecommendationDetailViewModel?> GetDetailViewModelAsync(string id)
     {
-        var featureAccessTask = featureAccessService.GetFeatureAccessAsync();
         var findingTask = findingsRepository.GetByIdAsync(id);
         var kbEntriesTask = knowledgeBaseCache.GetAllAsync();
         var allFindingsTask = findingsRepository.GetAllAsync();
@@ -172,14 +165,13 @@ public class RecommendationsService(
         var suppressedKeysTask = suppressionService.GetActiveSuppressionKeysAsync();
 
         await Task.WhenAll(
-            featureAccessTask, findingTask, kbEntriesTask,
+            findingTask, kbEntriesTask,
             allFindingsTask, scansTask, discoveriesTask, suppressedKeysTask);
 
         var finding = await findingTask;
         if (finding == null)
             return null;
 
-        var featureAccess = await featureAccessTask;
         var suppressedKeys = await suppressedKeysTask;
 
         var kbByType = (await kbEntriesTask).ToDictionary(kb => kb.FindingType, kb => kb);
@@ -270,7 +262,6 @@ public class RecommendationsService(
         {
             Finding = findingVm,
             AffectedAssets = affectedAssets,
-            FeatureAccess = featureAccess,
             ShowAiKeyHint = string.IsNullOrWhiteSpace(ServiceSettings.Instance.AnthropicApiKey)
         };
     }

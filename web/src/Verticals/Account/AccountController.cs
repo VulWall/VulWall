@@ -5,8 +5,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VulWall.Dashboard.Account.Models;
 using VulWall.Dashboard.Account.Services;
-using VulWall.Dashboard.Attributes;
-using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Services.RateLimiter;
 using VulWall.Dashboard.Data.Entities.User;
@@ -85,7 +83,6 @@ public class AccountController(
 
     [AllowAnonymous]
     [HttpPost("/login")]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Logged in")]
     public async Task<IActionResult> Login(LoginInput input)
     {
         if (!await accountService.AdminExistsAsync())
@@ -119,7 +116,6 @@ public class AccountController(
 
     [Authorize]
     [HttpPost("/logout")]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Logged out")]
     public async Task<IActionResult> Logout()
     {
         // Rotating the stamp also ends copies of this cookie and sessions on other devices.
@@ -130,7 +126,6 @@ public class AccountController(
 
     [Authorize]
     [HttpPost("/account/password")]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Changed password")]
     public async Task<IActionResult> ChangePassword(ChangePasswordInput input)
     {
         if (!ModelState.IsValid)
@@ -177,8 +172,6 @@ public class AccountController(
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
 
-        // The audit filter reads HttpContext.User after the action, so set it for this request too.
-        HttpContext.User = principal;
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
     }
 

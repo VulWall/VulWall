@@ -1,4 +1,3 @@
-using VulWall.Dashboard.Common.Models;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Data.Entities.KnowledgeBase;
 using DbFinding = VulWall.Dashboard.Data.Entities.Finding.Finding;
@@ -16,7 +15,6 @@ public class TechnicalReportBuilder(
         IEnumerable<DbFinding> findings,
         IEnumerable<Data.Entities.Discovery.Discovery> discoveries,
         Data.Entities.Scan.Scan? mostRecentScan,
-        FeatureAccess featureAccess,
         byte[]? logo = null)
     {
         // Build base summary report. The technical report does not render the score trend or
@@ -33,7 +31,6 @@ public class TechnicalReportBuilder(
             findingsList,
             discoveries,
             mostRecentScan,
-            featureAccess,
             doneScans,
             findingsList,
             null,

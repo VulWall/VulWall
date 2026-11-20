@@ -7,7 +7,7 @@ namespace VulWall.Dashboard.Common.Services.Organization;
 
 /// <summary>
 /// A self-hosted install has exactly one organization. The web app creates it at startup;
-/// the scanner only reads it (scan schedule from subscription_settings.scan_cron).
+/// the scanner only reads it (scan schedule from scan_settings.scan_cron).
 /// </summary>
 public static class DefaultOrganization
 {
@@ -27,7 +27,7 @@ public static class DefaultOrganization
         return await repository.CreateAsync(new OrgEntity
         {
             CompanyName = DefaultName,
-            SubscriptionSettings = new SubscriptionSettings { ScanCron = ScanCronGenerator.RandomWeekly() },
+            ScanSettings = new ScanSettings { ScanCron = ScanCronGenerator.RandomWeekly(), Enabled = true },
             CreatedAt = now,
             UpdatedAt = now
         });

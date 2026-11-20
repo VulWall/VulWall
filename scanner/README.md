@@ -58,7 +58,7 @@ All of these run as goroutines in the `nightwatch` process
 | **scan-coordinator** | Cron scans, queued-scan poller, scan monitor | MongoDB `scans` | domain/ip queues |
 | **domain-discovery** | Subdomain discovery (subfinder) | domain_discovery_queue | domain_discovery_results |
 | **port-discovery** | TCP port scanning | ip_discovery_queue | ip_discovery_results |
-| **ingestion** | MongoDB persistence (6 slices) | multiple | multiple |
+| **ingestion** | MongoDB persistence (5 slices) | multiple | multiple |
 | **nuclei-scanner** | Vulnerability scanning | domain/port_scan_triggers | security_findings |
 | **testssl-scanner** | TLS/SSL analysis | domain_scan_triggers | security_findings |
 | **js-dependency-scanner** | JS library vulnerabilities (retire.js) | domain_scan_triggers | security_findings |
@@ -135,7 +135,7 @@ src/
 - **assets** - User-added assets to scan (managed via UI)
 - **discoveries** - Scan results (domains, subdomains, IPs, ports) with `org_id`
 - **findings** - Security vulnerabilities from scanners
-- **organizations** - Org settings with `subscription_settings.scan_cron` (created by the web app)
+- **organizations** - Org settings with `scan_settings.scan_cron` (created by the web app)
 - **scans** - Scan execution records (`queued` by the web app, claimed by the coordinator)
 
 ## Documentation

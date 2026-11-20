@@ -293,11 +293,7 @@ else if (status == "muted")
         <!-- Suppression Panel -->
         @{
             var assetsWithDiscovery = Model.AffectedAssets.Where(a => !string.IsNullOrEmpty(a.DiscoveryId)).ToList();
-            var hasSuppressedAssets = assetsWithDiscovery.Any(a => a.IsSuppressed);
-            // Show the panel when the user can suppress, or when there are already-suppressed
-            // assets that the user must still be able to restore.
-            var showSuppressionPanel = !string.IsNullOrEmpty(Model.Finding.FindingType) &&
-                                       (Model.FeatureAccess.CanSuppressFindings || hasSuppressedAssets);
+            var showSuppressionPanel = !string.IsNullOrEmpty(Model.Finding.FindingType);
         }
         @if (showSuppressionPanel)
         {
@@ -317,7 +313,6 @@ else if (status == "muted")
                                 <i class="fas fa-check-circle"></i>
                                 @(asset.Target ?? asset.DiscoveryId) — @statusLabel
                             </span>
-                            @* Restore is always available, even when suppression is not allowed. *@
                             <form method="post"
                                   action="@Url.Action("UnsuppressFinding", "Recommendations")"
                                   class="d-inline">
@@ -330,7 +325,7 @@ else if (status == "muted")
                             </form>
                         </div>
                     }
-                    else if (Model.FeatureAccess.CanSuppressFindings)
+                    else
                     {
                         <form method="post"
                               action="@Url.Action("SuppressFinding", "Recommendations")"
