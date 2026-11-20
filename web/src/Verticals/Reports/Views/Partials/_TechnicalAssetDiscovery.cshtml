@@ -1,7 +1,7 @@
 @model VulWall.Dashboard.Reports.Models.TechnicalReportViewModel
 
 <section class="tr-band" id="infrastructure">
-    <p class="tr-eyebrow">ATTACK SURFACE</p>
+    <p class="tr-eyebrow">Attack surface</p>
     <h2 class="tr-h2">Infrastructure &amp; services</h2>
 
     @if (Model.NotableServices.Any())
@@ -11,10 +11,10 @@
             <table class="tr-table">
                 <thead>
                     <tr>
-                        <th>SERVICE</th>
-                        <th>HOST</th>
-                        <th>PORT</th>
-                        <th>CLOUD</th>
+                        <th>Service</th>
+                        <th>Host</th>
+                        <th>Port</th>
+                        <th>Cloud</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -41,11 +41,11 @@
             <table class="tr-table">
                 <thead>
                     <tr>
-                        <th>SUBDOMAIN</th>
+                        <th>Subdomain</th>
                         <th>IP</th>
-                        <th>CLOUD</th>
-                        <th>PORTS</th>
-                        <th>SERVICES</th>
+                        <th>Cloud</th>
+                        <th>Ports</th>
+                        <th>Services</th>
                     </tr>
                 </thead>
                 <tbody>

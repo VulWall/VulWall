@@ -180,9 +180,7 @@
 .live-runs__label {
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.08em;
     color: var(--vw-gray-400, #94A3B8);
-    text-transform: uppercase;
 }
 
 .live-runs__viewall {

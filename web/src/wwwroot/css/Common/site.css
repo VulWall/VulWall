@@ -220,8 +220,6 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
     margin-bottom: 10px;
     font-size: 0.68rem;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
     color: rgba(251, 251, 253, 0.65);
 }
 

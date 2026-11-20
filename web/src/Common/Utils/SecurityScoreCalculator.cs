@@ -237,7 +237,7 @@ public static class SecurityScoreCalculator
     {
         >= 90 => "Excellent",
         >= 70 => "Good",
-        >= 50 => "Needs Attention",
+        >= 50 => "Needs attention",
         >= 30 => "Poor",
         _ => "Critical"
     };
@@ -302,7 +302,7 @@ public static class SecurityScoreCalculator
         {
             >= 90 => ("Excellent", "Your security posture is excellent with minimal risk."),
             >= 70 => ("Good", "Your security posture is good. Address remaining issues to improve."),
-            >= 50 => ("Needs Attention", "Several security issues require attention."),
+            >= 50 => ("Needs attention", "Several security issues require attention."),
             >= 30 => ("Poor", "Significant security risks present. Prioritize remediation."),
             _ => ("Critical", "Critical security issues detected. Immediate action required.")
         };

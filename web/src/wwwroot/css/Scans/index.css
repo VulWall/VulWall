@@ -302,7 +302,7 @@
 
 /* Page header — base layout from shared .page-header (sections.css); deltas only */
 .scans-header { align-items: flex-end; gap: 20px; }
-.scans-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--vw-gray-400); margin-bottom: 4px; }
+.scans-eyebrow { font-size: 12px; font-weight: 600; color: var(--vw-gray-400); margin-bottom: 4px; }
 .scans-title { font-size: 29px; font-weight: 700; color: var(--brand-dark-blue); letter-spacing: -.02em; margin: 0; }
 .scans-subtitle { font-size: 14px; color: var(--vw-gray-500); margin-top: 4px; margin-bottom: 0; }
 .scans-header-actions { display: flex; gap: 10px; }
@@ -318,7 +318,7 @@
 .compare-selector-row { display: flex; align-items: stretch; gap: 14px; margin-bottom: 18px; }
 .compare-scan-card { flex: 1; background: var(--bs-body-bg, #fff); border: 1px solid var(--vw-gray-200); border-radius: 14px; box-shadow: var(--card-shadow); padding: 16px 20px; }
 .compare-scan-card--latest { border: 2px solid var(--brand-blue); box-shadow: 0 8px 24px rgba(0,86,161,.10); }
-.compare-scan-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--vw-gray-400); margin-bottom: 8px; }
+.compare-scan-label { font-size: 11px; font-weight: 600; color: var(--vw-gray-400); margin-bottom: 8px; }
 .compare-scan-label--latest { color: var(--brand-blue); }
 .compare-scan-info { display: flex; align-items: center; justify-content: space-between; }
 .compare-scan-date { font-size: 17px; font-weight: 600; color: var(--brand-dark-blue); }

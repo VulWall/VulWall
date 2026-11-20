@@ -194,7 +194,7 @@ public class TechnicalReportBuilder(
         {
             0 => "Good",
             >= 1 and <= 2 => "Monitor",
-            >= 3 and <= 5 => "Needs Attention",
+            >= 3 and <= 5 => "Needs attention",
             _ => "Critical"
         };
     }
