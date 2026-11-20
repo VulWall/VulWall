@@ -190,7 +190,7 @@ public class AssetsService(
         if (reasons is null || reasons.Count == 0)
             return null;
         return reasons.Contains(DegradedAsset.RootNxDomain)
-            ? "Domain does not resolve. Its open issues stay open until a scan can check it again."
+            ? "Domain does not resolve. If it stays gone for 3 scans in a row, its open issues are closed."
             : "The last scan couldn't check everything for this domain, so its open issues were kept.";
     }
 }

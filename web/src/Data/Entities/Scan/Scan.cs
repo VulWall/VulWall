@@ -47,9 +47,9 @@ public class Scan : IEntity<string>, IOrganizationEntity
     public string? CompletionReason { get; set; }
 
     /// <summary>
-    /// True when the scan resolved every open finding it did not see. False for a partial scan:
-    /// a timeout or restart close (nothing resolved), or a scan with <see cref="DegradedAssets"/>
-    /// (findings of those assets were left open). Null on older scans.
+    /// True when the scan's pipeline drained and every asset was fully checked. False for a partial
+    /// scan: a timeout close (nothing resolved), or a scan with <see cref="DegradedAssets"/>. Null on
+    /// older scans. Either way, the scanner closes an issue only on proof that it is fixed.
     /// </summary>
     [BsonElement("findings_reconciled")]
     [BsonIgnoreIfNull]
@@ -59,7 +59,7 @@ public class Scan : IEntity<string>, IOrganizationEntity
     [BsonElement("degraded_assets")]
     public List<DegradedAsset> DegradedAssets { get; set; } = [];
 
-    /// <summary>Open findings this scan did not see and left open because their asset is degraded.</summary>
+    /// <summary>Open findings this scan did not see and left open because it had no proof they are fixed.</summary>
     [BsonElement("unchecked_finding_ids")]
     public List<string> UncheckedFindingIds { get; set; } = [];
 

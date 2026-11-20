@@ -3,8 +3,9 @@ using MongoDB.Bson.Serialization.Attributes;
 namespace VulWall.Dashboard.Data.Entities.Scan;
 
 /// <summary>
-/// A domain asset whose attack surface a scan could not fully see. The scan left the findings
-/// under it open. Written by the scanner (scans.degraded_assets).
+/// A domain asset whose attack surface a scan could not fully see. Information for the user: the
+/// scanner closes an issue only on proof that it is fixed, so issues it could not re-check stay
+/// open. Written by the scanner (scans.degraded_assets).
 /// </summary>
 [BsonIgnoreExtraElements]
 public class DegradedAsset
@@ -20,7 +21,7 @@ public class DegradedAsset
     [BsonElement("domain")]
     public string Domain { get; set; } = string.Empty;
 
-    /// <summary>root_nxdomain, dns_failures or subdomain_enumeration_failed.</summary>
+    /// <summary>root_nxdomain, dns_failures, subdomain_enumeration_failed or publish_failed.</summary>
     [BsonElement("reason")]
     public string Reason { get; set; } = string.Empty;
 }

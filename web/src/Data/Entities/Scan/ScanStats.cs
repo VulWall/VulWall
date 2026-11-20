@@ -25,4 +25,11 @@ public class ScanStats
 
     [BsonElement("resolved_findings")]
     public int ResolvedFindings { get; set; }
+
+    /// <summary>
+    /// Open issues the scan did not see and kept open: it had no proof they are fixed (the check
+    /// of their host did not run or did not complete, or the host was not found). Written by the scanner.
+    /// </summary>
+    [BsonElement("unchecked_findings")]
+    public int UncheckedFindings { get; set; }
 }
