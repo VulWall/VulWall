@@ -52,18 +52,6 @@ public class ServiceSettings : EnvLoader
     [Env(Name = "NIGHTWATCH_API_KEY", Required = false)]
     public string NightWatchApiKey = string.Empty;
 
-    [Env(Name = "RESEND_API_KEY", Required = false)]
-    public string ResendApiKey = string.Empty;
-
-    [Env(Name = "RESEND_FROM_EMAIL", Default = "VulWall <noreply@example.com>")]
-    public string ResendFromEmail = string.Empty;
-
     [Env(Name = "NIGHTWATCH_WEBHOOK_SECRET", Required = false)]
     public string NightWatchWebhookSecret = string.Empty;
-
-    [Env(Name = "RESEND_SCAN_COMPLETE_TEMPLATE", Required = false)]
-    public string ResendScanCompleteTemplate = string.Empty;
-
-    [Env(Name = "RESEND_DELETE_ACCOUNT_TEMPLATE_ID", Required = false)]
-    public string ResendDeleteAccountTemplateId = string.Empty;
 }

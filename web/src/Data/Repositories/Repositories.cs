@@ -104,12 +104,6 @@ public class KnowledgeBaseRepository(IMongoDatabase database)
     }
 }
 
-// DeletionLogRepository uses BaseMongoRepository (not OrgScoped) because:
-// - Deletion logs outlive the organization — they must persist after the org is purged.
-// - They contain no PII; only org_id + timestamp for compliance/audit.
-public class DeletionLogRepository(IMongoDatabase database)
-    : BaseMongoRepository<DeletionLog, string>(database, "deletion_logs");
-
 public class FindingSuppressionsRepository(
     IMongoDatabase database,
     IOrganizationContext orgContext,

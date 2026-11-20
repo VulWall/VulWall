@@ -115,11 +115,6 @@
     background: transparent;
 }
 
-/* Danger tab */
-.vw-settings-tabs .vw-danger-tab .nav-link        { color: var(--vw-danger); }
-.vw-settings-tabs .vw-danger-tab .nav-link:hover  { border-bottom-color: var(--vw-danger); }
-.vw-settings-tabs .vw-danger-tab .nav-link.active { color: var(--vw-danger); border-bottom-color: var(--vw-danger); }
-
 /* ── Content fade-in ─────────────────────────────────────── */
 #accountTabsContent .tab-pane {
     animation: vwSettingsFade .2s var(--ease-standard);
@@ -270,40 +265,7 @@ select.vw-fld { cursor: pointer; }
 .vw-pref-name { font-size: 15px; font-weight: 600; color: var(--text-heading); margin-bottom: 2px; }
 .vw-pref-desc { font-size: 13px; color: var(--text-muted); margin: 0; }
 
-/* ── Danger zone card ────────────────────────────────────── */
-.vw-danger-card {
-    background: var(--surface-card);
-    border: 1px solid var(--vw-danger);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card);
-    overflow: hidden;
-}
-.vw-danger-card-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 15px 22px;
-    background: var(--vw-danger-bg);
-    border-bottom: 1px solid var(--vw-danger);
-}
-.vw-danger-card-header i  { color: var(--vw-danger); font-size: 15px; }
-.vw-danger-card-header span { font-size: 15px; font-weight: 700; color: var(--vw-danger); letter-spacing: -.01em; }
-.vw-danger-card-body {
-    padding: 24px 22px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-    flex-wrap: wrap;
-}
-.vw-danger-desc-title { font-size: 15px; font-weight: 600; color: var(--text-heading); margin-bottom: 4px; }
-.vw-danger-desc-text  { font-size: 13.5px; color: var(--text-muted); line-height: 1.5; max-width: 520px; margin: 0; }
-
-[data-bs-theme="dark"] .vw-danger-card        { border-color: var(--vw-danger); }
-[data-bs-theme="dark"] .vw-danger-card-header { background: rgba(217,45,32,.15); border-color: var(--vw-danger); }
-
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 640px) {
     .vw-fld-grid { grid-template-columns: 1fr; }
-    .vw-danger-card-body { flex-direction: column; align-items: flex-start; }
 }

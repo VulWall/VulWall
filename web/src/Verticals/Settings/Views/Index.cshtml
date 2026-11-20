@@ -6,7 +6,6 @@
 @section Styles {
     <link rel="stylesheet" href="~/css/Settings/index.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Settings/billing.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/Settings/delete-account.css" asp-append-version="true" />
 }
 
 @section Scripts {
@@ -14,7 +13,6 @@
     <script src="https://js.stripe.com/clover/stripe.js"></script>
     <script src="~/js/Settings/index.js" asp-append-version="true"></script>
     <script src="~/js/Settings/billing.js" asp-append-version="true"></script>
-    <script src="~/js/Settings/delete-account.js" asp-append-version="true"></script>
 }
 
 <div class="page-header page-header--stacked vw-settings-header">
@@ -48,12 +46,6 @@
             <i class="fa-solid fa-sliders"></i>Preferences
         </button>
     </li>
-    <li class="nav-item ms-auto vw-danger-tab" role="presentation">
-        <button class="nav-link" id="danger-tab" data-bs-toggle="tab" data-bs-target="#danger"
-                type="button" role="tab" aria-controls="danger" aria-selected="false">
-            <i class="fa-solid fa-triangle-exclamation"></i>Danger zone
-        </button>
-    </li>
 </ul>
 
 <div class="tab-content" id="accountTabsContent">
@@ -72,33 +64,7 @@
         <partial name="~/Verticals/Settings/Views/Partials/_TabLoadingPlaceholder.cshtml" model='("preferences-loading", "Loading preferences...")' />
         <div id="preferences-content" style="display: none;"></div>
     </div>
-    <div class="tab-pane fade" id="danger" role="tabpanel" aria-labelledby="danger-tab">
-        <partial name="~/Verticals/Settings/Views/Partials/_Danger.cshtml" />
-    </div>
 </div>
-
-<partial name="~/Common/Views/_ConfirmationModal.cshtml" model='new ConfirmationModalModel {
-    ModalId = "confirmDeleteAccountModal",
-    Title = "Delete Account",
-    Message = "This action is permanent and cannot be undone.",
-    MessageBold = true,
-    ConfirmButtonText = "Yes, Send Verification Code",
-    ConfirmButtonStyle = "danger",
-    ConfirmButtonIcon = "fa-solid fa-paper-plane",
-    HeaderStyle = "danger",
-    Icon = "fa-solid fa-triangle-exclamation",
-    Details = new List<string> { "All your assets, scans, findings, and reports will be permanently deleted", "Your active subscription will be cancelled immediately", "Your account cannot be recovered after deletion" },
-    DetailsTitle = "What will be deleted:",
-    DetailsIcon = "fa-solid fa-circle-exclamation",
-    DetailsStyle = "danger",
-    FooterMessage = "We will email you a verification code to confirm this action."
-}' />
-
-<partial name="~/Verticals/Settings/Views/Partials/_OtpVerificationModal.cshtml" />
-
-<form id="deletionAntiforgeryForm" style="display: none;">
-    @Html.AntiForgeryToken()
-</form>
 
 <partial name="~/Common/Views/_ConfirmationModal.cshtml" model='new ConfirmationModalModel {
     ModalId = "cancelSubscriptionModal",

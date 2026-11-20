@@ -183,7 +183,6 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<SettingsService>();
         services.AddScoped<StripePaymentService>();
-        services.AddScoped<AccountDeletionService>();
 
         return services;
     }
@@ -247,8 +246,7 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddEmailServices(this IServiceCollection services)
     {
-        services.AddSingleton<EmailTemplateRegistry>();
-        services.AddScoped<IEmailService, ResendEmailService>();
+        services.AddSingleton<IEmailService, NullEmailService>();
         return services;
     }
 

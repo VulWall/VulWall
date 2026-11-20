@@ -18,8 +18,7 @@ public class SettingsController(
     ILogger<SettingsController> logger,
     OrganizationRepository organizationRepository,
     IOrganizationContext organizationContext,
-    Services.SettingsService settingsService,
-    AccountDeletionService accountDeletionService)
+    Services.SettingsService settingsService)
     : Controller
 {
     [Authorize]
@@ -207,90 +206,6 @@ public class SettingsController(
     {
         var organization = await GetCurrentOrganizationAsync();
         return PartialView("Partials/_Preferences", organization.TourCompleted);
-    }
-
-    /// <summary>
-    /// Step 1 of account deletion: generates an OTP and sends it to the owner's email.
-    /// Returns 200 OK on success so the JS can switch to the OTP entry modal.
-    /// </summary>
-    [Authorize]
-    [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Requested account deletion")]
-    public async Task<IActionResult> RequestAccountDeletion()
-    {
-        var organization = await GetCurrentOrganizationAsync();
-
-        if (string.IsNullOrEmpty(organization.OwnerEmail))
-        {
-            logger.LogWarning("Account deletion requested for org {OrgId} but owner email is missing", organization.Id);
-            return BadRequest("Owner email not configured for this organization.");
-        }
-
-        if (accountDeletionService.IsOtpRequestRateLimited(organization.Id))
-        {
-            logger.LogWarning("Account deletion OTP request rate limited for org {OrgId}", organization.Id);
-            return StatusCode(429, "Please wait before requesting another verification code.");
-        }
-
-        var sent = await accountDeletionService.SendDeletionOtpAsync(organization.Id, organization.OwnerEmail);
-        if (!sent)
-        {
-            logger.LogError("Failed to send account deletion OTP for org {OrgId}", organization.Id);
-            return StatusCode(500, "Failed to send verification code. Please try again later.");
-        }
-
-        accountDeletionService.RecordOtpRequest(organization.Id);
-
-        logger.LogInformation("Account deletion OTP sent for org {OrgId}", organization.Id);
-        return Ok();
-    }
-
-    /// <summary>
-    /// Step 2 of account deletion: validates the OTP and, if correct, purges all data.
-    /// Returns a redirect URL — the client navigates to it, which triggers the Auth0 signout flow.
-    /// Accepts the OTP from the request body — never accepts user/org IDs from client input.
-    /// </summary>
-    [Authorize]
-    [HttpPost]
-    [AuditLog(Category = AuditLogCategory.Account, Action = "Confirmed account deletion")]
-    public async Task<IActionResult> ConfirmAccountDeletion([FromBody] ConfirmDeletionRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request?.Otp))
-            return BadRequest("Verification code is required.");
-
-        var orgId = await organizationContext.GetCurrentOrgIdAsync();
-
-        // The Auth0 user ID is read exclusively from server-side claims — never from request input.
-        var auth0UserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(auth0UserId))
-        {
-            logger.LogError("Cannot resolve Auth0 user ID from claims during account deletion for org {OrgId}", orgId);
-            return StatusCode(500, "Unable to identify the authenticated user.");
-        }
-
-        var success = await accountDeletionService.ConfirmAndDeleteAccountAsync(orgId, auth0UserId, request.Otp);
-
-        if (!success)
-            return BadRequest("The verification code is invalid or has expired. Please request a new code.");
-
-        // Data purge is complete. Return the signout URL — the client will navigate to it
-        // so the Auth0 redirect chain can work correctly (it requires a full page navigation).
-        return Ok(new { redirectUrl = Url.Action(nameof(SignOutAfterDeletion), "Settings") });
-    }
-
-    /// <summary>
-    /// Final step of account deletion: signs the user out via Auth0 and redirects to the login page.
-    /// The user's data is already gone at this point.
-    /// </summary>
-    [AllowAnonymous]
-    public async Task SignOutAfterDeletion()
-    {
-        var logoutProperties = new LogoutAuthenticationPropertiesBuilder()
-            .WithRedirectUri(Url.Action("Login", "Settings", new { accountDeleted = true }) ?? "/Account/Login?accountDeleted=true")
-            .Build();
-
-        await HttpContext.SignOutAsync(Auth0Constants.AuthenticationScheme, logoutProperties);
-        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     }
 
     [Authorize]

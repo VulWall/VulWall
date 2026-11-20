@@ -18,9 +18,7 @@
         "STRIPE_PRO_PRICEID": "",
         "STRIPE_PUBLISHABLEKEY": "",
         "STRIPE_SECRETKEY": "",
-        "STRIPE_WEBHOOKSECRET": "",
-        "RESEND_API_KEY": "",
-        "RESEND_SCAN_COMPLETE_TEMPLATE": ""
+        "STRIPE_WEBHOOKSECRET": ""
       }
     },
     "https": {
