@@ -137,7 +137,7 @@
 
 @section Scripts {
     <script id="chart-data" type="application/json">@Html.Raw(JsonSerializer.Serialize(Model.ChartData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))</script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="~/lib/chart.js/chart.umd.min.js" asp-append-version="true"></script>
     <script type="module" src="~/js/Dashboard/index.js" asp-append-version="true"></script>
 }
 

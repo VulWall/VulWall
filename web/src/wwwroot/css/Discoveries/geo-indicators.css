@@ -19,6 +19,15 @@
     border-radius: 2px;
 }
 
+/* Generic icon when no flag or provider logo is shipped in wwwroot/images/logos */
+.geo-icon {
+    width: 20px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--bs-secondary-color);
+    vertical-align: middle;
+}
+
 .geo-cloud-logo {
     opacity: 0.95;
     border-radius: 3px;

@@ -2,6 +2,8 @@
 @{
     Layout = null;
     var showReport = Model.Report != null;
+    // Link previews need an absolute image URL; build it from this install's own host.
+    var previewImageUrl = $"{Context.Request.Scheme}://{Context.Request.Host}/img/VW_Brand.png";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -16,15 +18,15 @@
     <meta property="og:site_name" content="VulWall" />
     <meta property="og:title" content="@(showReport ? $"{Model.Report!.OrganizationName} — Security Assessment Results Ready" : "Security Assessment Results — VulWall")" />
     <meta property="og:description" content="@(showReport ? $"A vulnerability assessment has been completed for {Model.Report!.OrganizationName}. Open to review findings and recommended actions." : "A vulnerability assessment has been completed. Open to review findings and recommended actions.")" />
-    <meta property="og:image" content="https://vulwall.com/images/VulWall-C.png" />
+    <meta property="og:image" content="@previewImageUrl" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="@(showReport ? $"{Model.Report!.OrganizationName} — Security Assessment Results Ready" : "Security Assessment Results — VulWall")" />
     <meta name="twitter:description" content="@(showReport ? $"A vulnerability assessment has been completed for {Model.Report!.OrganizationName}. Open to review findings and recommended actions." : "A vulnerability assessment has been completed. Open to review findings and recommended actions.")" />
-    <meta name="twitter:image" content="https://vulwall.com/images/VulWall-C.png" />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="twitter:image" content="@previewImageUrl" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/fontawesome/css/all.min.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Common/fonts.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Common/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Reports/shared.css" asp-append-version="true" />
@@ -46,8 +48,8 @@
                 <p class="status-message">
                     The report you're looking for doesn't exist or the link is invalid.
                 </p>
-                <a href="https://vulwall.com" class="btn btn-primary mt-3">
-                    <i class="fas fa-home me-2"></i>Go to VulWall
+                <a href="https://github.com/VulWall/VulWall" class="btn btn-primary mt-3" rel="noopener">
+                    <i class="fas fa-arrow-up-right-from-square me-2"></i>About VulWall
                 </a>
             </div>
             <div class="powered-by">
@@ -68,8 +70,8 @@
                     This shared report link has been revoked by the organization.
                     Please contact them for a new link.
                 </p>
-                <a href="https://vulwall.com" class="btn btn-primary mt-3">
-                    <i class="fas fa-home me-2"></i>Go to VulWall
+                <a href="https://github.com/VulWall/VulWall" class="btn btn-primary mt-3" rel="noopener">
+                    <i class="fas fa-arrow-up-right-from-square me-2"></i>About VulWall
                 </a>
             </div>
             <div class="powered-by">
@@ -90,8 +92,8 @@
                     This shared report link has expired.
                     Please contact the organization for a new link.
                 </p>
-                <a href="https://vulwall.com" class="btn btn-primary mt-3">
-                    <i class="fas fa-home me-2"></i>Go to VulWall
+                <a href="https://github.com/VulWall/VulWall" class="btn btn-primary mt-3" rel="noopener">
+                    <i class="fas fa-arrow-up-right-from-square me-2"></i>About VulWall
                 </a>
             </div>
             <div class="powered-by">
@@ -185,6 +187,6 @@
         </div>
     }
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js" asp-append-version="true"></script>
 </body>
 </html>
