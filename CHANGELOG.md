@@ -67,7 +67,11 @@ First open-source, self-hosted release, under the MIT License.
   except on a CDN edge address (Cloudflare, Fastly, CloudFront, Azure Front
   Door): its ports 80 and 443 are left to the scan by name, and another open
   port is scanned as `<name>:<port>` when it answers. nuclei by IP waited
-  minutes on each such port and then dropped it.
+  minutes on each such port and then dropped it. Findings of a
+  `<name>:<port>` run are not resolved by later scans: resolve them by hand,
+  or they close when the port stays closed for 3 scans. A CDN edge address
+  added as an IP asset gets no nuclei scan (its port scan still runs); the
+  Discoveries page marks such an address as a CDN edge.
 - `NUCLEI_RATE_LIMIT` (default 50) sets the requests per second of each
   nuclei process. At nuclei's own 150, a home or office connection times out
   and nuclei drops the target.

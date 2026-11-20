@@ -170,6 +170,9 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 
 		// IP geolocation enrichment now handled by discovery_enrichment service
 		var metadata map[string]interface{}
+		if provider := shared.CDNProvider(finding.IP); provider != "" {
+			metadata = map[string]interface{}{shared.DiscoveryMetaCDNEdge: provider}
+		}
 
 		newIPDiscovery := shared.Discovery{
 			ID:             ipDiscoveryID,
@@ -215,11 +218,16 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 		return "", false, err
 	}
 
-	// IP exists - update last_seen and add scan_id to array
+	// IP exists - update last_seen and add scan_id to array; keep the CDN edge mark current
 	update := bson.M{
 		"$set": bson.M{
 			"last_seen": timestamp,
 		},
+	}
+	if provider := shared.CDNProvider(finding.IP); provider != "" {
+		update["$set"].(bson.M)["metadata."+shared.DiscoveryMetaCDNEdge] = provider
+	} else {
+		update["$unset"] = bson.M{"metadata." + shared.DiscoveryMetaCDNEdge: ""}
 	}
 	// Add scan_id to array if present
 	if finding.ScanID != nil {

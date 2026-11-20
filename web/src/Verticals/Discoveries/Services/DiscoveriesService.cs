@@ -169,7 +169,8 @@ public class DiscoveriesService(
             Isp = geoInfo.Isp,
             CloudProvider = geoInfo.CloudProvider,
             CloudRegion = geoInfo.CloudRegion,
-            Waf = geoInfo.Waf
+            Waf = geoInfo.Waf,
+            CdnEdge = geoInfo.CdnEdge
         };
     }
 

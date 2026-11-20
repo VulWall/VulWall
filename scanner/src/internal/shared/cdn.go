@@ -16,6 +16,11 @@ import (
 //go:embed cdn_ranges.txt
 var cdnRangesFile string
 
+// DiscoveryMetaCDNEdge is the discoveries.metadata key on an IP discovery whose address is a
+// CDN edge: the CDN's name (CDNProvider). Port ingestion keeps it current; the web app shows
+// that such an address gets no nuclei scan by IP (only its names are scanned).
+const DiscoveryMetaCDNEdge = "cdn_edge"
+
 type cdnRange struct {
 	provider string
 	prefix   netip.Prefix

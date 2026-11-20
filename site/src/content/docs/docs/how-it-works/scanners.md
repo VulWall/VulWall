@@ -34,7 +34,10 @@ WAF or shared hosting are tested too. Open ports are scanned by IP address and p
 on the shared edge addresses of a CDN (Cloudflare, Fastly, CloudFront, Azure Front Door), which
 answer only requests that name a site. There, ports 80 and 443 are left to the scan by name,
 and another open port is scanned by the name that resolved to the address
-(`https://shop.example.com:8443`) when it answers.
+(`https://shop.example.com:8443`) when it answers. A later scan does not resolve the findings of
+such a run: resolve them by hand, or they close when the port stays closed for 3 scans. A CDN
+edge address that you add as an IP asset gets a port scan but no nuclei scan; add the
+hostnames behind it instead. The Discoveries page marks such an address as a CDN edge.
 
 ### TLS
 

@@ -30,6 +30,7 @@ public class DiscoveryItemViewModel
     public string? CloudProvider { get; set; }
     public string? CloudRegion { get; set; }
     public string? Waf { get; set; }
+    public string? CdnEdge { get; set; }
 
     public List<ServiceGroup> GroupedServices
     {
