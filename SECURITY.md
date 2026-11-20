@@ -9,8 +9,6 @@ Please report security vulnerabilities **privately** through GitHub:
 2. Describe the issue, the affected version or commit, and the steps to
    reproduce it. A proof of concept helps.
 
-If you can't use GitHub, email security@example.com instead.
-
 Do not open a public issue, pull request or discussion for a vulnerability
 until a fix is released.
 
