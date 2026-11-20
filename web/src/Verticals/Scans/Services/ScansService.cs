@@ -11,8 +11,7 @@ namespace VulWall.Dashboard.Scans.Services;
 
 public class ScansService(
     ScansRepository scansRepository,
-    FindingsRepository findingsRepository,
-    ScanTriggerService scanTriggerService)
+    FindingsRepository findingsRepository)
 {
     /// <summary>
     /// Gets the complete Index view model with all data.
@@ -171,28 +170,26 @@ public class ScansService(
     }
 
     /// <summary>
-    /// Determines whether the current org may trigger an on-demand scan. Used both by the Index
-    /// view (to render the button) and by the controller's POST action (as a server-side gate).
+    /// What "Scan now" does for the current org. Used by the Index view to render the button.
     /// Performs its own DB read so it can be called independently of the Index view model build.
     /// </summary>
     public async Task<ScanNowState> GetScanNowStateAsync()
     {
-        var hasInProgress = await scanTriggerService.IsScanInProgressAsync();
-
-        return hasInProgress ? ScanNowState.InProgress : ScanNowState.Allowed;
+        var scans = (await scansRepository.FindAsync(ScanTriggerService.InProgressPredicate(DateTime.UtcNow))).ToList();
+        return EvaluateScanNowState(scans);
     }
 
     /// <summary>
     /// Mirrors <see cref="GetScanNowStateAsync"/> but evaluates against an already-loaded scan list
-    /// (newest-first) so the Index view model build avoids a second DB round-trip.
+    /// so the Index view model build avoids a second DB round-trip.
     /// </summary>
-    private static ScanNowState EvaluateScanNowState(IList<Scan> scans)
+    internal static ScanNowState EvaluateScanNowState(IList<Scan> scans)
     {
-        var isInProgress = ScanTriggerService.InProgressPredicate(DateTime.UtcNow).Compile();
-        if (scans.Any(isInProgress))
-            return ScanNowState.InProgress;
+        if (scans.Any(s => s.Status == ScanStatus.Queued))
+            return ScanNowState.Queued;
 
-        return ScanNowState.Allowed;
+        var isStarted = ScanTriggerService.StartedPredicate(DateTime.UtcNow).Compile();
+        return scans.Any(isStarted) ? ScanNowState.InProgress : ScanNowState.Allowed;
     }
 
     /// <summary>

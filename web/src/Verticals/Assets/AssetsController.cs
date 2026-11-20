@@ -64,22 +64,27 @@ public class AssetsController(
     }
 
     /// <summary>
-    /// Starts a scan for a newly added asset unless the org already has one running.
-    /// Adding several assets in a row must not start one scan per asset: the running scan
-    /// does not pick up the new asset, so it is included in the next scan instead.
+    /// Starts a scan for a newly added asset. While a scan runs, one follow-up scan is queued
+    /// instead: the running scan does not pick up the new asset, the follow-up reads the assets
+    /// when it starts. Adding several assets in a row queues only that one follow-up.
     /// </summary>
     private async Task TriggerScanAndSetTempData(string assetName)
     {
-        var alreadyRunningMessage =
-            $"Asset {assetName} has been added. A scan is already running; the asset will be included in the next scan.";
-
         var triggeredBy = User.FindFirst(ClaimTypes.Email)?.Value ?? "unknown";
         var result = await scanTriggerService.TriggerAsync(triggeredBy);
 
-        if (result == TriggerScanResult.Started)
-            TempData["ScanTriggered"] = assetName;
-        else
-            TempData["Info"] = alreadyRunningMessage;
+        switch (result)
+        {
+            case TriggerScanResult.Started:
+                TempData["ScanTriggered"] = assetName;
+                break;
+            case TriggerScanResult.QueuedAfterCurrent:
+                TempData["Info"] = $"Asset {assetName} has been added. A scan is running. Your new asset will be scanned right after it finishes.";
+                break;
+            default:
+                TempData["Info"] = $"Asset {assetName} has been added. A follow-up scan is already queued and will include this asset.";
+                break;
+        }
     }
 
     [HttpPost]

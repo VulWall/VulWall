@@ -38,8 +38,15 @@
             else if (Model.ScanNowState == ScanNowState.InProgress)
             {
                 <button class="btn btn-vw-primary btn-sm overview-rescan-btn" disabled
-                        title="A scan is already running.">
+                        title="A scan is already running. To queue another one, use Scan again on the Scans page.">
                     <i class="fas fa-spinner fa-spin me-1"></i>Scanning…
+                </button>
+            }
+            else if (Model.ScanNowState == ScanNowState.Queued)
+            {
+                <button class="btn btn-vw-primary btn-sm overview-rescan-btn" disabled
+                        title="A scan is queued. It starts when no other scan is running.">
+                    <i class="fas fa-clock me-1"></i>Scan queued
                 </button>
             }
         </div>
