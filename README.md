@@ -39,6 +39,9 @@ to fix.
 ## Quick start
 
 You need Docker with Compose v2 and a host with 4 GB of RAM (recommended).
+In a test scan of one domain with the default settings, the stack used up to
+1.5 GB, of which the scanner used 1.2 GB. More domains and a higher
+`NUCLEI_WORKERS` use more.
 
 ```bash
 git clone https://github.com/VulWall/VulWall.git && cd VulWall
