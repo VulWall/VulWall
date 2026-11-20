@@ -30,6 +30,7 @@ import (
 	"github.com/VulWall/VulWall/scanner/src/internal/core/logger"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/mongox"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
+	"github.com/VulWall/VulWall/scanner/src/internal/core/sysinfo"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
 	"github.com/VulWall/VulWall/scanner/src/internal/discoveries/domain_discovery"
 	"github.com/VulWall/VulWall/scanner/src/internal/discoveries/port_discovery"
@@ -128,7 +129,11 @@ func run() error {
 		return err
 	}
 
-	return supervise(ctx, log, append(workers, coordinator...))
+	systemInfo := component{"system-info", func(ctx context.Context) error {
+		return sysinfo.Run(ctx, db, sysinfo.DefaultSources(), log.With(zap.String("component", "system-info")))
+	}}
+
+	return supervise(ctx, log, append(append(workers, coordinator...), systemInfo))
 }
 
 // createConsumerGroups creates the groups of the discovery job queues (from

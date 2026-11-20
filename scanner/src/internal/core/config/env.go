@@ -22,6 +22,11 @@ const (
 	EnvServiceName = "SERVICE_NAME"
 	// EnvEnvironment is the deployment environment (development/production)
 	EnvEnvironment = "ENVIRONMENT"
+	// EnvVulWallVersion is the release the image was built from (scanner/Dockerfile build arg)
+	EnvVulWallVersion = "VULWALL_VERSION"
+	// EnvNucleiVersion and EnvTestSSLVersion are the pinned tool versions, set by scanner/Dockerfile
+	EnvNucleiVersion  = "NUCLEI_VERSION"
+	EnvTestSSLVersion = "TESTSSL_VERSION"
 
 	// ===========================================
 	// API Keys

@@ -11,6 +11,12 @@
 # Base images are pinned by multi-arch index digest; Dependabot bumps tag and digest together.
 ARG GO_IMAGE=golang:1.26.10-alpine3.24@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696
 ARG RUNTIME_IMAGE=alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+# Tool versions are declared once here and redeclared in each stage that uses them.
+# The runtime stage exports them so the scanner can report them (system_info).
+ARG NUCLEI_VERSION=3.11.1
+ARG TESTSSL_TAG=v3.2.5
+# Release builds pass the tag (release.yml).
+ARG VULWALL_VERSION=dev
 
 # ---------------------------------------------------------------------------
 # Go binary (cross-compiled on the build platform for multi-arch builds)
@@ -30,10 +36,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Third-party tools, downloaded and verified
 FROM ${RUNTIME_IMAGE} AS tools
 ARG TARGETARCH
-ARG NUCLEI_VERSION=3.11.1
+ARG NUCLEI_VERSION
 ARG NUCLEI_SHA256_AMD64=ea63d4ae232808cd7c6bc00d0142428e231fab59dae01042246097d195835ab6
 ARG NUCLEI_SHA256_ARM64=8044e3d9768ba0a744b2872c1a87e813006f013da97ca9f50f7661a4203bec07
-ARG TESTSSL_TAG=v3.2.5
+ARG TESTSSL_TAG
 ARG TESTSSL_COMMIT=4f17be931a9d60f3f987975aea8221f1a8eaf7aa
 RUN apk add --no-cache curl unzip git
 RUN set -eu; \
@@ -57,6 +63,9 @@ RUN set -eu; \
 # ---------------------------------------------------------------------------
 # Runtime
 FROM ${RUNTIME_IMAGE}
+ARG NUCLEI_VERSION
+ARG TESTSSL_TAG
+ARG VULWALL_VERSION
 
 # retire.js and its whole dependency tree are pinned with integrity hashes in
 # docker/retire/package-lock.json (Dependabot updates it); npm ci installs exactly that.
@@ -90,7 +99,10 @@ ENV ENVIRONMENT=production \
     IP_ENRICHMENT_DB_PATH=/data/geo/dbip-country-lite.mmdb \
     IP_ASN_DB_PATH=/data/geo/dbip-asn-lite.mmdb \
     CLOUD_DATA_DIR=/data/geo/cloud \
-    WAF_RULES_PATH=/etc/vulwall/waf_rules.json
+    WAF_RULES_PATH=/etc/vulwall/waf_rules.json \
+    VULWALL_VERSION=$VULWALL_VERSION \
+    NUCLEI_VERSION=$NUCLEI_VERSION \
+    TESTSSL_VERSION=$TESTSSL_TAG
 
 USER vulwall
 WORKDIR /home/vulwall
