@@ -78,8 +78,9 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-vulwall-scanner}
-      OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-}
-      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-}
+      # The OpenTelemetry SDK reads these too and logs an error for an empty sampler name.
+      OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
     volumes:
       - nuclei-templates:/data/nuclei-templates
       - geo-data:/data/geo
