@@ -229,7 +229,14 @@ func (s *Service) targetsFor(orgID string, assets []shared.Asset) []shared.Asset
 
 // markFailed moves a scan to "failed" so it does not block its organization
 // until the monitor's safety timeout. Best-effort: errors are only logged.
+//
+// The write uses a context detached from ctx: the usual cause is a publish
+// that failed because ctx was cancelled (shutdown), and the scan must still be
+// closed then, or it stays "running" until the safety timeout.
 func (s *Service) markFailed(ctx context.Context, scanID string, cause error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), markFailedTimeout)
+	defer cancel()
+
 	now := time.Now()
 	err := s.store.setScanFields(ctx, scanID, bson.M{
 		"status":       shared.StatusFailed,

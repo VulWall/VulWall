@@ -77,7 +77,11 @@ func (f *fakeStore) claimQueuedScan(ctx context.Context, scanID string, set bson
 	return true, f.setScanFields(ctx, scanID, set)
 }
 
-func (f *fakeStore) setScanFields(_ context.Context, scanID string, set bson.M) error {
+func (f *fakeStore) setScanFields(ctx context.Context, scanID string, set bson.M) error {
+	// Like the MongoDB driver, refuse to write with a cancelled context.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s := f.scans[scanID]
 	if status, ok := set["status"].(string); ok {
 		s.Status = status
@@ -328,5 +332,20 @@ func TestScanStartTimePrefersStartedAt(t *testing.T) {
 	}
 	if got := scanStartTime(shared.Scan{CreatedAt: created, StartedAt: &started}); !got.Equal(started) {
 		t.Fatalf("with started_at: got %v, want started_at", got)
+	}
+}
+
+func TestMarkFailedWritesAfterContextCancelled(t *testing.T) {
+	store := newFakeStore()
+	store.scans["s1"] = shared.Scan{ID: "s1", OrgID: "org-1", Status: shared.StatusRunning}
+	svc, _ := newTestService(store, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // a shutdown cancelled the publish that failed
+
+	svc.markFailed(ctx, "s1", context.Canceled)
+
+	if store.scans["s1"].Status != shared.StatusFailed {
+		t.Fatalf("status = %q, want failed even though ctx was cancelled", store.scans["s1"].Status)
 	}
 }

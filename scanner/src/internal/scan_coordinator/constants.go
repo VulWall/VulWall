@@ -10,6 +10,10 @@ const (
 	// that the web UI queued.
 	QueuedScanPollInterval = 5 * time.Second
 
+	// markFailedTimeout bounds the detached write that closes a scan which
+	// failed to start (see Service.markFailed).
+	markFailedTimeout = 10 * time.Second
+
 	// QueuedScanBatchSize caps how many queued scans one poll reads.
 	QueuedScanBatchSize = 100
 
