@@ -104,6 +104,15 @@ func (f *fakeStore) claimQueuedScan(ctx context.Context, scanID string, set bson
 	return true, nil
 }
 
+func (f *fakeStore) deleteQueuedScan(_ context.Context, scanID string) (bool, error) {
+	s, ok := f.scans[scanID]
+	if !ok || s.Status != shared.StatusQueued {
+		return false, nil
+	}
+	delete(f.scans, scanID)
+	return true, nil
+}
+
 func (f *fakeStore) setScanFields(ctx context.Context, scanID string, set bson.M) error {
 	// Like the MongoDB driver, refuse to write with a cancelled context.
 	if err := ctx.Err(); err != nil {
@@ -619,7 +628,7 @@ func TestFollowUpScanTargetsAssetsAtClaimTime(t *testing.T) {
 }
 
 // TestQueuedScheduledScanSkippedWhenScheduleTurnedOff: the schedule was turned off while the
-// scheduled scan waited behind a running scan, so it is closed without running. A requested
+// scheduled scan waited behind a running scan, so it is deleted without running. A requested
 // scan of the same organization still runs.
 func TestQueuedScheduledScanSkippedWhenScheduleTurnedOff(t *testing.T) {
 	for name, settings := range map[string]shared.ScanSettings{
@@ -637,11 +646,11 @@ func TestQueuedScheduledScanSkippedWhenScheduleTurnedOff(t *testing.T) {
 
 		svc.startQueuedScans(context.Background())
 
-		set := store.set["q1"]
-		if store.scans["q1"].Status != shared.StatusFailed ||
-			set["status_reason"] != shared.ScanReasonScheduleTurnedOff ||
-			set["completion_reason"] != shared.ScanReasonScheduleTurnedOff || set["completed_at"] == nil {
-			t.Fatalf("%s: status %q, $set = %+v", name, store.scans["q1"].Status, set)
+		if s, ok := store.scans["q1"]; ok {
+			t.Fatalf("%s: queued scheduled scan still exists (status %q), want deleted", name, s.Status)
+		}
+		if _, ok := store.set["q1"]; ok {
+			t.Fatalf("%s: scan was updated before deletion: %+v", name, store.set["q1"])
 		}
 		if len(*published) != 0 {
 			t.Fatalf("%s: published %d jobs, want none", name, len(*published))
@@ -670,5 +679,21 @@ func TestQueuedScheduledScanRunsWhileScheduleOn(t *testing.T) {
 
 	if store.scans["q1"].Status != shared.StatusRunning || len(*published) != 1 {
 		t.Fatalf("status %q, %d jobs; want running with 1 job", store.scans["q1"].Status, len(*published))
+	}
+}
+
+// TestDeleteQueuedScanSparesClaimedScan: the delete only removes a scan that is still queued,
+// so a scan claimed between the poll and the delete keeps running.
+func TestDeleteQueuedScanSparesClaimedScan(t *testing.T) {
+	store := newFakeStore()
+	store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: shared.StatusRunning, Type: shared.ScanTypeScheduled}
+
+	deleted, err := store.deleteQueuedScan(context.Background(), "r1")
+
+	if err != nil || deleted {
+		t.Fatalf("deleted = %v, err = %v; want false, nil", deleted, err)
+	}
+	if _, ok := store.scans["r1"]; !ok {
+		t.Fatal("running scan was deleted")
 	}
 }

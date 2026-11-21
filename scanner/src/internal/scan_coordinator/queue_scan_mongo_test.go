@@ -75,16 +75,21 @@ func TestQueueScanAgainstMongo(t *testing.T) {
 		t.Fatalf("%d queued scans, want 1", n)
 	}
 
-	// The schedule is off: when the running scan is done, the poller closes the queued
+	// The delete filters on status too, so a running scan is never deleted.
+	if deleted, err := store.deleteQueuedScan(ctx, "r1"); err != nil || deleted {
+		t.Fatalf("deleteQueuedScan(running) = %v, %v; want false, nil", deleted, err)
+	}
+
+	// The schedule is off: when the running scan is done, the poller deletes the queued
 	// scheduled scan instead of running it.
 	if _, err := scans.UpdateOne(ctx, bson.M{"_id": "r1"}, bson.M{"$set": bson.M{"status": shared.StatusDone}}); err != nil {
 		t.Fatal(err)
 	}
 	svc.startQueuedScans(ctx)
-	if err := scans.FindOne(ctx, bson.M{"_id": scanID}).Decode(&got); err != nil {
-		t.Fatal(err)
+	if n, _ := scans.CountDocuments(ctx, bson.M{"_id": scanID}); n != 0 {
+		t.Fatalf("queued scheduled scan still exists after the schedule was turned off")
 	}
-	if got["status"] != shared.StatusFailed || got["completion_reason"] != shared.ScanReasonScheduleTurnedOff {
-		t.Fatalf("scan after schedule turned off = %v", got)
+	if n, _ := scans.CountDocuments(ctx, bson.M{"_id": "r1"}); n != 1 {
+		t.Fatalf("finished scan r1 was removed")
 	}
 }

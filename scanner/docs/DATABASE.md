@@ -510,10 +510,10 @@ read by the guards for older documents but is no longer written.
   scan per organization; the coordinator reads a duplicate-key error on that
   insert as "already queued".
 - A queued `scheduled` scan whose organization's schedule was turned off
-  while it waited (`scan_settings.enabled: false` or no `scan_cron`) becomes
-  `failed` with `status_reason` and `completion_reason`
-  `"schedule_turned_off"` and publishes nothing. Requested scans do not
-  depend on the schedule.
+  while it waited (`scan_settings.enabled: false` or no `scan_cron`) is
+  deleted: it never started, so there is nothing to keep. The delete filters
+  on `_id` and `status: "queued"`, so a scan claimed at the same time is not
+  deleted. Requested scans do not depend on the schedule.
 - A queued scan whose organization does not exist becomes `failed`. A queued
   scan with no enabled assets becomes `done` at once, with
   `findings_reconciled: false`. If no discovery job can

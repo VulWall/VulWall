@@ -58,6 +58,9 @@ type scanStore interface {
 	// claimQueuedScan applies set to the scan only while it is still queued.
 	// It reports false when another writer changed or deleted the scan first.
 	claimQueuedScan(ctx context.Context, scanID string, set bson.M) (bool, error)
+	// deleteQueuedScan deletes the scan only while it is still queued. It
+	// reports false when another writer claimed or removed it first.
+	deleteQueuedScan(ctx context.Context, scanID string) (bool, error)
 	setScanFields(ctx context.Context, scanID string, set bson.M) error
 	// setStartedScans applies set to every pending or running scan and
 	// returns how many it changed.
@@ -474,6 +477,17 @@ func (m mongoScanStore) claimQueuedScan(ctx context.Context, scanID string, set 
 		return false, err
 	}
 	return res.MatchedCount == 1, nil
+}
+
+// deleteQueuedScan deletes the scan only while its status is still "queued", so
+// a scan claimed concurrently is never deleted.
+func (m mongoScanStore) deleteQueuedScan(ctx context.Context, scanID string) (bool, error) {
+	res, err := m.db.Collection(shared.CollectionScans).DeleteOne(ctx,
+		bson.M{"_id": scanID, "status": shared.StatusQueued})
+	if err != nil {
+		return false, err
+	}
+	return res.DeletedCount == 1, nil
 }
 
 // setScanFields applies set to one scan.
