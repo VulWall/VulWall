@@ -26,6 +26,10 @@
 <a href="#main" class="skip-link visually-hidden-focusable">Skip to content</a>
 
 <div class="app-shell">
+    @* The sidebar shows the organization, the admin email and the update status: signed-in users only.
+       Anonymous pages that use this layout (the error pages) get the content area alone. *@
+    @if (User.Identity?.IsAuthenticated == true)
+    {
     <!-- Sidebar toggle (visible below lg breakpoint) -->
     <button class="sidebar-toggle btn d-lg-none"
             type="button"
@@ -49,6 +53,7 @@
             @await Html.PartialAsync("_Sidebar")
         </div>
     </div>
+    }
 
     <div class="content d-flex flex-column">
         <main id="main" class="container-fluid pt-4 px-4" role="main">
