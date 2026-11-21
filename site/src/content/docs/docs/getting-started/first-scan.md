@@ -19,7 +19,7 @@ can change the password later in **Settings**.
 
 Go to **Assets** and add a domain you own, for example `example.com`, or an IP address. Adding an
 asset does not start a scan. After you add it, VulWall offers **Scan now**. Add all your assets
-first if you like: a scan covers every asset you have when it starts.
+first if you like: a scan covers every enabled asset when it starts.
 
 :::caution
 Add only assets that you own or that you have written permission to test.
@@ -64,7 +64,7 @@ within 5 minutes. The sidebar and the **Scans** page show when the next
 scan starts. You can also start a scan at any time with **Scan now**.
 
 Adding an asset never starts a scan: a new asset is scanned by the next scan, from **Scan now** or
-the schedule. A scan covers every asset you have when it starts.
+the schedule. A scan covers every enabled asset when it starts.
 
 Only one scan runs at a time. While a scan is queued or running, **Scan now** is turned off; you
 can start a new scan when it finishes. If the schedule comes up while a scan is running, VulWall

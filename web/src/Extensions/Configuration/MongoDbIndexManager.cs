@@ -57,10 +57,10 @@ public static class MongoDbIndexManager
     {
         var collection = database.GetCollection<BsonDocument>("scans");
 
-        // UNIQUE among queued scans: at most one queued scan per organization, so two concurrent
-        // "add asset" or "scan now" requests cannot queue two follow-up scans (ScanTriggerService
-        // reads a duplicate-key error as "already queued"). The scanner claims a queued scan by
-        // changing its status, which takes it out of the index.
+        // UNIQUE among queued scans: at most one queued scan per organization, so concurrent
+        // "Scan now" requests, or a request racing the scanner's scheduled scan, cannot queue two
+        // scans (ScanTriggerService reads a duplicate-key error as "busy"). The scanner claims a
+        // queued scan by changing its status, which takes it out of the index.
         try
         {
             await collection.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(

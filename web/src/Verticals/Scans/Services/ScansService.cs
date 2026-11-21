@@ -150,7 +150,7 @@ public class ScansService(
         return new LiveScanStatusViewModel
         {
             IsScanning = true,
-            StartedTime = running.CreatedAt.ToString("HH:mm"),
+            StartedTime = (running.StartedAt ?? running.CreatedAt).ToString("HH:mm"),
             Trigger = trigger,
             RecentRuns = recentRuns,
             ScanNowState = scanNowState

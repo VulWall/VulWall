@@ -45,7 +45,7 @@
                     @if (Model.ScanNowState == ScanNowState.Queued)
                     {
                         @* The scanner queues a scan when the schedule fires during a running scan. *@
-                        <span class="live-pill live-pill--queued mt-2 d-inline-flex" title="It includes every asset you have when it starts.">
+                        <span class="live-pill live-pill--queued mt-2 d-inline-flex" title="It includes every enabled asset when it starts.">
                             <i class="fas fa-clock"></i>@ScanNowStateText.QueuedAfterCurrent
                         </span>
                     }

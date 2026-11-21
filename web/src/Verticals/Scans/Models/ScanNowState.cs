@@ -15,8 +15,9 @@ public enum ScanNowState
 public static class ScanNowStateText
 {
     /// <summary>
-    /// A scan queued behind a running one. The web app never queues one there, only the scanner
-    /// does, when the schedule fires during a scan, so it is a scheduled scan.
+    /// A scan queued behind a running one. The web app refuses "Scan now" during a scan, so this
+    /// is normally the scanner's scheduled scan (the schedule fired during the scan). Neutral
+    /// wording, because a requested scan can still end up queued behind a stuck running scan.
     /// </summary>
-    public const string QueuedAfterCurrent = "A scheduled scan will start after the current one.";
+    public const string QueuedAfterCurrent = "Another scan will start after the current one.";
 }
