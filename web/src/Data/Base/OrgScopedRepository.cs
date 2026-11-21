@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using MongoDB.Driver;
+using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Abstractions;
 
@@ -72,13 +73,13 @@ public abstract class OrgScopedRepository<TEntity, TId>(
         {
             logger.LogWarning(
                 "Attempted to update {EntityType} {EntityId} from org {EntityOrg} by user from org {UserOrg}",
-                typeof(TEntity).Name, entityId, existing.OrgId, orgId);
+                typeof(TEntity).Name, LogSanitizer.Clean(entityId?.ToString()), existing.OrgId, orgId);
             throw new UnauthorizedAccessException($"Cannot update {typeof(TEntity).Name} from different organization");
         }
 
         entity.OrgId = orgId;
         logger.LogDebug("Updating {EntityType} {EntityId} for org: {OrgId}",
-            typeof(TEntity).Name, entityId, orgId);
+            typeof(TEntity).Name, LogSanitizer.Clean(entityId?.ToString()), orgId);
 
         return await base.UpdateAsync(entity);
     }
@@ -98,12 +99,12 @@ public abstract class OrgScopedRepository<TEntity, TId>(
         {
             logger.LogWarning(
                 "Attempted to delete {EntityType} {EntityId} from org {EntityOrg} by user from org {UserOrg}",
-                typeof(TEntity).Name, id, existing.OrgId, orgId);
+                typeof(TEntity).Name, LogSanitizer.Clean(id?.ToString()), existing.OrgId, orgId);
             throw new UnauthorizedAccessException($"Cannot delete {typeof(TEntity).Name} from different organization");
         }
 
         logger.LogDebug("Deleting {EntityType} {EntityId} for org: {OrgId}",
-            typeof(TEntity).Name, id, orgId);
+            typeof(TEntity).Name, LogSanitizer.Clean(id?.ToString()), orgId);
 
         return await base.DeleteAsync(id);
     }
