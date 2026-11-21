@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0](https://github.com/VulWall/VulWall/compare/v0.2.0...v0.3.0) (2026-11-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **web:** on x86-64, .NET 11 needs an x86-64-v2 CPU (about 2013 or newer).
+
+### Added
+
+* upgrade to Redis 8 ([1acf727](https://github.com/VulWall/VulWall/commit/1acf7270b14c2fa537b8773ad398514c2dad0e6b))
+* **web:** upgrade to .NET 11 ([4380de3](https://github.com/VulWall/VulWall/commit/4380de354cafe04118b217efb31c30f066c8b567))
+
+
+### Fixed
+
+* **web:** sanitize entity IDs in repository log messages ([#117](https://github.com/VulWall/VulWall/issues/117)) ([beb59fc](https://github.com/VulWall/VulWall/commit/beb59fc17f92ce5d74ffdcf3e6e230bc817cfc72))
+
 ## [0.2.0](https://github.com/VulWall/VulWall/compare/v0.1.1...v0.2.0) (2026-11-21)
 
 
