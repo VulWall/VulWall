@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.0](https://github.com/VulWall/VulWall/compare/v0.1.1...v0.2.0) (2026-11-21)
+
+
+### Added
+
+* **web:** check for updates automatically and show it in the sidebar ([#114](https://github.com/VulWall/VulWall/issues/114)) ([2873db4](https://github.com/VulWall/VulWall/commit/2873db4aec6b87c343257f9d30320737ff8dbdb3))
+
+### Changed
+
+* After upgrading, VulWall checks GitHub for new releases automatically (shortly after start, then every 6 hours). GitHub sees your server's IP address and VulWall version. Set `UPDATE_CHECK=false` in `.env` to turn it off.
+
 ## [0.1.1] - 2026-11-21
 
 ### Changed

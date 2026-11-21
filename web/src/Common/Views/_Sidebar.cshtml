@@ -2,7 +2,9 @@
 @using System.Text.Json
 @using VulWall.Dashboard.Common.Services.Organization
 @using VulWall.Dashboard.Common.Services.ScanSchedule
+@using VulWall.Dashboard.Common.Services.UpdateCheck
 @inject IOrganizationContext OrganizationContext
+@inject UpdateCheckState UpdateCheck
 @{
     var email = User.FindFirst(ClaimTypes.Email)?.Value ?? User.FindFirst("email")?.Value ?? "user@example.com";
 
@@ -19,6 +21,9 @@
 
     var ctrl = (ViewContext.RouteData.Values["controller"]?.ToString() ?? "").ToLowerInvariant();
     bool IsActive(string c) => ctrl == c.ToLowerInvariant();
+
+    // From the background update check; never null for dev builds (they are never "Available").
+    var newVersion = UpdateCheck.Current.AvailableVersion;
 }
 
 <aside class="sidebar d-flex flex-column p-3" role="region" aria-label="Primary" data-tour="sidebar">
@@ -124,9 +129,13 @@
                     data-bs-toggle="modal"
                     data-bs-target="#aboutDialog"
                     aria-haspopup="dialog"
-                    aria-label="About VulWall"
-                    title="About VulWall">
+                    aria-label="@(newVersion is null ? "About VulWall" : "About VulWall, update available")"
+                    title="@(newVersion is null ? "About VulWall" : $"VulWall {newVersion} is available")">
                 <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                @if (newVersion is not null)
+                {
+                    <span class="sidebar-action__badge" aria-hidden="true" data-update-badge></span>
+                }
             </button>
             <button id="themeToggle"
                     type="button"
