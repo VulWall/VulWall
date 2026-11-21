@@ -1,3 +1,4 @@
+using System.Globalization;
 using VulWall.Dashboard.Common.Contracts.Enums;
 
 namespace VulWall.Dashboard.Discoveries.Models;
@@ -31,6 +32,33 @@ public class DiscoveryItemViewModel
     public string? CloudRegion { get; set; }
     public string? Waf { get; set; }
     public string? CdnEdge { get; set; }
+
+    /// <summary>
+    /// Country name for tooltips and alt text, e.g. "Netherlands (NL)".
+    /// Falls back to the bare code when it is not a known ISO 3166-1 alpha-2 region.
+    /// </summary>
+    public string? CountryLabel => FormatCountryLabel(CountryCode);
+
+    private static string? FormatCountryLabel(string? countryCode)
+    {
+        if (string.IsNullOrWhiteSpace(countryCode))
+            return null;
+
+        var code = countryCode.Trim().ToUpperInvariant();
+        // RegionInfo also accepts culture names ("en-US") and three-letter codes; only take ISO alpha-2.
+        if (code.Length != 2 || !code.All(char.IsAsciiLetterUpper))
+            return code;
+
+        try
+        {
+            var name = new RegionInfo(code).EnglishName;
+            return string.IsNullOrWhiteSpace(name) || name == code ? code : $"{name} ({code})";
+        }
+        catch (ArgumentException)
+        {
+            return code;
+        }
+    }
 
     public List<ServiceGroup> GroupedServices
     {
