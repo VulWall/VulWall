@@ -264,6 +264,16 @@
     font-size: 0.75rem;
     white-space: nowrap;
 }
+.disc-hosting .provider-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Icon or text, not both: the text after a working image is hidden (it is the image's
+   alt/title already). A broken image gets .image-error from index.js, so the text shows. */
+.disc-hosting .geo-flag:not(.image-error) + .country-code,
+.disc-hosting .geo-cloud-logo:not(.image-error) + .provider-name { display: none; }
 .disc-hosting .image-error { display: none; }
 
 /* ---------- Issues cell ---------- */
