@@ -46,6 +46,8 @@ var startedStatuses = []string{shared.StatusPending, shared.StatusRunning}
 // production implementation is mongoScanStore; tests use a fake.
 type scanStore interface {
 	orgExists(ctx context.Context, orgID string) (bool, error)
+	// orgScanSettings returns the organization's scan schedule settings.
+	orgScanSettings(ctx context.Context, orgID string) (shared.ScanSettings, error)
 	hasScanIn(ctx context.Context, orgID string, statuses []string) (bool, error)
 	orgAssets(ctx context.Context, orgID string) ([]shared.Asset, error)
 	// knownSubdomains returns the names of the org's subdomain discoveries whose parent is
@@ -353,6 +355,14 @@ func (m mongoScanStore) orgExists(ctx context.Context, orgID string) (bool, erro
 		return false, err
 	}
 	return true, nil
+}
+
+// orgScanSettings returns the scan_settings of the organization.
+func (m mongoScanStore) orgScanSettings(ctx context.Context, orgID string) (shared.ScanSettings, error) {
+	var org shared.Organization
+	err := m.db.Collection(shared.CollectionOrganizations).FindOne(ctx, shared.OrgIDFilter(orgID),
+		options.FindOne().SetProjection(bson.M{"scan_settings": 1})).Decode(&org)
+	return org.ScanSettings, err
 }
 
 // hasScanIn reports whether the organization has a scan in one of statuses.

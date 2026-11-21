@@ -2,6 +2,7 @@ package scan_coordinator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -83,7 +84,7 @@ func (s *Service) startQueuedScan(ctx context.Context, queued shared.Scan) {
 		return
 	}
 	if !exists {
-		s.finishQueued(ctx, queued.ID, shared.StatusFailed, ErrOrgNotFound)
+		s.finishQueued(ctx, queued.ID, shared.StatusFailed, "", ErrOrgNotFound)
 		return
 	}
 
@@ -95,6 +96,21 @@ func (s *Service) startQueuedScan(ctx context.Context, queued shared.Scan) {
 	if busy {
 		log.Debug("Queued scan waits: organization has a running scan")
 		return
+	}
+
+	// A scheduled scan queued behind a running one does not run when the
+	// schedule was turned off while it waited. Requested scans always run.
+	if queued.Type == shared.ScanTypeScheduled {
+		settings, err := s.store.orgScanSettings(ctx, queued.OrgID)
+		if err != nil {
+			log.Error("Failed to read scan schedule for queued scheduled scan", zap.Error(err))
+			return
+		}
+		if !settings.Scheduled() {
+			s.finishQueued(ctx, queued.ID, shared.StatusFailed, shared.ScanReasonScheduleTurnedOff,
+				errors.New("scan schedule turned off while the scan was queued"))
+			return
+		}
 	}
 
 	// Claim first, then read the assets: while the scan is queued, the web app promises that
@@ -168,14 +184,20 @@ func (s *Service) startQueuedScan(ctx context.Context, queued shared.Scan) {
 	)
 }
 
-// finishQueued closes a queued scan that can never start.
-func (s *Service) finishQueued(ctx context.Context, scanID, status string, cause error) {
+// finishQueued closes a queued scan that can never start. A non-empty reason
+// is stored as status_reason and completion_reason.
+func (s *Service) finishQueued(ctx context.Context, scanID, status, reason string, cause error) {
 	now := time.Now()
-	claimed, err := s.store.claimQueuedScan(ctx, scanID, bson.M{
+	set := bson.M{
 		"status":       status,
 		"completed_at": now,
 		"updated_at":   now,
-	})
+	}
+	if reason != "" {
+		set["status_reason"] = reason
+		set["completion_reason"] = reason
+	}
+	claimed, err := s.store.claimQueuedScan(ctx, scanID, set)
 	s.logger.Warn("Queued scan cannot start",
 		zap.String("scan_id", scanID),
 		zap.String("status", status),

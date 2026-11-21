@@ -39,7 +39,8 @@ func TestQueueScanAgainstMongo(t *testing.T) {
 		t.Fatal(err)
 	}
 	const org = "org-1"
-	if _, err := db.Collection(shared.CollectionOrganizations).InsertOne(ctx, bson.M{"_id": org}); err != nil {
+	if _, err := db.Collection(shared.CollectionOrganizations).InsertOne(ctx, bson.M{"_id": org,
+		"scan_settings": bson.M{"scan_cron": "0 2 * * *", "enabled": false}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := scans.InsertOne(ctx, bson.M{"_id": "r1", "org_id": org, "status": shared.StatusRunning, "created_at": time.Now()}); err != nil {
@@ -72,5 +73,18 @@ func TestQueueScanAgainstMongo(t *testing.T) {
 	}
 	if n, _ := scans.CountDocuments(ctx, bson.M{"org_id": org, "status": shared.StatusQueued}); n != 1 {
 		t.Fatalf("%d queued scans, want 1", n)
+	}
+
+	// The schedule is off: when the running scan is done, the poller closes the queued
+	// scheduled scan instead of running it.
+	if _, err := scans.UpdateOne(ctx, bson.M{"_id": "r1"}, bson.M{"$set": bson.M{"status": shared.StatusDone}}); err != nil {
+		t.Fatal(err)
+	}
+	svc.startQueuedScans(ctx)
+	if err := scans.FindOne(ctx, bson.M{"_id": scanID}).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got["status"] != shared.StatusFailed || got["completion_reason"] != shared.ScanReasonScheduleTurnedOff {
+		t.Fatalf("scan after schedule turned off = %v", got)
 	}
 }

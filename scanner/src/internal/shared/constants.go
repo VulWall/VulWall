@@ -19,6 +19,12 @@ const (
 	// so the scan is closed as failed and its findings are left untouched.
 	ScanReasonInterruptedByRestart = "interrupted_by_restart"
 
+	// ScanReasonScheduleTurnedOff is the status_reason and completion_reason of
+	// a scheduled scan that was queued behind a running scan and found the
+	// organization's schedule turned off when it could start. It is closed as
+	// failed without running, so its findings are left untouched.
+	ScanReasonScheduleTurnedOff = "schedule_turned_off"
+
 	// Scan completion reasons, stored in scans.completion_reason. Only a
 	// pipeline_quiescent close can reconcile findings (resolve the ones the
 	// scan did not see again); every other close leaves findings untouched.

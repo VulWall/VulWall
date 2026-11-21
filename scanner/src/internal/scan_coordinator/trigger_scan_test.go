@@ -26,19 +26,25 @@ type fakeStore struct {
 	insertErr error               // returned by insertScan, which then inserts nothing
 	onClaim   func()              // runs inside claimQueuedScan, after a successful claim
 	known     map[string][]string // by orgID/parentID
+	settings  map[string]shared.ScanSettings
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		orgs:   map[string]bool{},
-		assets: map[string][]shared.Asset{},
-		scans:  map[string]shared.Scan{},
-		set:    map[string]bson.M{},
+		orgs:     map[string]bool{},
+		assets:   map[string][]shared.Asset{},
+		scans:    map[string]shared.Scan{},
+		set:      map[string]bson.M{},
+		settings: map[string]shared.ScanSettings{},
 	}
 }
 
 func (f *fakeStore) orgExists(_ context.Context, orgID string) (bool, error) {
 	return f.orgs[orgID], nil
+}
+
+func (f *fakeStore) orgScanSettings(_ context.Context, orgID string) (shared.ScanSettings, error) {
+	return f.settings[orgID], nil
 }
 
 func (f *fakeStore) hasScanIn(_ context.Context, orgID string, statuses []string) (bool, error) {
@@ -232,6 +238,7 @@ func TestTriggerScanQueueInsertErrorIsReturned(t *testing.T) {
 func TestQueuedScheduledScanStartsAfterRunningScan(t *testing.T) {
 	store := newFakeStore()
 	store.orgs["org-1"] = true
+	store.settings["org-1"] = shared.ScanSettings{ScanCron: "0 2 * * *", Enabled: boolPtr(true)}
 	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com"), domainAsset("a2", "example.org")}
 	store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: shared.StatusRunning}
 	svc, published := newTestService(store, nil)
@@ -608,5 +615,60 @@ func TestFollowUpScanTargetsAssetsAtClaimTime(t *testing.T) {
 	}
 	if n := store.set["q1"]["stats.total_assets"]; n != 2 {
 		t.Fatalf("total_assets = %v, want 2 (both assets, read at claim time)", n)
+	}
+}
+
+// TestQueuedScheduledScanSkippedWhenScheduleTurnedOff: the schedule was turned off while the
+// scheduled scan waited behind a running scan, so it is closed without running. A requested
+// scan of the same organization still runs.
+func TestQueuedScheduledScanSkippedWhenScheduleTurnedOff(t *testing.T) {
+	for name, settings := range map[string]shared.ScanSettings{
+		"disabled":  {ScanCron: "0 2 * * *", Enabled: boolPtr(false)},
+		"cron gone": {ScanCron: ""},
+	} {
+		store := newFakeStore()
+		store.orgs["org-1"] = true
+		store.settings["org-1"] = settings
+		store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+		q := queuedScan("q1", "org-1", time.Now())
+		q.Type = shared.ScanTypeScheduled
+		store.scans["q1"] = q
+		svc, published := newTestService(store, nil)
+
+		svc.startQueuedScans(context.Background())
+
+		set := store.set["q1"]
+		if store.scans["q1"].Status != shared.StatusFailed ||
+			set["status_reason"] != shared.ScanReasonScheduleTurnedOff ||
+			set["completion_reason"] != shared.ScanReasonScheduleTurnedOff || set["completed_at"] == nil {
+			t.Fatalf("%s: status %q, $set = %+v", name, store.scans["q1"].Status, set)
+		}
+		if len(*published) != 0 {
+			t.Fatalf("%s: published %d jobs, want none", name, len(*published))
+		}
+
+		// A requested scan does not depend on the schedule.
+		store.scans["q2"] = queuedScan("q2", "org-1", time.Now())
+		svc.startQueuedScans(context.Background())
+		if store.scans["q2"].Status != shared.StatusRunning || len(*published) != 1 {
+			t.Fatalf("%s: requested scan status %q, %d jobs; want running with 1 job", name, store.scans["q2"].Status, len(*published))
+		}
+	}
+}
+
+func TestQueuedScheduledScanRunsWhileScheduleOn(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.settings["org-1"] = shared.ScanSettings{ScanCron: "0 2 * * *"} // enabled missing counts as on
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	q := queuedScan("q1", "org-1", time.Now())
+	q.Type = shared.ScanTypeScheduled
+	store.scans["q1"] = q
+	svc, published := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["q1"].Status != shared.StatusRunning || len(*published) != 1 {
+		t.Fatalf("status %q, %d jobs; want running with 1 job", store.scans["q1"].Status, len(*published))
 	}
 }
