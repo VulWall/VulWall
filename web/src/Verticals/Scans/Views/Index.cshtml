@@ -35,7 +35,7 @@
 {
     var errorMsg = errorCode switch
     {
-        "Busy" => ScanNowStateText.Busy,
+        "Busy" => VulWall.Dashboard.Common.Services.ScanTrigger.ScanTriggerService.BusyMessage,
         _      => "Something went wrong. Please try again."
     };
     <div class="alert alert-warning alert-dismissible fade show" role="alert">

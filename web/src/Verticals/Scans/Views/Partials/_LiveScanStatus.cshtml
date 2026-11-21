@@ -40,7 +40,7 @@
                         <button class="btn btn-primary btn-sm" disabled>
                             <i class="fas fa-bolt me-1"></i>Scan now
                         </button>
-                        <div class="live-card__busy">@ScanNowStateText.Busy</div>
+                        <div class="live-card__busy">@VulWall.Dashboard.Common.Services.ScanTrigger.ScanTriggerService.BusyMessage</div>
                     }
                     @if (Model.ScanNowState == ScanNowState.Queued)
                     {
@@ -103,7 +103,7 @@
                             <button class="btn btn-primary btn-sm" disabled>
                                 <i class="fas fa-bolt me-1"></i>Scan now
                             </button>
-                            <div class="live-card__busy">@ScanNowStateText.Busy</div>
+                            <div class="live-card__busy">@VulWall.Dashboard.Common.Services.ScanTrigger.ScanTriggerService.BusyMessage</div>
                             break;
                     }
                 </div>

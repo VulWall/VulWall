@@ -11,4 +11,7 @@ public class IndexViewModel
     public int SubdomainCount { get; set; }
     public int IpCount { get; set; }
     public int PortCount { get; set; }
+
+    /// <summary>A scan is queued or running: "Rescan now" is disabled (the server refuses it too).</summary>
+    public bool ScanInProgress { get; set; }
 }
