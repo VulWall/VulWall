@@ -124,7 +124,7 @@ public class ScansPublicRepository(IMongoDatabase database)
 
     /// <summary>
     /// Records the outcome of a claimed scan. Partial update so the scanner's own fields
-    /// (started_at, last_activity_at, ...) that the Scan entity does not map are kept.
+    /// (last_activity_at, ...) that the Scan entity does not map are kept.
     /// </summary>
     public Task CompleteExecutiveSummaryAsync(string scanId, string status, string? executiveSummary = null)
     {

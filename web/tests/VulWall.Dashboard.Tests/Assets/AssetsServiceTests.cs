@@ -75,6 +75,82 @@ public class AssetsServiceTests(MongoFixture mongo)
         Assert.True((await assets.Find(new BsonDocument("_id", id)).SingleAsync())["enabled"].AsBoolean);
     }
 
+    [Theory]
+    [InlineData("queued")]
+    [InlineData("pending")]
+    [InlineData("running")]
+    public async Task UpdateAssetStatus_ScanInProgress_IsRefusedAndAssetUnchanged(string status)
+    {
+        var (service, assets) = Create();
+        var (asset, _) = await service.CreateIpAssetAsync("8.8.8.8");
+        await InsertScan(assets, status);
+
+        var (success, error) = await service.UpdateAssetStatusAsync(asset!.Id, enabled: false);
+
+        Assert.False(success);
+        Assert.Equal(AssetsService.ScanInProgressToggleError, error);
+        Assert.True((await assets.Find(FilterDefinition<BsonDocument>.Empty).SingleAsync())["enabled"].AsBoolean);
+    }
+
+    [Theory]
+    [InlineData("queued")]
+    [InlineData("running")]
+    public async Task DeleteAsset_ScanInProgress_IsRefusedAndAssetKept(string status)
+    {
+        var (service, assets) = Create();
+        var (asset, _) = await service.CreateIpAssetAsync("8.8.8.8");
+        await InsertScan(assets, status);
+
+        var (success, error) = await service.DeleteAssetAsync(asset!.Id);
+
+        Assert.False(success);
+        Assert.Equal(AssetsService.ScanInProgressDeleteError, error);
+        Assert.Equal(1, await assets.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
+    }
+
+    [Fact]
+    public async Task UpdateAndDelete_OnlyFinishedScans_Succeed()
+    {
+        var (service, assets) = Create();
+        var (asset, _) = await service.CreateIpAssetAsync("8.8.8.8");
+        await InsertScan(assets, "done");
+
+        var (updated, updateError) = await service.UpdateAssetStatusAsync(asset!.Id, enabled: false);
+        Assert.True(updated, updateError);
+        Assert.False((await assets.Find(FilterDefinition<BsonDocument>.Empty).SingleAsync())["enabled"].AsBoolean);
+
+        var (deleted, deleteError) = await service.DeleteAssetAsync(asset.Id);
+        Assert.True(deleted, deleteError);
+        Assert.Equal(0, await assets.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
+    }
+
+    [Fact]
+    public async Task DeleteAsset_ScanQueuedLongAgoStartedRecently_IsRefused()
+    {
+        var (service, assets) = Create();
+        var (asset, _) = await service.CreateIpAssetAsync("8.8.8.8");
+        await InsertScan(assets, "running", createdAt: DateTime.UtcNow.AddHours(-30), startedAt: DateTime.UtcNow.AddHours(-1));
+
+        var (success, _) = await service.DeleteAssetAsync(asset!.Id);
+
+        Assert.False(success);
+    }
+
+    private static Task InsertScan(IMongoCollection<BsonDocument> assets, string status,
+        DateTime? createdAt = null, DateTime? startedAt = null)
+    {
+        var created = createdAt ?? DateTime.UtcNow.AddMinutes(-5);
+        var doc = new BsonDocument
+        {
+            { "_id", Guid.NewGuid().ToString() }, { "org_id", "org-1" }, { "status", status },
+            { "type", "scheduled" }, { "triggered_by", "system" },
+            { "created_at", created }, { "updated_at", created },
+        };
+        if (startedAt is not null)
+            doc["started_at"] = startedAt.Value;
+        return assets.Database.GetCollection<BsonDocument>("scans").InsertOneAsync(doc);
+    }
+
     [Fact]
     public async Task GetAssets_LatestScanDegradedAsset_ShowsNotice()
     {

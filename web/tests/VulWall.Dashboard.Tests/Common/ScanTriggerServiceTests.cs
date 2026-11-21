@@ -164,6 +164,38 @@ public class ScanTriggerServiceTests(MongoFixture mongo)
     }
 
     [Fact]
+    public async Task TriggerAsync_ScanQueuedLongAgoStartedRecently_CountsAsRunning()
+    {
+        var (service, scans) = Create();
+        var doc = ScanDoc("running", DateTime.UtcNow.AddHours(-30));
+        doc["started_at"] = DateTime.UtcNow.AddHours(-1);
+        await scans.InsertOneAsync(doc);
+
+        Assert.Equal(TriggerScanResult.QueuedAfterCurrent, await service.TriggerAsync("a"));
+        Assert.True(await service.IsScanInProgressAsync());
+    }
+
+    [Fact]
+    public async Task IsScanInProgress_StartedMoreThan24hAgo_IsStale()
+    {
+        var (service, scans) = Create();
+        var doc = ScanDoc("running", DateTime.UtcNow.AddHours(-30));
+        doc["started_at"] = DateTime.UtcNow.AddHours(-25);
+        await scans.InsertOneAsync(doc);
+
+        Assert.False(await service.IsScanInProgressAsync());
+    }
+
+    [Fact]
+    public async Task IsScanInProgress_RecentRunningScanWithoutStartedAt_UsesCreatedAt()
+    {
+        var (service, scans) = Create();
+        await scans.InsertOneAsync(ScanDoc("running", DateTime.UtcNow.AddHours(-1)));
+
+        Assert.True(await service.IsScanInProgressAsync());
+    }
+
+    [Fact]
     public async Task TriggerAsync_QueuedScanOlderThan24h_StillBlocks()
     {
         var (service, scans) = Create();
