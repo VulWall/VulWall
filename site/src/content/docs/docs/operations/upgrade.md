@@ -33,6 +33,27 @@ VULWALL_VERSION=0.1.0 ~/vulwall/vulwall upgrade
 
 New releases can add settings. Compare your `.env` with the new `.env.example` to see them.
 
+## Upgrade from 0.2 or earlier
+
+VulWall 0.2 and earlier ran MongoDB 7. Later releases run MongoDB 9, which cannot open a MongoDB 7
+database: the `mongo` container stops with exit code 62 and "UPGRADE PROBLEM" in its log. The
+upgrade does not change your data. To keep it, move it with a backup:
+
+```sh
+cd ~/vulwall
+VULWALL_VERSION=0.2.0 ./vulwall upgrade   # back to MongoDB 7
+./vulwall backup                          # note the file name it prints
+docker compose down -v                    # deletes the VulWall volumes
+./vulwall upgrade                         # MongoDB 9, empty database
+./vulwall restore <backup file>
+```
+
+Without `restore`, you start again with an empty database and create the admin account again.
+
+Going back from a later release to 0.2 needs the same steps the other way: MongoDB 7 cannot open
+a MongoDB 9 database either. Run `./vulwall backup` on the later release, then
+`docker compose down -v`, `VULWALL_VERSION=0.2.0 ./vulwall upgrade` and `./vulwall restore`.
+
 ## Verify a release
 
 The install script checks the files it downloads against the release's `SHA256SUMS`. The compose

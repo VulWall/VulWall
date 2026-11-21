@@ -316,6 +316,13 @@ mongo_report_mac() { crash_stubs; os=Darwin; report_crash mongo 0; }
 t "crash: no CPU hint on macOS, no exit code 0" 1 mongo_report_mac &&
     expect_not "$work/out" "AVX" && expect "$work/out" "The mongo container keeps stopping. Its"
 
+# MongoDB 9 on a MongoDB 7 data volume, or 7 on 9, exits with code 62; the hint shows on macOS too.
+mongo_report_fcv() { crash_stubs; os=Darwin; helper=vulwall; report_crash mongo 62; }
+t "crash: mongo exit 62 explains the data files of another release" 1 mongo_report_fcv &&
+    expect "$work/out" "made by another" && expect "$work/out" "VULWALL_VERSION=0.2.0 vulwall upgrade" &&
+    expect "$work/out" "cd /srv/vulwall && docker compose down -v" && expect_not "$work/out" "AVX"
+t "crash: CPU report has no old-data hint" 1 mongo_report && expect_not "$work/out" "made by another"
+
 wait_crash() { crash_stubs; st_redis="exited 1 0 none"; wait_healthy web 300; }
 t "wait: stops at once on a crash" 1 wait_crash && expect "$work/out" "The redis container keeps stopping"
 

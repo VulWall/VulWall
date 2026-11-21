@@ -13,7 +13,7 @@ name: vulwall
 
 services:
   mongo:
-    image: mongo:7.0.45@sha256:8bb4442761a63a8dda452744082cdac9644b429807eb977b42324a63cef59ca4
+    image: mongo:9.0.8@sha256:b0c835c26e5997413e985000f1013c275377cd9607761c1784d486f6dd620b7f
     restart: unless-stopped
     volumes:
       - mongo-data:/data/db
@@ -25,7 +25,7 @@ services:
       start_period: 20s
 
   redis:
-    image: redis:7.4.12-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+    image: redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:

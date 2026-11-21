@@ -522,6 +522,22 @@ log_tail() {
     compose logs --no-color --no-log-prefix --tail 30 "$1" 2>&1 | LC_ALL=C tr -cd '[:print:]\n\t' || true
 }
 
+# MongoDB exits with code 62 when its data files were made by another major
+# release (feature compatibility version). VulWall 0.2 and earlier ran MongoDB 7,
+# later releases run MongoDB 9; neither can open the other's files.
+mongo_data_help() {
+    say "MongoDB cannot open the existing database: its files were made by another"
+    say "MongoDB major release (VulWall 0.2 and earlier use MongoDB 7, later releases"
+    say "use MongoDB 9). Your data has not been changed. Choose one:"
+    say "  - Keep the data: install the release that made it again, for example"
+    say "      VULWALL_VERSION=0.2.0 $helper upgrade"
+    say "    run '$helper backup', do the next step, then install the release you"
+    say "    want and run '$helper restore <backup file>'."
+    say "  - Start with an empty database (this deletes all VulWall data):"
+    say "      cd $qdir && docker compose down -v"
+    say "    then run the installer again."
+}
+
 report_crash() { # service exit_code
     logs=$(log_tail "$1")
     if [ "$2" = 0 ]; then
@@ -530,6 +546,14 @@ report_crash() { # service exit_code
         err "The $1 container keeps stopping (exit code $2). Its last log lines:"
     fi
     printf '%s\n' "$logs" >&2
+    if [ "$1" = mongo ]; then
+        case "$2 $logs" in
+            62\ * | *"UPGRADE PROBLEM"*)
+                say "" >&2
+                mongo_data_help >&2
+                ;;
+        esac
+    fi
     # On macOS, Docker Desktop's VM has a CPU that MongoDB supports.
     if [ "$1" = mongo ] && [ "$os" = Linux ]; then
         case "$2 $logs" in

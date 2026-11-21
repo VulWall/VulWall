@@ -189,7 +189,7 @@ Test-only: `SCAN_IDLE_TIMEOUT` and `SCAN_MIN_RUNTIME` (rows above) are not in `d
 ## Dependencies
 
 - `github.com/redis/go-redis/v9` — Redis client with Streams
-- `go.mongodb.org/mongo-driver` — MongoDB driver
+- `go.mongodb.org/mongo-driver` — MongoDB driver, v1.17. The stack runs MongoDB 9, which MongoDB's compatibility table lists as fully supported only from driver v2.9 (v1.17 is untested there; the integration tests pass against `mongo:9`)
 - `go.uber.org/zap` — Structured logging
 - `github.com/robfig/cron/v3` — Cron scheduler
 - `github.com/joho/godotenv` — Env variable management

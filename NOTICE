@@ -119,17 +119,18 @@ Inter, JetBrains Mono and Chakra Petch fonts (fonts/)
 Services run by docker-compose.yml (separate images, not distributed by VulWall)
 ------------------------------------------------------------------------------
 
-MongoDB (official image mongo:7)
+MongoDB (official image mongo:9)
   https://www.mongodb.com
   License: Server Side Public License v1 (SSPL). VulWall uses MongoDB
   unmodified, as a separate database server, through its network protocol.
   If you offer MongoDB itself as a service to third parties, read the SSPL.
 
-Redis (official image redis:7-alpine)
+Redis (official image redis:8-alpine)
   https://redis.io
-  Redis 7.4 and later are dual-licensed under the Redis Source Available
-  License v2 (RSALv2) and the Server Side Public License v1 (SSPL). VulWall
-  uses Redis unmodified, as a separate server, through its network protocol.
+  Redis 8 and later are licensed, at your choice, under the Redis Source
+  Available License v2 (RSALv2), the Server Side Public License v1 (SSPL) or
+  the GNU Affero General Public License v3 (AGPLv3). VulWall uses Redis
+  unmodified, as a separate server, through its network protocol.
 
 Jaeger (optional "tracing" profile, jaegertracing/all-in-one)
   https://www.jaegertracing.io

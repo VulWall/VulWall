@@ -15,7 +15,7 @@ description: What a host needs to run VulWall.
 
 The images are published for `linux/amd64` and `linux/arm64`. 32-bit systems are not supported.
 
-VulWall's database, MongoDB 7, needs a recent enough CPU. On x86-64 the CPU must support AVX,
+VulWall's database, MongoDB 9, needs a recent enough CPU. On x86-64 the CPU must support AVX,
 which most CPUs made since 2011 do; some Celeron, Pentium and Atom models do not. On ARM the CPU
 must implement ARMv8.2-A. A Raspberry Pi 5 and AWS Graviton2 or later work. A Raspberry Pi 4 or
 older does not, because its Cortex-A72 is ARMv8.0.
@@ -27,6 +27,12 @@ passthrough.
 
 The install script checks the CPU before it changes anything. On a CPU without these features,
 MongoDB stops at start with "Illegal instruction".
+
+## Linux kernel
+
+MongoDB 9 can crash on Linux kernels 6.19 to 7.0.13. Use a kernel older than 6.19 or 7.0.14 and
+later. See MongoDB's
+[production notes](https://www.mongodb.com/docs/manual/administration/production-notes/).
 
 ## Memory and disk
 

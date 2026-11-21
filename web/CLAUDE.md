@@ -568,7 +568,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 ## Testing
 
-- `dotnet test` from `web/`. Tests that touch MongoDB use `MongoFixture` (EphemeralMongo starts a throwaway `mongod`; the binary is downloaded on first run) and `[Collection(MongoCollection.Name)]`, with one fresh database per test.
+- `dotnet test` from `web/`. Tests that touch MongoDB use `MongoFixture` (EphemeralMongo starts a throwaway MongoDB 9 `mongod`, matching `docker-compose.yml`; the binary is downloaded on first run) and `[Collection(MongoCollection.Name)]`, with one fresh database per test.
 
 ## Frontend JavaScript Architecture
 
