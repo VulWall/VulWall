@@ -11,10 +11,14 @@
 #    They run in this workflow because a tag created with GITHUB_TOKEN does
 #    not start other workflows.
 #
-# Manual fallback: run this workflow by hand (workflow_dispatch) with an
-# existing tag. It builds and publishes that tag and creates its release, or
-# completes the existing (draft) release. There is no tag-push trigger, so a
-# tag never starts a second run.
+# Manual fallback: run this workflow by hand on an existing tag,
+#   gh workflow run release.yml --ref vX.Y.Z -f tag=vX.Y.Z
+# (--ref makes the provenance record the tag). It builds and publishes that
+# tag and creates its release, or completes the existing (draft) release.
+# There is no tag-push trigger, so a tag never starts a second run.
+#
+# "latest" (image tag and release mark) goes only to the highest stable tag,
+# and the X.Y image tag only to the highest patch of its line.
 name: Release
 
 on:
@@ -45,6 +49,10 @@ jobs:
     outputs:
       # The tag to build and publish, or empty when there is nothing to release.
       tag: ${{ steps.tag.outputs.tag }}
+      # "true" when the tag is the highest stable release overall, and within
+      # its major.minor line; a fix for an older line must not move "latest".
+      latest: ${{ steps.tag.outputs.latest }}
+      minor_latest: ${{ steps.tag.outputs.minor_latest }}
     steps:
       - id: release
         if: github.event_name == 'push'
@@ -57,7 +65,9 @@ jobs:
           manifest-file: .release-please-manifest.json
       - id: tag
         name: Select the tag
+        shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.tag }}
           RELEASE_CREATED: ${{ steps.release.outputs.release_created }}
@@ -69,11 +79,32 @@ jobs:
           elif [ "$RELEASE_CREATED" = true ]; then
             tag=$RELEASE_TAG
           fi
-          if [ -n "$tag" ] && ! printf '%s\n' "$tag" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?'; then
+          if [ -z "$tag" ]; then
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # [[ =~ ]] matches the whole string, so a newline cannot slip through.
+          if ! [[ $tag =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::not a release tag: $tag"
             exit 1
           fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          line="^v${BASH_REMATCH[1]}\\.${BASH_REMATCH[2]}\\."
+          # The tag already exists (release-please or the maintainer created it),
+          # so it is among these refs.
+          refs=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref')
+          stable=$(grep -Ex 'v[0-9]+\.[0-9]+\.[0-9]+' <<< "${refs//refs\/tags\//}" | sort -V || true)
+          latest=false
+          minor_latest=false
+          if [[ $tag != *-* ]]; then
+            [ "$tag" = "$(tail -n 1 <<< "$stable")" ] && latest=true
+            [ "$tag" = "$(grep -E "$line" <<< "$stable" | tail -n 1)" ] && minor_latest=true
+          fi
+          echo "$tag: latest=$latest minor_latest=$minor_latest"
+          {
+            echo "tag=$tag"
+            echo "latest=$latest"
+            echo "minor_latest=$minor_latest"
+          } >> "$GITHUB_OUTPUT"
 
   image:
     name: ghcr.io/vulwall/${{ matrix.image }}
@@ -111,10 +142,11 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ghcr.io/vulwall/${{ matrix.image }}
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag }}
-            type=raw,value=latest,enable=${{ !contains(needs.release-please.outputs.tag, '-') }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag }},enable=${{ needs.release-please.outputs.minor_latest == 'true' }}
+            type=raw,value=latest,enable=${{ needs.release-please.outputs.latest == 'true' }}
           labels: |
             org.opencontainers.image.revision=${{ steps.rev.outputs.sha }}
       - id: build
@@ -159,6 +191,7 @@ jobs:
       contents: write
     env:
       TAG: ${{ needs.release-please.outputs.tag }}
+      LATEST: ${{ needs.release-please.outputs.latest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -183,20 +216,25 @@ jobs:
       # install.sh downloads from releases/latest, so a release is published
       # only after its assets are attached.
       - name: Publish the release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           prerelease=false
           case "$TAG" in *-*) prerelease=true ;; esac
-          if gh release view "$TAG" >/dev/null 2>&1; then
+          if view=$(gh release view "$TAG" --json tagName 2>&1); then
             # The draft release from release-please, or a re-run: attach the
             # assets, then publish.
             gh release upload "$TAG" --clobber \
               dist/docker-compose.yml dist/env.example dist/vulwall dist/SHA256SUMS
             gh release edit "$TAG" --draft=false --prerelease="$prerelease" \
-              --title "VulWall $TAG"
+              --latest="$LATEST" --title "VulWall $TAG"
+          elif [[ $view != *"release not found"* ]]; then
+            # Any other error (API, auth) must not lead to a second release.
+            echo "$view" >&2
+            exit 1
           else
-            gh release create "$TAG" --prerelease="$prerelease" --verify-tag \
+            gh release create "$TAG" --prerelease="$prerelease" --latest="$LATEST" --verify-tag \
               --title "VulWall $TAG" \
               --notes "See [CHANGELOG.md](https://github.com/VulWall/VulWall/blob/$TAG/CHANGELOG.md). Install or upgrade: \`curl -fsSL https://vulwall.com/install.sh | sh\`" \
               dist/docker-compose.yml dist/env.example dist/vulwall dist/SHA256SUMS

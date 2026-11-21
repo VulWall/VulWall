@@ -119,13 +119,20 @@ Maintainers release with
    `docker-compose.yml`, `env.example`, `vulwall` and `SHA256SUMS` to the
    release and publishes it. The installer downloads from the latest
    release, so the release stays a draft until its files are attached.
+   Only the highest stable version gets the `latest` image tag and the
+   "Latest" release mark; the `X.Y` image tag goes to the highest patch of
+   that line. A fix released for an older line does not move them.
 
 The release PR is opened with the workflow's `GITHUB_TOKEN`, and pull
 requests opened that way do not start CI. The PR has no required checks, so
 merge it with the admin bypass. It changes only `CHANGELOG.md` and
-`.release-please-manifest.json`. To run CI on it instead, store a GitHub App
-or fine-grained token with contents, pull requests and issues write access
-as the `RELEASE_PLEASE_TOKEN` secret; the workflow uses it when it exists.
+`.release-please-manifest.json`. Before you merge, read the `CHANGELOG.md`
+diff: the text comes from PR titles and descriptions, so look for HTML or
+other markup and for a version bump you did not expect.
+
+To run CI on the release PR instead, store a GitHub App or fine-grained
+token with contents, pull requests and issues write access as the
+`RELEASE_PLEASE_TOKEN` secret; the workflow uses it when it exists.
 
 The repository setting "Allow GitHub Actions to create and approve pull
 requests" (Settings > Actions > General) must be on, or release-please
@@ -138,11 +145,14 @@ case, or to build and publish any existing tag by hand, run the workflow
 with the tag:
 
 ```bash
-gh workflow run release.yml -f tag=vX.Y.Z
+gh workflow run release.yml --ref vX.Y.Z -f tag=vX.Y.Z
 ```
 
 It completes the draft release for that tag, or creates a release when none
-exists. Tags pushed by hand do not start a release on their own.
+exists. `--ref` runs the workflow file from that tag, so the build
+provenance records the tag and its commit; this works for tags created
+after release-please was set up (v0.1.1 and older have no manual trigger).
+Tags pushed by hand do not start a release on their own.
 
 To release a specific version, for example 1.0.0, add a `Release-As: 1.0.0`
 footer to the squash commit message of a PR.
