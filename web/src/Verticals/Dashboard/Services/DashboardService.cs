@@ -213,7 +213,7 @@ public class DashboardService(
     /// <summary>
     /// Display-only state of the Overview "Rescan now" button, by the same rule as the Scans
     /// vertical. <c>ScansController.TriggerScan</c> goes through <c>ScanTriggerService</c>, which
-    /// decides server-side, so a stale value here can never queue a second scan.
+    /// refuses server-side while a scan is in progress, so a stale value here can never start a second scan.
     /// </summary>
     private async Task<ScanNowState> GetScanNowStateAsync()
     {

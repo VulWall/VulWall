@@ -1,9 +1,8 @@
 document.addEventListener('DOMContentLoaded', function() {
-    const scanTriggeredFlag = document.getElementById('scanTriggeredFlag');
-    if (scanTriggeredFlag) {
-        const scanModal = document.getElementById('scanTriggeredModal');
-        if (scanModal) {
-            new bootstrap.Modal(scanModal).show();
+    if (document.getElementById('assetAddedFlag')) {
+        const addedModal = document.getElementById('assetAddedModal');
+        if (addedModal) {
+            new bootstrap.Modal(addedModal).show();
         }
     }
 
@@ -60,14 +59,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Prevent specific form submissions (not search form)
+    // The row forms (delete, status change) are sent with fetch below. Other forms, such as
+    // "Scan now" in the confirmation after adding an asset, submit normally.
     document.addEventListener('submit', function(e) {
-        // Allow search form to submit normally
-        if (e.target.method === 'get') {
-            return;
+        if (e.target.closest('.asset-actions')) {
+            e.preventDefault();
         }
-        // Prevent other POST forms (delete, status change)
-        e.preventDefault();
     });
 
     // Show modal when delete button is clicked

@@ -15,7 +15,7 @@ public class ScanNowStateTests
         Assert.Equal(ScanNowState.Allowed, ScansService.EvaluateScanNowState([S(ScanStatus.Done)]));
 
     [Fact]
-    public void RunningScan_CanQueueAFollowUp() =>
+    public void RunningScan_InProgress() =>
         Assert.Equal(ScanNowState.InProgress, ScansService.EvaluateScanNowState([S(ScanStatus.Running)]));
 
     [Fact]

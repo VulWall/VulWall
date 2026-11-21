@@ -17,8 +17,9 @@ can change the password later in **Settings**.
 
 ## 2. Add a domain or IP address
 
-Go to **Assets** and add a domain you own, for example `example.com`, or an IP address. VulWall
-starts a scan of a new asset right away.
+Go to **Assets** and add a domain you own, for example `example.com`, or an IP address. Adding an
+asset does not start a scan. After you add it, VulWall offers **Scan now**. Add all your assets
+first if you like: a scan covers every asset you have when it starts.
 
 :::caution
 Add only assets that you own or that you have written permission to test.
@@ -26,9 +27,10 @@ Add only assets that you own or that you have written permission to test.
 
 The scanner skips private and internal IP ranges unless you set `ALLOW_PRIVATE_TARGETS=true`.
 
-## 3. Watch the scan
+## 3. Start the scan
 
-The **Scans** page shows the scan status. A scan goes through these stages:
+Click **Scan now** after you add an asset, or on the **Scans** page. The **Scans** page shows the
+scan status. A scan goes through these stages:
 
 1. **Discovery.** VulWall finds subdomains of your domains and resolves them to IP addresses, then
    scans the TCP ports of each IP address.
@@ -61,6 +63,10 @@ time zone is your browser's; the page shows which one it uses. The scanner picks
 within 5 minutes. The sidebar and the **Scans** page show when the next
 scan starts. You can also start a scan at any time with **Scan now**.
 
-If you add an asset or use **Scan now** while a scan is running, VulWall queues one more scan that
-starts as soon as the current one finishes. New assets don't wait for the schedule. Only one scan
-waits at a time, and it scans every asset you have when it starts.
+Adding an asset never starts a scan: a new asset is scanned by the next scan, from **Scan now** or
+the schedule. A scan covers every asset you have when it starts.
+
+Only one scan runs at a time. While a scan is queued or running, **Scan now** is turned off; you
+can start a new scan when it finishes. If the schedule comes up while a scan is running, VulWall
+queues the scheduled scan and starts it as soon as the current one finishes. Only one scan waits at
+a time.
