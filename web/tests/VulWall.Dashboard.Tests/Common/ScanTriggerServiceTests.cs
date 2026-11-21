@@ -43,63 +43,57 @@ public class ScanTriggerServiceTests(MongoFixture mongo)
     }
 
     [Fact]
-    public async Task TriggerAsync_QueuedScanExists_ReturnsAlreadyQueuedAndInsertsNothing()
+    public async Task TriggerAsync_QueuedScanExists_IsBusyAndInsertsNothing()
     {
         var (service, scans) = Create();
         await scans.InsertOneAsync(ScanDoc("queued", DateTime.UtcNow.AddMinutes(-5)));
 
         var result = await service.TriggerAsync("admin@example.com");
 
-        Assert.Equal(TriggerScanResult.AlreadyQueued, result);
+        Assert.Equal(TriggerScanResult.Busy, result);
         Assert.Equal(1, await scans.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }
 
     [Theory]
     [InlineData("pending")]
     [InlineData("running")]
-    public async Task TriggerAsync_ScanRunning_QueuesOneFollowUpScan(string status)
+    public async Task TriggerAsync_ScanRunning_IsBusyAndInsertsNothing(string status)
     {
         var (service, scans) = Create();
         await scans.InsertOneAsync(ScanDoc(status, DateTime.UtcNow.AddMinutes(-5)));
 
-        var result = await service.TriggerAsync("admin@example.com");
-
-        Assert.Equal(TriggerScanResult.QueuedAfterCurrent, result);
-        var queued = Assert.Single(await scans.Find(Builders<BsonDocument>.Filter.Eq("status", "queued")).ToListAsync());
-        Assert.Equal(OrgId, queued["org_id"].AsString);
-        Assert.Equal("requested", queued["type"].AsString);
-        Assert.Equal("admin@example.com", queued["triggered_by"].AsString);
+        Assert.Equal(TriggerScanResult.Busy, await service.TriggerAsync("admin@example.com"));
+        Assert.Equal(1, await scans.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }
 
     [Fact]
-    public async Task TriggerAsync_ScanRunningAndFollowUpQueued_InsertsNothing()
+    public async Task TriggerAsync_ScanRunningAndScheduledScanQueued_InsertsNothing()
     {
         var (service, scans) = Create();
         await scans.InsertOneAsync(ScanDoc("running", DateTime.UtcNow.AddMinutes(-5)));
         await scans.InsertOneAsync(ScanDoc("queued", DateTime.UtcNow.AddMinutes(-1)));
 
-        Assert.Equal(TriggerScanResult.AlreadyQueued, await service.TriggerAsync("a"));
+        Assert.Equal(TriggerScanResult.Busy, await service.TriggerAsync("a"));
         Assert.Equal(2, await scans.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }
 
     [Fact]
-    public async Task TriggerAsync_ConcurrentRequestsWhileRunning_QueueExactlyOneScan()
+    public async Task TriggerAsync_ConcurrentRequestsWhileIdle_QueueExactlyOneScan()
     {
         var db = mongo.NewDatabase();
         await MongoDbIndexManager.EnsureIndexesAsync(db);
         var repo = new ScansRepository(db, new FixedOrganizationContext(OrgId),
             NullLogger<OrgScopedRepository<Scan, string>>.Instance);
         var scans = db.GetCollection<BsonDocument>("scans");
-        await scans.InsertOneAsync(ScanDoc("running", DateTime.UtcNow.AddMinutes(-5)));
 
         // Separate service instances, as for separate HTTP requests.
         var results = await Task.WhenAll(Enumerable.Range(0, 20)
             .Select(_ => Task.Run(() => new ScanTriggerService(repo).TriggerAsync("a"))));
 
         Assert.Equal(1, await scans.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("status", "queued")));
-        Assert.Single(results, r => r == TriggerScanResult.QueuedAfterCurrent);
-        Assert.All(results.Where(r => r != TriggerScanResult.QueuedAfterCurrent),
-            r => Assert.Equal(TriggerScanResult.AlreadyQueued, r));
+        Assert.Single(results, r => r == TriggerScanResult.Started);
+        Assert.All(results.Where(r => r != TriggerScanResult.Started),
+            r => Assert.Equal(TriggerScanResult.Busy, r));
     }
 
     [Fact]
@@ -131,14 +125,14 @@ public class ScanTriggerServiceTests(MongoFixture mongo)
     }
 
     [Fact]
-    public async Task TriggerAsync_SecondCall_ReturnsAlreadyQueued()
+    public async Task TriggerAsync_SecondCall_IsBusy()
     {
         var (service, _) = Create();
 
         await service.TriggerAsync("a");
         var second = await service.TriggerAsync("a");
 
-        Assert.Equal(TriggerScanResult.AlreadyQueued, second);
+        Assert.Equal(TriggerScanResult.Busy, second);
     }
 
     [Theory]
@@ -164,14 +158,14 @@ public class ScanTriggerServiceTests(MongoFixture mongo)
     }
 
     [Fact]
-    public async Task TriggerAsync_ScanQueuedLongAgoStartedRecently_CountsAsRunning()
+    public async Task TriggerAsync_ScanQueuedLongAgoStartedRecently_IsBusy()
     {
         var (service, scans) = Create();
         var doc = ScanDoc("running", DateTime.UtcNow.AddHours(-30));
         doc["started_at"] = DateTime.UtcNow.AddHours(-1);
         await scans.InsertOneAsync(doc);
 
-        Assert.Equal(TriggerScanResult.QueuedAfterCurrent, await service.TriggerAsync("a"));
+        Assert.Equal(TriggerScanResult.Busy, await service.TriggerAsync("a"));
         Assert.True(await service.IsScanInProgressAsync());
     }
 
@@ -201,7 +195,7 @@ public class ScanTriggerServiceTests(MongoFixture mongo)
         var (service, scans) = Create();
         await scans.InsertOneAsync(ScanDoc("queued", DateTime.UtcNow.AddHours(-30)));
 
-        Assert.Equal(TriggerScanResult.AlreadyQueued, await service.TriggerAsync("a"));
+        Assert.Equal(TriggerScanResult.Busy, await service.TriggerAsync("a"));
         Assert.Equal(1, await scans.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }
 

@@ -15,7 +15,7 @@ public class ScanNowStateTests
         Assert.Equal(ScanNowState.Allowed, ScansService.EvaluateScanNowState([S(ScanStatus.Done)]));
 
     [Fact]
-    public void RunningScan_CanQueueAFollowUp() =>
+    public void RunningScan_InProgress() =>
         Assert.Equal(ScanNowState.InProgress, ScansService.EvaluateScanNowState([S(ScanStatus.Running)]));
 
     [Fact]
@@ -53,5 +53,18 @@ public class ScanNowStateTests
         Assert.True(model.IsScanning);
         Assert.Equal(ScanNowState.Queued, model.ScanNowState);
         Assert.Contains(model.RecentRuns, r => r.Meta == "Queued");
+    }
+
+    [Theory]
+    [InlineData(ScanType.Scheduled, "system", "scheduled")]
+    [InlineData(ScanType.Requested, "admin@example.com", "manual · admin@example.com")]
+    [InlineData(ScanType.Requested, "", "manual")]
+    public void LiveStatus_TriggerLabel_FollowsScanType(ScanType type, string triggeredBy, string expected)
+    {
+        var scan = S(ScanStatus.Running);
+        scan.Type = type;
+        scan.TriggeredBy = triggeredBy;
+
+        Assert.Equal(expected, ScansService.BuildLiveScanStatus([scan], []).Trigger);
     }
 }

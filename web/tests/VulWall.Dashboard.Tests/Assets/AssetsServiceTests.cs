@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Data.Base;
@@ -134,6 +135,36 @@ public class AssetsServiceTests(MongoFixture mongo)
         var (success, _) = await service.DeleteAssetAsync(asset!.Id);
 
         Assert.False(success);
+    }
+
+    [Fact]
+    public async Task AssetAddedScanState_NoScanEver_IsFirstScan()
+    {
+        var (service, _) = Create();
+
+        Assert.Equal(AssetAddedScanState.FirstScan, await service.GetAssetAddedScanStateAsync());
+    }
+
+    [Theory]
+    [InlineData("done")]
+    [InlineData("failed")]
+    public async Task AssetAddedScanState_OnlyFinishedScans_IsIdle(string status)
+    {
+        var (service, assets) = Create();
+        await InsertScan(assets, status);
+
+        Assert.Equal(AssetAddedScanState.Idle, await service.GetAssetAddedScanStateAsync());
+    }
+
+    [Theory]
+    [InlineData("queued")]
+    [InlineData("running")]
+    public async Task AssetAddedScanState_ScanInProgress_WinsEvenOnFirstScan(string status)
+    {
+        var (service, assets) = Create();
+        await InsertScan(assets, status);
+
+        Assert.Equal(AssetAddedScanState.ScanInProgress, await service.GetAssetAddedScanStateAsync());
     }
 
     private static Task InsertScan(IMongoCollection<BsonDocument> assets, string status,

@@ -91,6 +91,16 @@
 
 .overview-header-scanmeta .mono { color: var(--ov-text); }
 
+.overview-header-actions { text-align: right; }
+
+.overview-header-busy {
+    display: block;
+    max-width: 260px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--ov-muted);
+}
+
 .status-pill {
     display: inline-flex;
     align-items: center;

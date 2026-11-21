@@ -53,11 +53,11 @@ public class ScansController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> TriggerScan()
     {
-        // ScanTriggerService decides: start, queue one follow-up scan, or nothing.
+        // ScanTriggerService decides server-side: start a scan, or nothing while one is in progress.
         var triggeredBy = User.FindFirst(ClaimTypes.Email)?.Value ?? "unknown";
         var result = await scanTriggerService.TriggerAsync(triggeredBy);
 
-        if (result == TriggerScanResult.AlreadyQueued)
+        if (result == TriggerScanResult.Busy)
             TempData["ScanNowError"] = result.ToString();
         else
             TempData["ScanNowSuccess"] = result.ToString();

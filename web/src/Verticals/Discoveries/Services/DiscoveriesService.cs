@@ -1,3 +1,4 @@
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Data.Entities.Discovery;
@@ -74,6 +75,7 @@ public class DiscoveriesService(
 
         return new IndexViewModel
         {
+            ScanInProgress = scans.Any(ScanTriggerService.InProgressPredicate(DateTime.UtcNow).Compile()),
             Discoveries = visibleAssets,
             // Summary stats (always populated)
             TotalDiscoveries = allAssets.Count,

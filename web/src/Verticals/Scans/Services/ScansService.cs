@@ -146,16 +146,25 @@ public class ScansService(
             return new LiveScanStatusViewModel { IsScanning = false, NextScanCountdown = countdown, RecentRuns = recentRuns, ScanNowState = scanNowState };
         }
 
-        var trigger = string.IsNullOrEmpty(running.TriggeredBy) ? "automated" : $"manual · {running.TriggeredBy}";
+        var trigger = TriggerLabel(running);
         return new LiveScanStatusViewModel
         {
             IsScanning = true,
-            StartedTime = running.CreatedAt.ToString("HH:mm"),
+            StartedTime = (running.StartedAt ?? running.CreatedAt).ToString("HH:mm"),
             Trigger = trigger,
             RecentRuns = recentRuns,
             ScanNowState = scanNowState
         };
     }
+
+    /// <summary>
+    /// Who started a scan, from its type: scheduled scans have <c>triggered_by: "system"</c>,
+    /// which is not a person, so only a requested scan shows <c>triggered_by</c>.
+    /// </summary>
+    internal static string TriggerLabel(Scan scan) =>
+        scan.Type != ScanType.Requested ? "scheduled"
+        : string.IsNullOrEmpty(scan.TriggeredBy) ? "manual"
+        : $"manual · {scan.TriggeredBy}";
 
     internal static string PartialScanHint(Scan scan)
     {
