@@ -25,22 +25,29 @@
                     </div>
                 </div>
                 <div class="live-card__right">
-                    @switch (Model.ScanNowState)
+                    @if (Model.ScanNowState == ScanNowState.Allowed)
                     {
-                        case ScanNowState.Queued:
-                            <span class="live-pill live-pill--queued" title="It starts right after this scan and includes every asset you have then.">
-                                <i class="fas fa-clock"></i>Next scan queued
-                            </span>
-                            break;
-
-                        default:
-                            <form asp-controller="Scans" asp-action="TriggerScan" method="post" class="d-inline">
-                                <button type="submit" class="btn btn-outline-primary btn-sm"
-                                        title="Queue a scan that starts right after this one, for example to include assets you just added.">
-                                    <i class="fas fa-forward me-1"></i>Scan again after this
-                                </button>
-                            </form>
-                            break;
+                        @* A running scan older than the in-progress window counts as stuck. *@
+                        <form asp-controller="Scans" asp-action="TriggerScan" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="fas fa-bolt me-1"></i>Scan now
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        @* The server refuses "Scan now" during a scan too, see ScanTriggerService.TriggerAsync. *@
+                        <button class="btn btn-primary btn-sm" disabled>
+                            <i class="fas fa-bolt me-1"></i>Scan now
+                        </button>
+                        <div class="live-card__busy">@ScanNowStateText.Busy</div>
+                    }
+                    @if (Model.ScanNowState == ScanNowState.Queued)
+                    {
+                        @* The scanner queues a scan when the schedule fires during a running scan. *@
+                        <span class="live-pill live-pill--queued mt-2 d-inline-flex" title="It includes every asset you have when it starts.">
+                            <i class="fas fa-clock"></i>@ScanNowStateText.QueuedAfterCurrent
+                        </span>
                     }
                 </div>
             </div>
@@ -71,7 +78,7 @@
                         <i class="fas fa-satellite-dish"></i>
                     </div>
                     <div>
-                        <div class="live-card__title mb-1">No scan running</div>
+                        <div class="live-card__title mb-1">@(Model.ScanNowState == ScanNowState.Allowed ? "No scan running" : "Scan starting")</div>
                         <div class="live-card__meta">
                             @if (!string.IsNullOrEmpty(Model.NextScanCountdown))
                             {
@@ -91,18 +98,12 @@
                             </form>
                             break;
 
-                        case ScanNowState.InProgress:
-                            <button class="btn btn-primary btn-sm" disabled
-                                    title="A scan is already running.">
-                                <i class="fas fa-spinner fa-spin me-1"></i>Scanning…
+                        default:
+                            @* Busy (pending or queued): the server refuses too, see ScanTriggerService.TriggerAsync. *@
+                            <button class="btn btn-primary btn-sm" disabled>
+                                <i class="fas fa-bolt me-1"></i>Scan now
                             </button>
-                            break;
-
-                        case ScanNowState.Queued:
-                            <button class="btn btn-primary btn-sm" disabled
-                                    title="A scan is queued and starts within a minute.">
-                                <i class="fas fa-clock me-1"></i>Scan queued
-                            </button>
+                            <div class="live-card__busy">@ScanNowStateText.Busy</div>
                             break;
                     }
                 </div>

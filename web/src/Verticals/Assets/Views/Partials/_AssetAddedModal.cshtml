@@ -1,0 +1,66 @@
+@using VulWall.Dashboard.Assets.Models
+@{
+    var addedAsset = TempData["AssetAdded"] as string;
+    var scanState = Enum.TryParse<AssetAddedScanState>(TempData["AssetAddedScanState"] as string, out var parsed)
+        ? parsed
+        : AssetAddedScanState.Idle;
+}
+@if (addedAsset != null)
+{
+    <input type="hidden" id="assetAddedFlag" />
+    <div class="modal fade" id="assetAddedModal" tabindex="-1" aria-labelledby="assetAddedModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="assetAddedModalLabel">
+                        <i class="fas fa-circle-check me-2 text-primary"></i>Asset added
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3"><strong>@addedAsset</strong> has been added.</p>
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-circle-info me-1"></i>
+                        @switch (scanState)
+                        {
+                            case AssetAddedScanState.ScanInProgress:
+                                @:A scan is running. New assets are included in the next scan.
+                                break;
+                            case AssetAddedScanState.FirstScan:
+                                @:Run your first scan to see what VulWall finds. Add your other assets first if you like: a scan covers every asset you have when it starts.
+                                break;
+                            default:
+                                @:It is included in the next scan. To scan it now, use Scan now.
+                                break;
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    @switch (scanState)
+                    {
+                        case AssetAddedScanState.ScanInProgress:
+                            <a href="@Url.Action("Index", "Scans")" class="btn btn-outline-primary">See scans</a>
+                            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+                            break;
+                        case AssetAddedScanState.FirstScan:
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Later</button>
+                            <form asp-controller="Scans" asp-action="TriggerScan" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-bolt me-1"></i>Scan now
+                                </button>
+                            </form>
+                            break;
+                        default:
+                            <form asp-controller="Scans" asp-action="TriggerScan" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-outline-primary">
+                                    <i class="fas fa-bolt me-1"></i>Scan now
+                                </button>
+                            </form>
+                            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+                            break;
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
