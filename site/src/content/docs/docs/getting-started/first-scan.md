@@ -8,7 +8,7 @@ description: Create the admin account, add a domain and run a scan.
 Open the setup link that the installer printed. To make it again, get the token with
 `grep SETUP_TOKEN .env` in the install directory and open
 `http://localhost:8080/setup?token=<token>`. If the installer picked another port, or you set
-`VULWALL_PORT`, use that port; `vulwall status` shows the URL. If you installed from the repository without a
+`VULWALL_PORT`, use that port; `~/vulwall/vulwall status` shows the URL. If you installed from the repository without a
 `SETUP_TOKEN`, see [Open the setup page](/docs/getting-started/manual-install/#open-the-setup-page).
 Enter your email address, a password and the name of your organization.
 

@@ -103,6 +103,8 @@ Set these environment variables for the `sh` that runs the script:
 | `VULWALL_PORT` | `8080`, or the first free port from 8081 | Port of the web UI on `127.0.0.1` |
 | `VULWALL_INSTALL_DOCKER` | not set | `1` installs or starts Docker on Linux without asking |
 | `VULWALL_SKIP_CPU_CHECK` | not set | `1` skips the CPU check |
+| `VULWALL_BASE_URL` | GitHub release | Download the release files from this `https://` URL instead, for example a mirror |
+| `VULWALL_ALLOW_HTTP` | not set | `1` allows an `http://` `VULWALL_BASE_URL`, for local testing only |
 
 ```sh
 curl -fsSL https://vulwall.com/install.sh | VULWALL_DIR=$HOME/apps/vulwall VULWALL_VERSION=0.1.0 sh
@@ -164,7 +166,7 @@ cd ~/vulwall && docker compose down
 To remove VulWall and **delete all its data**, run `vulwall uninstall`, or:
 
 ```sh
-cd ~/vulwall && docker compose down -v && cd && rm -rf ~/vulwall
+cd ~/vulwall && docker compose down -v && cd && rm -rf ~/vulwall && rm -f ~/.local/bin/vulwall
 ```
 
 ## Verify the download

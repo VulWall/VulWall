@@ -56,6 +56,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.example.com
 OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer <token>
 ```
 
-The scanner also reads the standard `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` and
-`OTEL_RESOURCE_ATTRIBUTES` variables. To use them, add them to the scanner's `environment` in a
+`OTEL_TRACES_SAMPLER` and `OTEL_TRACES_SAMPLER_ARG` also go in `.env`; see
+[Configuration](/docs/configuration/). The scanner also reads the standard
+`OTEL_RESOURCE_ATTRIBUTES` variable. To use it, add it to the scanner's `environment` in a
 `docker-compose.override.yml`.

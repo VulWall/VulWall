@@ -55,6 +55,6 @@ Replace `0.1.0` with your release. To check the exact images your install runs, 
 
 ```sh
 git pull
-docker compose pull          # when you use the published images
-docker compose up -d --build # when you build from source
+docker compose pull && docker compose up -d   # when you use the published images
+docker compose up -d --build                  # when you build from source
 ```
