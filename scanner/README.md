@@ -73,7 +73,7 @@ All of these run as goroutines in the `nightwatch` process
 ### Prerequisites
 
 - Go (version in `src/go.mod`)
-- Redis 7 and MongoDB 7 (for example `docker compose up -d mongo redis` from the
+- Redis 8 and MongoDB 9 (for example `docker compose up -d mongo redis` from the
   repo root, with ports published by an override file, or local installs)
 - For a full local scan: `nuclei`, `testssl.sh` and `retire` on `PATH`. The
   container image has all of them; without them the matching scanners log

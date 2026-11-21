@@ -38,8 +38,8 @@ MONGO_URI=mongodb://localhost:27017 MONGO_DB=vulwall dotnet run
 `src/Properties/launchSettings.example.json` is a starting point for IDE run profiles. Copy it to
 `launchSettings.json` (git-ignored) to use it.
 
-Tests start a throwaway MongoDB through EphemeralMongo, which downloads a `mongod` binary on the
-first run:
+Tests start a throwaway MongoDB 9 through EphemeralMongo, which downloads a `mongod` binary on
+the first run:
 
 ```bash
 dotnet test

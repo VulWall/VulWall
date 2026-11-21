@@ -43,7 +43,7 @@ VulWall includes or runs third-party software and data. Each keeps its own licen
 License does not change: nuclei and subfinder (MIT), testssl.sh (GPL-2.0), retire.js
 (Apache-2.0), the DB-IP Lite databases (CC BY 4.0, "IP Geolocation by DB-IP"), flag-icons (MIT)
 and simple-icons (CC0). testssl.sh runs as a separate program in the scanner image; it is not
-linked into VulWall. The compose file also runs MongoDB (SSPL), Redis (RSALv2 or SSPL) and, optionally, Jaeger (Apache-2.0) as
+linked into VulWall. The compose file also runs MongoDB (SSPL), Redis (RSALv2, SSPL or AGPLv3) and, optionally, Jaeger (Apache-2.0) as
 separate, unmodified servers.
 
 The full list, with copyright notices, is in

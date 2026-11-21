@@ -17,7 +17,7 @@ public sealed class MongoFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _runner = await MongoRunner.RunAsync(new MongoRunnerOptions());
+        _runner = await MongoRunner.RunAsync(new MongoRunnerOptions { Version = MongoVersion.V9 });
         _client = new MongoClient(_runner.ConnectionString);
     }
 
