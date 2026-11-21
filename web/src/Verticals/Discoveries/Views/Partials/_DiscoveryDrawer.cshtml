@@ -21,11 +21,11 @@
                     <span class="value">@Model.IpAddress</span>
                 </div>
             }
-            @if (!string.IsNullOrEmpty(Model.CountryCode))
+            @if (!string.IsNullOrWhiteSpace(Model.CountryCode))
             {
                 <div class="disc-drawer-row">
                     <span class="label">Country</span>
-                    <span class="value">@Model.CountryCode@(string.IsNullOrEmpty(Model.Continent) ? "" : $" · {Model.Continent}")</span>
+                    <span class="value">@Model.CountryLabel@(string.IsNullOrEmpty(Model.Continent) ? "" : $" · {Model.Continent}")</span>
                 </div>
             }
             @if (!string.IsNullOrEmpty(Model.CloudProvider))

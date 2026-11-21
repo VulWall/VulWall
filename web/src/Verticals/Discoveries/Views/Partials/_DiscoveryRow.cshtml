@@ -86,7 +86,7 @@
         <div class="disc-hosting">
             @* An icon, or the text when there is no icon. The text always renders after the image:
                CSS hides it while the image is fine, so a broken image falls back to the text. *@
-            @if (!string.IsNullOrEmpty(d.CountryCode))
+            @if (!string.IsNullOrWhiteSpace(d.CountryCode))
             {
                 var flagUrl = LogoUrlHelper.GetCountryFlagUrl(Env.WebRootFileProvider, d.CountryCode);
                 var countryLabel = d.CountryLabel;
