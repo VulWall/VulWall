@@ -16,12 +16,24 @@
         <h1 class="page-title">Discoveries</h1>
         <p class="page-subtitle">Your external attack surface</p>
     </div>
-    <form method="post" action="@Url.Action("TriggerScan", "Scans")">
-        @Html.AntiForgeryToken()
-        <button type="submit" class="btn btn-primary btn-sm">
-            <i class="fas fa-bolt me-1"></i> Rescan now
-        </button>
-    </form>
+    @if (Model.ScanInProgress)
+    {
+        <div class="disc-rescan-busy">
+            <button type="button" class="btn btn-primary btn-sm" disabled>
+                <i class="fas fa-bolt me-1"></i> Rescan now
+            </button>
+            <span class="disc-rescan-busy__text">@VulWall.Dashboard.Common.Services.ScanTrigger.ScanTriggerService.BusyMessage</span>
+        </div>
+    }
+    else
+    {
+        <form method="post" action="@Url.Action("TriggerScan", "Scans")">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="fas fa-bolt me-1"></i> Rescan now
+            </button>
+        </form>
+    }
 </div>
 
 <!-- Stats row -->

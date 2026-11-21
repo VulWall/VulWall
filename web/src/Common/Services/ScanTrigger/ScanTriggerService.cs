@@ -11,12 +11,9 @@ public enum TriggerScanResult
     /// <summary>No scan was in progress: a scan is queued and starts on the scanner's next poll.</summary>
     Started,
 
-    /// <summary>A scan is running: a follow-up scan is queued and starts right after it.</summary>
-    QueuedAfterCurrent,
-
-    /// <summary>A follow-up scan was already queued: nothing was inserted. It reads the assets
-    /// when it starts, so it includes assets added since it was queued.</summary>
-    AlreadyQueued
+    /// <summary>A scan is queued, pending or running: nothing was inserted. "Scan now" is
+    /// available again when it finishes.</summary>
+    Busy
 }
 
 /// <summary>
@@ -31,6 +28,9 @@ public class ScanTriggerService(ScansRepository scansRepository)
     /// orphaned scan record does not block new scans forever.
     /// </summary>
     private static readonly TimeSpan InProgressWindow = TimeSpan.FromHours(24);
+
+    /// <summary>Shown next to every disabled "Scan now" button and when a request is refused.</summary>
+    public const string BusyMessage = "A scan is running. You can start a new one when it finishes.";
 
     /// <summary>
     /// A scan the scanner has started (pending or running) less than <see cref="InProgressWindow"/>
@@ -64,20 +64,18 @@ public class ScanTriggerService(ScansRepository scansRepository)
         scansRepository.ExistsAsync(InProgressPredicate(DateTime.UtcNow));
 
     /// <summary>
-    /// Queues a scan for the current organization. While a scan runs, it queues one follow-up
-    /// scan, so assets added during the run are scanned right after it instead of at the next
-    /// scheduled scan. There is never more than one queued scan per organization: a second
-    /// request returns <see cref="TriggerScanResult.AlreadyQueued"/>. The unique partial index
-    /// on <c>scans</c> (<c>org_id</c> where <c>status</c> is <c>queued</c>, see
-    /// <c>MongoDbIndexManager</c>) makes this hold for concurrent requests too.
+    /// Queues a scan for the current organization ("Scan now"), unless a scan is already in
+    /// progress (<see cref="InProgressPredicate"/>): then it inserts nothing and returns
+    /// <see cref="TriggerScanResult.Busy"/>. The web app never queues a scan behind a running
+    /// one; only the scanner does that, when the schedule fires during a scan. The unique partial
+    /// index on <c>scans</c> (<c>org_id</c> where <c>status</c> is <c>queued</c>, see
+    /// <c>MongoDbIndexManager</c>) keeps concurrent requests to one queued scan.
     /// </summary>
     public async Task<TriggerScanResult> TriggerAsync(string triggeredBy)
     {
-        if (await scansRepository.ExistsAsync(s => s.Status == ScanStatus.Queued))
-            return TriggerScanResult.AlreadyQueued;
-
         var now = DateTime.UtcNow;
-        var running = await scansRepository.ExistsAsync(StartedPredicate(now));
+        if (await scansRepository.ExistsAsync(InProgressPredicate(now)))
+            return TriggerScanResult.Busy;
 
         try
         {
@@ -93,9 +91,9 @@ public class ScanTriggerService(ScansRepository scansRepository)
         catch (MongoWriteException e) when (e.WriteError?.Category == ServerErrorCategory.DuplicateKey)
         {
             // A concurrent request queued one first.
-            return TriggerScanResult.AlreadyQueued;
+            return TriggerScanResult.Busy;
         }
 
-        return running ? TriggerScanResult.QueuedAfterCurrent : TriggerScanResult.Started;
+        return TriggerScanResult.Started;
     }
 }

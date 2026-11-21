@@ -170,6 +170,20 @@ public class AssetsService(
 
     public Task<bool> IsScanInProgressAsync() => scanTriggerService.IsScanInProgressAsync();
 
+    /// <summary>
+    /// Decides what to offer after an asset is added. "Never had a scan" means no scan document
+    /// of any status exists for the organization.
+    /// </summary>
+    public async Task<AssetAddedScanState> GetAssetAddedScanStateAsync()
+    {
+        if (await IsScanInProgressAsync())
+            return AssetAddedScanState.ScanInProgress;
+
+        return await scansRepository.ExistsAsync(_ => true)
+            ? AssetAddedScanState.Idle
+            : AssetAddedScanState.FirstScan;
+    }
+
     public async Task<AssetsStatistics> GetStatisticsAsync()
     {
         var allAssets = await assetsRepository.GetAllAsync();

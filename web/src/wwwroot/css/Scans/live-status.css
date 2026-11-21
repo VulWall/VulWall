@@ -88,6 +88,15 @@
     color: var(--vw-gray-400, #94A3B8);
 }
 
+/* "Scan now" is off while a scan is in progress: say why, under the disabled button. */
+.live-card__busy {
+    max-width: 240px;
+    margin-top: 6px;
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--vw-gray-500, #64748B);
+}
+
 /* ── Right side ── */
 .live-card__right {
     text-align: right;
