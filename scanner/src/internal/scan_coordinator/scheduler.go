@@ -190,13 +190,18 @@ func (sc *Scheduler) triggerScan(org shared.Organization) {
 		zap.String("company_name", org.CompanyName),
 	)
 
-	if _, err := sc.service.TriggerScan(ctx, ScanRequest{
+	if scanID, err := sc.service.TriggerScan(ctx, ScanRequest{
 		OrgID:       org.ID,
 		Type:        shared.ScanTypeScheduled,
 		TriggeredBy: "system",
 	}); errors.Is(err, ErrScanInProgress) {
-		sc.logger.Info("Skipping cron scan: a scan is already running",
+		sc.logger.Info("Skipping cron scan: a scan is already queued",
 			zap.String("org_id", org.ID),
+		)
+	} else if errors.Is(err, ErrScanQueued) {
+		sc.logger.Info("Cron scan queued: it starts after the running scan",
+			zap.String("org_id", org.ID),
+			zap.String("scan_id", scanID),
 		)
 	} else if err != nil {
 		sc.logger.Error("Failed to process organization scan",

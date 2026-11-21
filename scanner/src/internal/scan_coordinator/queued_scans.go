@@ -12,10 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// StartQueuedScans polls the scans collection for scans the web UI queued and
-// starts them. It blocks until ctx is cancelled.
+// StartQueuedScans polls the scans collection for queued scans and starts
+// them. It blocks until ctx is cancelled.
 //
-// The web UI inserts {_id, org_id, status: "queued", triggered_by, created_at}.
+// The web UI inserts {_id, org_id, status: "queued", type: "requested",
+// triggered_by, created_at}; TriggerScan inserts the same shape with type
+// "scheduled" when the cron fires during a running scan.
 // The poller claims the document in place (queued -> running) and publishes the
 // discovery jobs under that same _id, so the UI can follow the scan it created.
 //
@@ -95,13 +97,42 @@ func (s *Service) startQueuedScan(ctx context.Context, queued shared.Scan) {
 		return
 	}
 
+	// A scheduled scan queued behind a running one does not run when the
+	// schedule was turned off while it waited. It never started, so it is
+	// deleted, not closed. Requested scans always run.
+	if queued.Type == shared.ScanTypeScheduled {
+		settings, err := s.store.orgScanSettings(ctx, queued.OrgID)
+		if err != nil {
+			log.Error("Failed to read scan schedule for queued scheduled scan", zap.Error(err))
+			return
+		}
+		if !settings.Scheduled() {
+			deleted, err := s.store.deleteQueuedScan(ctx, queued.ID)
+			if err != nil {
+				log.Error("Failed to remove queued scheduled scan", zap.Error(err))
+				return
+			}
+			if deleted {
+				log.Info("Queued scheduled scan removed: schedule turned off")
+			}
+			return
+		}
+	}
+
 	// Claim first, then read the assets: while the scan is queued, the web app promises that
 	// it includes every asset added before it starts, so an asset added up to the claim must
-	// be in it. After the claim the web app sees a running scan and queues a follow-up.
+	// be in it. After the claim the scan is running, so a scan queued later waits behind it.
+
+	// A scheduled scan queued behind a running one keeps its type, so the web
+	// app labels it Scheduled; anything else is a requested scan.
+	scanType := shared.ScanTypeRequested
+	if queued.Type == shared.ScanTypeScheduled {
+		scanType = shared.ScanTypeScheduled
+	}
 	now := time.Now()
 	claimed, err := s.store.claimQueuedScan(ctx, queued.ID, bson.M{
 		"status":     shared.StatusRunning,
-		"type":       shared.ScanTypeRequested,
+		"type":       scanType,
 		"started_at": now,
 		"updated_at": now,
 	})

@@ -81,7 +81,7 @@ KNOWLEDGE BASE FLOW:
 
 SCAN COORDINATOR FLOW:
 1. Runs on cron schedule per organization (`scan_settings.scan_cron`, skipped when `scan_settings.enabled` is false)
-2. Creates Scan record (status=running, type=scheduled)
+2. Creates Scan record (status=running, type=scheduled). If a scan is already running, it queues one (status=queued, type=scheduled) that the queued-scan poller starts after it; if one is already queued, it does nothing
 3. Queries enabled user-added assets from assets collection
 4. Publishes discovery jobs to Redis:
    ├─→ Domain assets → domain_discovery_queue
@@ -152,7 +152,7 @@ document with `status: "queued"` and polls the document for `done`/`failed`.
 - Queued-scan poll: every 5 seconds (ticker, not cron)
 
 **Scan lifecycle:**
-1. Either the web app inserts a scan with status `queued` and the poller claims it in place (status `running`, `started_at` set), or the cron fires and the coordinator inserts a scan with status `running`
+1. Either the web app inserts a scan with status `queued` and the poller claims it in place (status `running`, `started_at` set), or the cron fires and the coordinator inserts a scan with status `running` (or, while another scan runs, a `queued` scan with type `scheduled` that the poller claims the same way)
 2. Query enabled assets → publish discovery jobs with the scan's `_id` as `scan_id`
 3. Discovery → ingestion → active recon pipeline processes normally
 4. Scan monitor checks the pipeline groups → marks the scan `done` when every group has drained (or a timeout fires)

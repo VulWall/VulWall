@@ -484,13 +484,17 @@ should use the top-level `references` field.
 - **Requested scans** — the web app inserts
   `{_id, org_id, status: "queued", triggered_by, created_at}`. The scan
   coordinator polls every 5 s and claims the document in place: it sets
-  `status: "running"`, `type: "requested"`, `started_at` and `updated_at`,
+  `status: "running"`, `type` (`"scheduled"` for a scan the cron queued,
+  else `"requested"`), `started_at` and `updated_at`,
   then reads the organization's assets (so an asset added while the scan was
   queued is in it), sets `targeted_assets` and `stats.total_assets`, and
   publishes discovery jobs with that `_id`. A failure after the claim marks
   the scan `failed`.
 - **Scheduled scans** — the coordinator's cron inserts a new document with
-  `status: "running"` and `started_at`.
+  `status: "running"` and `started_at`. When the organization has a `pending`
+  or `running` scan, it inserts a queued scan instead
+  (`{_id, org_id, status: "queued", type: "scheduled", triggered_by: "system",
+  created_at, updated_at}`), which the poller starts after the running scan.
 
 Status values: `queued` → `running` → `done` (or `failed`). `pending` is still
 read by the guards for older documents but is no longer written.
@@ -499,8 +503,17 @@ read by the guards for older documents but is no longer written.
   has a `pending` or `running` scan and starts on a later poll. Only the oldest
   queued scan of an organization starts in one poll, so several queued
   requests run one after another.
-- A scheduled trigger is skipped while the organization has a `queued`,
-  `pending` or `running` scan.
+- A scheduled trigger is skipped while the organization has a `queued` scan:
+  that scan reads the assets when it starts, so it covers them all. While a
+  scan is `pending` or `running`, the trigger queues a scan (see above). The
+  web app's unique partial index (`org_id_1_queued_unique`) allows one queued
+  scan per organization; the coordinator reads a duplicate-key error on that
+  insert as "already queued".
+- A queued `scheduled` scan whose organization's schedule was turned off
+  while it waited (`scan_settings.enabled: false` or no `scan_cron`) is
+  deleted: it never started, so there is nothing to keep. The delete filters
+  on `_id` and `status: "queued"`, so a scan claimed at the same time is not
+  deleted. Requested scans do not depend on the schedule.
 - A queued scan whose organization does not exist becomes `failed`. A queued
   scan with no enabled assets becomes `done` at once, with
   `findings_reconciled: false`. If no discovery job can

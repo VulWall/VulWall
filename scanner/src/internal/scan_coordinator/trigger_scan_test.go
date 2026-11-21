@@ -9,6 +9,7 @@ import (
 
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
@@ -22,21 +23,28 @@ type fakeStore struct {
 	inserted  []shared.Scan
 	activeErr error
 	assetsErr error
+	insertErr error               // returned by insertScan, which then inserts nothing
 	onClaim   func()              // runs inside claimQueuedScan, after a successful claim
 	known     map[string][]string // by orgID/parentID
+	settings  map[string]shared.ScanSettings
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		orgs:   map[string]bool{},
-		assets: map[string][]shared.Asset{},
-		scans:  map[string]shared.Scan{},
-		set:    map[string]bson.M{},
+		orgs:     map[string]bool{},
+		assets:   map[string][]shared.Asset{},
+		scans:    map[string]shared.Scan{},
+		set:      map[string]bson.M{},
+		settings: map[string]shared.ScanSettings{},
 	}
 }
 
 func (f *fakeStore) orgExists(_ context.Context, orgID string) (bool, error) {
 	return f.orgs[orgID], nil
+}
+
+func (f *fakeStore) orgScanSettings(_ context.Context, orgID string) (shared.ScanSettings, error) {
+	return f.settings[orgID], nil
 }
 
 func (f *fakeStore) hasScanIn(_ context.Context, orgID string, statuses []string) (bool, error) {
@@ -63,6 +71,9 @@ func (f *fakeStore) knownSubdomains(_ context.Context, orgID, parentID string) (
 }
 
 func (f *fakeStore) insertScan(_ context.Context, scan shared.Scan) error {
+	if f.insertErr != nil {
+		return f.insertErr
+	}
 	f.inserted = append(f.inserted, scan)
 	f.scans[scan.ID] = scan
 	return nil
@@ -90,6 +101,15 @@ func (f *fakeStore) claimQueuedScan(ctx context.Context, scanID string, set bson
 	if f.onClaim != nil {
 		f.onClaim()
 	}
+	return true, nil
+}
+
+func (f *fakeStore) deleteQueuedScan(_ context.Context, scanID string) (bool, error) {
+	s, ok := f.scans[scanID]
+	if !ok || s.Status != shared.StatusQueued {
+		return false, nil
+	}
+	delete(f.scans, scanID)
 	return true, nil
 }
 
@@ -153,21 +173,127 @@ func domainAsset(id, domain string) shared.Asset {
 	return shared.Asset{ID: id, Type: "domain", Domain: strPtr(domain), Enabled: true}
 }
 
-func TestTriggerScanRejectsWhenScanActive(t *testing.T) {
-	for _, status := range []string{shared.StatusQueued, shared.StatusPending, shared.StatusRunning} {
+// TestTriggerScanQueuesWhileScanRunning is the fix for #100: a cron firing during a running
+// scan queues a scheduled scan instead of dropping it, and a second firing adds nothing.
+func TestTriggerScanQueuesWhileScanRunning(t *testing.T) {
+	for _, status := range []string{shared.StatusPending, shared.StatusRunning} {
 		store := newFakeStore()
 		store.orgs["org-1"] = true
-		store.scans["s0"] = shared.Scan{ID: "s0", OrgID: "org-1", Status: status}
-		svc, _ := newTestService(store, nil)
+		store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+		store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: status}
+		svc, published := newTestService(store, nil)
+		req := ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled, TriggeredBy: "system"}
 
-		scanID, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled, TriggeredBy: "system"})
+		scanID, err := svc.TriggerScan(context.Background(), req)
 
-		if !errors.Is(err, ErrScanInProgress) {
-			t.Fatalf("status %q: err = %v, want ErrScanInProgress", status, err)
+		if !errors.Is(err, ErrScanQueued) {
+			t.Fatalf("status %q: err = %v, want ErrScanQueued", status, err)
 		}
-		if scanID != "" || len(store.inserted) != 0 {
-			t.Fatalf("status %q: scan created despite active scan", status)
+		if len(store.inserted) != 1 {
+			t.Fatalf("status %q: inserted %d scans, want 1", status, len(store.inserted))
 		}
+		got := store.inserted[0]
+		if got.ID != scanID || got.OrgID != "org-1" || got.Status != shared.StatusQueued ||
+			got.Type != shared.ScanTypeScheduled || got.TriggeredBy != "system" ||
+			got.CreatedAt.IsZero() || got.UpdatedAt.IsZero() || got.StartedAt != nil {
+			t.Fatalf("status %q: queued scan = %+v", status, got)
+		}
+		if len(*published) != 0 {
+			t.Fatalf("status %q: published %d jobs; a queued scan publishes nothing", status, len(*published))
+		}
+
+		if _, err := svc.TriggerScan(context.Background(), req); !errors.Is(err, ErrScanInProgress) {
+			t.Fatalf("status %q: second trigger err = %v, want ErrScanInProgress", status, err)
+		}
+		if len(store.inserted) != 1 {
+			t.Fatalf("status %q: second trigger inserted another scan", status)
+		}
+	}
+}
+
+// TestTriggerScanQueueDuplicateKeyMeansAlreadyQueued: the web app queued a scan between the
+// check and the insert, and the unique partial index rejected ours.
+func TestTriggerScanQueueDuplicateKeyMeansAlreadyQueued(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: shared.StatusRunning}
+	store.insertErr = mongo.WriteException{WriteErrors: []mongo.WriteError{{Code: 11000, Message: "E11000 duplicate key error"}}}
+	svc, _ := newTestService(store, nil)
+
+	_, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled, TriggeredBy: "system"})
+
+	if !errors.Is(err, ErrScanInProgress) {
+		t.Fatalf("err = %v, want ErrScanInProgress", err)
+	}
+}
+
+func TestTriggerScanQueueInsertErrorIsReturned(t *testing.T) {
+	boom := errors.New("mongo down")
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: shared.StatusRunning}
+	store.insertErr = boom
+	svc, _ := newTestService(store, nil)
+
+	_, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled})
+
+	if !errors.Is(err, boom) || errors.Is(err, ErrScanQueued) || errors.Is(err, ErrScanInProgress) {
+		t.Fatalf("err = %v, want wrapped mongo error", err)
+	}
+}
+
+// TestQueuedScheduledScanStartsAfterRunningScan: the poller starts the queued scheduled scan
+// as a normal full scan once the running scan is done, and it stays labelled scheduled.
+func TestQueuedScheduledScanStartsAfterRunningScan(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.settings["org-1"] = shared.ScanSettings{ScanCron: "0 2 * * *", Enabled: boolPtr(true)}
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com"), domainAsset("a2", "example.org")}
+	store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: shared.StatusRunning}
+	svc, published := newTestService(store, nil)
+
+	scanID, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled, TriggeredBy: "system"})
+	if !errors.Is(err, ErrScanQueued) {
+		t.Fatalf("err = %v, want ErrScanQueued", err)
+	}
+
+	svc.startQueuedScans(context.Background())
+	if store.scans[scanID].Status != shared.StatusQueued || len(*published) != 0 {
+		t.Fatalf("queued scan started while r1 runs")
+	}
+
+	r1 := store.scans["r1"]
+	r1.Status = shared.StatusDone
+	store.scans["r1"] = r1
+	svc.startQueuedScans(context.Background())
+
+	set := store.set[scanID]
+	if store.scans[scanID].Status != shared.StatusRunning || set["type"] != shared.ScanTypeScheduled ||
+		set["stats.total_assets"] != 2 || set["started_at"] == nil {
+		t.Fatalf("claim $set = %+v, status %q", set, store.scans[scanID].Status)
+	}
+	if len(*published) != 2 {
+		t.Fatalf("published %d jobs, want one per asset", len(*published))
+	}
+}
+
+func TestTriggerScanStartsWhenIdle(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	store.scans["d1"] = shared.Scan{ID: "d1", OrgID: "org-1", Status: shared.StatusDone}
+	svc, published := newTestService(store, nil)
+
+	scanID, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled, TriggeredBy: "system"})
+
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if got := store.scans[scanID]; got.Status != shared.StatusRunning || got.Type != shared.ScanTypeScheduled {
+		t.Fatalf("scan = %+v, want a running scheduled scan", got)
+	}
+	if len(*published) != 1 {
+		t.Fatalf("published %d jobs, want 1", len(*published))
 	}
 }
 
@@ -393,10 +519,15 @@ func TestScheduledTriggerSkippedWhileScanQueued(t *testing.T) {
 	store := newFakeStore()
 	store.orgs["org-1"] = true
 	store.scans["q1"] = queuedScan("q1", "org-1", time.Now())
-	svc, _ := newTestService(store, nil)
+	store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: shared.StatusRunning}
+	svc, published := newTestService(store, nil)
 
-	if _, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled}); !errors.Is(err, ErrScanInProgress) {
+	scanID, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled})
+	if !errors.Is(err, ErrScanInProgress) {
 		t.Fatalf("err = %v, want ErrScanInProgress", err)
+	}
+	if scanID != "" || len(store.inserted) != 0 || len(*published) != 0 {
+		t.Fatal("scan inserted or jobs published although a scan is already queued")
 	}
 }
 
@@ -493,5 +624,76 @@ func TestFollowUpScanTargetsAssetsAtClaimTime(t *testing.T) {
 	}
 	if n := store.set["q1"]["stats.total_assets"]; n != 2 {
 		t.Fatalf("total_assets = %v, want 2 (both assets, read at claim time)", n)
+	}
+}
+
+// TestQueuedScheduledScanSkippedWhenScheduleTurnedOff: the schedule was turned off while the
+// scheduled scan waited behind a running scan, so it is deleted without running. A requested
+// scan of the same organization still runs.
+func TestQueuedScheduledScanSkippedWhenScheduleTurnedOff(t *testing.T) {
+	for name, settings := range map[string]shared.ScanSettings{
+		"disabled":  {ScanCron: "0 2 * * *", Enabled: boolPtr(false)},
+		"cron gone": {ScanCron: ""},
+	} {
+		store := newFakeStore()
+		store.orgs["org-1"] = true
+		store.settings["org-1"] = settings
+		store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+		q := queuedScan("q1", "org-1", time.Now())
+		q.Type = shared.ScanTypeScheduled
+		store.scans["q1"] = q
+		svc, published := newTestService(store, nil)
+
+		svc.startQueuedScans(context.Background())
+
+		if s, ok := store.scans["q1"]; ok {
+			t.Fatalf("%s: queued scheduled scan still exists (status %q), want deleted", name, s.Status)
+		}
+		if _, ok := store.set["q1"]; ok {
+			t.Fatalf("%s: scan was updated before deletion: %+v", name, store.set["q1"])
+		}
+		if len(*published) != 0 {
+			t.Fatalf("%s: published %d jobs, want none", name, len(*published))
+		}
+
+		// A requested scan does not depend on the schedule.
+		store.scans["q2"] = queuedScan("q2", "org-1", time.Now())
+		svc.startQueuedScans(context.Background())
+		if store.scans["q2"].Status != shared.StatusRunning || len(*published) != 1 {
+			t.Fatalf("%s: requested scan status %q, %d jobs; want running with 1 job", name, store.scans["q2"].Status, len(*published))
+		}
+	}
+}
+
+func TestQueuedScheduledScanRunsWhileScheduleOn(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.settings["org-1"] = shared.ScanSettings{ScanCron: "0 2 * * *"} // enabled missing counts as on
+	store.assets["org-1"] = []shared.Asset{domainAsset("a1", "example.com")}
+	q := queuedScan("q1", "org-1", time.Now())
+	q.Type = shared.ScanTypeScheduled
+	store.scans["q1"] = q
+	svc, published := newTestService(store, nil)
+
+	svc.startQueuedScans(context.Background())
+
+	if store.scans["q1"].Status != shared.StatusRunning || len(*published) != 1 {
+		t.Fatalf("status %q, %d jobs; want running with 1 job", store.scans["q1"].Status, len(*published))
+	}
+}
+
+// TestDeleteQueuedScanSparesClaimedScan: the delete only removes a scan that is still queued,
+// so a scan claimed between the poll and the delete keeps running.
+func TestDeleteQueuedScanSparesClaimedScan(t *testing.T) {
+	store := newFakeStore()
+	store.scans["r1"] = shared.Scan{ID: "r1", OrgID: "org-1", Status: shared.StatusRunning, Type: shared.ScanTypeScheduled}
+
+	deleted, err := store.deleteQueuedScan(context.Background(), "r1")
+
+	if err != nil || deleted {
+		t.Fatalf("deleted = %v, err = %v; want false, nil", deleted, err)
+	}
+	if _, ok := store.scans["r1"]; !ok {
+		t.Fatal("running scan was deleted")
 	}
 }
