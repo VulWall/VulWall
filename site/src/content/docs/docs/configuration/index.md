@@ -20,6 +20,7 @@ Docker Compose recreates the containers whose settings changed. Your data is kep
 | `VULWALL_PORT` | `8080` | Host port of the web UI. It is bound to `127.0.0.1` only. |
 | `SECURE_COOKIES` | `false` | Set to `true` when you serve VulWall over HTTPS. Turns on Secure cookies, HSTS and the HTTP to HTTPS redirect. See [Reverse proxy and HTTPS](/docs/configuration/reverse-proxy/). |
 | `TRUSTED_PROXIES` | empty | Comma-separated IP addresses or CIDR ranges of reverse proxies whose `X-Forwarded-For` and `X-Forwarded-Proto` headers are trusted. Empty means loopback only. |
+| `UPDATE_CHECK` | `true` | The web app asks the GitHub API (`api.github.com`) for the latest VulWall release at start and every 6 hours, and shows a dot on the About button in the sidebar when a newer one exists. Set to `false` on hosts without internet access, or if you do not want this request. |
 | `SETUP_TOKEN` | empty | First-run setup token: only someone with it can create the admin account. The install script adds a random one to `.env`; for a manual install, generate one with `openssl rand -hex 16`. Empty means a new random token at each start, printed in `docker compose logs web`. |
 
 ## Scanner

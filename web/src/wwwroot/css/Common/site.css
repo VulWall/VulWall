@@ -295,6 +295,7 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
     margin: 0 0 0 12px;
 }
 .sidebar-action {
+    position: relative;
     width: 36px;
     height: 36px;
     display: inline-flex;
@@ -317,6 +318,18 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
 .sidebar-action:focus-visible {
     outline: 2px solid var(--brand-on);
     outline-offset: 2px;
+}
+/* Update available: a small static orange accent dot on the About button. No pulse (that means "scanning"),
+   never red (severity). The ring is the sidebar gradient's bottom colour, so the dot reads in both themes. */
+.sidebar-action__badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brand-orange);
+    box-shadow: 0 0 0 2px var(--brand-bg-end);
 }
 .sidebar-action--muted {
     color: var(--sidebar-muted);

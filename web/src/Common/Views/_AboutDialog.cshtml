@@ -1,9 +1,25 @@
 @*
     About dialog, opened from the About button in the sidebar. Static content is rendered here; versions and the
-    system info text come from GET /about/info when the dialog opens (wwwroot/js/Common/about.js).
+    system info text come from GET /about/info when the dialog opens (wwwroot/js/Common/about.js). The update
+    status comes from the background update check (UpdateCheckState); opening the dialog never asks GitHub.
 *@
+@using VulWall.Dashboard.Common.Services.UpdateCheck
+@inject UpdateCheckState UpdateCheck
 @{
     var webVersion = VulWall.Dashboard.Common.Utils.ServiceSettings.Instance.Version;
+    var update = UpdateCheck.Current;
+    var updateText = update.Status switch
+    {
+        UpdateStatus.Off => "Update check is off.",
+        UpdateStatus.NotChecked => "VulWall has not checked for updates yet.",
+        UpdateStatus.Latest => "You're on the latest version.",
+        UpdateStatus.Available => $"{update.LatestVersion} is available.",
+        UpdateStatus.Unknown => $"This is a development build. The latest release is {update.LatestVersion}.",
+        UpdateStatus.NoRelease => "No published release found yet.",
+        UpdateStatus.RateLimited => "GitHub limits update checks right now. VulWall tries again later.",
+        UpdateStatus.Unreachable => "Could not reach GitHub to check for updates. VulWall tries again later.",
+        _ => "Could not check for updates. VulWall tries again later.",
+    };
     var builtWith = new (string Name, string Url, string License)[]
     {
         ("nuclei", "https://github.com/projectdiscovery/nuclei", "MIT"),
@@ -38,12 +54,34 @@
                         <dd>@webVersion</dd>
                     </dl>
                     <p class="about-note d-none" data-about-load-error role="status">Could not load the scanner versions.</p>
+                    <div class="about-update@(update.Status == UpdateStatus.Available ? " is-available" : "")">
+                        <p class="about-update__status">
+                            @if (update.Status == UpdateStatus.Available)
+                            {
+                                <i class="fas fa-circle-arrow-up" aria-hidden="true"></i>
+                            }
+                            <span>@updateText</span>
+                            @if (update.ReleaseUrl is not null && update.Status is UpdateStatus.Available or UpdateStatus.Unknown)
+                            {
+                                <a href="@update.ReleaseUrl" target="_blank" rel="noopener noreferrer">Release notes</a>
+                            }
+                        </p>
+                        @if (update.Status == UpdateStatus.Available)
+                        {
+                            <p class="about-update__hint">To upgrade, run this on the server:</p>
+                            <div class="about-command">
+                                <code class="about-command__text" data-about-command>~/vulwall/vulwall upgrade</code>
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-about-command-copy>
+                                    <i class="fas fa-copy" aria-hidden="true"></i> Copy
+                                </button>
+                            </div>
+                            <p class="about-status" data-about-command-status role="status" aria-live="polite"></p>
+                            <a href="https://vulwall.com/docs/operations/upgrade/" target="_blank" rel="noopener noreferrer">How to upgrade</a>
+                        }
+                    </div>
                     <div class="d-flex flex-wrap gap-2 mt-3">
                         <button type="button" class="btn btn-sm btn-outline-primary" data-about-copy disabled>
                             <i class="fas fa-copy" aria-hidden="true"></i> Copy system info
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" data-about-check>
-                            <i class="fas fa-rotate" aria-hidden="true"></i> Check for updates
                         </button>
                     </div>
                     <p class="about-status" data-about-status role="status" aria-live="polite"></p>

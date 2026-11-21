@@ -128,7 +128,7 @@ Each vertical is self-contained and includes:
 * **Reports**: Report generation (Summary, Technical)
 * **Scans**: Scan history, results, findings overview
 * **Settings**: Company details and logo, password, scan schedule
-* **About**: Data for the About dialog (`Common/Views/_AboutDialog.cshtml`, opened from the About button in the sidebar): `GET /about/info` (versions from the scanner's `system_info` document, plus a copy-paste system info text with versions and counts only) and `POST /about/check-updates` (server-side GitHub latest-release check, only on click, 1 h cache)
+* **About**: Data for the About dialog (`Common/Views/_AboutDialog.cshtml`, opened from the About button in the sidebar): `GET /about/info` (versions from the scanner's `system_info` document, plus a copy-paste system info text with versions and counts only). The update status in the dialog and the dot on the sidebar About button come from `UpdateCheckState` (Common singleton), which only `UpdateCheckPoller` (About, hosted service) writes: GitHub latest-release check 10 s after start, then every 6 h, failures retried after 15 min doubling to 6 h and keeping the last answer; `UPDATE_CHECK=false` turns it off. Page loads never call GitHub.
 
 ### Common Layer (Shared Across Verticals)
 The Common layer contains **only** types needed for cross-vertical communication:
@@ -515,6 +515,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 | Settings | `SettingsService` | Company info, logo, scan schedule, tour state |
 | About | `AboutService` | Versions and the system info text |
 | About | `UpdateCheckService` | GitHub latest-release check (typed `HttpClient`) |
+| About | `UpdateCheckPoller` | Background update check, writes `UpdateCheckState` |
 
 ## Authentication & Authorization
 
@@ -563,7 +564,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 - Use `EnvLoader` utility to load environment variables (`Common/Utils/ServiceSettings.cs`)
 - Never commit secrets to version control; `src/Properties/launchSettings.json` is git-ignored (copy `launchSettings.example.json`)
-- Variables: `MONGO_URI`, `MONGO_DB`, `PORT`, `ANTHROPIC_API_KEY` (optional), `DEFAULT_AI_MODEL` (the root compose file sets it from `ANTHROPIC_MODEL`, with the default filled in, because `EnvLoader` uses a set but empty value as-is), `SECURE_COOKIES`, `TRUSTED_PROXIES`, `SETUP_TOKEN`, `DATA_PROTECTION_KEYS_DIR` (image: `/data/keys` on the web-only `web-keys` volume; keys are deliberately not in MongoDB, which the scanner shares), `VULWALL_VERSION` (shown in the About dialog; a Dockerfile build arg, release images pass the tag, default `dev`; the root compose file passes `VULWALL_BUILD_VERSION`, which the root `make build`/`make up` set to `dev (<short commit>)`). See `README.md`.
+- Variables: `MONGO_URI`, `MONGO_DB`, `PORT`, `ANTHROPIC_API_KEY` (optional), `DEFAULT_AI_MODEL` (the root compose file sets it from `ANTHROPIC_MODEL`, with the default filled in, because `EnvLoader` uses a set but empty value as-is), `SECURE_COOKIES`, `TRUSTED_PROXIES`, `SETUP_TOKEN`, `UPDATE_CHECK` (default `true`; `false`, `0`, `no` or `off` turns off the background GitHub update check), `DATA_PROTECTION_KEYS_DIR` (image: `/data/keys` on the web-only `web-keys` volume; keys are deliberately not in MongoDB, which the scanner shares), `VULWALL_VERSION` (shown in the About dialog; a Dockerfile build arg, release images pass the tag, default `dev`; the root compose file passes `VULWALL_BUILD_VERSION`, which the root `make build`/`make up` set to `dev (<short commit>)`). See `README.md`.
 
 ## Testing
 

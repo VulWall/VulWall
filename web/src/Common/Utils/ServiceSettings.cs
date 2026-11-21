@@ -61,4 +61,16 @@ public class ServiceSettings : EnvLoader
     /// </summary>
     [Env(Name = "VULWALL_VERSION", Default = "dev")]
     public string Version = "dev";
+
+    /// <summary>
+    /// UPDATE_CHECK: the web app asks GitHub for the latest release at start and every 6 hours.
+    /// "false", "0", "no" or "off" turns it off; anything else, or unset, keeps it on.
+    /// </summary>
+    [Env(Name = "UPDATE_CHECK", Default = "true")]
+    public string UpdateCheck = "true";
+
+    public bool UpdateCheckEnabled => IsOn(UpdateCheck);
+
+    internal static bool IsOn(string? value) =>
+        value?.Trim().ToLowerInvariant() is not ("false" or "0" or "no" or "off");
 }

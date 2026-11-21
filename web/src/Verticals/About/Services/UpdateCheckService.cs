@@ -2,56 +2,47 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Caching.Memory;
-using VulWall.Dashboard.About.Models;
+using VulWall.Dashboard.Common.Services.UpdateCheck;
 
 namespace VulWall.Dashboard.About.Services;
 
 /// <summary>
-/// Asks GitHub for the latest VulWall release. Runs only when the admin clicks "Check for updates"
-/// (never on a schedule), from the server so the browser CSP keeps connect-src 'self'.
+/// Asks GitHub for the latest VulWall release, from the server so the browser CSP keeps connect-src 'self'.
+/// Only <see cref="UpdateCheckPoller"/> calls it (at start, then every 6 hours), never a page load.
 /// </summary>
-public partial class UpdateCheckService(HttpClient http, IMemoryCache cache, ILogger<UpdateCheckService> logger)
+public partial class UpdateCheckService(HttpClient http, ILogger<UpdateCheckService> logger)
 {
     public const string LatestReleaseApi = "https://api.github.com/repos/VulWall/VulWall/releases/latest";
     private const string ReleaseTagUrl = "https://github.com/VulWall/VulWall/releases/tag/";
-    private const string CacheKey = "about:latest-release";
-    private static readonly TimeSpan CacheFor = TimeSpan.FromHours(1);
-    // A failure is cached briefly so repeated clicks do not hammer GitHub's unauthenticated rate limit.
-    private static readonly TimeSpan ErrorCacheFor = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan MinRateLimitWait = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan MaxRateLimitWait = TimeSpan.FromHours(1);
 
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
-    /// <summary>A fetch result: the latest tag, or the failure status (with a null tag).</summary>
-    private sealed record Fetched(string? Tag, UpdateStatus Failure);
-
-    public async Task<UpdateCheckResult> CheckAsync(string currentVersion, CancellationToken ct = default)
+    /// <summary>
+    /// One request to GitHub. Every failure is a result; <c>RateLimitWait</c> is GitHub's reset time for a
+    /// rate-limit answer. Only a cancelled request (shutdown) throws.
+    /// </summary>
+    public async Task<(UpdateCheckResult Result, TimeSpan? RateLimitWait)> CheckAsync(string currentVersion,
+        CancellationToken ct = default)
     {
-        if (!cache.TryGetValue(CacheKey, out Fetched? fetched) || fetched is null)
-        {
-            var (result, cacheFor) = await FetchAsync(ct);
-            fetched = result;
-            cache.Set(CacheKey, fetched, cacheFor);
-        }
+        var (tag, failure, wait) = await FetchAsync(ct);
+        if (tag is null || !SemVer.TryParse(tag, out var latest))
+            return (new UpdateCheckResult(tag is null ? failure : UpdateStatus.Error), wait);
 
-        if (fetched.Tag is null || !SemVer.TryParse(fetched.Tag, out var latest))
-            return new UpdateCheckResult(fetched.Tag is null ? fetched.Failure : UpdateStatus.Error);
-
-        var url = ReleaseTagUrl + Uri.EscapeDataString(fetched.Tag);
+        var label = "v" + tag.TrimStart('v');
+        var url = ReleaseTagUrl + Uri.EscapeDataString(tag);
         // Not a release version, for example "dev" or "dev (abc1234)" from a local build.
         if (!SemVer.TryParse(currentVersion, out var current))
-            return new UpdateCheckResult(UpdateStatus.Unknown, fetched.Tag, url);
+            return (new UpdateCheckResult(UpdateStatus.Unknown, label, url), null);
 
-        return current.CompareTo(latest) >= 0
-            ? new UpdateCheckResult(UpdateStatus.Latest, fetched.Tag, url)
-            : new UpdateCheckResult(UpdateStatus.Available, fetched.Tag, url);
+        return (current.CompareTo(latest) >= 0
+            ? new UpdateCheckResult(UpdateStatus.Latest, label, url)
+            : new UpdateCheckResult(UpdateStatus.Available, label, url), null);
     }
 
-    /// <summary>
-    /// Asks GitHub for the latest release tag. Every failure is a result, cached for a while; only a
-    /// cancelled request (the browser went away) throws, so it is never cached.
-    /// </summary>
-    private async Task<(Fetched Result, TimeSpan CacheFor)> FetchAsync(CancellationToken ct)
+    /// <summary>The latest release tag, or a null tag with the failure status.</summary>
+    private async Task<(string? Tag, UpdateStatus Failure, TimeSpan? RateLimitWait)> FetchAsync(CancellationToken ct)
     {
         try
         {
@@ -62,10 +53,10 @@ public partial class UpdateCheckService(HttpClient http, IMemoryCache cache, ILo
             {
                 logger.LogWarning("Update check: GitHub answered {Status}", (int)response.StatusCode);
                 if (response.StatusCode == HttpStatusCode.NotFound)
-                    return (new Fetched(null, UpdateStatus.NoRelease), ErrorCacheFor);
+                    return (null, UpdateStatus.NoRelease, null);
                 if (IsRateLimited(response))
-                    return (new Fetched(null, UpdateStatus.RateLimited), RateLimitCacheFor(response.Headers, DateTimeOffset.UtcNow));
-                return (new Fetched(null, UpdateStatus.Error), ErrorCacheFor);
+                    return (null, UpdateStatus.RateLimited, RateLimitWait(response.Headers, DateTimeOffset.UtcNow));
+                return (null, UpdateStatus.Error, null);
             }
 
             await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
@@ -75,22 +66,22 @@ public partial class UpdateCheckService(HttpClient http, IMemoryCache cache, ILo
                 tag.ValueKind == JsonValueKind.String &&
                 tag.GetString() is { } value && SemVer.TryParse(value, out _))
             {
-                return (new Fetched(value, UpdateStatus.Error), CacheFor);
+                return (value.Trim(), UpdateStatus.Error, null);
             }
 
             logger.LogWarning("Update check: GitHub response has no valid tag_name");
-            return (new Fetched(null, UpdateStatus.Error), ErrorCacheFor);
+            return (null, UpdateStatus.Error, null);
         }
         catch (JsonException)
         {
             logger.LogWarning("Update check: GitHub response is not JSON");
-            return (new Fetched(null, UpdateStatus.Error), ErrorCacheFor);
+            return (null, UpdateStatus.Error, null);
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException && !ct.IsCancellationRequested)
         {
             // Connection failure, DNS failure or our timeout.
             logger.LogWarning("Update check failed: {Error}", ex.GetType().Name);
-            return (new Fetched(null, UpdateStatus.Unreachable), ErrorCacheFor);
+            return (null, UpdateStatus.Unreachable, null);
         }
     }
 
@@ -104,11 +95,11 @@ public partial class UpdateCheckService(HttpClient http, IMemoryCache cache, ILo
          (Header(response.Headers, "X-RateLimit-Remaining") == "0" || response.Headers.RetryAfter is not null));
 
     /// <summary>
-    /// How long to keep a rate-limit answer: until GitHub's reset time (Retry-After, else
+    /// How long to wait after a rate-limit answer: until GitHub's reset time (Retry-After, else
     /// X-RateLimit-Reset in Unix seconds), at least 1 minute and at most 1 hour. 1 minute without
     /// either header.
     /// </summary>
-    internal static TimeSpan RateLimitCacheFor(HttpResponseHeaders headers, DateTimeOffset now)
+    internal static TimeSpan RateLimitWait(HttpResponseHeaders headers, DateTimeOffset now)
     {
         TimeSpan? wait = null;
         if (headers.RetryAfter?.Delta is { } delta)
@@ -120,8 +111,8 @@ public partial class UpdateCheckService(HttpClient http, IMemoryCache cache, ILo
             wait = DateTimeOffset.FromUnixTimeSeconds(reset) - now;
 
         if (wait is not { } w)
-            return ErrorCacheFor;
-        return w < ErrorCacheFor ? ErrorCacheFor : w > CacheFor ? CacheFor : w;
+            return MinRateLimitWait;
+        return w < MinRateLimitWait ? MinRateLimitWait : w > MaxRateLimitWait ? MaxRateLimitWait : w;
     }
 
     private static string? Header(HttpResponseHeaders headers, string name) =>

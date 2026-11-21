@@ -114,6 +114,7 @@ services:
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       SETUP_TOKEN: ${SETUP_TOKEN:-}
+      UPDATE_CHECK: ${UPDATE_CHECK:-true}
     volumes:
       # Data-protection keys that sign the auth cookies. Kept off MongoDB so the scanner,
       # which shares the database, cannot forge a login.
