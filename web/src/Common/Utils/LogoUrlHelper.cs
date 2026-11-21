@@ -8,7 +8,7 @@ namespace VulWall.Dashboard.Common.Utils;
 /// <summary>
 /// Resolves country-flag and cloud-provider logo images served from wwwroot/images/logos
 /// (flags from flag-icons, provider logos from simple-icons; see NOTICE).
-/// Returns null when the image is not shipped, so the view renders a generic icon instead.
+/// Returns null when the image is not shipped, so the view renders the name as text instead.
 /// Inputs come from scan data in the database, so only safe slugs ever reach a file path.
 /// </summary>
 public static partial class LogoUrlHelper

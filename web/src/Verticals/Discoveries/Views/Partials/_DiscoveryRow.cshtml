@@ -84,18 +84,17 @@
 
         <!-- 3: Hosting (geo) -->
         <div class="disc-hosting">
-            @if (!string.IsNullOrEmpty(d.CountryCode))
+            @* An icon, or the text when there is no icon. The text always renders after the image:
+               CSS hides it while the image is fine, so a broken image falls back to the text. *@
+            @if (!string.IsNullOrWhiteSpace(d.CountryCode))
             {
                 var flagUrl = LogoUrlHelper.GetCountryFlagUrl(Env.WebRootFileProvider, d.CountryCode);
+                var countryLabel = d.CountryLabel;
                 if (flagUrl != null)
                 {
-                    <img class="geo-flag" src="@flagUrl" alt="@d.CountryCode" title="@d.CountryCode" />
+                    <img class="geo-flag" src="@flagUrl" alt="@countryLabel" title="@countryLabel" />
                 }
-                else
-                {
-                    <i class="fas fa-earth-americas geo-icon" title="@d.CountryCode" aria-hidden="true"></i>
-                }
-                <span class="country-code">@d.CountryCode</span>
+                <span class="country-code" title="@countryLabel">@d.CountryCode.Trim().ToUpperInvariant()</span>
             }
             @if (!string.IsNullOrEmpty(d.CloudProvider) || !string.IsNullOrEmpty(d.Isp))
             {
@@ -105,10 +104,7 @@
                 {
                     <img class="geo-cloud-logo" src="@logoUrl" alt="@providerName" title="@providerName" />
                 }
-                else
-                {
-                    <i class="fas fa-cloud geo-icon" title="@providerName" aria-label="@providerName"></i>
-                }
+                <span class="provider-name" title="@providerName">@providerName</span>
             }
         </div>
 
