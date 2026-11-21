@@ -1,5 +1,5 @@
 // About dialog (Common/Views/_AboutDialog.cshtml): loads versions when it opens, copies the
-// system info text, and checks for updates only when the button is clicked.
+// system info text and the upgrade command. The update status is rendered on the server.
 
 const dialog = document.getElementById('aboutDialog');
 if (dialog) init(dialog);
@@ -8,7 +8,9 @@ function init(dialog) {
     const versions = dialog.querySelector('[data-about-versions]');
     const loadError = dialog.querySelector('[data-about-load-error]');
     const copyButton = dialog.querySelector('[data-about-copy]');
-    const checkButton = dialog.querySelector('[data-about-check]');
+    const command = dialog.querySelector('[data-about-command]');
+    const commandButton = dialog.querySelector('[data-about-command-copy]');
+    const commandStatus = dialog.querySelector('[data-about-command-status]');
     const status = dialog.querySelector('[data-about-status]');
     const fallback = dialog.querySelector('[data-about-copy-fallback]');
     let copyText = '';
@@ -34,6 +36,7 @@ function init(dialog) {
 
     dialog.addEventListener('hidden.bs.modal', () => {
         setStatus(status, '');
+        if (commandStatus) setStatus(commandStatus, '');
         fallback.classList.add('d-none');
     });
 
@@ -52,7 +55,10 @@ function init(dialog) {
         }
     });
 
-    checkButton.addEventListener('click', () => checkForUpdates(checkButton, status));
+    // Only rendered when a newer release is known.
+    if (command && commandButton && commandStatus) {
+        commandButton.addEventListener('click', () => copyCommand(command, commandStatus));
+    }
 }
 
 function renderVersions(list, rows) {
@@ -87,61 +93,36 @@ function copyWithFallback(textarea, text, status) {
     }
 }
 
-async function checkForUpdates(button, status) {
-    const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
-    button.disabled = true;
-    setStatus(status, 'Checking for updates...');
+function copyCommand(code, status) {
+    const text = code.textContent.trim();
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text)
+            .then(() => setStatus(status, 'Command copied.'))
+            .catch(() => selectAndCopy(code, status));
+    } else {
+        selectAndCopy(code, status);
+    }
+}
+
+// Plain-HTTP LAN installs have no navigator.clipboard: select the command and try the old copy
+// command; if the browser blocks that too, the selection stays for Ctrl+C.
+function selectAndCopy(element, status) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    let copied = false;
     try {
-        const response = await fetch('/about/check-updates', {
-            method: 'POST',
-            headers: { RequestVerificationToken: token, Accept: 'application/json' }
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        showUpdateResult(status, await response.json());
-    } catch (err) {
-        console.warn('About: update check failed', err);
-        setStatus(status, 'Could not check for updates. Try again later.');
-    } finally {
-        button.disabled = false;
+        copied = document.execCommand('copy');
+    } catch {
+        copied = false;
     }
+    setStatus(status, copied
+        ? 'Command copied.'
+        : 'Your browser blocked copying. The command is selected: press Ctrl+C or Cmd+C.');
 }
 
-function showUpdateResult(status, result) {
-    const latest = typeof result.latestVersion === 'string' ? result.latestVersion : '';
-    const url = typeof result.releaseUrl === 'string' && result.releaseUrl.startsWith('https://github.com/VulWall/VulWall/')
-        ? result.releaseUrl : '';
-    switch (result.status) {
-        case 'Latest':
-            setStatus(status, "You're on the latest version.");
-            break;
-        case 'Available':
-            setStatus(status, `${latest} is available. `, url, 'Release notes');
-            break;
-        case 'Unknown':
-            setStatus(status, `This is a development build. The latest release is ${latest}. `, url, 'Release notes');
-            break;
-        case 'NoRelease':
-            setStatus(status, 'No published release found yet.');
-            break;
-        case 'RateLimited':
-            setStatus(status, 'GitHub limits update checks right now. Try again in an hour.');
-            break;
-        case 'Unreachable':
-            setStatus(status, "Could not reach GitHub. Check the server's internet connection and try again.");
-            break;
-        default:
-            setStatus(status, 'Could not check for updates. Try again later.');
-    }
-}
-
-function setStatus(status, text, linkUrl, linkText) {
-    status.replaceChildren(document.createTextNode(text));
-    if (linkUrl) {
-        const a = document.createElement('a');
-        a.href = linkUrl;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.textContent = linkText;
-        status.append(a);
-    }
+function setStatus(status, text) {
+    status.textContent = text;
 }

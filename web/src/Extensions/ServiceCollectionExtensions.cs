@@ -22,6 +22,8 @@ using VulWall.Dashboard.Reports.Services.ExecutiveSummaryJob;
 using VulWall.Dashboard.Common.Services.RateLimiter;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.About.Services;
+using VulWall.Dashboard.Common.Services.UpdateCheck;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace VulWall.Dashboard.Extensions;
 
@@ -98,9 +100,13 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddAboutServices(this IServiceCollection services)
     {
         services.AddScoped<AboutService>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton(new UpdateCheckState(ServiceSettings.Instance.UpdateCheckEnabled));
+        services.AddHostedService<UpdateCheckPoller>();
         services.AddHttpClient<UpdateCheckService>(client =>
         {
             client.Timeout = UpdateCheckService.Timeout;
+            client.MaxResponseContentBufferSize = UpdateCheckService.MaxResponseBytes;
             // GitHub rejects API requests without a User-Agent.
             if (!client.DefaultRequestHeaders.UserAgent.TryParseAdd($"VulWall/{ServiceSettings.Instance.Version}"))
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("VulWall");

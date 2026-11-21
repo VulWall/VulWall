@@ -122,6 +122,22 @@ public class AssetsService(
         return (asset, null);
     }
 
+    public const string ScanInProgressToggleError =
+        "A scan is running. Wait for it to finish before you enable or disable assets.";
+
+    public const string ScanInProgressDeleteError =
+        "A scan is running. Wait for it to finish before you delete assets.";
+
+    // Enable, disable and delete are refused while a scan is queued or running: the scanner reads
+    // the asset list once, when the scan starts, and would keep scanning (and writing results
+    // for) an asset that was disabled or deleted after that.
+    //
+    // The in-progress check runs right before the write, so the window between the two is one
+    // database round-trip. A queued scan already counts as in progress, so only a scheduled scan
+    // that the scanner inserts in that window can slip through. The cost is results for one
+    // asset from one scan; the next scan leaves the asset out. Closing the window fully would
+    // need a lock shared with the scanner, which is not worth it for this.
+
     public async Task<(bool Success, string? ErrorMessage)> UpdateAssetStatusAsync(string assetId, bool enabled)
     {
         var asset = await assetsRepository.GetByIdAsync(assetId);
@@ -129,6 +145,9 @@ public class AssetsService(
         {
             return (false, $"Asset with ID {assetId} not found.");
         }
+
+        if (await IsScanInProgressAsync())
+            return (false, ScanInProgressToggleError);
 
         asset.Enabled = enabled;
         await assetsRepository.UpdateAsync(asset);
@@ -143,13 +162,27 @@ public class AssetsService(
             return (false, null);
 
         if (await IsScanInProgressAsync())
-            return (false, "A scan is currently running. Please wait for it to complete before removing assets.");
+            return (false, ScanInProgressDeleteError);
 
         await assetsRepository.DeleteAsync(id);
         return (true, null);
     }
 
     public Task<bool> IsScanInProgressAsync() => scanTriggerService.IsScanInProgressAsync();
+
+    /// <summary>
+    /// Decides what to offer after an asset is added. "Never had a scan" means no scan document
+    /// of any status exists for the organization.
+    /// </summary>
+    public async Task<AssetAddedScanState> GetAssetAddedScanStateAsync()
+    {
+        if (await IsScanInProgressAsync())
+            return AssetAddedScanState.ScanInProgress;
+
+        return await scansRepository.ExistsAsync(_ => true)
+            ? AssetAddedScanState.Idle
+            : AssetAddedScanState.FirstScan;
+    }
 
     public async Task<AssetsStatistics> GetStatisticsAsync()
     {

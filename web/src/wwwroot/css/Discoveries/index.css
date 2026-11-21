@@ -264,6 +264,16 @@
     font-size: 0.75rem;
     white-space: nowrap;
 }
+.disc-hosting .provider-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Icon or text, not both: the text after a working image is hidden (it is the image's
+   alt/title already). A broken image gets .image-error from index.js, so the text shows. */
+.disc-hosting .geo-flag:not(.image-error) + .country-code,
+.disc-hosting .geo-cloud-logo:not(.image-error) + .provider-name { display: none; }
 .disc-hosting .image-error { display: none; }
 
 /* ---------- Issues cell ---------- */
@@ -470,3 +480,14 @@
 [data-bs-theme="dark"] .disc-row-wrap.status-not-sure .disc-row-grid { background: linear-gradient(to right, rgba(181,71,8,.28) 0%, transparent 280px); }
 [data-bs-theme="dark"] .disc-row-wrap.status-not-mine .disc-row-grid { background: linear-gradient(to right, rgba(217,45,32,.28) 0%, transparent 280px); }
 [data-bs-theme="dark"] .disc-row-wrap.status-ignore   .disc-row-grid { background: linear-gradient(to right, rgba(100,116,139,.22) 0%, transparent 280px); }
+
+/* "Rescan now" is off while a scan is in progress: say why, under the disabled button. */
+.disc-rescan-busy { text-align: right; }
+
+.disc-rescan-busy__text {
+    display: block;
+    max-width: 260px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--vw-gray-500, #64748B);
+}

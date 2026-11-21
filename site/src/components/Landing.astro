@@ -156,18 +156,21 @@ const checks = [
 		</p>
 	</section>
 
-	<section class="legal">
-		<p>
-			<strong>Scan only what you are allowed to scan.</strong> VulWall sends port scans and
-			vulnerability probes. Add only systems you own or have written permission to test.
-		</p>
-		<p>
-			VulWall is free software under the
-			<a href="https://github.com/VulWall/VulWall/blob/main/LICENSE">MIT License</a>. The VulWall
-			name and logo are trademarks of Moji Tajik.
-		</p>
-		<p>Design by <a href="https://reyhane.pro/">Reyhaneh Kamali</a>.</p>
-	</section>
+	<footer class="legal">
+		<p class="note">Only scan systems you own or have written permission to test.</p>
+		<div class="row">
+			<p>
+				<span>© 2026 Moji Tajik</span>
+				<span><a href="https://github.com/VulWall/VulWall/blob/main/LICENSE">MIT License</a></span>
+				<span>Design by <a href="https://reyhane.pro/">Reyhaneh Kamali</a></span>
+			</p>
+			<nav aria-label="Footer">
+				<span><a href="/docs/">Docs</a></span>
+				<span><a href="https://github.com/VulWall/VulWall">GitHub</a></span>
+				<span><a href="https://github.com/VulWall/VulWall/security">Security</a></span>
+			</nav>
+		</div>
+	</footer>
 </div>
 
 <style>
@@ -315,16 +318,53 @@ const checks = [
 		font-size: var(--sl-text-sm);
 		font-weight: 500;
 	}
+	/* Compact footer: cancel most of the section gap above it. */
 	.legal {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		padding-top: 1.5rem;
+		margin-top: calc(2rem - clamp(3rem, 8vw, 5.5rem));
+		padding-top: 1rem;
 		border-top: 1px solid var(--vw-border);
-		font-size: var(--sl-text-sm);
+		font-size: var(--sl-text-xs);
+		line-height: 1.5;
 		color: var(--vw-text-muted);
 	}
-	.legal strong {
-		color: var(--vw-text-body);
+	.legal p {
+		margin: 0;
+	}
+	.legal .row {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 0.25rem 1.5rem;
+		margin-top: 0.4rem;
+	}
+	/* Every item gets a leading separator; the clip hides it at the start of each line, so
+	   wrapped lines never begin with a dot. */
+	.legal .row p,
+	.legal nav {
+		display: flex;
+		flex-wrap: wrap;
+		margin-left: -1.25rem;
+		clip-path: inset(0 0 0 1.25rem);
+	}
+	.legal .row p > *::before,
+	.legal nav > *::before {
+		content: '·' / '';
+		display: inline-block;
+		width: 1.25rem;
+		text-align: center;
+	}
+	.legal a {
+		color: var(--vw-text-muted);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.legal a:hover {
+		color: var(--vw-link);
+	}
+	@media (max-width: 40rem) {
+		.legal .row {
+			flex-direction: column;
+		}
 	}
 </style>

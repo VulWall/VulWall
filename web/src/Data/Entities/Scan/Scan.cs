@@ -29,6 +29,15 @@ public class Scan : IEntity<string>, IOrganizationEntity
     [BsonElement("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// When the scanner started the scan. Written by the scanner when it claims a queued scan
+    /// (which keeps its original <see cref="CreatedAt"/>) or inserts a scheduled one. Null on
+    /// queued scans and on scans from older scanner versions.
+    /// </summary>
+    [BsonElement("started_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? StartedAt { get; set; }
+
     [BsonElement("completed_at")]
     [BsonIgnoreIfNull]
     public DateTime? CompletedAt { get; set; }

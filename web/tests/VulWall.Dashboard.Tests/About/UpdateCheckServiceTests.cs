@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
-using VulWall.Dashboard.About.Models;
+using Microsoft.Extensions.Time.Testing;
 using VulWall.Dashboard.About.Services;
+using VulWall.Dashboard.Common.Services.UpdateCheck;
 
 namespace VulWall.Dashboard.Tests.About;
 
@@ -20,11 +20,14 @@ public class UpdateCheckServiceTests
         }
     }
 
+    // A fixed clock: GitHub's rate-limit reset is compared with it.
+    private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+
     private static (UpdateCheckService Service, StubHandler Handler) Create(Func<HttpRequestMessage, HttpResponseMessage> respond)
     {
         var handler = new StubHandler(respond);
-        var service = new UpdateCheckService(new HttpClient(handler), new MemoryCache(new MemoryCacheOptions()),
-            NullLogger<UpdateCheckService>.Instance);
+        var http = new HttpClient(handler) { MaxResponseContentBufferSize = UpdateCheckService.MaxResponseBytes };
+        var service = new UpdateCheckService(http, new FakeTimeProvider(Now), NullLogger<UpdateCheckService>.Instance);
         return (service, handler);
     }
 
@@ -38,7 +41,7 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => Release("v1.2.0"));
 
-        var result = await service.CheckAsync("v1.1.9");
+        var (result, _) = await service.CheckAsync("v1.1.9");
 
         Assert.Equal(UpdateStatus.Available, result.Status);
         Assert.Equal("v1.2.0", result.LatestVersion);
@@ -53,7 +56,7 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => Release("v1.2.0"));
 
-        var result = await service.CheckAsync(current);
+        var (result, _) = await service.CheckAsync(current);
 
         Assert.Equal(UpdateStatus.Latest, result.Status);
     }
@@ -63,7 +66,7 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => Release("v1.2.0"));
 
-        Assert.Equal(UpdateStatus.Available, (await service.CheckAsync("v1.2.0-rc.2")).Status);
+        Assert.Equal(UpdateStatus.Available, (await service.CheckAsync("v1.2.0-rc.2")).Result.Status);
     }
 
     [Fact]
@@ -71,7 +74,7 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => Release("v1.2.0"));
 
-        var result = await service.CheckAsync("dev");
+        var (result, _) = await service.CheckAsync("dev");
 
         Assert.Equal(UpdateStatus.Unknown, result.Status);
         Assert.Equal("v1.2.0", result.LatestVersion);
@@ -87,7 +90,7 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => new HttpResponseMessage(status) { Content = new StringContent(body) });
 
-        var result = await service.CheckAsync("v1.0.0");
+        var (result, _) = await service.CheckAsync("v1.0.0");
 
         Assert.Equal(UpdateStatus.Error, result.Status);
         Assert.Null(result.LatestVersion);
@@ -101,7 +104,7 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") });
 
-        var result = await service.CheckAsync(current);
+        var (result, _) = await service.CheckAsync(current);
 
         Assert.Equal(UpdateStatus.NoRelease, result.Status);
         Assert.Null(result.LatestVersion);
@@ -112,20 +115,44 @@ public class UpdateCheckServiceTests
     {
         var response = new HttpResponseMessage(status) { Content = new StringContent("{\"message\":\"API rate limit exceeded\"}") };
         response.Headers.Add("X-RateLimit-Remaining", "0");
-        response.Headers.Add("X-RateLimit-Reset", DateTimeOffset.UtcNow.AddMinutes(30).ToUnixTimeSeconds().ToString());
+        response.Headers.Add("X-RateLimit-Reset", Now.AddMinutes(30).ToUnixTimeSeconds().ToString());
         return response;
     }
 
     [Theory]
     [InlineData(HttpStatusCode.Forbidden)]
     [InlineData(HttpStatusCode.TooManyRequests)]
-    public async Task RateLimit_IsRateLimited_AndCached(HttpStatusCode status)
+    public async Task RateLimit_IsRateLimited_WithTheWaitUntilTheReset(HttpStatusCode status)
     {
-        var (service, handler) = Create(_ => RateLimited(status));
+        var (service, _) = Create(_ => RateLimited(status));
 
-        Assert.Equal(UpdateStatus.RateLimited, (await service.CheckAsync("v1.0.0")).Status);
-        Assert.Equal(UpdateStatus.RateLimited, (await service.CheckAsync("v1.0.0")).Status);
-        Assert.Equal(1, handler.Calls);
+        var (result, wait) = await service.CheckAsync("v1.0.0");
+
+        Assert.Equal(UpdateStatus.RateLimited, result.Status);
+        Assert.Equal(TimeSpan.FromMinutes(30), wait);
+    }
+
+    [Fact]
+    public async Task OversizedResponse_FailsTheCheck()
+    {
+        var huge = "{\"tag_name\":\"v9.0.0\",\"body\":\"" + new string('a', UpdateCheckService.MaxResponseBytes) + "\"}";
+        var (service, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(huge) });
+
+        var (result, _) = await service.CheckAsync("v1.0.0");
+
+        Assert.NotEqual(UpdateStatus.Available, result.Status);
+        Assert.Null(result.LatestVersion);
+    }
+
+    [Fact]
+    public async Task NonAsciiDigits_AreNotAVersion()
+    {
+        // Arabic-Indic digits: \d would match them and int.Parse would then throw.
+        var (service, _) = Create(_ => Release("v\u0661.\u0662.\u0663"));
+
+        var (result, _) = await service.CheckAsync("v1.0.0");
+
+        Assert.Equal(UpdateStatus.Error, result.Status);
     }
 
     [Fact]
@@ -133,18 +160,18 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests));
 
-        Assert.Equal(UpdateStatus.RateLimited, (await service.CheckAsync("v1.0.0")).Status);
+        Assert.Equal(UpdateStatus.RateLimited, (await service.CheckAsync("v1.0.0")).Result.Status);
     }
 
     [Fact]
-    public void RateLimitCache_LastsUntilTheReset_BetweenOneMinuteAndOneHour()
+    public void RateLimitWait_LastsUntilTheReset_BetweenOneMinuteAndOneHour()
     {
         var now = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
         TimeSpan For(Action<HttpResponseMessage> set)
         {
             var response = new HttpResponseMessage(HttpStatusCode.Forbidden);
             set(response);
-            return UpdateCheckService.RateLimitCacheFor(response.Headers, now);
+            return UpdateCheckService.RateLimitWait(response.Headers, now);
         }
 
         Assert.Equal(TimeSpan.FromMinutes(20),
@@ -165,7 +192,7 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => throw new HttpRequestException("no route"));
 
-        Assert.Equal(UpdateStatus.Unreachable, (await service.CheckAsync("v1.0.0")).Status);
+        Assert.Equal(UpdateStatus.Unreachable, (await service.CheckAsync("v1.0.0")).Result.Status);
     }
 
     [Fact]
@@ -173,19 +200,17 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => throw new TaskCanceledException("timeout"));
 
-        Assert.Equal(UpdateStatus.Unreachable, (await service.CheckAsync("v1.0.0")).Status);
+        Assert.Equal(UpdateStatus.Unreachable, (await service.CheckAsync("v1.0.0")).Result.Status);
     }
 
     [Fact]
-    public async Task CancelledRequest_Throws_AndIsNotCached()
+    public async Task CancelledRequest_Throws()
     {
         var (service, _) = Create(_ => Release("v1.2.0"));
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.CheckAsync("v1.0.0", cts.Token));
-
-        Assert.Equal(UpdateStatus.Available, (await service.CheckAsync("v1.0.0")).Status);
     }
 
     [Fact]
@@ -193,18 +218,28 @@ public class UpdateCheckServiceTests
     {
         var (service, _) = Create(_ => Release("v1.2.0"));
 
-        Assert.Equal(UpdateStatus.Unknown, (await service.CheckAsync("dev (abc1234)")).Status);
+        Assert.Equal(UpdateStatus.Unknown, (await service.CheckAsync("dev (abc1234)")).Result.Status);
     }
 
     [Fact]
-    public async Task Result_IsCached()
+    public async Task EachCheck_IsOneRequest()
     {
         var (service, handler) = Create(_ => Release("v1.2.0"));
 
         await service.CheckAsync("v1.0.0");
-        await service.CheckAsync("v1.2.0");
 
         Assert.Equal(1, handler.Calls);
+    }
+
+    [Fact]
+    public async Task TagWithoutV_IsShownWithV()
+    {
+        var (service, _) = Create(_ => Release("1.2.0"));
+
+        var (result, _) = await service.CheckAsync("v1.0.0");
+
+        Assert.Equal("v1.2.0", result.LatestVersion);
+        Assert.Equal("https://github.com/VulWall/VulWall/releases/tag/1.2.0", result.ReleaseUrl);
     }
 
     [Fact]

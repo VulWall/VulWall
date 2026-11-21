@@ -4,6 +4,51 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.0](https://github.com/VulWall/VulWall/compare/v0.1.1...v0.2.0) (2026-11-21)
+
+
+### Added
+
+* **web:** check for updates automatically and show it in the sidebar ([#114](https://github.com/VulWall/VulWall/issues/114)) ([2873db4](https://github.com/VulWall/VulWall/commit/2873db4aec6b87c343257f9d30320737ff8dbdb3))
+
+### Changed
+
+* After upgrading, VulWall checks GitHub for new releases automatically (shortly after start, then every 6 hours). GitHub sees your server's IP address and VulWall version. Set `UPDATE_CHECK=false` in `.env` to turn it off.
+
+## [0.1.1] - 2026-11-21
+
+### Changed
+
+- Adding an asset no longer starts a scan. A dialog confirms the asset and
+  offers "Scan now"; before your first scan it is the main action. Add your
+  other assets first if you like: a scan covers every enabled asset when it
+  starts. (#97)
+- One scan at a time. While a scan is queued or running, "Scan now" is
+  refused and its buttons are disabled with "A scan is running. You can
+  start a new one when it finishes." It no longer queues a follow-up scan.
+  (#97)
+- Enabling, disabling and deleting assets are refused while a scan runs, and
+  the assets page shows why instead of failing silently. (#98)
+- The Discoveries list shows a country flag or provider logo without the
+  text next to it; the name is in the tooltip ("Netherlands (NL)"). Without
+  an image, the text is shown. (#95)
+
+### Fixed
+
+- A scheduled scan that fires while another scan runs is queued and runs
+  after it, instead of being dropped. If you turn the schedule off while it
+  waits, it is removed. (#100)
+- A scan that waited in the queue for more than 24 hours, for example while
+  the scanner was down, no longer looks finished once it starts. (#98)
+- Deleting an asset during a scan could remove it from the list without
+  deleting it. (#98)
+- Scheduled scans were labelled "manual · system" on the Scans page. (#102)
+- The live scan card showed when a scan was queued instead of when it
+  started.
+- Docs: upgrade steps for git installs, tracing settings, uninstall, and
+  settings for hosts without internet access. The `VULWALL_VERSION` comment in
+  `.env.example` no longer suggests it pins a script install. (#92)
+
 ## [0.1.0] - 2026-11-21
 
 First open-source, self-hosted release, under the MIT License.

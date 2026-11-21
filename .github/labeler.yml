@@ -1,0 +1,21 @@
+scanner:
+  - changed-files:
+      - any-glob-to-any-file: ["scanner/**", "install.sh", "scripts/**"]
+
+web:
+  - changed-files:
+      - any-glob-to-any-file: ["web/**"]
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ["site/**", "docs/**", "**/*.md"]
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scanner/src/go.mod"
+          - "scanner/src/go.sum"
+          - "web/**/*.csproj"
+          - "**/package.json"
+          - "**/package-lock.json"
+          - ".github/dependabot.yml"

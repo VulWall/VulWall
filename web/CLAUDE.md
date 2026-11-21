@@ -128,7 +128,7 @@ Each vertical is self-contained and includes:
 * **Reports**: Report generation (Summary, Technical)
 * **Scans**: Scan history, results, findings overview
 * **Settings**: Company details and logo, password, scan schedule
-* **About**: Data for the About dialog (`Common/Views/_AboutDialog.cshtml`, opened from the About button in the sidebar): `GET /about/info` (versions from the scanner's `system_info` document, plus a copy-paste system info text with versions and counts only) and `POST /about/check-updates` (server-side GitHub latest-release check, only on click, 1 h cache)
+* **About**: Data for the About dialog (`Common/Views/_AboutDialog.cshtml`, opened from the About button in the sidebar): `GET /about/info` (versions from the scanner's `system_info` document, plus a copy-paste system info text with versions and counts only). The update status in the dialog and the dot on the sidebar About button come from `UpdateCheckState` (Common singleton), which only `UpdateCheckPoller` (About, hosted service) writes: GitHub latest-release check 10 s after start, then every 6 h, failures retried after 15 min doubling to 6 h and keeping the last answer; `UPDATE_CHECK=false` turns it off. Page loads never call GitHub. `_Layout` renders the sidebar (and so the badge) for signed-in users only, because the anonymous error pages use the same layout.
 
 ### Common Layer (Shared Across Verticals)
 The Common layer contains **only** types needed for cross-vertical communication:
@@ -515,6 +515,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 | Settings | `SettingsService` | Company info, logo, scan schedule, tour state |
 | About | `AboutService` | Versions and the system info text |
 | About | `UpdateCheckService` | GitHub latest-release check (typed `HttpClient`) |
+| About | `UpdateCheckPoller` | Background update check, writes `UpdateCheckState` |
 
 ## Authentication & Authorization
 
@@ -550,8 +551,8 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 ### Scanner Link
 - **Trigger**: `ScanTriggerService` (Common) inserts a `scans` document with `status: "queued"`, `type: "requested"` and a string UUID `_id`. The scanner picks it up. There is no HTTP call to the scanner.
-- **In progress**: a scan for the org with status `queued` (any age: the scanner always claims it eventually), or `pending`/`running` created in the last 24 hours (`ScanTriggerService.InProgressPredicate`). Use it for every "scan running" check.
-- **Follow-up scan**: `ScanTriggerService.TriggerAsync` queues a scan when none is in progress (`Started`), queues one follow-up while a scan is pending/running (`QueuedAfterCurrent`), and inserts nothing when a scan is already queued (`AlreadyQueued`). The unique partial index `org_id_1_queued_unique` (`MongoDbIndexManager`, `{org_id: 1}` where `status: "queued"`) keeps it to one queued scan per org under concurrent requests; a duplicate-key error reads as `AlreadyQueued`. The scanner starts the oldest queued scan once nothing else runs and reads the assets at that moment.
+- **In progress**: a scan for the org with status `queued` (any age: the scanner always claims it eventually), or `pending`/`running` started in the last 24 hours (`started_at`, which the scanner sets when it claims or inserts a scan; `created_at` for scans without it) (`ScanTriggerService.InProgressPredicate`). Use it for every "scan running" check. Enabling, disabling and deleting assets is refused while a scan is in progress.
+- **Scan now**: `ScanTriggerService.TriggerAsync` queues a scan only when none is in progress (`Started`); while a scan is queued, pending or running it inserts nothing (`Busy`), and every "Scan now" button (Scans, Overview, Discoveries, the dialog after adding an asset) is disabled with `ScanTriggerService.BusyMessage`. The web app never queues a scan behind a running one; the scanner does, when the schedule fires during a scan (a queued `type: "scheduled"` scan, shown as `ScanNowStateText.QueuedAfterCurrent`). Adding an asset never starts a scan. The unique partial index `org_id_1_queued_unique` (`MongoDbIndexManager`, `{org_id: 1}` where `status: "queued"`) keeps it to one queued scan per org under concurrent requests; a duplicate-key error reads as `Busy`. The scanner starts the oldest queued scan once nothing else runs and reads the assets at that moment.
 - **Completion**: the scanner sets `status: "done"` (`"completed"` is also read as `Done`). `ExecutiveSummaryPoller` checks every 30s, claims each finished scan atomically (`executive_summary_status`: `processing` → `done` | `skipped` | `failed`) and writes `executive_summary` when `ANTHROPIC_API_KEY` is set. `failed` is retried up to 3 attempts (`executive_summary_attempts`, backoff 5 then 30 min from `executive_summary_claimed_at`); `skipped` is claimed again once AI is enabled (within the 7-day window). Scans with scan `status: "failed"` (including `status_reason: "interrupted_by_restart"`) never get a summary. There is no webhook.
 
 ### AI Services
@@ -563,7 +564,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 
 - Use `EnvLoader` utility to load environment variables (`Common/Utils/ServiceSettings.cs`)
 - Never commit secrets to version control; `src/Properties/launchSettings.json` is git-ignored (copy `launchSettings.example.json`)
-- Variables: `MONGO_URI`, `MONGO_DB`, `PORT`, `ANTHROPIC_API_KEY` (optional), `DEFAULT_AI_MODEL` (the root compose file sets it from `ANTHROPIC_MODEL`, with the default filled in, because `EnvLoader` uses a set but empty value as-is), `SECURE_COOKIES`, `TRUSTED_PROXIES`, `SETUP_TOKEN`, `DATA_PROTECTION_KEYS_DIR` (image: `/data/keys` on the web-only `web-keys` volume; keys are deliberately not in MongoDB, which the scanner shares), `VULWALL_VERSION` (shown in the About dialog; a Dockerfile build arg, release images pass the tag, default `dev`; the root compose file passes `VULWALL_BUILD_VERSION`, which the root `make build`/`make up` set to `dev (<short commit>)`). See `README.md`.
+- Variables: `MONGO_URI`, `MONGO_DB`, `PORT`, `ANTHROPIC_API_KEY` (optional), `DEFAULT_AI_MODEL` (the root compose file sets it from `ANTHROPIC_MODEL`, with the default filled in, because `EnvLoader` uses a set but empty value as-is), `SECURE_COOKIES`, `TRUSTED_PROXIES`, `SETUP_TOKEN`, `UPDATE_CHECK` (default `true`; unset, empty, `true`, `1`, `yes` or `on` keeps the background GitHub update check on; any other value turns it off, and a value that is not `false`, `0`, `no` or `off` logs a warning at start), `DATA_PROTECTION_KEYS_DIR` (image: `/data/keys` on the web-only `web-keys` volume; keys are deliberately not in MongoDB, which the scanner shares), `VULWALL_VERSION` (shown in the About dialog; a Dockerfile build arg, release images pass the tag, default `dev`; the root compose file passes `VULWALL_BUILD_VERSION`, which the root `make build`/`make up` set to `dev (<short commit>)`). See `README.md`.
 
 ## Testing
 

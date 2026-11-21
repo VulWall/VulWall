@@ -1,17 +1,13 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Services;
 
 namespace VulWall.Dashboard.Assets;
 
 [Authorize]
-public class AssetsController(
-    AssetsService assetsService,
-    ScanTriggerService scanTriggerService) : Controller
+public class AssetsController(AssetsService assetsService) : Controller
 {
     public async Task<IActionResult> Index()
     {
@@ -33,6 +29,7 @@ public class AssetsController(
             return View(input);
         }
 
+        string assetName;
         switch (input.AssetType)
         {
             case AssetType.Domain:
@@ -43,8 +40,8 @@ public class AssetsController(
                     ModelState.AddModelError(nameof(input.DomainName), error);
                     return View(input);
                 }
-                await TriggerScanAndSetTempData(asset!.Domain!);
-                return RedirectToAction(nameof(Index));
+                assetName = asset!.Domain!;
+                break;
             }
             case AssetType.Ip:
             {
@@ -54,37 +51,19 @@ public class AssetsController(
                     ModelState.AddModelError(nameof(input.IpAddress), error);
                     return View(input);
                 }
-                await TriggerScanAndSetTempData(asset!.Ip!);
-                return RedirectToAction(nameof(Index));
+                assetName = asset!.Ip!;
+                break;
             }
             default:
                 ModelState.AddModelError(string.Empty, "Invalid asset type.");
                 return View(input);
         }
-    }
 
-    /// <summary>
-    /// Starts a scan for a newly added asset. While a scan runs, one follow-up scan is queued
-    /// instead: the running scan does not pick up the new asset, the follow-up reads the assets
-    /// when it starts. Adding several assets in a row queues only that one follow-up.
-    /// </summary>
-    private async Task TriggerScanAndSetTempData(string assetName)
-    {
-        var triggeredBy = User.FindFirst(ClaimTypes.Email)?.Value ?? "unknown";
-        var result = await scanTriggerService.TriggerAsync(triggeredBy);
-
-        switch (result)
-        {
-            case TriggerScanResult.Started:
-                TempData["ScanTriggered"] = assetName;
-                break;
-            case TriggerScanResult.QueuedAfterCurrent:
-                TempData["Info"] = $"Asset {assetName} has been added. A scan is running. Your new asset will be scanned right after it finishes.";
-                break;
-            default:
-                TempData["Info"] = $"Asset {assetName} has been added. A follow-up scan is already queued and will include this asset.";
-                break;
-        }
+        // Adding an asset never starts a scan: scans run from "Scan now" or the schedule. The
+        // confirmation offers "Scan now" unless a scan is already queued or running.
+        TempData["AssetAdded"] = assetName;
+        TempData["AssetAddedScanState"] = (await assetsService.GetAssetAddedScanStateAsync()).ToString();
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]
@@ -103,7 +82,8 @@ public class AssetsController(
             {
                 return NotFound(errorMessage);
             }
-            return BadRequest(errorMessage);
+            // 409 with the message: the page calls this with fetch and shows the text.
+            return Conflict(errorMessage);
         }
 
         return RedirectToAction(nameof(Index));
@@ -120,11 +100,10 @@ public class AssetsController(
         var (success, error) = await assetsService.DeleteAssetAsync(id);
         if (!success)
         {
+            // 409 with the message: the page calls this with fetch, which would follow a
+            // redirect to a 200 and remove the row although nothing was deleted.
             if (error != null)
-            {
-                TempData["Error"] = error;
-                return RedirectToAction(nameof(Index));
-            }
+                return Conflict(error);
             return NotFound($"Asset with ID {id} not found.");
         }
 
