@@ -26,6 +26,16 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleModalInstance = new bootstrap.Modal(toggleModal);
     }
 
+    // A 409 carries a message for the user (for example: a scan is running). Other errors get
+    // the generic text.
+    async function errorMessage(response, fallback) {
+        if (response.status === 409) {
+            const text = (await response.text()).trim();
+            if (text) return text;
+        }
+        return fallback;
+    }
+
     async function fetchStatistics() {
         try {
             const response = await fetch('/Assets/GetStatistics');
@@ -87,9 +97,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    VW.showError(await errorMessage(response, 'Failed to delete asset. Please try again.'));
+                    modalInstance.hide();
+                    return;
                 }
-                
+
                 if (row) {
                     row.remove();
                 }
@@ -180,7 +192,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    VW.showError(await errorMessage(response, 'Failed to update asset status. Please try again.'));
+                    checkbox.checked = !newEnabled;
+                    enabledInput.value = (!newEnabled).toString().toLowerCase();
+                    toggleModalInstance.hide();
+                    return;
                 }
 
                 // Update the row's status pill and data-attr so filters stay correct

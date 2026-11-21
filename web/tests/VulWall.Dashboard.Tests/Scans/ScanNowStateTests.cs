@@ -28,6 +28,24 @@ public class ScanNowStateTests
         Assert.Equal(ScanNowState.Allowed, ScansService.EvaluateScanNowState([S(ScanStatus.Running, 25)]));
 
     [Fact]
+    public void ScanQueuedLongAgoStartedRecently_InProgress()
+    {
+        var scan = S(ScanStatus.Running, 30);
+        scan.StartedAt = DateTime.UtcNow.AddHours(-1);
+
+        Assert.Equal(ScanNowState.InProgress, ScansService.EvaluateScanNowState([scan]));
+    }
+
+    [Fact]
+    public void StartedMoreThan24hAgo_Allowed()
+    {
+        var scan = S(ScanStatus.Running, 30);
+        scan.StartedAt = DateTime.UtcNow.AddHours(-25);
+
+        Assert.Equal(ScanNowState.Allowed, ScansService.EvaluateScanNowState([scan]));
+    }
+
+    [Fact]
     public void LiveStatus_RunningWithQueuedFollowUp_ShowsBoth()
     {
         var model = ScansService.BuildLiveScanStatus([S(ScanStatus.Queued), S(ScanStatus.Running)], []);

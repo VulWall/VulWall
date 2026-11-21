@@ -103,7 +103,8 @@ public class AssetsController(
             {
                 return NotFound(errorMessage);
             }
-            return BadRequest(errorMessage);
+            // 409 with the message: the page calls this with fetch and shows the text.
+            return Conflict(errorMessage);
         }
 
         return RedirectToAction(nameof(Index));
@@ -120,11 +121,10 @@ public class AssetsController(
         var (success, error) = await assetsService.DeleteAssetAsync(id);
         if (!success)
         {
+            // 409 with the message: the page calls this with fetch, which would follow a
+            // redirect to a 200 and remove the row although nothing was deleted.
             if (error != null)
-            {
-                TempData["Error"] = error;
-                return RedirectToAction(nameof(Index));
-            }
+                return Conflict(error);
             return NotFound($"Asset with ID {id} not found.");
         }
 

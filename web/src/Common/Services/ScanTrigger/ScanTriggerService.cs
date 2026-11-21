@@ -33,13 +33,18 @@ public class ScanTriggerService(ScansRepository scansRepository)
     private static readonly TimeSpan InProgressWindow = TimeSpan.FromHours(24);
 
     /// <summary>
-    /// A scan the scanner has started (pending or running) and that is younger than
-    /// <see cref="InProgressWindow"/>.
+    /// A scan the scanner has started (pending or running) less than <see cref="InProgressWindow"/>
+    /// ago. The age counts from <c>started_at</c>: a queued scan keeps its <c>created_at</c> when
+    /// the scanner claims it, so a scan that waited in the queue for a day must not look stale the
+    /// moment it starts. Scans without <c>started_at</c> (older scanner versions) use
+    /// <c>created_at</c>. <c>started_at</c> is never earlier than <c>created_at</c>, so "either is
+    /// recent" is the same as "the later one is recent", and it translates to a plain filter.
     /// </summary>
     public static Expression<Func<Scan, bool>> StartedPredicate(DateTime utcNow)
     {
         var cutoff = utcNow - InProgressWindow;
-        return s => (s.Status == ScanStatus.Pending || s.Status == ScanStatus.Running) && s.CreatedAt >= cutoff;
+        return s => (s.Status == ScanStatus.Pending || s.Status == ScanStatus.Running)
+                    && (s.StartedAt >= cutoff || s.CreatedAt >= cutoff);
     }
 
     /// <summary>
@@ -51,7 +56,8 @@ public class ScanTriggerService(ScansRepository scansRepository)
     {
         var cutoff = utcNow - InProgressWindow;
         return s => s.Status == ScanStatus.Queued
-                    || ((s.Status == ScanStatus.Pending || s.Status == ScanStatus.Running) && s.CreatedAt >= cutoff);
+                    || ((s.Status == ScanStatus.Pending || s.Status == ScanStatus.Running)
+                        && (s.StartedAt >= cutoff || s.CreatedAt >= cutoff));
     }
 
     public Task<bool> IsScanInProgressAsync() =>
