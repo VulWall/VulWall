@@ -1,0 +1,18 @@
+name: Label pull requests
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Label by changed paths
+    runs-on: ubuntu-latest
+    steps:
+      # Reads only the labeler config from the base branch; never checks out
+      # or runs code from the pull request.
+      - uses: actions/labeler@8558fd74291d67161a8a78ce36a881fa63b766a9 # v5.0.0
