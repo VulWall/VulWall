@@ -1,15 +1,84 @@
-name: Release images
+# Releases (see "Releases" in CONTRIBUTING.md):
+#
+# 1. Every push to main runs release-please. From the conventional commit
+#    subjects since the last release it opens or updates one release PR,
+#    "chore: release vX.Y.Z", which changes only CHANGELOG.md and
+#    .release-please-manifest.json.
+# 2. Merging that PR makes release-please create the tag vX.Y.Z and a draft
+#    GitHub Release with the changelog entry as notes.
+# 3. The image and release jobs below then build and publish the images for
+#    that tag, attest them, attach the release assets and publish the draft.
+#    They run in this workflow because a tag created with GITHUB_TOKEN does
+#    not start other workflows.
+#
+# Manual fallback: run this workflow by hand (workflow_dispatch) with an
+# existing tag. It builds and publishes that tag and creates its release, or
+# completes the existing (draft) release. There is no tag-push trigger, so a
+# tag never starts a second run.
+name: Release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and publish, e.g. v0.1.2
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
+  release-please:
+    name: Release PR
+    runs-on: ubuntu-latest
+    # A queued run waits instead of cancelling one that may be creating a release.
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
+    permissions:
+      contents: write       # release branch commits, tag and draft release
+      pull-requests: write  # open and update the release PR
+      issues: write         # create and set the "autorelease: ..." labels
+    outputs:
+      # The tag to build and publish, or empty when there is nothing to release.
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - id: release
+        if: github.event_name == 'push'
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          # Optional RELEASE_PLEASE_TOKEN (GitHub App or fine-grained token):
+          # a release PR opened with GITHUB_TOKEN does not start CI.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      - id: tag
+        name: Select the tag
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_CREATED: ${{ steps.release.outputs.release_created }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          tag=
+          if [ "$EVENT" = workflow_dispatch ]; then
+            tag=$INPUT_TAG
+          elif [ "$RELEASE_CREATED" = true ]; then
+            tag=$RELEASE_TAG
+          fi
+          if [ -n "$tag" ] && ! printf '%s\n' "$tag" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?'; then
+            echo "::error::not a release tag: $tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   image:
     name: ghcr.io/vulwall/${{ matrix.image }}
+    needs: release-please
+    if: needs.release-please.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,6 +95,11 @@ jobs:
             context: ./web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.release-please.outputs.tag }}
+      # The tagged commit; on main or a manual run it can differ from github.sha.
+      - id: rev
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
@@ -38,9 +112,11 @@ jobs:
         with:
           images: ghcr.io/vulwall/${{ matrix.image }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag }}
+            type=raw,value=latest,enable=${{ !contains(needs.release-please.outputs.tag, '-') }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.rev.outputs.sha }}
       - id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
@@ -49,7 +125,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VULWALL_VERSION=${{ github.ref_name }}
+          build-args: VULWALL_VERSION=${{ needs.release-please.outputs.tag }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -77,12 +153,16 @@ jobs:
 
   release:
     name: GitHub Release
-    needs: image
+    needs: [release-please, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: ${{ needs.release-please.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.release-please.outputs.tag }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: digest-*
@@ -91,7 +171,7 @@ jobs:
       - name: Build release assets
         run: |
           SCANNER_DIGEST=$(cat digest/scanner) WEB_DIGEST=$(cat digest/web) \
-            scripts/release-assets.sh "$GITHUB_REF_NAME" dist
+            scripts/release-assets.sh "$TAG" dist
           grep -q '/scanner:.*@sha256:' dist/docker-compose.yml
           grep -q '/web:.*@sha256:' dist/docker-compose.yml
       - name: Validate the release compose file
@@ -100,19 +180,23 @@ jobs:
           docker compose -f docker-compose.yml config -q
           docker compose -f docker-compose.yml --profile tracing config -q
           sha256sum -c SHA256SUMS
-      - name: Create the release
+      # install.sh downloads from releases/latest, so a release is published
+      # only after its assets are attached.
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
         run: |
-          prerelease=
-          case "$TAG" in *-*) prerelease=yes ;; esac
+          prerelease=false
+          case "$TAG" in *-*) prerelease=true ;; esac
           if gh release view "$TAG" >/dev/null 2>&1; then
-            # Re-run of this workflow: replace the assets of the existing release.
+            # The draft release from release-please, or a re-run: attach the
+            # assets, then publish.
             gh release upload "$TAG" --clobber \
               dist/docker-compose.yml dist/env.example dist/vulwall dist/SHA256SUMS
+            gh release edit "$TAG" --draft=false --prerelease="$prerelease" \
+              --title "VulWall $TAG"
           else
-            gh release create "$TAG" ${prerelease:+--prerelease} --verify-tag \
+            gh release create "$TAG" --prerelease="$prerelease" --verify-tag \
               --title "VulWall $TAG" \
               --notes "See [CHANGELOG.md](https://github.com/VulWall/VulWall/blob/$TAG/CHANGELOG.md). Install or upgrade: \`curl -fsSL https://vulwall.com/install.sh | sh\`" \
               dist/docker-compose.yml dist/env.example dist/vulwall dist/SHA256SUMS
