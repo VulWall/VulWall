@@ -43,7 +43,8 @@ The scanner needs outbound internet access. Besides the traffic to your targets,
 nuclei templates, the DB-IP Lite geolocation databases and the published IP ranges of some cloud
 providers. The first start takes a few minutes because of these downloads.
 
-On a host without internet access, set `GEO_DOWNLOAD=false`. Scans of internet targets need
+On a host without internet access, set `GEO_DOWNLOAD=false`, `CLOUD_DETECTOR_ENABLED=false` and
+`DNS_RECHECK_RESOLVERS=off`. Scans of internet targets need
 internet access in any case.
 
 The web UI needs no inbound port open to the internet. It listens on `127.0.0.1` only. See
