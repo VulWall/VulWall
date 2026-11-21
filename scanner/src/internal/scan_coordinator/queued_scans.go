@@ -12,10 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// StartQueuedScans polls the scans collection for scans the web UI queued and
-// starts them. It blocks until ctx is cancelled.
+// StartQueuedScans polls the scans collection for queued scans and starts
+// them. It blocks until ctx is cancelled.
 //
-// The web UI inserts {_id, org_id, status: "queued", triggered_by, created_at}.
+// The web UI inserts {_id, org_id, status: "queued", type: "requested",
+// triggered_by, created_at}; TriggerScan inserts the same shape with type
+// "scheduled" when the cron fires during a running scan.
 // The poller claims the document in place (queued -> running) and publishes the
 // discovery jobs under that same _id, so the UI can follow the scan it created.
 //
@@ -98,10 +100,16 @@ func (s *Service) startQueuedScan(ctx context.Context, queued shared.Scan) {
 	// Claim first, then read the assets: while the scan is queued, the web app promises that
 	// it includes every asset added before it starts, so an asset added up to the claim must
 	// be in it. After the claim the web app sees a running scan and queues a follow-up.
+	// A scheduled scan queued behind a running one keeps its type, so the web
+	// app labels it Scheduled; anything else is a requested scan.
+	scanType := shared.ScanTypeRequested
+	if queued.Type == shared.ScanTypeScheduled {
+		scanType = shared.ScanTypeScheduled
+	}
 	now := time.Now()
 	claimed, err := s.store.claimQueuedScan(ctx, queued.ID, bson.M{
 		"status":     shared.StatusRunning,
-		"type":       shared.ScanTypeRequested,
+		"type":       scanType,
 		"started_at": now,
 		"updated_at": now,
 	})

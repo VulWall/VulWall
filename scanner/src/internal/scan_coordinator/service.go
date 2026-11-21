@@ -28,19 +28,19 @@ import (
 // longer exists — e.g., deleted between a cron enqueue and execution.
 var ErrOrgNotFound = errors.New("organization not found")
 
-// ErrScanInProgress indicates the organization already has a queued or running
-// scan. The running scan will pick up assets that were added before its
-// discovery jobs were published, and later additions are covered by the next scan.
-var ErrScanInProgress = errors.New("scan already in progress for organization")
+// ErrScanInProgress indicates the organization already has a queued scan, so
+// nothing was started or queued. The queued scan reads the assets when it
+// starts, so it covers everything a new scan would.
+var ErrScanInProgress = errors.New("scan already queued for organization")
 
-// Status sets used by the one-scan-per-organization guard.
-var (
-	// startedStatuses are the states of a scan whose pipeline is in flight.
-	startedStatuses = []string{shared.StatusPending, shared.StatusRunning}
-	// activeStatuses adds queued scans: a scheduled trigger must not start a
-	// second pipeline while a requested scan waits for the poller.
-	activeStatuses = []string{shared.StatusQueued, shared.StatusPending, shared.StatusRunning}
-)
+// ErrScanQueued indicates the organization had a pending or running scan, so a
+// queued scan was inserted instead of starting one. The queued-scan poller
+// starts it after the running scan finishes.
+var ErrScanQueued = errors.New("scan queued after the running scan")
+
+// startedStatuses are the states of a scan whose pipeline is in flight; the
+// one-scan-per-organization guard checks them.
+var startedStatuses = []string{shared.StatusPending, shared.StatusRunning}
 
 // scanStore is the MongoDB access the coordinator needs to start scans. The
 // production implementation is mongoScanStore; tests use a fake.
@@ -102,6 +102,11 @@ type ScanRequest struct {
 // organization. The cron scheduler uses it; scans requested from the web UI
 // arrive as queued documents and go through StartQueuedScans instead.
 // Returns the scan ID on success.
+//
+// While the organization has a queued scan it does nothing and returns
+// ErrScanInProgress. While it has a pending or running scan it queues one
+// (the same one-queued-scan-per-organization rule as the web app) and returns
+// its ID with ErrScanQueued, so a long scan does not swallow a scheduled one.
 func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, error) {
 	ctx, span := s.tracer.Start(ctx, "trigger_scan",
 		trace.WithAttributes(
@@ -136,20 +141,31 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 		return "", ErrOrgNotFound
 	}
 
-	// One active scan per organization, queued scans included. Without this
-	// guard a cron firing during an on-demand scan starts a second pipeline.
-	active, err := s.store.hasScanIn(ctx, req.OrgID, activeStatuses)
+	// One active scan per organization. A queued scan already covers every
+	// asset, so there is nothing to add.
+	queued, err := s.store.hasScanIn(ctx, req.OrgID, []string{shared.StatusQueued})
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return "", fmt.Errorf("failed to check queued scans: %w", err)
+	}
+	if queued {
+		span.SetStatus(codes.Error, ErrScanInProgress.Error())
+		s.logger.Info("Skipping scan trigger: a scan is already queued",
+			zap.String("org_id", req.OrgID),
+		)
+		return "", ErrScanInProgress
+	}
+
+	// A running scan must not get a second pipeline: queue this one behind it.
+	busy, err := s.store.hasScanIn(ctx, req.OrgID, startedStatuses)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return "", fmt.Errorf("failed to check running scans: %w", err)
 	}
-	if active {
-		span.SetStatus(codes.Error, ErrScanInProgress.Error())
-		s.logger.Info("Skipping scan trigger: a scan is already queued or running",
-			zap.String("org_id", req.OrgID),
-		)
-		return "", ErrScanInProgress
+	if busy {
+		return s.queueScan(ctx, req)
 	}
 
 	assets, err := s.store.orgAssets(ctx, req.OrgID)
@@ -207,6 +223,39 @@ func (s *Service) TriggerScan(ctx context.Context, req ScanRequest) (string, err
 	)
 
 	return scanID, nil
+}
+
+// queueScan inserts a queued scan for req, as the web app does for a scan
+// requested while another runs. The queued-scan poller claims it once the
+// running scan is done. The web app's unique partial index allows one queued
+// scan per organization, so a duplicate-key error means another writer queued
+// one first: that scan covers all assets too.
+func (s *Service) queueScan(ctx context.Context, req ScanRequest) (string, error) {
+	now := time.Now()
+	scan := shared.Scan{
+		ID:          uuid.New().String(),
+		OrgID:       req.OrgID,
+		Status:      shared.StatusQueued,
+		Type:        req.Type,
+		TriggeredBy: req.TriggeredBy,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := s.store.insertScan(ctx, scan); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			s.logger.Info("Skipping scan trigger: a scan was queued concurrently",
+				zap.String("org_id", req.OrgID),
+			)
+			return "", ErrScanInProgress
+		}
+		return "", fmt.Errorf("failed to queue scan: %w", err)
+	}
+	s.logger.Info("Queued scan: the organization has a running scan",
+		zap.String("scan_id", scan.ID),
+		zap.String("org_id", req.OrgID),
+		zap.String("type", req.Type),
+	)
+	return scan.ID, ErrScanQueued
 }
 
 // targetsFor builds the targeted_assets audit trail for a scan. Assets with a
