@@ -97,10 +97,6 @@
     color: var(--vw-gray-500, #64748B);
 }
 
-[data-bs-theme="dark"] .live-card__busy {
-    color: var(--vw-gray-400);
-}
-
 /* ── Right side ── */
 .live-card__right {
     text-align: right;
