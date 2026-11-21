@@ -411,8 +411,9 @@ body { background: var(--app-bg); font-family: var(--font-primary); }
         flex: 1 0 auto;
         background: transparent;
     }
-    /* Add top padding to main content to clear the hamburger button (beats main's .pt-4) */
-    .app-shell .content > main {
+    /* Add top padding to main content to clear the hamburger button (beats main's .pt-4). Pages without
+       the sidebar (anonymous error pages) have no hamburger button. */
+    .app-shell .sidebar-toggle ~ .content > main {
         padding-top: 4.5rem !important;
     }
 }
