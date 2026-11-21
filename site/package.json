@@ -15,6 +15,9 @@
     "@fontsource/inter": "5.3.0",
     "@fontsource/jetbrains-mono": "5.3.0",
     "@fortawesome/fontawesome-free": "6.5.1",
-    "astro": "7.4.13"
+    "astro": "7.4.13",
+    "hast-util-from-html": "2.0.3",
+    "hast-util-sanitize": "5.0.2",
+    "hast-util-to-html": "9.0.7"
   }
 }
