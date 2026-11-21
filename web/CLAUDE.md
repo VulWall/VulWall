@@ -28,7 +28,7 @@ This skill encodes the brand tokens, severity ramp, CSP constraints, dark-mode r
 
 
 ## Key Technologies
-- **Backend**: .NET 10.0, C#
+- **Backend**: .NET 11.0, C#
 - **Frontend**: ASP.NET Core MVC with Razor Views
 - **Database**: MongoDB
 - **Auth**: Local cookie authentication (single admin, BCrypt)

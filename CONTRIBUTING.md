@@ -5,7 +5,7 @@ Thanks for your interest in contributing.
 ## Development setup
 
 Requirements: Docker with Compose v2, Go (version in `scanner/src/go.mod`)
-and the .NET 10 SDK.
+and the .NET 11 SDK.
 
 Run the whole stack from source:
 

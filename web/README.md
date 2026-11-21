@@ -1,7 +1,7 @@
 # VulWall Web
 
 The web app for a self-hosted VulWall install: add domains and IP addresses, start scans, and read
-findings, recommendations and reports. Built with ASP.NET Core MVC (.NET 10) on MongoDB.
+findings, recommendations and reports. Built with ASP.NET Core MVC (.NET 11) on MongoDB.
 
 The scanner (`../scanner`) does the scanning. The two share one MongoDB database and nothing else:
 the web app queues scans by writing to the `scans` collection, and the scanner writes the results
@@ -28,7 +28,7 @@ account (email and a password of at least 10 characters) and name your organizat
 
 ## Run locally
 
-Requires the .NET 10 SDK and a MongoDB you can reach.
+Requires the .NET 11 SDK and a MongoDB you can reach.
 
 ```bash
 cd src
