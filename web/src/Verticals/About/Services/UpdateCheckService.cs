@@ -10,7 +10,7 @@ namespace VulWall.Dashboard.About.Services;
 /// Asks GitHub for the latest VulWall release, from the server so the browser CSP keeps connect-src 'self'.
 /// Only <see cref="UpdateCheckPoller"/> calls it (at start, then every 6 hours), never a page load.
 /// </summary>
-public partial class UpdateCheckService(HttpClient http, ILogger<UpdateCheckService> logger)
+public partial class UpdateCheckService(HttpClient http, TimeProvider time, ILogger<UpdateCheckService> logger)
 {
     public const string LatestReleaseApi = "https://api.github.com/repos/VulWall/VulWall/releases/latest";
     private const string ReleaseTagUrl = "https://github.com/VulWall/VulWall/releases/tag/";
@@ -18,6 +18,12 @@ public partial class UpdateCheckService(HttpClient http, ILogger<UpdateCheckServ
     private static readonly TimeSpan MaxRateLimitWait = TimeSpan.FromHours(1);
 
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Limit for the GitHub response body (the typed client's MaxResponseContentBufferSize). A release answer
+    /// is a few KB; a larger one fails the check instead of filling memory.
+    /// </summary>
+    public const int MaxResponseBytes = 1024 * 1024;
 
     /// <summary>
     /// One request to GitHub. Every failure is a result; <c>RateLimitWait</c> is GitHub's reset time for a
@@ -55,7 +61,7 @@ public partial class UpdateCheckService(HttpClient http, ILogger<UpdateCheckServ
                 if (response.StatusCode == HttpStatusCode.NotFound)
                     return (null, UpdateStatus.NoRelease, null);
                 if (IsRateLimited(response))
-                    return (null, UpdateStatus.RateLimited, RateLimitWait(response.Headers, DateTimeOffset.UtcNow));
+                    return (null, UpdateStatus.RateLimited, RateLimitWait(response.Headers, time.GetUtcNow()));
                 return (null, UpdateStatus.Error, null);
             }
 
@@ -125,7 +131,8 @@ public partial class UpdateCheckService(HttpClient http, ILogger<UpdateCheckServ
     internal readonly partial record struct SemVer(int Major, int Minor, int Patch, string PreRelease)
         : IComparable<SemVer>
     {
-        [GeneratedRegex(@"^v?(\d{1,9})\.(\d{1,9})\.(\d{1,9})(?:-([0-9A-Za-z.-]{1,40}))?$")]
+        // [0-9], not \d: \d also matches other Unicode digits, which int.Parse rejects.
+        [GeneratedRegex(@"^v?([0-9]{1,9})\.([0-9]{1,9})\.([0-9]{1,9})(?:-([0-9A-Za-z.-]{1,40}))?$")]
         private static partial Regex Pattern();
 
         public static bool TryParse(string? value, out SemVer version)

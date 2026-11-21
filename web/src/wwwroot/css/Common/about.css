@@ -98,6 +98,10 @@
 .about-update__status i {
     color: var(--vw-primary);
 }
+/* Cobalt is about 2.2:1 on the dark box; the dark theme's lighter brand blue reads. */
+[data-bs-theme="dark"] .about-update__status i {
+    color: var(--brand-blue);
+}
 .about-update__status a {
     font-weight: 400;
 }

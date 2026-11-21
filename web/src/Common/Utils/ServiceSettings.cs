@@ -63,14 +63,23 @@ public class ServiceSettings : EnvLoader
     public string Version = "dev";
 
     /// <summary>
-    /// UPDATE_CHECK: the web app asks GitHub for the latest release at start and every 6 hours.
-    /// "false", "0", "no" or "off" turns it off; anything else, or unset, keeps it on.
+    /// UPDATE_CHECK: the web app asks GitHub for the latest release shortly after start and every 6 hours.
+    /// Unset, empty, "true", "1", "yes" or "on" keeps it on; any other value turns it off (see
+    /// <see cref="ParseSwitch"/>).
     /// </summary>
     [Env(Name = "UPDATE_CHECK", Default = "true")]
     public string UpdateCheck = "true";
 
-    public bool UpdateCheckEnabled => IsOn(UpdateCheck);
+    public bool UpdateCheckEnabled => ParseSwitch(UpdateCheck) == true;
 
-    internal static bool IsOn(string? value) =>
-        value?.Trim().ToLowerInvariant() is not ("false" or "0" or "no" or "off");
+    /// <summary>
+    /// An on/off setting, ignoring case and spaces: true for unset, empty, true, 1, yes or on; false for
+    /// false, 0, no or off; null for anything else, which callers treat as off and log.
+    /// </summary>
+    internal static bool? ParseSwitch(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        null or "" or "true" or "1" or "yes" or "on" => true,
+        "false" or "0" or "no" or "off" => false,
+        _ => null,
+    };
 }

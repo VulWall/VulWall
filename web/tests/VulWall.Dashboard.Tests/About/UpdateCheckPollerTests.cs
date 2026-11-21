@@ -54,12 +54,13 @@ public class UpdateCheckPollerTests
         Create(bool enabled = true)
     {
         var handler = new StubHandler();
+        var time = new CountingTimeProvider();
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<TimeProvider>(time);
         services.AddHttpClient<UpdateCheckService>().ConfigurePrimaryHttpMessageHandler(() => handler);
         var provider = services.BuildServiceProvider();
         var state = new UpdateCheckState(enabled);
-        var time = new CountingTimeProvider();
         var poller = new UpdateCheckPoller(provider.GetRequiredService<IServiceScopeFactory>(), state, time,
             NullLogger<UpdateCheckPoller>.Instance);
         return (poller, state, handler, time);
@@ -215,15 +216,22 @@ public class UpdateCheckPollerTests
     [Theory]
     [InlineData(null, true)]
     [InlineData("", true)]
+    [InlineData(" ", true)]
     [InlineData("true", true)]
+    [InlineData(" TRUE ", true)]
+    [InlineData("1", true)]
     [InlineData("yes", true)]
+    [InlineData("On", true)]
     [InlineData("false", false)]
     [InlineData(" FALSE ", false)]
     [InlineData("0", false)]
     [InlineData("off", false)]
     [InlineData("no", false)]
-    public void UpdateCheckSetting_IsOnUnlessTurnedOff(string? value, bool on) =>
-        Assert.Equal(on, VulWall.Dashboard.Common.Utils.ServiceSettings.IsOn(value));
+    [InlineData("disabled", null)] // off, with a warning at start
+    [InlineData("ture", null)]
+    [InlineData("2", null)]
+    public void UpdateCheckSetting_Parsing(string? value, bool? parsed) =>
+        Assert.Equal(parsed, VulWall.Dashboard.Common.Utils.ServiceSettings.ParseSwitch(value));
 
     [Theory]
     [InlineData(UpdateStatus.Available, "v1.2.0")]

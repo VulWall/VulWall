@@ -23,7 +23,14 @@ public class UpdateCheckPoller(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!state.Enabled)
+        {
+            var value = ServiceSettings.Instance.UpdateCheck;
+            if (ServiceSettings.ParseSwitch(value) is null)
+                logger.LogWarning(
+                    "UPDATE_CHECK={Value} is not one of true, false, 1, 0, yes, no, on, off: the update check is off",
+                    LogSanitizer.Clean(value));
             return;
+        }
 
         var delay = StartDelay;
         while (true)

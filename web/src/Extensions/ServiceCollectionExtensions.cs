@@ -106,6 +106,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<UpdateCheckService>(client =>
         {
             client.Timeout = UpdateCheckService.Timeout;
+            client.MaxResponseContentBufferSize = UpdateCheckService.MaxResponseBytes;
             // GitHub rejects API requests without a User-Agent.
             if (!client.DefaultRequestHeaders.UserAgent.TryParseAdd($"VulWall/{ServiceSettings.Instance.Version}"))
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("VulWall");

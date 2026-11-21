@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using VulWall.Dashboard.About.Services;
 using VulWall.Dashboard.Common.Services.UpdateCheck;
 
@@ -19,10 +20,14 @@ public class UpdateCheckServiceTests
         }
     }
 
+    // A fixed clock: GitHub's rate-limit reset is compared with it.
+    private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+
     private static (UpdateCheckService Service, StubHandler Handler) Create(Func<HttpRequestMessage, HttpResponseMessage> respond)
     {
         var handler = new StubHandler(respond);
-        var service = new UpdateCheckService(new HttpClient(handler), NullLogger<UpdateCheckService>.Instance);
+        var http = new HttpClient(handler) { MaxResponseContentBufferSize = UpdateCheckService.MaxResponseBytes };
+        var service = new UpdateCheckService(http, new FakeTimeProvider(Now), NullLogger<UpdateCheckService>.Instance);
         return (service, handler);
     }
 
@@ -110,7 +115,7 @@ public class UpdateCheckServiceTests
     {
         var response = new HttpResponseMessage(status) { Content = new StringContent("{\"message\":\"API rate limit exceeded\"}") };
         response.Headers.Add("X-RateLimit-Remaining", "0");
-        response.Headers.Add("X-RateLimit-Reset", DateTimeOffset.UtcNow.AddMinutes(30).ToUnixTimeSeconds().ToString());
+        response.Headers.Add("X-RateLimit-Reset", Now.AddMinutes(30).ToUnixTimeSeconds().ToString());
         return response;
     }
 
@@ -124,7 +129,30 @@ public class UpdateCheckServiceTests
         var (result, wait) = await service.CheckAsync("v1.0.0");
 
         Assert.Equal(UpdateStatus.RateLimited, result.Status);
-        Assert.InRange(wait!.Value, TimeSpan.FromMinutes(29), TimeSpan.FromMinutes(30));
+        Assert.Equal(TimeSpan.FromMinutes(30), wait);
+    }
+
+    [Fact]
+    public async Task OversizedResponse_FailsTheCheck()
+    {
+        var huge = "{\"tag_name\":\"v9.0.0\",\"body\":\"" + new string('a', UpdateCheckService.MaxResponseBytes) + "\"}";
+        var (service, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(huge) });
+
+        var (result, _) = await service.CheckAsync("v1.0.0");
+
+        Assert.NotEqual(UpdateStatus.Available, result.Status);
+        Assert.Null(result.LatestVersion);
+    }
+
+    [Fact]
+    public async Task NonAsciiDigits_AreNotAVersion()
+    {
+        // Arabic-Indic digits: \d would match them and int.Parse would then throw.
+        var (service, _) = Create(_ => Release("v\u0661.\u0662.\u0663"));
+
+        var (result, _) = await service.CheckAsync("v1.0.0");
+
+        Assert.Equal(UpdateStatus.Error, result.Status);
     }
 
     [Fact]
