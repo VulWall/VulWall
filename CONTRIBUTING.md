@@ -37,7 +37,7 @@ packages read each other's messages. CI runs them the same way.
 
 ```bash
 docker run -d --rm --name vw-test-mongo -p 127.0.0.1:27018:27017 mongo:7
-docker run -d --rm --name vw-test-redis -p 127.0.0.1:6380:6379 redis:7-alpine
+docker run -d --rm --name vw-test-redis -p 127.0.0.1:6380:6379 redis:8-alpine
 cd scanner/src
 VULWALL_TEST_MONGO_URI=mongodb://127.0.0.1:27018 \
 VULWALL_TEST_REDIS_URI=redis://127.0.0.1:6380/0 \
