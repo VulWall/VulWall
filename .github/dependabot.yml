@@ -23,6 +23,10 @@ updates:
       # The Anthropic SDK changes its API between releases; it is upgraded by
       # hand together with AnthropicAIService.
       - dependency-name: "Anthropic*"
+      # Microsoft.Extensions.* majors follow the .NET runtime major; they move
+      # together with the base images and TargetFramework.
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /scanner/docker/retire

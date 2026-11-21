@@ -13,7 +13,7 @@ You keep the copyright to your contribution.
 
 ## Development setup
 
-You need Docker with Compose v2, Go (the version in `scanner/src/go.mod`) and the .NET 10 SDK.
+You need Docker with Compose v2, Go (the version in `scanner/src/go.mod`) and the .NET 11 SDK.
 For this website you also need Node.js.
 
 Run the whole stack from source:
