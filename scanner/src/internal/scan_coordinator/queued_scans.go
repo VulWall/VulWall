@@ -121,8 +121,7 @@ func (s *Service) startQueuedScan(ctx context.Context, queued shared.Scan) {
 
 	// Claim first, then read the assets: while the scan is queued, the web app promises that
 	// it includes every asset added before it starts, so an asset added up to the claim must
-	// be in it. After the claim the scan is running, so a later request (from the web app,
-	// or the cron's scheduled scan) is queued behind it.
+	// be in it. After the claim the scan is running, so a scan queued later waits behind it.
 
 	// A scheduled scan queued behind a running one keeps its type, so the web
 	// app labels it Scheduled; anything else is a requested scan.
