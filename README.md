@@ -168,6 +168,7 @@ comments.
 | `VULWALL_VERSION` | `latest` | Image tag of `ghcr.io/vulwall/scanner` and `ghcr.io/vulwall/web` |
 | `VULWALL_BUILD_VERSION` | `dev` | Version that images built from source show in the About dialog. `make build` and `make up` set it to `dev (<short commit>)` |
 | `SECURE_COOKIES` | `false` | Set to `true` when VulWall is served over HTTPS |
+| `UPDATE_CHECK` | `true` | Ask the GitHub API for the latest release shortly after start, then every 6 hours (sooner after a failed check: 15 minutes, doubling up to 6 hours), and show a dot on the About button when one is newer. `false` turns it off; a value other than `true`, `1`, `yes`, `on`, `false`, `0`, `no` or `off` also turns it off, with a warning in the log |
 | `TRUSTED_PROXIES` | empty | IPs/CIDRs of reverse proxies whose `X-Forwarded-*` headers are trusted |
 | `NUCLEI_WORKERS` | `2` | Concurrent nuclei processes |
 | `NUCLEI_RATE_LIMIT` | `30` | Requests per second for each nuclei process |
