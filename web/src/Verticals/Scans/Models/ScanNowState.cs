@@ -14,7 +14,6 @@ public enum ScanNowState
 
 public static class ScanNowStateText
 {
-    public const string Busy = "A scan is running. You can start a new one when it finishes.";
     /// <summary>
     /// A scan queued behind a running one. The web app never queues one there, only the scanner
     /// does, when the schedule fires during a scan, so it is a scheduled scan.

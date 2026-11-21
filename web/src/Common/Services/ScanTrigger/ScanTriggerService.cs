@@ -29,6 +29,9 @@ public class ScanTriggerService(ScansRepository scansRepository)
     /// </summary>
     private static readonly TimeSpan InProgressWindow = TimeSpan.FromHours(24);
 
+    /// <summary>Shown next to every disabled "Scan now" button and when a request is refused.</summary>
+    public const string BusyMessage = "A scan is running. You can start a new one when it finishes.";
+
     /// <summary>
     /// A scan the scanner has started (pending or running) less than <see cref="InProgressWindow"/>
     /// ago. The age counts from <c>started_at</c>: a queued scan keeps its <c>created_at</c> when

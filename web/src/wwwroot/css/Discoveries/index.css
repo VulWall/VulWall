@@ -480,3 +480,18 @@
 [data-bs-theme="dark"] .disc-row-wrap.status-not-sure .disc-row-grid { background: linear-gradient(to right, rgba(181,71,8,.28) 0%, transparent 280px); }
 [data-bs-theme="dark"] .disc-row-wrap.status-not-mine .disc-row-grid { background: linear-gradient(to right, rgba(217,45,32,.28) 0%, transparent 280px); }
 [data-bs-theme="dark"] .disc-row-wrap.status-ignore   .disc-row-grid { background: linear-gradient(to right, rgba(100,116,139,.22) 0%, transparent 280px); }
+
+/* "Rescan now" is off while a scan is in progress: say why, under the disabled button. */
+.disc-rescan-busy { text-align: right; }
+
+.disc-rescan-busy__text {
+    display: block;
+    max-width: 260px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--vw-gray-500, #64748B);
+}
+
+[data-bs-theme="dark"] .disc-rescan-busy__text {
+    color: var(--vw-gray-400);
+}
