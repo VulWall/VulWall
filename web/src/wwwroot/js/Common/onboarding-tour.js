@@ -50,7 +50,7 @@ const tourSteps = [
         position: 'top',
         title: 'Fix now',
         icon: 'fa-wrench',
-        description: 'Your most critical vulnerabilities and how to fix them. Add an Anthropic API key and AI writes more detailed guidance.'
+        description: 'Your most critical vulnerabilities and how to fix them. Set an AI API key (AI_API_KEY) and AI writes more detailed guidance.'
     },
     {
         id: 'timeline',

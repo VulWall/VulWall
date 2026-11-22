@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Driver;
 using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.AIServices;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Dashboard.Services;
 using VulWall.Dashboard.Data.Base;
@@ -59,7 +60,8 @@ internal sealed class TestServices(IMongoDatabase db, string orgId)
     public ScansService ScansService() => new(Scans, Findings, AssetScope, _org);
 
     public RecommendationsService RecommendationsService() =>
-        new(Findings, Discoveries, Scans, KnowledgeBase, Suppressions, AssetScope, _org);
+        new(Findings, Discoveries, Scans, KnowledgeBase, Suppressions, AssetScope, _org,
+            new AiStatus(new EnvAiConfigSource()));
 
     public DashboardService DashboardService()
     {

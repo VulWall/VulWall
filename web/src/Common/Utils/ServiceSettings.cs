@@ -19,11 +19,18 @@ public class ServiceSettings : EnvLoader
     [Env(Name = "MONGO_DB", Default = "vulwall")]
     public string MongoDb = "vulwall";
 
-    [Env(Name = "ANTHROPIC_API_KEY", Required = false)]
-    public string AnthropicApiKey = string.Empty;
+    // AI settings. Empty values mean "use the default"; read them through IAiConfigSource, not here.
+    [Env(Name = "AI_PROVIDER", Required = false)]
+    public string AiProvider = string.Empty;
 
-    [Env(Name = "DEFAULT_AI_MODEL", Default = "claude-sonnet-4-6")]
-    public string DefaultAIModel = string.Empty;
+    [Env(Name = "AI_API_KEY", Required = false)]
+    public string AiApiKey = string.Empty;
+
+    [Env(Name = "AI_MODEL", Required = false)]
+    public string AiModel = string.Empty;
+
+    [Env(Name = "AI_BASE_URL", Required = false)]
+    public string AiBaseUrl = string.Empty;
 
     /// <summary>
     /// Comma-separated IPs/CIDR ranges of reverse proxies whose X-Forwarded-* headers are trusted.

@@ -1,4 +1,3 @@
-using Anthropic;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -250,10 +249,9 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddAiServices(this IServiceCollection services)
     {
         services.AddSingleton<PromptLoader>();
-        var apiKey = ServiceSettings.Instance.AnthropicApiKey;
-        if (!string.IsNullOrEmpty(apiKey))
-            services.AddSingleton(new AnthropicClient { ApiKey = apiKey });
-        services.AddScoped<IAIService, AnthropicAIService>();
+        services.AddSingleton<IAiConfigSource, EnvAiConfigSource>();
+        services.AddSingleton<AiStatus>();
+        services.AddSingleton<IAiService, AiService>();
 
         return services;
     }
