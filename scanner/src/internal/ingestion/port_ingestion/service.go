@@ -20,20 +20,22 @@ import (
 )
 
 type Service struct {
-	db       *mongo.Database
-	redis    *redis.Client
-	logger   *zap.Logger
-	tracer   trace.Tracer
-	orgGuard *shared.OrgGuard
+	db         *mongo.Database
+	redis      *redis.Client
+	logger     *zap.Logger
+	tracer     trace.Tracer
+	orgGuard   *shared.OrgGuard
+	assetGuard *shared.AssetGuard
 }
 
-func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger, orgGuard *shared.OrgGuard) *Service {
+func NewService(db *mongo.Database, redis *redis.Client, logger *zap.Logger, orgGuard *shared.OrgGuard, assetGuard *shared.AssetGuard) *Service {
 	return &Service{
-		db:       db,
-		redis:    redis,
-		logger:   logger,
-		tracer:   otel.Tracer("port-ingestion"),
-		orgGuard: orgGuard,
+		db:         db,
+		redis:      redis,
+		logger:     logger,
+		tracer:     otel.Tracer("port-ingestion"),
+		orgGuard:   orgGuard,
+		assetGuard: assetGuard,
 	}
 }
 
@@ -77,6 +79,20 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 		s.logger.Info("Skipping finding: organization no longer exists",
 			zap.String("trace_id", finding.TraceID),
 			zap.String("org_id", finding.OrgID),
+			zap.String("ip", finding.IP),
+		)
+		return nil
+	}
+
+	// Drop results of an asset that was deleted, or whose delete has started, while its scan
+	// was in flight (shared.AssetGuard). Writing them would add a dead id to asset_ids, or
+	// create a discovery that holds only that id and stays hidden. Soft-skip, as above: a
+	// retry cannot succeed, because a deleted asset never comes back.
+	if finding.AssetID != "" && !s.assetGuard.Exists(ctx, finding.OrgID, finding.AssetID) {
+		s.logger.Info("Skipping finding: asset no longer exists or is being deleted",
+			zap.String("trace_id", finding.TraceID),
+			zap.String("org_id", finding.OrgID),
+			zap.String("asset_id", finding.AssetID),
 			zap.String("ip", finding.IP),
 		)
 		return nil

@@ -54,6 +54,9 @@ internal sealed class AssetScope : IAssetScope
     public bool IsHidden(string? discoveryId) =>
         discoveryId != null && _hiddenDiscoveryIds.Contains(discoveryId);
 
+    public bool IsVisibleDiscovery(string? discoveryId) =>
+        discoveryId != null && _visibleDiscoveryIds.Contains(discoveryId);
+
     public IReadOnlyCollection<string>? OwnersOf(string? discoveryId) =>
         discoveryId != null ? _owners.GetValueOrDefault(discoveryId) : null;
 

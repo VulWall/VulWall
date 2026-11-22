@@ -94,7 +94,7 @@
                 @foreach (var asset in Model.Assets)
                 {
                     var statusClass = asset.Enabled ? "is-active" : "is-inactive";
-                    var statusLabel = asset.Enabled ? "Active" : "Inactive";
+                    var statusLabel = asset.Deleting ? "Deleting" : asset.Enabled ? "Active" : "Inactive";
                     var assetTypeStr = asset.Type == AssetType.Domain ? "domain" : "ip";
                     var assetIcon = asset.Type == AssetType.Domain ? "fas fa-globe" : "fas fa-server";
                     var typeLabel = asset.Type == AssetType.Domain ? "Domain" : "IP address";
@@ -108,7 +108,11 @@
                             <span class="asset-avatar"><i class="@assetIcon"></i></span>
                             <span class="asset-name-block">
                                 <span class="asset-name">@asset.Name</span>
-                                @if (asset.ScanNotice is not null)
+                                @if (asset.Deleting)
+                                {
+                                    <span class="asset-notice"><i class="fas fa-circle-info"></i>The delete did not finish. Delete again to finish.</span>
+                                }
+                                else if (asset.ScanNotice is not null)
                                 {
                                     <span class="asset-notice"><i class="fas fa-circle-info"></i>@asset.ScanNotice</span>
                                 }
@@ -118,7 +122,7 @@
                         <span class="asset-type-label type-col">@typeLabel</span>
                         @* Status *@
                         <div>
-                            <span class="asset-status @statusClass">
+                            <span class="asset-status @(asset.Deleting ? "is-deleting" : statusClass)">
                                 <span class="asset-status-dot"></span>@statusLabel
                             </span>
                         </div>
@@ -134,7 +138,8 @@
                                     <input class="form-check-input"
                                            type="checkbox"
                                            @(asset.Enabled ? "checked" : null)
-                                           title="@(asset.Enabled ? "Disable scanning" : "Enable scanning")" />
+                                           disabled="@asset.Deleting"
+                                           title="@(asset.Deleting ? "Delete the asset again to finish" : asset.Enabled ? "Disable scanning" : "Enable scanning")" />
                                 </div>
                             </form>
                             <form class="delete-asset-form" data-action="@Url.Action("Delete")">

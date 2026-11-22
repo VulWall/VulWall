@@ -281,14 +281,17 @@ public abstract class AssetDeleteCascadeTestsBase(MongoFixture mongo, int batchS
             catch (SimulatedCrash)
             {
             }
-            Assert.Equal(1, await s.C("assets").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("_id", ObjectId.Parse(s.X))));
+            var asset = await s.C("assets").Find(Builders<BsonDocument>.Filter.Eq("_id", ObjectId.Parse(s.X))).SingleAsync();
+            // From the pull on, the asset is marked: it can only be deleted again, never enabled.
+            if (stopAfter >= 3)
+                Assert.True(asset.GetValue("deleting", false).AsBoolean, $"deleting after {stopAfter} writes");
 
             await DeleteX(s);
 
             Assert.True(expected == await SnapshotAsync(s.Db, OrgId, s), $"retry after {stopAfter} writes");
         }
-        // disable, pull, 5 writes per batch, asset delete
-        Assert.Equal(2 + 5 * (int)Math.Ceiling(OwnedByXOnly.Length / (double)batchSize) + 1, stopAfter);
+        // disable, mark deleting, pull, 5 writes per batch, asset delete
+        Assert.Equal(3 + 5 * (int)Math.Ceiling(OwnedByXOnly.Length / (double)batchSize) + 1, stopAfter);
     }
 
     // A scan that adds an owner back between the select and the deletes (the in-memory window in
@@ -347,7 +350,9 @@ public abstract class AssetDeleteCascadeTestsBase(MongoFixture mongo, int batchS
 
         Assert.False(success);
         Assert.Equal(AssetsService.ScanInProgressDeleteError, error);
-        Assert.Equal(enabled, (await s.C("assets").Find(byId).SingleAsync())["enabled"].AsBoolean);
+        var asset = await s.C("assets").Find(byId).SingleAsync();
+        Assert.Equal(enabled, asset["enabled"].AsBoolean);
+        Assert.False(asset.Contains("deleting"));
         Assert.Equal(OwnedByXOnly.Concat(Survivors).Order(), await IdsAsync(s.C("discoveries"), OrgId));
         Assert.Equal([s.X, s.Y], await AssetIdsAsync(s, "ip-shared"));
         Assert.Equal(OwnedByXOnly.Length + Survivors.Length, await s.C("findings").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("org_id", OrgId)));
@@ -449,7 +454,8 @@ public abstract class AssetDeleteCascadeTestsBase(MongoFixture mongo, int batchS
         var scans = s.Services.Scans;
         return new AssetsService(new FaultyAssets(s.Db, org, faults), scans, new ScanTriggerService(scans),
             new FaultyDiscoveries(s.Db, org, faults), new FaultyFindings(s.Db, org, faults),
-            new FaultySuppressions(s.Db, org, faults), new FaultyCoverage(s.Db, org, faults))
+            new FaultySuppressions(s.Db, org, faults), new FaultyCoverage(s.Db, org, faults),
+            NullLogger<AssetsService>.Instance)
         {
             DeleteBatchSize = batchSize
         };

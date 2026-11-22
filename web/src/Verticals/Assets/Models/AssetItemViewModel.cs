@@ -8,6 +8,8 @@ public class AssetItemViewModel
     public string Name { get; set; } = "Unknown";
     public AssetType Type { get; set; }
     public bool Enabled { get; set; }
+    /// <summary>A delete started and did not finish: the asset can only be deleted again.</summary>
+    public bool Deleting { get; set; }
     public DateTime AddedOn { get; set; }
     /// <summary>Set when the latest scan could not fully check this asset.</summary>
     public string? ScanNotice { get; set; }

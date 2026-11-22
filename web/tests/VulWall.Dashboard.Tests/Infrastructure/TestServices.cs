@@ -41,7 +41,8 @@ internal sealed class TestServices(IMongoDatabase db, string orgId)
     public ScanCoverageRepository ScanCoverage => new(db, _org, NullLogger<OrgScopedRepository<ScanCoverage, string>>.Instance);
 
     public AssetsService AssetsService(int deleteBatchSize = 1000) =>
-        new(Assets, Scans, new ScanTriggerService(Scans), Discoveries, Findings, SuppressionsRepository, ScanCoverage)
+        new(Assets, Scans, new ScanTriggerService(Scans), Discoveries, Findings, SuppressionsRepository, ScanCoverage,
+            NullLogger<AssetsService>.Instance)
         {
             DeleteBatchSize = deleteBatchSize
         };

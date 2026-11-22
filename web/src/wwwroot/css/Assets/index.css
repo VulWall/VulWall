@@ -293,6 +293,17 @@
     background: var(--vw-gray-400);
 }
 
+/* A delete that did not finish: the asset can only be deleted again. */
+.asset-status.is-deleting {
+    background: var(--vw-warning-light);
+    border: 1px solid var(--vw-warning);
+    color: var(--vw-warning-dark);
+}
+
+.asset-status.is-deleting .asset-status-dot {
+    background: var(--vw-warning);
+}
+
 /* Added date */
 .asset-date {
     font-family: var(--bs-font-monospace);
