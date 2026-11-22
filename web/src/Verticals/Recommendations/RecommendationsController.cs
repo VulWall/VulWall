@@ -74,12 +74,19 @@ public class RecommendationsController(
                            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                            ?? "unknown";
 
-        await suppressionService.SuppressAsync(
+        var found = await suppressionService.SuppressAsync(
             input.DiscoveryId,
             input.FindingType,
             input.Status,
             suppressedBy,
             input.Note);
+        if (!found)
+        {
+            TempData["Error"] = "This finding is not available. Its asset may be disabled.";
+            if (!string.IsNullOrEmpty(returnFindingId))
+                return RedirectToAction(nameof(Detail), new { id = returnFindingId });
+            return RedirectToAction(nameof(Index));
+        }
 
         TempData["Info"] = "Finding has been dismissed.";
 
@@ -97,7 +104,13 @@ public class RecommendationsController(
             return BadRequest("SuppressionId is required.");
         }
 
-        await suppressionService.UnsuppressAsync(input.SuppressionId);
+        if (!await suppressionService.UnsuppressAsync(input.SuppressionId))
+        {
+            TempData["Error"] = "This dismissed finding is not available. Its asset may be disabled.";
+            if (!string.IsNullOrEmpty(returnFindingId))
+                return RedirectToAction(nameof(Detail), new { id = returnFindingId });
+            return RedirectToAction(nameof(Index));
+        }
 
         TempData["Info"] = "Finding has been restored.";
 

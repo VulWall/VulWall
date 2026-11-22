@@ -82,7 +82,7 @@ func TestDecideResolutions(t *testing.T) {
 			evidence(f, observedSub(), okCoverage(shared.FindingKey{FindingType: "missing-csp", Title: "Missing CSP"})), ResolutionNotReproduced},
 		{"scanner error (no ok coverage) stays open",
 			evidence(f, observedSub(), &coverageRef{Source: "http-headers", DiscoveryID: "sub-1", Status: shared.CoverageError}), "open"},
-		{"scanner never reported (lost publish, crashed, disabled asset) stays open",
+		{"scanner never reported (lost publish, crashed) stays open",
 			evidence(f, observedSub(), nil), "open"},
 		{"coverage of another scanner does not count",
 			evidence(f, observedSub(), &coverageRef{Source: "nuclei", DiscoveryID: "sub-1", Status: shared.CoverageOK}), "open"},
@@ -197,4 +197,55 @@ func TestDecideResolutionsSplitsCandidates(t *testing.T) {
 	if !slices.Equal(d.notReproduced, []string{"f1"}) || !slices.Equal(d.unchecked, []string{"f-other"}) || len(d.gone) != 0 {
 		t.Fatalf("decision = %+v", d)
 	}
+}
+
+// TestDecideResolutionsSkipsUntargetedAssets: a finding whose discovery belongs only to assets
+// the scan did not target (disabled or deleted) is skipped, neither resolved nor unchecked, so
+// a disabled asset's findings do not pile up as unchecked. One targeted owner, or no recorded
+// owner at all, keeps the usual rules.
+func TestDecideResolutionsSkipsUntargetedAssets(t *testing.T) {
+	t.Parallel()
+	withOwners := func(owners ...string) *discoveryRef {
+		d := observedSub()
+		d.AssetIDs = owners
+		return d
+	}
+	tests := []struct {
+		name   string
+		owners []string
+		want   string
+	}{
+		{"only untargeted owners: skipped", []string{"asset-off"}, "skipped"},
+		{"shared with a targeted owner: resolved", []string{"asset-off", "asset-on"}, ResolutionNotReproduced},
+		{"no recorded owner: resolved", nil, ResolutionNotReproduced},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			in := evidence(headerFinding(), withOwners(tt.owners...), okCoverage())
+			in.targetedAssets = map[string]bool{"asset-on": true}
+			d := decideResolutions(in)
+			got := outcome(d)
+			if len(d.notReproduced)+len(d.gone)+len(d.unchecked) == 0 {
+				got = "skipped"
+			}
+			if got != tt.want {
+				t.Fatalf("outcome = %s, want %s (decision %+v)", got, tt.want, d)
+			}
+		})
+	}
+
+	t.Run("untargeted host confirmed gone is not resolved", func(t *testing.T) {
+		t.Parallel()
+		gone := &discoveryRef{ID: "sub-1", AssetType: shared.AssetTypeSubdomain, AssetIDs: []string{"asset-off"}}
+		in := evidence(headerFinding(), gone, nil)
+		in.targetedAssets = map[string]bool{"asset-on": true}
+		key := coverageKey{shared.CoverageSourceDomainDiscovery, "sub-1"}
+		for _, scan := range recent3 {
+			in.hostChecks[scan] = map[coverageKey]bool{key: true}
+		}
+		if d := decideResolutions(in); len(d.gone)+len(d.notReproduced)+len(d.unchecked) != 0 {
+			t.Fatalf("decision = %+v, want the finding skipped", d)
+		}
+	})
 }

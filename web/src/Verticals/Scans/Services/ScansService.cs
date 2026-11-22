@@ -1,5 +1,7 @@
 using Cronos;
 using VulWall.Dashboard.Common.Contracts.Enums;
+using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.Scan;
@@ -11,7 +13,9 @@ namespace VulWall.Dashboard.Scans.Services;
 
 public class ScansService(
     ScansRepository scansRepository,
-    FindingsRepository findingsRepository)
+    FindingsRepository findingsRepository,
+    IAssetScopeFilter assetScopeFilter,
+    IOrganizationContext organizationContext)
 {
     /// <summary>
     /// Gets the complete Index view model with all data.
@@ -25,11 +29,13 @@ public class ScansService(
             orderByProperty: s => s.CreatedAt,
             sortDirection: SortDirection.Descending);
         var allFindingsTask = findingsRepository.GetAllAsync();
+        var scopeTask = GetAssetScopeAsync();
 
-        await Task.WhenAll(allScansTask, allFindingsTask);
+        await Task.WhenAll(allScansTask, allFindingsTask, scopeTask);
 
         var allScans = (await allScansTask).ToList();
-        var allFindings = (await allFindingsTask).ToList();
+        var scope = await scopeTask;
+        var allFindings = scope.Filter(await allFindingsTask);
 
         var statistics = new ScanOverviewStatistics
         {
@@ -50,7 +56,7 @@ public class ScansService(
         // allScans is sorted newest-first, so donePair[0] = latest, donePair[1] = baseline.
         var donePair = allScans.Where(s => s.Status == ScanStatus.Done).Take(2).ToList();
         ScanComparisonViewModel? initialComparison = donePair.Count == 2
-            ? BuildComparison(donePair[1], donePair[0], allFindings)
+            ? BuildComparison(donePair[1], donePair[0], allFindings, scope.OwnersOf)
             : null;
 
         var scheduledDates = GetScheduledScanDates(scanCron);
@@ -87,8 +93,10 @@ public class ScansService(
         IReadOnlyDictionary<string, int>? uniqueIssueCounts = null;
         if (doneScanIds.Count > 0)
         {
-            var findings = (await findingsRepository.FindAsync(
+            // Polled every few seconds: load the owners of these findings' discoveries only.
+            var raw = (await findingsRepository.FindAsync(
                 f => f.ScanIds.Any(sid => doneScanIds.Contains(sid)))).ToList();
+            var findings = (await GetAssetScopeAsync(raw)).Filter(raw);
             uniqueIssueCounts = ComputeUniqueIssueCounts(doneScanIds, findings);
         }
 
@@ -222,14 +230,41 @@ public class ScansService(
         if (baseline.Status != ScanStatus.Done || latest.Status != ScanStatus.Done)
             return null;
 
-        var findings = await findingsRepository.FindAsync(
-            f => f.ScanIds.Any(sid => sid == fromScanId || sid == toScanId));
+        var raw = (await findingsRepository.FindAsync(
+            f => f.ScanIds.Any(sid => sid == fromScanId || sid == toScanId))).ToList();
+        var scope = await GetAssetScopeAsync(raw);
 
-        return BuildComparison(baseline, latest, findings);
+        return BuildComparison(baseline, latest, scope.Filter(raw), scope.OwnersOf);
     }
 
-    internal static ScanComparisonViewModel BuildComparison(Scan baseline, Scan latest, IEnumerable<Finding> allFindings)
+    private async Task<IAssetScope> GetAssetScopeAsync() =>
+        await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync());
+
+    /// <summary>Scope that knows only the discoveries of <paramref name="findings"/>.</summary>
+    private async Task<IAssetScope> GetAssetScopeAsync(IEnumerable<Finding> findings) =>
+        await assetScopeFilter.GetAsync(
+            await organizationContext.GetCurrentOrgIdAsync(),
+            findings.Select(f => f.DiscoveryId).OfType<string>().Distinct().ToList());
+
+    /// <summary>
+    /// Whether <paramref name="scan"/> did not check <paramref name="finding"/>: the scan targeted
+    /// no asset at all (every asset disabled; the scanner closes it at once), or none of the
+    /// assets that own the finding's discovery was a target of the scan (a disabled asset).
+    /// A discovery without owners is in scope of any scan that targeted something.
+    /// </summary>
+    private static bool OutOfScope(Scan scan, Finding finding, Func<string?, IReadOnlyCollection<string>?> ownersOf)
     {
+        if (scan.TargetedAssets.Count == 0)
+            return true;
+        // Known limit: these are today's owners (asset_ids now), not the owners at scan time.
+        var owners = ownersOf(finding.DiscoveryId);
+        return owners is { Count: > 0 } && !owners.Any(id => scan.TargetedAssets.Any(t => t.AssetId == id));
+    }
+
+    internal static ScanComparisonViewModel BuildComparison(Scan baseline, Scan latest, IEnumerable<Finding> allFindings,
+        Func<string?, IReadOnlyCollection<string>?>? ownersOf = null)
+    {
+        ownersOf ??= _ => null;
         var findings = allFindings.ToList();
         var baselineFindings = findings.Where(f => f.ScanIds.Contains(baseline.Id)).ToList();
         var latestFindings = findings.Where(f => f.ScanIds.Contains(latest.Id)).ToList();
@@ -241,16 +276,22 @@ public class ScansService(
         static string Key(Finding f) => $"{f.FindingType ?? f.Title}|{f.Severity}|{f.Source ?? ""}";
 
         // A group missing from the latest scan is "not checked" rather than resolved when any of
-        // its findings sits under an asset the latest scan could not fully check: the scanner
-        // left those open (Scan.UncheckedFindingIds).
+        // its findings sits under an asset the latest scan could not fully check (the scanner
+        // left those open: Scan.UncheckedFindingIds), or under assets the latest scan did not
+        // target at all (disabled then: the scanner skips those findings).
         var uncheckedIds = latest.UncheckedFindingIds.ToHashSet();
         var baselineGroups = baselineFindings
             .Where(f => f.Severity != Severity.Info)
             .GroupBy(Key)
             .ToList();
         var notCheckedKeys = baselineGroups
-            .Where(g => g.Any(f => uncheckedIds.Contains(f.Id)))
+            .Where(g => g.Any(f => uncheckedIds.Contains(f.Id) || OutOfScope(latest, f, ownersOf)))
             .Select(g => g.Key)
+            .ToHashSet();
+        // Likewise a group that the baseline did not target is not "added" in the latest scan.
+        var baselineUncheckedKeys = latestFindings
+            .Where(f => f.Severity != Severity.Info && OutOfScope(baseline, f, ownersOf))
+            .Select(Key)
             .ToHashSet();
         var baselineDeduped = baselineGroups.Select(g => g.First()).ToList();
 
@@ -266,7 +307,9 @@ public class ScansService(
         var missing   = baselineDeduped.Where(f => !latestKeySet.Contains(Key(f))).ToList();
         var resolved  = missing.Where(f => !notCheckedKeys.Contains(Key(f))).ToList();
         var notChecked = missing.Count - resolved.Count;
-        var added     = latestDeduped.Where(f => !baselineKeySet.Contains(Key(f))).ToList();
+        var added     = latestDeduped
+            .Where(f => !baselineKeySet.Contains(Key(f)) && !baselineUncheckedKeys.Contains(Key(f)))
+            .ToList();
         var unchanged = baselineDeduped.Count(f => latestKeySet.Contains(Key(f)));
 
         var (bc, bh, bm, bl) = FindingSeverityCounter.CountBySeverityGrouped(baselineFindings);

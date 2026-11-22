@@ -203,12 +203,15 @@ is resolved by the first later scan that has the evidence). A candidate is resol
   neither are the ports of an IP that no name resolves to any more (it gets no port scan): their
   findings stay open.
 
+A finding whose discovery has `asset_ids`, none of them in the scan's `targeted_assets`
+(disabled or deleted assets), is skipped: it stays open and is not counted as unchecked.
+
 Everything else stays open: a missing or `error` coverage record, a host not seen this scan
-(a subdomain lost to NXDOMAIN or subfinder variance, a filtered port), a disabled asset (not
-scanned), a scanner that crashed. Resolved findings get `resolution_reason`,
-`resolved_by_scan_id` and `resolved_at`; a finding reported again is reopened and loses them.
-The open candidates are counted in `stats.unchecked_findings` and listed in
-`unchecked_finding_ids`; the web app shows them as "not checked" in a scan comparison.
+(a subdomain lost to NXDOMAIN or subfinder variance, a filtered port), a scanner that crashed.
+Resolved findings get `resolution_reason`, `resolved_by_scan_id` and `resolved_at`; a finding
+reported again is reopened and loses them. The open candidates (skipped ones excluded) are
+counted in `stats.unchecked_findings` and listed in `unchecked_finding_ids`; the web app shows
+them as "not checked" in a scan comparison.
 
 **Known subdomains.** The coordinator gives each domain discovery job the names below the domain
 that a scan saw in the last 90 days (`known_subdomains`, read from `discoveries`). Discovery

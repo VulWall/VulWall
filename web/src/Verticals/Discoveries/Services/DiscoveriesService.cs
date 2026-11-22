@@ -2,6 +2,7 @@ using MongoDB.Driver;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Entities.Discovery;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Discoveries.Models;
@@ -11,7 +12,10 @@ namespace VulWall.Dashboard.Discoveries.Services;
 public class DiscoveriesService(
     DiscoveriesRepository discoveriesRepository,
     FindingsRepository findingsRepository,
-    ScansRepository scansRepository)
+    ScansRepository scansRepository,
+    IAssetScopeFilter assetScopeFilter,
+    ISuppressionFilter suppressionFilter,
+    IOrganizationContext organizationContext)
 {
     public async Task<IndexViewModel> GetIndexViewModelAsync()
     {
@@ -22,33 +26,41 @@ public class DiscoveriesService(
             .OrderByDescending(s => s.CreatedAt)
             .FirstOrDefault()?.Id;
 
-        var results = (await discoveriesRepository.FindAsync(e =>
-            (e.AssetType == AssetType.Ip && e.ParentId == null)
+        var scope = await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync());
+
+        var hostsAndIps = (await discoveriesRepository.FindAsync(e =>
+            e.AssetType == AssetType.Ip
             || e.AssetType == AssetType.Domain
             || e.AssetType == AssetType.SubDomain
         )).ToList();
 
-        var discoveryIds = results.Select(d => d.Id).ToList();
+        // An IP is a row of its own when it has no parent or its parent is hidden (a disabled
+        // asset's host that resolves to an IP still shared with an enabled asset).
+        var visible = scope.Filter(hostsAndIps);
+        var results = visible
+            .Where(d => d.AssetType != AssetType.Ip || d.ParentId == null || scope.IsHidden(d.ParentId))
+            .ToList();
+        var discoveryIds = results.Select(d => d.Id).ToHashSet();
+        var allIpDiscoveries = visible
+            .Where(d => d.AssetType == AssetType.Ip && d.ParentId != null && discoveryIds.Contains(d.ParentId))
+            .ToList();
 
-        var ipDiscoveriesTask = discoveriesRepository.FindAsync(d =>
-            d.AssetType == AssetType.Ip && discoveryIds.Contains(d.ParentId)
-        );
+        // Row counts are open, non-suppressed findings, as on Overview and Recommendations (#50).
+        var findingIds = discoveryIds.ToList();
         var findingsTask = findingsRepository.FindAsync(f =>
-            !string.IsNullOrEmpty(f.DiscoveryId) && discoveryIds.Contains(f.DiscoveryId)
+            f.Status == "open" && !string.IsNullOrEmpty(f.DiscoveryId) && findingIds.Contains(f.DiscoveryId)
         );
-
-        await Task.WhenAll(ipDiscoveriesTask, findingsTask);
-
-        var allIpDiscoveries = (await ipDiscoveriesTask).ToList();
-        var findings = (await findingsTask).ToList();
+        var suppressedKeysTask = suppressionFilter.GetActiveSuppressionKeysAsync();
+        await Task.WhenAll(findingsTask, suppressedKeysTask);
+        var findings = suppressionFilter.FilterSuppressed(await findingsTask, await suppressedKeysTask).ToList();
 
         var ipIds = allIpDiscoveries.Select(ip => ip.Id).Concat(
             results.Where(r => r.AssetType == AssetType.Ip).Select(r => r.Id)
         ).ToList();
 
-        var portDiscoveries = (await discoveriesRepository.FindAsync(d =>
-            d.AssetType == AssetType.Port && ipIds.Contains(d.ParentId)
-        )).ToList();
+        var portDiscoveries = scope.Filter(await discoveriesRepository.FindAsync(d =>
+            d.AssetType == AssetType.Port && ipIds.Contains(d.ParentId!)
+        ));
 
         var findingsByDiscovery = findings
             .GroupBy(f => f.DiscoveryId)
@@ -93,6 +105,11 @@ public class DiscoveriesService(
         {
             return false;
         }
+
+        // A disabled asset's discovery is not found, as on the Discoveries page.
+        var scope = await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync(), [discoveryId]);
+        if (scope.IsHidden(discoveryId))
+            return false;
 
         // Partial $set: a full replace would drop the scanner fields the Discovery entity does not map.
         var matched = await discoveriesRepository.UpdateOneAsync(

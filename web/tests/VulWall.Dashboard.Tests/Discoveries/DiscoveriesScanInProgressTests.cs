@@ -21,7 +21,6 @@ public class DiscoveriesScanInProgressTests(MongoFixture mongo)
     public async Task IndexViewModel_ScanInProgress_DisablesRescan(string? status, bool expected)
     {
         var db = mongo.NewDatabase();
-        var org = new FixedOrganizationContext("org-1");
         if (status is not null)
         {
             await db.GetCollection<BsonDocument>("scans").InsertOneAsync(new BsonDocument
@@ -31,10 +30,7 @@ public class DiscoveriesScanInProgressTests(MongoFixture mongo)
                 { "created_at", DateTime.UtcNow }, { "updated_at", DateTime.UtcNow },
             });
         }
-        var service = new DiscoveriesService(
-            new DiscoveriesRepository(db, org, NullLogger<OrgScopedRepository<Discovery, string>>.Instance),
-            new FindingsRepository(db, org, NullLogger<OrgScopedRepository<Finding, string>>.Instance),
-            new ScansRepository(db, org, NullLogger<OrgScopedRepository<Scan, string>>.Instance));
+        var service = new TestServices(db, "org-1").DiscoveriesService();
 
         Assert.Equal(expected, (await service.GetIndexViewModelAsync()).ScanInProgress);
     }

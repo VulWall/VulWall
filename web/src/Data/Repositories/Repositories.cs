@@ -157,7 +157,32 @@ public class FindingsPublicRepository(IMongoDatabase database)
 
 // DiscoveriesPublicRepository uses BaseMongoRepository for access outside a user request (e.g., background jobs)
 public class DiscoveriesPublicRepository(IMongoDatabase database)
-    : BaseMongoRepository<Discovery, string>(database, "discoveries");
+    : BaseMongoRepository<Discovery, string>(database, "discoveries")
+{
+    /// <summary>
+    /// Id and asset_ids of the org's discoveries, without the rest of the document: every one, or
+    /// only <paramref name="ids"/> when given.
+    /// </summary>
+    public async Task<List<(string Id, IReadOnlyCollection<string>? AssetIds)>> GetOwnersAsync(
+        string orgId, IReadOnlyCollection<string>? ids = null)
+    {
+        var filter = Builders<Discovery>.Filter.Eq(d => d.OrgId, orgId);
+        if (ids != null)
+            filter &= Builders<Discovery>.Filter.In(d => d.Id, ids);
+        var docs = await Collection.Find(filter)
+            .Project(d => new { d.Id, d.AssetIds })
+            .ToListAsync();
+        return docs.Select(d => (d.Id, (IReadOnlyCollection<string>?)d.AssetIds)).ToList();
+    }
+}
+
+// AssetsPublicRepository uses BaseMongoRepository for access outside a user request (e.g., background jobs)
+public class AssetsPublicRepository(IMongoDatabase database)
+    : BaseMongoRepository<Asset, string>(database, "assets")
+{
+    public Task<List<string>> GetEnabledIdsAsync(string orgId) =>
+        Collection.Find(a => a.OrgId == orgId && a.Enabled).Project(a => a.Id).ToListAsync();
+}
 
 // KnowledgeBaseRepository uses BaseMongoRepository (not OrgScoped) because:
 // - KB entries are shared across all organizations (one entry per finding_type)

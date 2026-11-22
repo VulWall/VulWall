@@ -200,6 +200,7 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddAssetServices(this IServiceCollection services)
     {
         services.AddScoped<AssetsService>();
+        services.AddScoped<IAssetScopeFilter, AssetScopeFilter>();
 
         return services;
     }
