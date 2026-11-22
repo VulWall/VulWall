@@ -35,6 +35,7 @@ public class TechnicalReportBuilder(
             doneScans,
             findingsList,
             null,
+            _ => null,
             null,
             logo,
             logoContentType

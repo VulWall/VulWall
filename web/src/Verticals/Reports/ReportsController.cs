@@ -105,7 +105,8 @@ public class ReportsController(
                 selectedScan,
                 allDoneScans,
                 allFindings,
-                previousScan?.Id,
+                previousScan,
+                scope.OwnersOf,
                 allDiscoveries,
                 organization.Logo,
                 organization.GetLogoContentType()
