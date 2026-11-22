@@ -11,7 +11,7 @@ The VulWall scanner (formerly NightWatch) is a **vertically-sliced Go monorepo**
 - **Org-scoped** — every record includes `org_id`; jobs without it are skipped
 
 **Two asset collections:**
-- `assets` — user-added assets to scan (managed via UI, `enabled: true/false`)
+- `assets` — user-added assets to scan (managed via UI, `enabled: true/false`; `deleting: true` while a delete is unfinished, never scanned)
 - `discoveries` — scan results (auto-discovered, `ownership_status: verified/notMine/notSure`)
 
 ---
@@ -82,7 +82,7 @@ KNOWLEDGE BASE FLOW:
 SCAN COORDINATOR FLOW:
 1. Runs on cron schedule per organization (`scan_settings.scan_cron`, skipped when `scan_settings.enabled` is false)
 2. Creates Scan record (status=running, type=scheduled). If a scan is already running, it queues one (status=queued, type=scheduled) that the queued-scan poller starts after it; if one is already queued, it does nothing
-3. Queries enabled user-added assets from assets collection
+3. Queries enabled user-added assets from assets collection (not those marked `deleting`)
 4. Publishes discovery jobs to Redis:
    ├─→ Domain assets → domain_discovery_queue
    └─→ IP assets → ip_discovery_queue
@@ -420,6 +420,16 @@ The orchestrator runs all consumer slices concurrently:
 | findings_ingestion | `security_findings` | `findings`, `scan_coverage` | `kb_generation_queue` |
 | enrichment_ingestion | `discovery_enrichment_results` | `discoveries` | — |
 | kb_ingestion | `kb_generation_results` | `knowledge_base` | — |
+
+Domain, port and findings ingestion drop results of an organization that no longer exists
+(`shared.OrgGuard`). Domain and port ingestion also drop a result whose `asset_id` is not an asset
+of the organization any more, or is marked `deleting` (`shared.AssetGuard`, cached like
+`OrgGuard`: positives 30 s, negatives 5 min). A scan message still in flight when the web app
+deleted its asset (a scan closed by `safety_timeout`, a stuck consumer) would otherwise create
+discoveries that hold only the dead id and stay hidden for good. Both guards ACK and log the
+message: a retry cannot succeed. A result without `asset_id` is written as before. What slips
+through the positive cache is cleaned by the next asset delete, which also pulls the ids of
+assets that no longer exist (see `DATABASE.md`, Discoveries Collection).
 
 ---
 

@@ -189,6 +189,8 @@ type Asset struct {
     OrgID         string     `bson:"org_id"`
     Type          string     `bson:"type"`          // "domain" or "ip"
     Enabled       bool       `bson:"enabled"`
+    // deleting (not mapped): set by the web app when a delete starts; the coordinator's query
+    // and the ingestion asset guard skip such an asset.
     DNSVerifiedAt *time.Time `bson:"dns_verified_at,omitempty"`
     Domain        *string    `bson:"domain,omitempty"`
     IP            *string    `bson:"ip,omitempty"`
@@ -304,6 +306,7 @@ type ScanStats struct {
   org_id: "507f1f77bcf86cd799439011",
   type: "domain",                    // "domain" or "ip"
   enabled: true,
+  deleting: true,                    // Only while a delete is unfinished (see below); never cleared
   dns_verified_at: ISODate("2025-11-09T08:53:38.744Z"),
   domain: "moj.dev",                // For domain assets
   added_on: ISODate("2025-11-09T08:53:27.775Z")
@@ -366,11 +369,28 @@ The three states:
 - **Empty (`[]`):** only the web app writes it, while it deletes the discovery's last asset.
   Hidden by the web app and skipped by finding resolution, like a discovery of a disabled asset.
 
+When the user adds an asset, the web app records it right away on the discoveries that earlier
+scans found for it, as its first scan would: for a domain asset its own host (the domain or
+subdomain id the scanner gives it: more than one dot is a subdomain), the IPs that host resolves
+to now (`resolution_history` entries without `last_seen`) and their ports; for an IP asset the
+IP and its ports. It uses the scanner's ids (`shared/ids.go`, ported to
+`web/src/Verticals/Assets/Services/DiscoveryIds.cs`; both hold the same test vectors) and only
+`$addToSet` on existing discoveries of the org. So adding `api.a.com` after `a.com` found it
+means disabling or deleting `a.com` no longer hides or deletes that data.
+
 When the user deletes an asset, the web app first disables it and checks again that no scan
 started (a scan that read the asset before the disable is seen by that check; the delete
-then stops and sets `enabled` back to its value before the delete). Then:
+then stops and sets `enabled` back to its value before the delete). Then it sets
+`deleting: true` on the asset and never clears it: the asset can only be deleted again. The web
+app refuses to enable or disable it and treats it as disabled, the scan coordinator does not scan
+it, and domain and port ingestion drop its results (`shared.AssetGuard`). Then:
 
-1. It removes the id from `asset_ids` (`$pull`) in every discovery of the organization.
+1. It removes the id from `asset_ids` (`$pull`) in every discovery of the organization, together
+   with the ids of assets that no longer exist in the organization. Those come from scan
+   messages that were still in flight when an earlier delete ran (a scan closed by
+   `safety_timeout`, a stuck consumer): the asset guard drops them, but its cache and the gap
+   between its check and the write leave a short window. The web app reads the recorded ids
+   before the existing assets, so an asset added meanwhile is never taken for a deleted one.
 2. Discoveries whose `asset_ids` is now empty belong to no asset. Per batch, the web app checks
    again that they are still empty (a scan may have added an owner back), deletes their
    `findings`, `finding_suppressions` and `scan_coverage` records (by `discovery_id`), removes
@@ -381,7 +401,12 @@ then stops and sets `enabled` back to its value before the delete). Then:
    `knowledge_base` are kept, so a scan can name findings that no longer exist.
 
 Because the scanner never writes an empty `asset_ids`, an empty one means "delete pending", and
-deleting the asset again finishes a run that stopped part-way. When a later scan finds a
+deleting the asset again finishes a run that stopped part-way. Step 2 sweeps every empty
+discovery of the organization, also those of another asset's unfinished delete. That is safe
+because of the `deleting` mark: an empty `asset_ids` can only belong to an asset that is marked
+(or no longer exists), and a marked asset can never be enabled again, so its data is on its way
+out anyway. Adding an asset that reaches such a discovery gives it an owner again and keeps it.
+The last step deletes the asset only while it is marked. When a later scan finds a
 subdomain or IP under a parent again, domain ingestion sets its missing `parent_id`.
 
 ### Findings Collection
@@ -744,5 +769,5 @@ redis-cli XADD ip_discovery_queue * data '{
 - **source REQUIRED** — ingestion skips findings without `source` field
 - **Dedup keys:** findings deduplicated by `(org_id, discovery_id, finding_type, title)`
 - **Scan tracking:** `scan_ids` array uses MongoDB `$addToSet` to prevent duplicates
-- **Ownership:** `asset_ids` holds every asset (`assets._id`, hex) whose scan reached the discovery. Jobs and findings carry `asset_id`; domain and port ingestion add it with `$addToSet`. A port gets its IP's list: the IP is port-scanned once per scan, so domain ingestion adds a later asset to the IP and then to the IP's ports, and port ingestion copies the IP's list onto a port it writes. The port scan of a direct IP asset also publishes an `ip` finding on every scan, also with no port open, and port ingestion adds the asset to the IP and all its ports the same way (it does not enrich the IP again). New discoveries hold the id in the insert itself
+- **Ownership:** `asset_ids` holds every asset (`assets._id`, hex) whose scan reached the discovery. Jobs and findings carry `asset_id`; domain and port ingestion add it with `$addToSet`. A port gets its IP's list: the IP is port-scanned once per scan, so domain ingestion adds a later asset to the IP and then to the IP's ports, and port ingestion copies the IP's list onto a port it writes. The port scan of a direct IP asset also publishes an `ip` finding on every scan, also with no port open, and port ingestion adds the asset to the IP and all its ports the same way (it does not enrich the IP again). New discoveries hold the id in the insert itself. Results of an asset that no longer exists in the org, or is marked `deleting`, are dropped (`shared.AssetGuard`, cached like `OrgGuard`); a finding without `asset_id` is written as before
 - **History:** IP resolution history and service history tracked via arrays, not overwrite
