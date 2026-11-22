@@ -13,8 +13,24 @@ import (
 
 // privateRanges contains all IP networks that must not be scanned.
 // Covers RFC1918 private ranges, loopback, link-local (including AWS metadata),
-// CGNAT, IPv6 loopback, and IPv6 unique-local (fc00::/7).
+// CGNAT, IPv6 loopback, and IPv6 unique-local (fc00::/7). IPv6 addresses that
+// embed an IPv4 address are also checked by that IPv4 address (isReservedIP).
 var privateRanges []*net.IPNet
+
+// IPv6 ranges that embed an IPv4 address the traffic goes to (embeddedIPv4).
+var (
+	nat64WellKnown = mustParseCIDR("64:ff9b::/96") // RFC 6052: IPv4 in the last 32 bits
+	sixToFour      = mustParseCIDR("2002::/16")    // RFC 3056: IPv4 in bits 16-47
+	teredo         = mustParseCIDR("2001::/32")    // RFC 4380: server in bits 32-63, client inverted in the last 32
+)
+
+func mustParseCIDR(cidr string) *net.IPNet {
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic(fmt.Sprintf("shared: invalid CIDR %q: %v", cidr, err))
+	}
+	return network
+}
 
 func init() {
 	// These CIDRs are the complete set of reserved/non-routable ranges that
@@ -54,6 +70,18 @@ func init() {
 		"fc00::/7",
 		// IPv6 multicast
 		"ff00::/8",
+		// IPv4-compatible IPv6 (RFC 4291, deprecated), e.g. ::7f00:1; some stacks
+		// route it to the embedded IPv4 address. Covers ::/128 and ::1/128 too.
+		"::/96",
+		// IPv6 discard-only (RFC 6666)
+		"100::/64",
+		// IPv6 documentation (RFC 3849)
+		"2001:db8::/32",
+		// Local-use NAT64 (RFC 8215). The IPv4 position depends on the prefix
+		// length the translator uses (RFC 6052: /48 to /96), which the address does
+		// not show, so no reading of it is safe. The well-known prefix 64:ff9b::/96
+		// is decoded instead (embeddedIPv4).
+		"64:ff9b:1::/48",
 		// Note: IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) are handled by
 		// normalising them to IPv4 via ip.To4() before the range checks,
 		// so no explicit ::ffff:0:0/96 entry is needed here.
@@ -89,14 +117,58 @@ func CheckPublicIPs(ips []net.IP) error {
 		return nil
 	}
 	for _, ip := range ips {
-		normalised := ip
-		if v4 := ip.To4(); v4 != nil {
-			normalised = v4
+		if isReservedIP(ip) {
+			return fmt.Errorf("%w %q", ErrReservedIP, ip.String())
 		}
-		for _, cidr := range privateRanges {
-			if cidr.Contains(normalised) {
-				return fmt.Errorf("%w %q", ErrReservedIP, ip.String())
-			}
+	}
+	return nil
+}
+
+// isReservedIP reports whether ip is in a reserved range, or is an IPv6 address
+// that embeds (NAT64, 6to4, Teredo) an IPv4 address in one. IPv4-mapped IPv6
+// (::ffff:a.b.c.d) is checked as its IPv4 address.
+func isReservedIP(ip net.IP) bool {
+	if v4 := ip.To4(); v4 != nil {
+		return inPrivateRanges(v4)
+	}
+	if inPrivateRanges(ip) {
+		return true
+	}
+	for _, v4 := range embeddedIPv4(ip) {
+		if inPrivateRanges(v4) {
+			return true
+		}
+	}
+	return false
+}
+
+func inPrivateRanges(ip net.IP) bool {
+	for _, cidr := range privateRanges {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// embeddedIPv4 returns the IPv4 addresses that an IPv6 address in a translation
+// or tunnel range sends traffic to: NAT64 well-known prefix, 6to4, and Teredo
+// (both the server and the client). These ranges are not refused as a whole: an
+// IPv6-only network with DNS64 reaches public IPv4 hosts through them.
+func embeddedIPv4(ip net.IP) []net.IP {
+	ip = ip.To16()
+	if ip == nil {
+		return nil
+	}
+	switch {
+	case nat64WellKnown.Contains(ip):
+		return []net.IP{net.IPv4(ip[12], ip[13], ip[14], ip[15]).To4()}
+	case sixToFour.Contains(ip):
+		return []net.IP{net.IPv4(ip[2], ip[3], ip[4], ip[5]).To4()}
+	case teredo.Contains(ip):
+		return []net.IP{
+			net.IPv4(ip[4], ip[5], ip[6], ip[7]).To4(),
+			net.IPv4(^ip[12], ^ip[13], ^ip[14], ^ip[15]).To4(),
 		}
 	}
 	return nil
@@ -304,16 +376,5 @@ func IsPrivateIP(ipStr string) (bool, error) {
 		return false, fmt.Errorf("invalid IP address: %q", ipStr)
 	}
 
-	// Normalise IPv4-in-IPv6 representation (e.g. "::ffff:192.168.1.1")
-	if v4 := ip.To4(); v4 != nil {
-		ip = v4
-	}
-
-	for _, network := range privateRanges {
-		if network.Contains(ip) {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return isReservedIP(ip), nil
 }
