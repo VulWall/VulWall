@@ -3,6 +3,7 @@ package port_ingestion
 import (
 	"context"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -64,5 +65,56 @@ func TestIPDiscoveryCDNEdgeMark(t *testing.T) {
 	}
 	if got := mark(own); got != nil {
 		t.Fatalf("cdn_edge = %v, want it removed", got)
+	}
+}
+
+// TestInsertsHoldAssetID checks against a real MongoDB that a new IP or port discovery holds
+// its asset in the insert itself, so a failure before the stamp that follows cannot leave it
+// without an owner. Without an asset, the insert has no asset_ids field.
+func TestInsertsHoldAssetID(t *testing.T) {
+	uri := os.Getenv("VULWALL_TEST_MONGO_URI")
+	if uri == "" {
+		t.Skip("VULWALL_TEST_MONGO_URI not set")
+	}
+	ctx := context.Background()
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := client.Database("vulwall_test_" + uuid.NewString()[:8])
+	t.Cleanup(func() { _ = db.Drop(ctx); _ = client.Disconnect(ctx) })
+	s := &Service{db: db, logger: zap.NewNop()}
+	assetIDs := func(id string) any {
+		var doc bson.M
+		if err := db.Collection(shared.CollectionDiscoveries).FindOne(ctx, bson.M{"_id": id}).Decode(&doc); err != nil {
+			t.Fatal(err)
+		}
+		return doc["asset_ids"]
+	}
+
+	for _, asset := range []string{"asset-1", ""} {
+		ip := "203.0.113.20"
+		if asset == "" {
+			ip = "203.0.113.21"
+		}
+		f := shared.IPDiscoveryFinding{DiscoveryID: shared.GeneratePortID("org", ip, 22, shared.ProtocolTCP),
+			OrgID: "org", AssetID: asset, IP: ip, Port: 22, Protocol: shared.ProtocolTCP, Source: "port_discovery", Status: shared.AssetStatusActive}
+		ipID, _, err := s.ensureIPDiscovery(ctx, f, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		portID, err := s.upsertPortDiscovery(ctx, f, ipID, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want any
+		if asset != "" {
+			want = bson.A{asset}
+		}
+		for what, id := range map[string]string{"IP": ipID, "port": portID} {
+			if got := assetIDs(id); !reflect.DeepEqual(got, want) {
+				t.Errorf("%s inserted for asset %q: asset_ids = %v, want %v", what, asset, got, want)
+			}
+		}
 	}
 }

@@ -95,8 +95,9 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 
 	span.SetAttributes(attribute.Bool("ip.is_new", isNewIP))
 
-	// 2. Publish enrichment job for IP (if it's asset_type="ip" finding or new IP)
-	if finding.AssetType == shared.AssetTypeIP || isNewIP {
+	// 2. Publish enrichment job for a new IP. A direct IP asset's asset_type="ip" finding
+	// comes every scan; it only records the asset and does not enrich the IP again.
+	if isNewIP {
 		if err := s.publishEnrichmentJob(ctx, finding, ipDiscoveryID); err != nil {
 			s.logger.Error("Failed to publish enrichment job for IP",
 				zap.String("trace_id", finding.TraceID),
@@ -107,11 +108,11 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 		}
 	}
 
-	// Record the asset whose scan reached this IP (a direct IP asset has no domain
-	// ingestion to do it). After the enrichment job: a retry of this message
-	// sees the IP as not new and does not queue it again. Before the port write below,
-	// which copies the IP's list.
-	if err := shared.AddDiscoveryAssetIDs(ctx, s.db, bson.M{"_id": ipDiscoveryID, "org_id": finding.OrgID}, finding.AssetID); err != nil {
+	// Record the asset whose scan reached this IP on the IP and its ports, as domain
+	// ingestion does (a direct IP asset has no domain ingestion). After the enrichment
+	// job: a retry of this message sees the IP as not new and does not queue it again.
+	// Before the port write below, which copies the IP's list.
+	if err := shared.AddIPAssetID(ctx, s.db, finding.OrgID, ipDiscoveryID, finding.IP, finding.AssetID); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(attribute.Bool("scan.success", false))
@@ -193,6 +194,7 @@ func (s *Service) ensureIPDiscovery(ctx context.Context, finding shared.IPDiscov
 			ID:             ipDiscoveryID,
 			OrgID:          finding.OrgID,                   // Organization GUID
 			ScanIDs:        scanIDs,                         // Array of scan identifiers
+			AssetIDs:       shared.NewDiscoveryAssetIDs(finding.AssetID),
 			AssetType:      shared.AssetTypeIP,
 			Source:        finding.Source,
 			Status:         finding.Status,
@@ -295,6 +297,7 @@ func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDisc
 			ID:             finding.DiscoveryID,                // Use provided deterministic ID (org-scoped)
 			OrgID:          finding.OrgID,                      // Organization GUID
 			ScanIDs:        scanIDs,                            // Array of scan identifiers
+			AssetIDs:       shared.NewDiscoveryAssetIDs(finding.AssetID),
 			AssetType:      shared.AssetTypePort,
 			Source:        finding.Source,
 			Status:         finding.Status,
@@ -538,6 +541,10 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 
 	if len(discovery.ScanIDs) > 0 {
 		doc["scan_ids"] = discovery.ScanIDs
+	}
+
+	if len(discovery.AssetIDs) > 0 {
+		doc["asset_ids"] = discovery.AssetIDs
 	}
 
 	if discovery.ParentID != nil {

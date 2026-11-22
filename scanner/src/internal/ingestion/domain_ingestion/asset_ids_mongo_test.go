@@ -111,6 +111,20 @@ func (e *assetIDsEnv) openPort(assetID, ip string, port int) {
 	}
 }
 
+// directIP ingests the IP finding that the port scan of a direct IP asset publishes on
+// every scan, also with no port open.
+func (e *assetIDsEnv) directIP(assetID, ip string) {
+	e.t.Helper()
+	f := shared.IPDiscoveryFinding{
+		DiscoveryID: shared.GenerateIPID(testOrg, ip), AssetType: shared.AssetTypeIP, TraceID: "trace",
+		ScanID: &e.scanID, OrgID: testOrg, AssetID: assetID, Source: "port_discovery", IP: ip,
+		Status: shared.AssetStatusActive, Timestamp: time.Now(),
+	}
+	if err := e.port.ProcessFinding(e.ctx, f); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
 // assetIDs returns the discovery's asset_ids, and whether the field is there at all.
 func (e *assetIDsEnv) assetIDs(id string) ([]string, bool) {
 	e.t.Helper()
@@ -229,4 +243,64 @@ func TestAssetIDsOfDirectIPAsset(t *testing.T) {
 	e.wantAssetIDs("IP", shared.GenerateIPID(testOrg, ip), "asset-ip")
 	e.wantAssetIDs("port 22", shared.GeneratePortID(testOrg, ip, 22, shared.ProtocolTCP), "asset-ip")
 	e.wantAssetIDs("port 443", shared.GeneratePortID(testOrg, ip, 443, shared.ProtocolTCP), "asset-ip")
+}
+
+// A direct IP asset added later owns every port of its IP, also a port that is closed in
+// its scan: the same docs a domain asset reaching the IP gets.
+func TestAssetIDsOfDirectIPAssetReachClosedPorts(t *testing.T) {
+	e := newAssetIDsEnv(t)
+	const ip = "203.0.113.12"
+	e.host("asset-a", shared.AssetTypeDomain, "a.test", ip)
+	e.openPort("asset-a", ip, 22)
+
+	e.scanID = "scan-2" // the direct IP asset's scan: port 22 is closed now
+	e.directIP("asset-d", ip)
+	e.openPort("asset-d", ip, 443)
+
+	e.wantAssetIDs("IP", shared.GenerateIPID(testOrg, ip), "asset-a", "asset-d")
+	e.wantAssetIDs("closed port 22", shared.GeneratePortID(testOrg, ip, 22, shared.ProtocolTCP), "asset-a", "asset-d")
+	e.wantAssetIDs("port 443", shared.GeneratePortID(testOrg, ip, 443, shared.ProtocolTCP), "asset-a", "asset-d")
+}
+
+// A direct IP asset with no port open still owns its IP: the IP finding creates the doc.
+// It is enriched once, when created, not on every scan.
+func TestAssetIDsOfDirectIPAssetWithoutOpenPorts(t *testing.T) {
+	e := newAssetIDsEnv(t)
+	const ip = "203.0.113.13"
+	e.directIP("asset-d", ip)
+	e.scanID = "scan-2"
+	e.directIP("asset-d", ip)
+
+	e.wantAssetIDs("IP", shared.GenerateIPID(testOrg, ip), "asset-d")
+	n, err := e.rdb.XLen(e.ctx, shared.StreamDiscoveryEnrichmentQueue).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("%d enrichment jobs, want 1 (for the new IP)", n)
+	}
+	if n, _ := e.rdb.XLen(e.ctx, shared.StreamPortScanTriggers).Result(); n != 0 {
+		t.Errorf("%d port scan triggers, want none for an IP finding", n)
+	}
+}
+
+// A new discovery holds its asset in the insert itself, so a failure before the stamp
+// that follows cannot leave it without an owner.
+func TestAssetIDsInDomainIngestionInserts(t *testing.T) {
+	e := newAssetIDsEnv(t)
+	ip := "203.0.113.14"
+	f := shared.DiscoveryFinding{
+		DiscoveryID: shared.GenerateDomainID(testOrg, "a.test"), AssetType: shared.AssetTypeDomain, ScanID: &e.scanID,
+		OrgID: testOrg, AssetID: "asset-a", Source: "subfinder", Host: "a.test", IP: &ip, Status: shared.AssetStatusActive,
+	}
+	id, err := e.domain.upsertDomainDiscovery(e.ctx, f, shared.AssetTypeDomain, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ipID, _, _, err := e.domain.upsertIPDiscovery(e.ctx, f, id, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.wantAssetIDs("inserted domain", id, "asset-a")
+	e.wantAssetIDs("inserted IP", ipID, "asset-a")
 }
