@@ -1,18 +1,12 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using VulWall.Dashboard.Assets;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Services.ScanTrigger;
-using VulWall.Dashboard.Data.Base;
-using VulWall.Dashboard.Data.Entities.Asset;
-using VulWall.Dashboard.Data.Entities.Scan;
-using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Tests.Infrastructure;
 
 namespace VulWall.Dashboard.Tests.Assets;
@@ -24,10 +18,7 @@ public class AssetsControllerTests(MongoFixture mongo)
     public async Task Add_DoesNotStartAScan_AndOffersTheFirstScan()
     {
         var db = mongo.NewDatabase();
-        var orgContext = new FixedOrganizationContext("org-1");
-        var assets = new AssetsRepository(db, orgContext, NullLogger<OrgScopedRepository<Asset, string>>.Instance);
-        var scans = new ScansRepository(db, orgContext, NullLogger<OrgScopedRepository<Scan, string>>.Instance);
-        var controller = new AssetsController(new AssetsService(assets, scans, new ScanTriggerService(scans)))
+        var controller = new AssetsController(new TestServices(db, "org-1").AssetsService())
         {
             TempData = new TempDataDictionary(new DefaultHttpContext(), new InMemoryTempDataProvider())
         };

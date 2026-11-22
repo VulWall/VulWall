@@ -5,9 +5,9 @@
 | Collection | Constant | Purpose | Writer |
 |------------|----------|---------|--------|
 | `assets` | `CollectionAssets` | User-added assets to scan (managed via UI) | Dashboard |
-| `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (4 asset types) | Ingestion |
-| `findings` | `CollectionFindings` | Security vulnerabilities from scanners | Ingestion (the scan monitor resolves) |
-| `scan_coverage` | `CollectionScanCoverage` | Per-scan evidence that a check completed on a target, or that a host is gone | Ingestion |
+| `discoveries` | `CollectionDiscoveries` | Org-scoped scan results (4 asset types) | Ingestion (the web app removes them on asset delete) |
+| `findings` | `CollectionFindings` | Security vulnerabilities from scanners | Ingestion (the scan monitor resolves; the web app removes them on asset delete) |
+| `scan_coverage` | `CollectionScanCoverage` | Per-scan evidence that a check completed on a target, or that a host is gone | Ingestion (the web app removes them on asset delete) |
 | `knowledge_base` | `CollectionKnowledgeBase` | Shared KB entries by finding_type (~84 entries) | Ingestion |
 | `organizations` | `CollectionOrganizations` | Org settings with the scan schedule (`scan_settings`) | Dashboard |
 | `scans` | `CollectionScans` | Scan execution records | Scan coordinator |
@@ -354,6 +354,35 @@ type ScanStats struct {
   ]
 }
 ```
+
+`asset_ids` lists the assets (`assets._id`, hex) whose scans reached the discovery. The scanner
+only adds to it (`$addToSet`) and never writes an empty list: it leaves the field out instead.
+The three states:
+
+- **Missing:** written before ownership was recorded. Shown by the web app, and in scope of
+  every scan's finding resolution.
+- **Ids:** shown while one of them is an enabled asset. Finding resolution skips the discovery
+  when the scan targeted none of them.
+- **Empty (`[]`):** only the web app writes it, while it deletes the discovery's last asset.
+  Hidden by the web app and skipped by finding resolution, like a discovery of a disabled asset.
+
+When the user deletes an asset, the web app first disables it and checks again that no scan
+started (a scan that read the asset before the disable is seen by that check; the delete
+then stops and sets `enabled` back to its value before the delete). Then:
+
+1. It removes the id from `asset_ids` (`$pull`) in every discovery of the organization.
+2. Discoveries whose `asset_ids` is now empty belong to no asset. Per batch, the web app checks
+   again that they are still empty (a scan may have added an owner back), deletes their
+   `findings`, `finding_suppressions` and `scan_coverage` records (by `discovery_id`), removes
+   `parent_id` from the owned discoveries that point at one of them, and then deletes them.
+   Discoveries that another asset also reaches keep their data, and so do discoveries without
+   `asset_ids`.
+3. It deletes the asset last. `scans` (`targeted_assets`, `unchecked_finding_ids`) and
+   `knowledge_base` are kept, so a scan can name findings that no longer exist.
+
+Because the scanner never writes an empty `asset_ids`, an empty one means "delete pending", and
+deleting the asset again finishes a run that stopped part-way. When a later scan finds a
+subdomain or IP under a parent again, domain ingestion sets its missing `parent_id`.
 
 ### Findings Collection
 ```javascript

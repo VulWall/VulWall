@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Services.ScanTrigger;
-using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Recommendations.Constants;
 using VulWall.Dashboard.Recommendations.Models;
 using VulWall.Dashboard.Reports.Models;
@@ -30,21 +28,19 @@ public class DisabledAssetHidesDataTests(MongoFixture mongo)
     private const string SharedIpIssue = "Shared IP issue";  // IP under api.b.com, owned by B and A
     private const string BIpIssue = "B IP issue";            // IP under api.b.com, owned by B only
     private const string LegacyIssue = "Legacy issue";       // no asset_ids
-    private const string EmptyIssue = "Empty issue";         // asset_ids: []
+    private const string EmptyIssue = "Empty issue";         // asset_ids: [] (an asset delete is pending)
     private const string GoneAssetIssue = "Gone asset issue"; // asset_ids of a deleted asset
     private const string OrphanIssue = "Orphan issue";       // discovery does not exist
 
-    private static readonly string[] VisibleWhenBDisabled = [AIssue, SharedIpIssue, LegacyIssue, EmptyIssue];
-    private static readonly string[] HiddenWhenBDisabled = [BSubIssue, BIpIssue, GoneAssetIssue, OrphanIssue];
-    private static readonly string[] VisibleWhenAllEnabled = [AIssue, BSubIssue, SharedIpIssue, BIpIssue, LegacyIssue, EmptyIssue];
+    private static readonly string[] VisibleWhenBDisabled = [AIssue, SharedIpIssue, LegacyIssue];
+    private static readonly string[] HiddenWhenBDisabled = [BSubIssue, BIpIssue, GoneAssetIssue, OrphanIssue, EmptyIssue];
+    private static readonly string[] VisibleWhenAllEnabled = [AIssue, BSubIssue, SharedIpIssue, BIpIssue, LegacyIssue];
 
     private sealed record Seed(IMongoDatabase Db, string OrgId, string AssetA, string AssetB, TestServices Services)
     {
         public async Task SetEnabled(string assetId, bool enabled)
         {
-            var scans = Services.Scans;
-            var service = new AssetsService(Services.Assets, scans, new ScanTriggerService(scans));
-            var (success, error) = await service.UpdateAssetStatusAsync(assetId, enabled);
+            var (success, error) = await Services.AssetsService().UpdateAssetStatusAsync(assetId, enabled);
             Assert.True(success, error);
         }
 
@@ -110,10 +106,12 @@ public class DisabledAssetHidesDataTests(MongoFixture mongo)
         var discoveries = (await s.Services.Discoveries.GetAllAsync()).ToList();
 
         Assert.Equal(
-            ["d-a", "d-empty", "d-legacy", "ip-shared"],
+            ["d-a", "d-legacy", "ip-shared"],
             scope.Filter(discoveries).Select(d => d.Id).Order().ToArray());
         Assert.True(scope.IsHidden("d-b-api"));
         Assert.True(scope.IsHidden("d-gone"));
+        Assert.True(scope.IsHidden("d-empty"));    // [] = an asset delete is pending
+        Assert.False(scope.IsHidden("d-legacy"));  // no asset_ids field = not recorded, visible
         Assert.False(scope.IsHidden("d-missing")); // unknown is not "hidden"
         Assert.Equal(VisibleWhenBDisabled.Order(), TitlesOf(scope.Filter(await s.Services.Findings.GetAllAsync())));
     }
@@ -210,10 +208,10 @@ public class DisabledAssetHidesDataTests(MongoFixture mongo)
         var model = await s.Services.DiscoveriesService().GetIndexViewModelAsync();
 
         Assert.Equal(
-            ["192.0.2.1", "a.com", "empty.c.com", "old.c.com"],
+            ["192.0.2.1", "a.com", "old.c.com"],
             model.Discoveries.Select(d => d.Name).Order().ToArray());
         Assert.Equal(1, model.Discoveries.Single(d => d.Name == "192.0.2.1").HighIssues);
-        Assert.Equal(4, model.TotalDiscoveries);
+        Assert.Equal(3, model.TotalDiscoveries);
     }
 
     [Fact]
@@ -223,7 +221,7 @@ public class DisabledAssetHidesDataTests(MongoFixture mongo)
 
         var model = await s.Services.DiscoveriesService().GetIndexViewModelAsync();
 
-        Assert.Equal(["a.com", "b.com", "empty.c.com", "old.c.com"], model.Discoveries.Select(d => d.Name).Order().ToArray());
+        Assert.Equal(["a.com", "b.com", "old.c.com"], model.Discoveries.Select(d => d.Name).Order().ToArray());
         Assert.Equal(["api.b.com"], model.Discoveries.Single(d => d.Name == "b.com").Children.Select(c => c.Name).ToArray());
     }
 

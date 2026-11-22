@@ -23,8 +23,9 @@ public class AssetScopeFilter(
 }
 
 /// <summary>
-/// The visibility rule: a discovery is hidden only when <c>asset_ids</c> is non-empty and none
-/// of its ids is an existing, enabled asset. A discovery without <c>asset_ids</c> stays visible.
+/// The visibility rule: a discovery is visible when it has no <c>asset_ids</c> field (written
+/// before ownership was recorded) or one of its ids is an existing, enabled asset. An empty
+/// <c>asset_ids</c> is hidden: only an asset delete empties it, and the discovery is about to go.
 /// </summary>
 internal sealed class AssetScope : IAssetScope
 {
@@ -61,5 +62,5 @@ internal sealed class AssetScope : IAssetScope
     public List<Finding> Filter(IEnumerable<Finding> findings) => findings.Where(IsVisible).ToList();
 
     private bool IsOwnedByEnabledAsset(IReadOnlyCollection<string>? assetIds) =>
-        assetIds is not { Count: > 0 } || assetIds.Any(_enabledAssetIds.Contains);
+        assetIds is null || assetIds.Any(_enabledAssetIds.Contains);
 }

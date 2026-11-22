@@ -1,17 +1,27 @@
+using MongoDB.Driver;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Data.Entities.Asset;
+using VulWall.Dashboard.Data.Entities.Discovery;
+using VulWall.Dashboard.Data.Entities.Finding;
+using VulWall.Dashboard.Data.Entities.FindingSuppression;
 using VulWall.Dashboard.Data.Entities.Scan;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Validation;
+using ScanCoverageRecord = VulWall.Dashboard.Data.Entities.ScanCoverage.ScanCoverage;
+using SortDirection = VulWall.Dashboard.Common.Contracts.Enums.SortDirection;
 
 namespace VulWall.Dashboard.Assets.Services;
 
 public class AssetsService(
     AssetsRepository assetsRepository,
     ScansRepository scansRepository,
-    ScanTriggerService scanTriggerService)
+    ScanTriggerService scanTriggerService,
+    DiscoveriesRepository discoveriesRepository,
+    FindingsRepository findingsRepository,
+    FindingSuppressionsRepository suppressionsRepository,
+    ScanCoverageRepository scanCoverageRepository)
 {
     public async Task<IndexViewModel> GetAssetsAsync()
     {
@@ -129,14 +139,23 @@ public class AssetsService(
         "A scan is running. Wait for it to finish before you delete assets.";
 
     // Enable, disable and delete are refused while a scan is queued or running: the scanner reads
-    // the asset list once, when the scan starts, and would keep scanning (and writing results
+    // the enabled assets once, when the scan starts, and would keep scanning (and writing results
     // for) an asset that was disabled or deleted after that.
     //
-    // The in-progress check runs right before the write, so the window between the two is one
-    // database round-trip. A queued scan already counts as in progress, so only a scheduled scan
-    // that the scanner inserts in that window can slip through. The cost is results for one
-    // asset from one scan; the next scan leaves the asset out. Closing the window fully would
-    // need a lock shared with the scanner, which is not worth it for this.
+    // Enable and disable: the in-progress check runs right before the write, so the window between
+    // the two is one database round-trip. A queued scan already counts as in progress, so only a
+    // scheduled scan that the scanner inserts in that window can slip through. The cost is results
+    // for one asset from one scan; the next scan leaves the asset out.
+    //
+    // Delete: a scan that slipped through would add the asset back to asset_ids after the cascade
+    // removed it, and that data would stay hidden for good. So delete disables the asset first and
+    // checks again: a scan that starts after the disable does not read the asset, and one that
+    // started before it is seen by the second check, which stops the delete and sets enabled back
+    // to what it was. That scan already read the asset, so the restore changes nothing it scans,
+    // and the Assets page stays truthful. If a write fails after the disable, the asset stays
+    // disabled; deleting it again finishes the job. What is left is the scanner's own
+    // gap between reading the assets and inserting the scan, which is in memory. Closing it fully
+    // would need a lock shared with the scanner, which is not worth it for this.
 
     public async Task<(bool Success, string? ErrorMessage)> UpdateAssetStatusAsync(string assetId, bool enabled)
     {
@@ -164,8 +183,74 @@ public class AssetsService(
         if (await IsScanInProgressAsync())
             return (false, ScanInProgressDeleteError);
 
-        await assetsRepository.DeleteAsync(id);
+        // Disable first, then check again (see the comment above UpdateAssetStatusAsync).
+        var byId = Builders<Asset>.Filter.Eq(a => a.Id, asset.Id);
+        await assetsRepository.UpdateOneAsync(byId, Builders<Asset>.Update.Set(a => a.Enabled, false));
+        if (await IsScanInProgressAsync())
+        {
+            await assetsRepository.UpdateOneAsync(byId, Builders<Asset>.Update.Set(a => a.Enabled, asset.Enabled));
+            return (false, ScanInProgressDeleteError);
+        }
+
+        await DeleteOwnedDataAsync(asset.Id);
+
+        // Last, so a run that fails part-way can be retried from the Assets page.
+        await assetsRepository.DeleteManyAsync(byId);
         return (true, null);
+    }
+
+    /// <summary>Discovery ids per <c>$in</c> in the cascade. Tests set it low to cross batches.</summary>
+    internal int DeleteBatchSize { get; init; } = 1000;
+
+    /// <summary>
+    /// Removes the asset from <c>asset_ids</c> and deletes the discoveries no asset owns any more,
+    /// with their findings, suppressions and scan coverage. Scans and the knowledge base stay.
+    /// Every write is org-scoped by the repositories.
+    ///
+    /// Only a discovery whose <c>asset_ids</c> is now empty is deleted, never "every discovery
+    /// that holds this id": whoever controls DNS under one asset can make the scanner add that
+    /// asset to another asset's IP. A discovery without <c>asset_ids</c> is never deleted.
+    ///
+    /// MongoDB runs without transactions here, so a retry must finish a run that stopped at any
+    /// step. The scanner never writes an empty <c>asset_ids</c> (it omits the field or adds with
+    /// $addToSet), so an empty one can only come from this pull: the org's empty discoveries are
+    /// exactly the ones still to delete, also when an earlier run stopped after the pull. They
+    /// stay as the marker until the last step deletes them.
+    /// </summary>
+    private async Task DeleteOwnedDataAsync(string assetId)
+    {
+        var d = Builders<Discovery>.Filter;
+        await discoveriesRepository.UpdateManyAsync(
+            d.AnyEq(x => x.AssetIds, assetId),
+            Builders<Discovery>.Update.Pull(x => x.AssetIds, assetId));
+
+        var ownerless = d.Size(x => x.AssetIds, 0);
+        var orphanIds = await discoveriesRepository.FindIdsAsync(ownerless);
+
+        foreach (var selected in orphanIds.Chunk(DeleteBatchSize))
+        {
+            // Still empty: a discovery that got an owner since the select keeps its findings and,
+            // above all, the suppressions the user made.
+            var batch = await discoveriesRepository.FindIdsAsync(d.In(x => x.Id, selected) & ownerless);
+            if (batch.Count == 0)
+                continue;
+
+            await findingsRepository.DeleteManyAsync(Builders<Finding>.Filter.In(x => x.DiscoveryId, batch));
+            await suppressionsRepository.DeleteManyAsync(Builders<FindingSuppression>.Filter.In(x => x.DiscoveryId, batch));
+            await scanCoverageRepository.DeleteManyAsync(
+                Builders<ScanCoverageRecord>.Filter.In(x => x.DiscoveryId, batch));
+
+            // Before the discoveries go: the empty ones are the only record of what is deleted.
+            // An IP left pointing at a deleted parent is dropped from the Discoveries page;
+            // without a parent it is shown on its own, and the next scan re-parents it. A
+            // discovery without asset_ids is not touched.
+            await discoveriesRepository.UpdateManyAsync(
+                d.In(x => x.ParentId, batch) & d.SizeGt(x => x.AssetIds, 0),
+                Builders<Discovery>.Update.Unset(x => x.ParentId));
+
+            // Empty again in the filter: a discovery that got an owner since the select stays.
+            await discoveriesRepository.DeleteManyAsync(d.In(x => x.Id, batch) & ownerless);
+        }
     }
 
     public Task<bool> IsScanInProgressAsync() => scanTriggerService.IsScanInProgressAsync();

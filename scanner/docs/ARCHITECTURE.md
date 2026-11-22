@@ -204,7 +204,9 @@ is resolved by the first later scan that has the evidence). A candidate is resol
   findings stay open.
 
 A finding whose discovery has `asset_ids`, none of them in the scan's `targeted_assets`
-(disabled or deleted assets), is skipped: it stays open and is not counted as unchecked.
+(disabled or deleted assets), is skipped: it stays open and is not counted as unchecked. An
+empty `asset_ids` (the web app is deleting the discovery's last asset) is skipped the same way;
+only a discovery without the field is always in scope.
 
 Everything else stays open: a missing or `error` coverage record, a host not seen this scan
 (a subdomain lost to NXDOMAIN or subfinder variance, a filtered port), a scanner that crashed.

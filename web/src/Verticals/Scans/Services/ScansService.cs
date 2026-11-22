@@ -249,8 +249,9 @@ public class ScansService(
     /// <summary>
     /// Whether <paramref name="scan"/> did not check <paramref name="finding"/>: the scan targeted
     /// no asset at all (every asset disabled; the scanner closes it at once), or none of the
-    /// assets that own the finding's discovery was a target of the scan (a disabled asset).
-    /// A discovery without owners is in scope of any scan that targeted something.
+    /// assets that own the finding's discovery was a target of the scan (a disabled asset, or an
+    /// empty <c>asset_ids</c> while a delete is pending). A discovery without <c>asset_ids</c>, or
+    /// one that is unknown, is in scope of any scan that targeted something.
     /// </summary>
     private static bool OutOfScope(Scan scan, Finding finding, Func<string?, IReadOnlyCollection<string>?> ownersOf)
     {
@@ -258,7 +259,7 @@ public class ScansService(
             return true;
         // Known limit: these are today's owners (asset_ids now), not the owners at scan time.
         var owners = ownersOf(finding.DiscoveryId);
-        return owners is { Count: > 0 } && !owners.Any(id => scan.TargetedAssets.Any(t => t.AssetId == id));
+        return owners != null && !owners.Any(id => scan.TargetedAssets.Any(t => t.AssetId == id));
     }
 
     internal static ScanComparisonViewModel BuildComparison(Scan baseline, Scan latest, IEnumerable<Finding> allFindings,

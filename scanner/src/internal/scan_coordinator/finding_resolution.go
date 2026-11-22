@@ -44,7 +44,8 @@ type discoveryRef struct {
 	ID        string `bson:"_id"`
 	AssetType string `bson:"asset_type"`
 	IP        string `bson:"ip"`
-	// AssetIDs: the assets whose scans reached the discovery (assets._id, hex).
+	// AssetIDs: the assets whose scans reached the discovery (assets._id, hex). nil when the
+	// field is missing (not recorded); empty, not nil, for asset_ids: [] (a delete is pending).
 	AssetIDs []string `bson:"asset_ids"`
 	// Observed: the discovery has the closing scan in scan_ids (re-discovered live).
 	Observed bool `bson:"observed"`
@@ -98,7 +99,8 @@ type resolutionDecision struct {
 //
 // A candidate whose discovery belongs only to assets the scan did not target (disabled or
 // deleted assets) is skipped: the scan was never meant to check it, so it is neither resolved
-// nor counted unchecked. A discovery without asset_ids is never skipped.
+// nor counted unchecked. That includes an empty asset_ids, which only the web app writes while
+// it deletes an asset. A discovery without the asset_ids field is never skipped.
 //
 // Every other candidate stays open (unchecked): a missing coverage record, a check that did
 // not complete, a host that was not seen this scan or a lost message all leave the finding as
@@ -124,9 +126,10 @@ func decideResolutions(in resolutionInput) resolutionDecision {
 }
 
 // targetedByScan reports whether the closing scan targeted at least one of d's assets, or d
-// has no asset_ids (written before ownership was recorded).
+// has no asset_ids field (written before ownership was recorded). An empty asset_ids is not
+// targeted: the web app is deleting its last asset.
 func targetedByScan(in resolutionInput, d discoveryRef) bool {
-	if len(d.AssetIDs) == 0 {
+	if d.AssetIDs == nil {
 		return true
 	}
 	return slices.ContainsFunc(d.AssetIDs, func(id string) bool { return in.targetedAssets[id] })

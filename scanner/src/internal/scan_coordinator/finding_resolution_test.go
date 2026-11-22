@@ -218,6 +218,7 @@ func TestDecideResolutionsSkipsUntargetedAssets(t *testing.T) {
 		{"only untargeted owners: skipped", []string{"asset-off"}, "skipped"},
 		{"shared with a targeted owner: resolved", []string{"asset-off", "asset-on"}, ResolutionNotReproduced},
 		{"no recorded owner: resolved", nil, ResolutionNotReproduced},
+		{"empty owners, a delete is pending: skipped", []string{}, "skipped"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

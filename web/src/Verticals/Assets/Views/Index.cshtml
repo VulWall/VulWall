@@ -168,11 +168,11 @@
     {
         ModalId = "confirmDeleteModal",
         Title = "Delete asset",
-        Message = "Are you sure you want to delete this asset?",
+        Message = "This deletes the asset and the scan data that belongs only to it: its hosts, IPs and ports with their issues, including the ones you dismissed as accepted risk or false positive. Data your other assets share, and your scan history, stay.",
         ConfirmButtonText = "Delete asset",
         ConfirmButtonStyle = "danger",
         ConfirmButtonIcon = "fa-solid fa-trash",
-        FooterMessage = "This action cannot be undone.",
+        FooterMessage = "You can't undo this. To stop scanning but keep the data, disable the asset instead.",
         DynamicContentId = "assetDeleteContent"
     };
 }

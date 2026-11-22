@@ -207,6 +207,10 @@ public abstract class OrgScopedRepository<TEntity, TId>(
         return await base.DeleteManyAsync(filter & OrgFilter(orgId));
     }
 
+    /// <summary><paramref name="filter"/> limited to the current organization.</summary>
+    protected async Task<FilterDefinition<TEntity>> InOrgAsync(FilterDefinition<TEntity> filter) =>
+        filter & OrgFilter(await orgContext.GetCurrentOrgIdAsync());
+
     private static FilterDefinition<TEntity> OrgFilter(string orgId)
     {
         var parameter = Expression.Parameter(typeof(TEntity), "e");
