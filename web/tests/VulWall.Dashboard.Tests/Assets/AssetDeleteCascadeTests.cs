@@ -1,6 +1,17 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using VulWall.Dashboard.Assets.Services;
+using VulWall.Dashboard.Common.Services.Organization;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
+using VulWall.Dashboard.Data.Base;
+using VulWall.Dashboard.Data.Entities.Asset;
+using VulWall.Dashboard.Data.Entities.Discovery;
+using VulWall.Dashboard.Data.Entities.Finding;
+using VulWall.Dashboard.Data.Entities.FindingSuppression;
+using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Tests.Infrastructure;
+using ScanCoverageRecord = VulWall.Dashboard.Data.Entities.ScanCoverage.ScanCoverage;
 
 namespace VulWall.Dashboard.Tests.Assets;
 
@@ -13,9 +24,16 @@ namespace VulWall.Dashboard.Tests.Assets;
 /// ip-x (X only, with a port), ip-shared (X and Y, with a port) and ip-z (X and Z). y-api is Y's
 /// host that DNS under X also reaches (X added to it). d-legacy has no asset_ids. Org 2 holds
 /// discoveries with the same asset id string, and records that point at org 1's discovery ids.
+///
+/// Every test runs twice: with the default batch size, and with one discovery per batch.
 /// </summary>
 [Collection(MongoCollection.Name)]
-public class AssetDeleteCascadeTests(MongoFixture mongo)
+public class AssetDeleteCascadeTests(MongoFixture mongo) : AssetDeleteCascadeTestsBase(mongo, 1000);
+
+[Collection(MongoCollection.Name)]
+public class AssetDeleteCascadeBatchOfOneTests(MongoFixture mongo) : AssetDeleteCascadeTestsBase(mongo, 1);
+
+public abstract class AssetDeleteCascadeTestsBase(MongoFixture mongo, int batchSize)
 {
     private const string OrgId = "org-1";
     private const string OtherOrgId = "org-2";
@@ -102,9 +120,11 @@ public class AssetDeleteCascadeTests(MongoFixture mongo)
         return new Seed(db, new TestServices(db, OrgId), xs, ys, zs);
     }
 
-    private static async Task DeleteX(Seed s)
+    private AssetsService Service(Seed s) => s.Services.AssetsService(batchSize);
+
+    private async Task DeleteX(Seed s)
     {
-        var (success, error) = await s.Services.AssetsService().DeleteAssetAsync(s.X);
+        var (success, error) = await Service(s).DeleteAssetAsync(s.X);
         Assert.True(success, error);
     }
 
@@ -213,7 +233,7 @@ public class AssetDeleteCascadeTests(MongoFixture mongo)
         await DeleteX(direct);
 
         var s = await CreateAsync();
-        var (disabled, error) = await s.Services.AssetsService().UpdateAssetStatusAsync(s.X, false);
+        var (disabled, error) = await Service(s).UpdateAssetStatusAsync(s.X, false);
         Assert.True(disabled, error);
         await DeleteX(s);
 
@@ -231,35 +251,107 @@ public class AssetDeleteCascadeTests(MongoFixture mongo)
         await DeleteX(s);
         var after = await SnapshotAsync(s.Db, OrgId);
 
-        var (success, error) = await s.Services.AssetsService().DeleteAssetAsync(s.X);
+        var (success, error) = await Service(s).DeleteAssetAsync(s.X);
 
         Assert.False(success);
         Assert.Null(error); // not found
         Assert.Equal(after, await SnapshotAsync(s.Db, OrgId));
     }
 
-    public enum CrashPoint { AfterPull, AfterChildRecords, AfterParentUnset, BeforeAssetDelete }
-
-    // MongoDB has no transaction here. A run that stopped at any step leaves the asset, so the
-    // user deletes it again; that retry must end in the same state as a run that never stopped.
-    [Theory]
-    [InlineData(CrashPoint.AfterPull)]
-    [InlineData(CrashPoint.AfterChildRecords)]
-    [InlineData(CrashPoint.AfterParentUnset)]
-    [InlineData(CrashPoint.BeforeAssetDelete)]
-    public async Task Delete_RetryAfterAPartialRun_Completes(CrashPoint crash)
+    // MongoDB has no transaction here. A run that stops at any write leaves the asset, so the user
+    // deletes it again; that retry must end in the same state as a run that never stopped. The
+    // real DeleteAssetAsync is stopped after 0, 1, 2, ... writes until a run gets through.
+    [Fact]
+    public async Task Delete_RetryAfterARunThatStoppedAtAnyWrite_Completes()
     {
         var clean = await CreateAsync();
         await DeleteX(clean);
         var expected = await SnapshotAsync(clean.Db, OrgId, clean);
 
+        int stopAfter;
+        for (stopAfter = 0; ; stopAfter++)
+        {
+            var s = await CreateAsync();
+            var faults = new Faults { StopAfterWrites = stopAfter };
+            try
+            {
+                await FaultyService(s, faults).DeleteAssetAsync(s.X);
+                break; // every write done: no stop point left
+            }
+            catch (SimulatedCrash)
+            {
+            }
+            Assert.Equal(1, await s.C("assets").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("_id", ObjectId.Parse(s.X))));
+
+            await DeleteX(s);
+
+            Assert.True(expected == await SnapshotAsync(s.Db, OrgId, s), $"retry after {stopAfter} writes");
+        }
+        // disable, pull, 5 writes per batch, asset delete
+        Assert.Equal(2 + 5 * (int)Math.Ceiling(OwnedByXOnly.Length / (double)batchSize) + 1, stopAfter);
+    }
+
+    // A scan that adds an owner back between the select and the deletes (the in-memory window in
+    // the scanner) must not cost that discovery its findings and the user's suppressions.
+    [Fact]
+    public async Task Delete_OwnerAddedBackAfterTheSelect_KeepsTheDiscoveryAndItsRecords()
+    {
         var s = await CreateAsync();
-        await SimulatePartialRunAsync(s, crash);
-        Assert.Equal(1, await s.C("assets").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("_id", ObjectId.Parse(s.X))));
+        var faults = new Faults
+        {
+            AfterFindIds = async call =>
+            {
+                if (call == 1) // the select of the empty discoveries
+                    await s.C("discoveries").UpdateOneAsync(
+                        Builders<BsonDocument>.Filter.Eq("_id", "ip-x"),
+                        Builders<BsonDocument>.Update.AddToSet("asset_ids", s.Y));
+            }
+        };
 
+        var (success, error) = await FaultyService(s, faults).DeleteAssetAsync(s.X);
+
+        Assert.True(success, error);
+        Assert.Equal([s.Y], await AssetIdsAsync(s, "ip-x"));
+        var onIpX = Builders<BsonDocument>.Filter.Eq("discovery_id", "ip-x") & Builders<BsonDocument>.Filter.Eq("org_id", OrgId);
+        Assert.Equal(1, await s.C("findings").CountDocumentsAsync(onIpX));
+        Assert.Equal(1, await s.C("finding_suppressions").CountDocumentsAsync(onIpX));
+        Assert.Equal(1, await s.C("scan_coverage").CountDocumentsAsync(onIpX));
+        // The others still go.
+        Assert.Equal(0, await s.C("discoveries").CountDocumentsAsync(Builders<BsonDocument>.Filter.In("_id", ["d-x", "d-x-www", "port-x"])));
+    }
+
+    // A scan that read the asset as enabled before the disable is seen by the second check: the
+    // delete stops with the asset disabled and nothing removed, and a later delete finishes it.
+    [Fact]
+    public async Task Delete_ScanStartedBeforeTheDisable_StopsWithTheAssetDisabled()
+    {
+        var s = await CreateAsync();
+        var faults = new Faults
+        {
+            AfterWrite = async write =>
+            {
+                if (write == 1) // the first write; with the fix, the disable
+                    await s.C("scans").InsertOneAsync(new BsonDocument
+                    {
+                        { "_id", "s-race" }, { "org_id", OrgId }, { "status", "running" }, { "type", "scheduled" },
+                        { "created_at", DateTime.UtcNow }, { "started_at", DateTime.UtcNow },
+                    });
+            }
+        };
+
+        var (success, error) = await FaultyService(s, faults).DeleteAssetAsync(s.X);
+
+        Assert.False(success);
+        Assert.Equal(AssetsService.ScanInProgressDeleteError, error);
+        var asset = await s.C("assets").Find(Builders<BsonDocument>.Filter.Eq("_id", ObjectId.Parse(s.X))).SingleAsync();
+        Assert.False(asset["enabled"].AsBoolean);
+        Assert.Equal(OwnedByXOnly.Concat(Survivors).Order(), await IdsAsync(s.C("discoveries"), OrgId));
+        Assert.Equal([s.X, s.Y], await AssetIdsAsync(s, "ip-shared"));
+        Assert.Equal(OwnedByXOnly.Length + Survivors.Length, await s.C("findings").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("org_id", OrgId)));
+
+        await s.C("scans").UpdateOneAsync(Builders<BsonDocument>.Filter.Eq("_id", "s-race"), Builders<BsonDocument>.Update.Set("status", "done"));
         await DeleteX(s);
-
-        Assert.Equal(expected, await SnapshotAsync(s.Db, OrgId, s));
+        Assert.Equal(Survivors, await IdsAsync(s.C("discoveries"), OrgId));
     }
 
     [Fact]
@@ -284,32 +376,6 @@ public class AssetDeleteCascadeTests(MongoFixture mongo)
         Assert.Empty(cmp.Added);
         Assert.Empty(cmp.Resolved);
         Assert.Equal(1, cmp.NotCheckedCount); // y-api's finding; the deleted ones are skipped
-    }
-
-    // The steps of DeleteAssetAsync, done by hand up to the crash point.
-    private static async Task SimulatePartialRunAsync(Seed s, CrashPoint crash)
-    {
-        var f = Builders<BsonDocument>.Filter;
-        var discoveries = s.C("discoveries");
-        var org = f.Eq("org_id", OrgId);
-        await discoveries.UpdateManyAsync(org & f.AnyEq("asset_ids", s.X), Builders<BsonDocument>.Update.Pull("asset_ids", s.X));
-        if (crash == CrashPoint.AfterPull)
-            return;
-
-        var empty = f.Size("asset_ids", 0);
-        var orphans = (await discoveries.Find(org & empty).ToListAsync()).Select(d => d["_id"].AsString).ToList();
-        Assert.Equal(OwnedByXOnly.Order(), orphans.Order());
-        foreach (var name in new[] { "findings", "finding_suppressions", "scan_coverage" })
-            await s.C(name).DeleteManyAsync(org & f.In("discovery_id", orphans));
-        if (crash == CrashPoint.AfterChildRecords)
-            return;
-
-        await discoveries.UpdateManyAsync(org & f.In("parent_id", orphans) & f.SizeGt("asset_ids", 0),
-            Builders<BsonDocument>.Update.Unset("parent_id"));
-        if (crash == CrashPoint.AfterParentUnset)
-            return;
-
-        await discoveries.DeleteManyAsync(org & f.In("_id", orphans) & empty);
     }
 
     private static BsonDocument Discovery(string orgId, string id, string type, string[]? assetIds,
@@ -372,5 +438,84 @@ public class AssetDeleteCascadeTests(MongoFixture mongo)
                          "suppressed_at", "created_at", "updated_at", "started_at", "completed_at", "added_on" })
                 d.Remove(key);
         return new BsonArray(docs).ToJson();
+    }
+
+    private AssetsService FaultyService(Seed s, Faults faults)
+    {
+        var org = new FixedOrganizationContext(OrgId);
+        var scans = s.Services.Scans;
+        return new AssetsService(new FaultyAssets(s.Db, org, faults), scans, new ScanTriggerService(scans),
+            new FaultyDiscoveries(s.Db, org, faults), new FaultyFindings(s.Db, org, faults),
+            new FaultySuppressions(s.Db, org, faults), new FaultyCoverage(s.Db, org, faults))
+        {
+            DeleteBatchSize = batchSize
+        };
+    }
+
+    private sealed class SimulatedCrash : Exception;
+
+    /// <summary>Counts the writes of the delete; can stop it, or act between its steps.</summary>
+    private sealed class Faults
+    {
+        public int? StopAfterWrites { get; init; }
+        public Func<int, Task>? AfterWrite { get; init; }
+        public Func<int, Task>? AfterFindIds { get; init; }
+        private int _writes;
+        private int _finds;
+
+        public async Task<T> Write<T>(Func<Task<T>> write)
+        {
+            if (_writes == StopAfterWrites)
+                throw new SimulatedCrash();
+            var result = await write();
+            _writes++;
+            if (AfterWrite != null)
+                await AfterWrite(_writes);
+            return result;
+        }
+
+        public async Task<List<string>> FindIds(Func<Task<List<string>>> find)
+        {
+            var result = await find();
+            _finds++;
+            if (AfterFindIds != null)
+                await AfterFindIds(_finds);
+            return result;
+        }
+    }
+
+    private sealed class FaultyAssets(IMongoDatabase db, IOrganizationContext org, Faults f)
+        : AssetsRepository(db, org, NullLogger<OrgScopedRepository<Asset, string>>.Instance)
+    {
+        public override Task<long> UpdateOneAsync(FilterDefinition<Asset> filter, UpdateDefinition<Asset> update) =>
+            f.Write(() => base.UpdateOneAsync(filter, update));
+        public override Task<long> DeleteManyAsync(FilterDefinition<Asset> filter) => f.Write(() => base.DeleteManyAsync(filter));
+    }
+
+    private sealed class FaultyDiscoveries(IMongoDatabase db, IOrganizationContext org, Faults f)
+        : DiscoveriesRepository(db, org, NullLogger<OrgScopedRepository<Discovery, string>>.Instance)
+    {
+        public override Task<long> UpdateManyAsync(FilterDefinition<Discovery> filter, UpdateDefinition<Discovery> update) =>
+            f.Write(() => base.UpdateManyAsync(filter, update));
+        public override Task<long> DeleteManyAsync(FilterDefinition<Discovery> filter) => f.Write(() => base.DeleteManyAsync(filter));
+        public override Task<List<string>> FindIdsAsync(FilterDefinition<Discovery> filter) => f.FindIds(() => base.FindIdsAsync(filter));
+    }
+
+    private sealed class FaultyFindings(IMongoDatabase db, IOrganizationContext org, Faults f)
+        : FindingsRepository(db, org, NullLogger<OrgScopedRepository<Finding, string>>.Instance)
+    {
+        public override Task<long> DeleteManyAsync(FilterDefinition<Finding> filter) => f.Write(() => base.DeleteManyAsync(filter));
+    }
+
+    private sealed class FaultySuppressions(IMongoDatabase db, IOrganizationContext org, Faults f)
+        : FindingSuppressionsRepository(db, org, NullLogger<OrgScopedRepository<FindingSuppression, string>>.Instance)
+    {
+        public override Task<long> DeleteManyAsync(FilterDefinition<FindingSuppression> filter) => f.Write(() => base.DeleteManyAsync(filter));
+    }
+
+    private sealed class FaultyCoverage(IMongoDatabase db, IOrganizationContext org, Faults f)
+        : ScanCoverageRepository(db, org, NullLogger<OrgScopedRepository<ScanCoverageRecord, string>>.Instance)
+    {
+        public override Task<long> DeleteManyAsync(FilterDefinition<ScanCoverageRecord> filter) => f.Write(() => base.DeleteManyAsync(filter));
     }
 }

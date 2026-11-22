@@ -139,14 +139,21 @@ public class AssetsService(
         "A scan is running. Wait for it to finish before you delete assets.";
 
     // Enable, disable and delete are refused while a scan is queued or running: the scanner reads
-    // the asset list once, when the scan starts, and would keep scanning (and writing results
+    // the enabled assets once, when the scan starts, and would keep scanning (and writing results
     // for) an asset that was disabled or deleted after that.
     //
-    // The in-progress check runs right before the write, so the window between the two is one
-    // database round-trip. A queued scan already counts as in progress, so only a scheduled scan
-    // that the scanner inserts in that window can slip through. The cost is results for one
-    // asset from one scan; the next scan leaves the asset out. Closing the window fully would
-    // need a lock shared with the scanner, which is not worth it for this.
+    // Enable and disable: the in-progress check runs right before the write, so the window between
+    // the two is one database round-trip. A queued scan already counts as in progress, so only a
+    // scheduled scan that the scanner inserts in that window can slip through. The cost is results
+    // for one asset from one scan; the next scan leaves the asset out.
+    //
+    // Delete: a scan that slipped through would add the asset back to asset_ids after the cascade
+    // removed it, and that data would stay hidden for good. So delete disables the asset first and
+    // checks again: a scan that starts after the disable does not read the asset, and one that
+    // started before it is seen by the second check, which stops the delete with the asset left
+    // disabled (deleting again after the scan finishes the job). What is left is the scanner's own
+    // gap between reading the assets and inserting the scan, which is in memory. Closing it fully
+    // would need a lock shared with the scanner, which is not worth it for this.
 
     public async Task<(bool Success, string? ErrorMessage)> UpdateAssetStatusAsync(string assetId, bool enabled)
     {
@@ -174,6 +181,13 @@ public class AssetsService(
         if (await IsScanInProgressAsync())
             return (false, ScanInProgressDeleteError);
 
+        // Disable first, then check again (see the comment above UpdateAssetStatusAsync).
+        await assetsRepository.UpdateOneAsync(
+            Builders<Asset>.Filter.Eq(a => a.Id, asset.Id),
+            Builders<Asset>.Update.Set(a => a.Enabled, false));
+        if (await IsScanInProgressAsync())
+            return (false, ScanInProgressDeleteError);
+
         await DeleteOwnedDataAsync(asset.Id);
 
         // Last, so a run that fails part-way can be retried from the Assets page.
@@ -181,7 +195,8 @@ public class AssetsService(
         return (true, null);
     }
 
-    private const int DeleteBatchSize = 1000;
+    /// <summary>Discovery ids per <c>$in</c> in the cascade. Tests set it low to cross batches.</summary>
+    internal int DeleteBatchSize { get; init; } = 1000;
 
     /// <summary>
     /// Removes the asset from <c>asset_ids</c> and deletes the discoveries no asset owns any more,
@@ -206,12 +221,16 @@ public class AssetsService(
             Builders<Discovery>.Update.Pull(x => x.AssetIds, assetId));
 
         var ownerless = d.Size(x => x.AssetIds, 0);
-        var orphanIds = (await discoveriesRepository.FindAsync(x => x.AssetIds != null && x.AssetIds.Count == 0))
-            .Select(x => x.Id)
-            .ToList();
+        var orphanIds = await discoveriesRepository.FindIdsAsync(ownerless);
 
-        foreach (var batch in orphanIds.Chunk(DeleteBatchSize))
+        foreach (var selected in orphanIds.Chunk(DeleteBatchSize))
         {
+            // Still empty: a discovery that got an owner since the select keeps its findings and,
+            // above all, the suppressions the user made.
+            var batch = await discoveriesRepository.FindIdsAsync(d.In(x => x.Id, selected) & ownerless);
+            if (batch.Count == 0)
+                continue;
+
             await findingsRepository.DeleteManyAsync(Builders<Finding>.Filter.In(x => x.DiscoveryId, batch));
             await suppressionsRepository.DeleteManyAsync(Builders<FindingSuppression>.Filter.In(x => x.DiscoveryId, batch));
             await scanCoverageRepository.DeleteManyAsync(

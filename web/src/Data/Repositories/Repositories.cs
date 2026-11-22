@@ -39,7 +39,12 @@ public class DiscoveriesRepository(
     IMongoDatabase database,
     IOrganizationContext orgContext,
     ILogger<OrgScopedRepository<Discovery, string>> logger)
-    : OrgScopedRepository<Discovery, string>(database, "discoveries", orgContext, logger);
+    : OrgScopedRepository<Discovery, string>(database, "discoveries", orgContext, logger)
+{
+    /// <summary>The ids of the org's discoveries that match <paramref name="filter"/>, nothing else.</summary>
+    public virtual async Task<List<string>> FindIdsAsync(FilterDefinition<Discovery> filter) =>
+        await Collection.Find(await InOrgAsync(filter)).Project(d => d.Id).ToListAsync();
+}
 
 public class ScansRepository(
     IMongoDatabase database,

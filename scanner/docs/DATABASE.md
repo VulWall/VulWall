@@ -357,11 +357,22 @@ type ScanStats struct {
 
 `asset_ids` lists the assets (`assets._id`, hex) whose scans reached the discovery. The scanner
 only adds to it (`$addToSet`) and never writes an empty list: it leaves the field out instead.
-A discovery without `asset_ids` was written before ownership was recorded. The web app reads it
-to hide the discoveries of disabled assets, and removes an id when the user deletes the asset:
+The three states:
+
+- **Missing:** written before ownership was recorded. Shown by the web app, and in scope of
+  every scan's finding resolution.
+- **Ids:** shown while one of them is an enabled asset. Finding resolution skips the discovery
+  when the scan targeted none of them.
+- **Empty (`[]`):** only the web app writes it, while it deletes the discovery's last asset.
+  Hidden by the web app and skipped by finding resolution, like a discovery of a disabled asset.
+
+When the user deletes an asset, the web app first disables it and checks again that no scan
+started (a scan that read the asset before the disable is seen by that check, and the delete
+stops with the asset disabled). Then:
 
 1. It removes the id from `asset_ids` (`$pull`) in every discovery of the organization.
-2. Discoveries whose `asset_ids` is now empty belong to no asset. The web app deletes their
+2. Discoveries whose `asset_ids` is now empty belong to no asset. Per batch, the web app checks
+   again that they are still empty (a scan may have added an owner back), deletes their
    `findings`, `finding_suppressions` and `scan_coverage` records (by `discovery_id`), removes
    `parent_id` from the owned discoveries that point at one of them, and then deletes them.
    Discoveries that another asset also reaches keep their data, and so do discoveries without
