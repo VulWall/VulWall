@@ -127,7 +127,7 @@ public class ScansService(
                 ScanStatus.Running => "Scanning…",
                 ScanStatus.Queued => "Queued",
                 ScanStatus.Done => (uniqueIssueCounts != null && uniqueIssueCounts.TryGetValue(s.Id, out var unique)
-                    ? $"{unique} issues ({s.Stats.TotalFindings} raw)"
+                    ? $"{unique} issues"
                     : $"{s.Stats.TotalFindings} issues")
                     + (s.FindingsReconciled == false ? " · partial scan" : string.Empty),
                 ScanStatus.Failed => s.StatusReason == Scan.InterruptedByRestart ? "Interrupted by restart" : "Failed",

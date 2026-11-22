@@ -93,6 +93,23 @@ public class ScanCompletionFieldsTests(MongoFixture mongo)
         Assert.Equal(hasHint, run.MetaHint != null);
     }
 
+    // The stored total includes findings of disabled assets; only the scoped count is shown.
+    [Fact]
+    public void RecentRun_ShowsOnlyTheScopedIssueCount()
+    {
+        var scan = new Scan
+        {
+            Id = "s1",
+            OrgId = OrgId,
+            Status = ScanStatus.Done,
+            Stats = new ScanStats { TotalFindings = 24 },
+        };
+
+        var run = Assert.Single(ScansService.BuildLiveScanStatus([scan], [], new Dictionary<string, int> { ["s1"] = 10 }).RecentRuns);
+
+        Assert.Equal("10 issues", run.Meta);
+    }
+
     [Fact]
     public void RecentRun_PartialScanHint_NamesDegradedAssetCount()
     {
