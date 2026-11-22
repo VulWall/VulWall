@@ -44,7 +44,10 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 		bson.M{"_id": "s2", "org_id": org, "status": shared.StatusDone, "completion_reason": shared.ScanCompletionPipelineQuiescent, "created_at": now.Add(-2 * time.Hour)},
 	)
 	insert(shared.CollectionDiscoveries,
-		bson.M{"_id": "live", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{"s1", "s2", thisScan}},
+		// Shared with the disabled asset: the enabled one keeps it in scope.
+		bson.M{"_id": "live", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{"s1", "s2", thisScan}, "asset_ids": bson.A{"asset-off", "asset-on"}},
+		// Owned only by a disabled asset: out of scope, even with evidence that would resolve it.
+		bson.M{"_id": "off", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{thisScan}, "asset_ids": bson.A{"asset-off"}},
 		bson.M{"_id": "gone", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{"s0"}},
 		bson.M{"_id": "never", "org_id": org, "asset_type": shared.AssetTypeSubdomain},
 		bson.M{"_id": "port", "org_id": org, "asset_type": shared.AssetTypePort, "scan_ids": bson.A{"s2", thisScan}},
@@ -58,6 +61,7 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 		bson.M{"_id": "f-port", "org_id": org, "discovery_id": "port", "source": "nuclei", "finding_type": "h", "title": "H", "status": "open", "scan_ids": bson.A{"s2"}},
 		bson.M{"_id": "f-name-run", "org_id": org, "discovery_id": "port", "source": "nuclei", "finding_type": "i", "title": "I", "status": "open", "scan_ids": bson.A{"s2"},
 			"metadata": bson.M{shared.FindingMetaScanHost: "shop.example.com", "template_id": "i"}},
+		bson.M{"_id": "f-off", "org_id": org, "discovery_id": "off", "source": "http-headers", "finding_type": "j", "title": "J", "status": "open", "scan_ids": bson.A{"s2"}},
 		bson.M{"_id": "f-seen", "org_id": org, "discovery_id": "live", "source": "nuclei", "finding_type": "g", "title": "G", "status": "open", "scan_ids": bson.A{thisScan}},
 	)
 	absent := func(scan string) bson.M {
@@ -67,12 +71,14 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 		bson.M{"scan_id": thisScan, "org_id": org, "source": "http-headers", "discovery_id": "live", "status": shared.CoverageOK,
 			"reported": bson.A{bson.M{"finding_type": "b", "title": "B"}}},
 		bson.M{"scan_id": thisScan, "org_id": org, "source": "nuclei", "discovery_id": "live", "status": shared.CoverageError},
+		bson.M{"scan_id": thisScan, "org_id": org, "source": "http-headers", "discovery_id": "off", "status": shared.CoverageOK},
 		bson.M{"scan_id": thisScan, "org_id": org, "source": "nuclei", "discovery_id": "port", "status": shared.CoverageOK},
 		absent(thisScan), absent("s2"), absent("s1"),
 	)
 
 	m := &ScanMonitor{db: db, logger: zap.NewNop(), tracer: otel.Tracer("test")}
-	scan := shared.Scan{ID: thisScan, OrgID: org, CreatedAt: now}
+	scan := shared.Scan{ID: thisScan, OrgID: org, CreatedAt: now,
+		TargetedAssets: []shared.AssetTarget{{AssetID: "asset-on", Type: "domain", Value: "example.com"}}}
 	d, err := m.findingsToResolve(ctx, scan)
 	if err != nil {
 		t.Fatal(err)

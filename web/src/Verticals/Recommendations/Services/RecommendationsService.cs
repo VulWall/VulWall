@@ -1,5 +1,6 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Services.Mappers;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.Finding;
@@ -13,7 +14,9 @@ public class RecommendationsService(
     DiscoveriesRepository discoveriesRepository,
     ScansRepository scansRepository,
     KnowledgeBaseCacheService knowledgeBaseCache,
-    FindingSuppressionService suppressionService)
+    FindingSuppressionService suppressionService,
+    IAssetScopeFilter assetScopeFilter,
+    IOrganizationContext organizationContext)
 {
     public async Task<RecommendationsIndexViewModel> GetIndexViewModelAsync()
     {
@@ -27,12 +30,14 @@ public class RecommendationsService(
         var kbEntriesTask = knowledgeBaseCache.GetAllAsync();
         var suppressedKeysTask = suppressionService.GetActiveSuppressionKeysAsync();
         var activeSuppressionsTask = suppressionService.GetActiveSuppressionsAsync();
+        var scopeTask = GetAssetScopeAsync();
 
         await Task.WhenAll(
             allFindingsTask, scansTask,
-            discoveriesTask, kbEntriesTask, suppressedKeysTask, activeSuppressionsTask);
+            discoveriesTask, kbEntriesTask, suppressedKeysTask, activeSuppressionsTask, scopeTask);
 
-        var allFindings = await allFindingsTask;
+        var scope = await scopeTask;
+        var allFindings = scope.Filter(await allFindingsTask);
         var latestScan = (await scansTask).FirstOrDefault();
         var findings = latestScan != null
             ? allFindings.Where(f => f.ScanIds.Contains(latestScan.Id)).ToList()
@@ -40,9 +45,12 @@ public class RecommendationsService(
 
         var openFindings = findings.Where(f => f.Status == "open").ToList();
         var suppressedKeys = await suppressedKeysTask;
-        var activeSuppressions = await activeSuppressionsTask;
+        // The Dismissed list leaves out the suppressions of disabled assets' discoveries.
+        var activeSuppressions = (await activeSuppressionsTask)
+            .Where(s => !scope.IsHidden(s.DiscoveryId))
+            .ToList();
 
-        var discoveryDict = (await discoveriesTask).ToDictionary(d => d.Id, d => d);
+        var discoveryDict = scope.Filter(await discoveriesTask).ToDictionary(d => d.Id, d => d);
         var kbByType = (await kbEntriesTask).ToDictionary(kb => kb.FindingType, kb => kb);
 
         var viewModel = new RecommendationsIndexViewModel();
@@ -129,6 +137,9 @@ public class RecommendationsService(
         return viewModel;
     }
 
+    private async Task<IAssetScope> GetAssetScopeAsync() =>
+        await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync());
+
     private static string? GetTarget(string? discoveryId, Dictionary<string, Data.Entities.Discovery.Discovery> discoveryDict)
     {
         if (discoveryId == null || !discoveryDict.TryGetValue(discoveryId, out var discovery))
@@ -163,13 +174,16 @@ public class RecommendationsService(
             limit: 1);
         var discoveriesTask = discoveriesRepository.GetAllAsync();
         var suppressedKeysTask = suppressionService.GetActiveSuppressionKeysAsync();
+        var scopeTask = GetAssetScopeAsync();
 
         await Task.WhenAll(
             findingTask, kbEntriesTask,
-            allFindingsTask, scansTask, discoveriesTask, suppressedKeysTask);
+            allFindingsTask, scansTask, discoveriesTask, suppressedKeysTask, scopeTask);
 
+        var scope = await scopeTask;
         var finding = await findingTask;
-        if (finding == null)
+        // A finding of a disabled asset (or of no discovery) is not found.
+        if (finding == null || !scope.IsVisible(finding))
             return null;
 
         var suppressedKeys = await suppressedKeysTask;
@@ -207,7 +221,7 @@ public class RecommendationsService(
         };
 
         var findingType = finding.FindingType ?? finding.Title;
-        var allFindings = await allFindingsTask;
+        var allFindings = scope.Filter(await allFindingsTask);
         var latestScan = (await scansTask).FirstOrDefault();
         var scopedFindings = latestScan != null
             ? allFindings.Where(f => f.ScanIds.Contains(latestScan.Id)).ToList()
@@ -216,7 +230,7 @@ public class RecommendationsService(
             .Where(f => (f.FindingType ?? f.Title) == findingType && f.Status == "open")
             .ToList();
 
-        var discoveryDict = (await discoveriesTask).ToDictionary(d => d.Id, d => d);
+        var discoveryDict = scope.Filter(await discoveriesTask).ToDictionary(d => d.Id, d => d);
 
         // Load all active suppressions for this finding type so we can show per-asset state.
         // GroupBy + First guards against duplicate rows that could exist before the unique index

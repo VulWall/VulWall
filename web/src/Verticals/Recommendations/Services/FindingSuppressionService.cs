@@ -1,5 +1,6 @@
 using MongoDB.Driver;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Data.Entities.Finding;
 using VulWall.Dashboard.Data.Entities.FindingSuppression;
 using VulWall.Dashboard.Data.Repositories;
@@ -8,7 +9,10 @@ using VulWall.Dashboard.Recommendations.Models;
 
 namespace VulWall.Dashboard.Recommendations.Services;
 
-public class FindingSuppressionService(FindingSuppressionsRepository suppressionsRepository)
+public class FindingSuppressionService(
+    FindingSuppressionsRepository suppressionsRepository,
+    IAssetScopeFilter assetScopeFilter,
+    IOrganizationContext organizationContext)
     : ISuppressionFilter
 {
     /// <inheritdoc />
@@ -47,14 +51,18 @@ public class FindingSuppressionService(FindingSuppressionsRepository suppression
     /// Creates or updates a suppression for the given (discoveryId, findingType) pair.
     /// Idempotent: re-suppressing the same pair updates status/note rather than duplicating.
     /// On a duplicate-key race, treats the existing row as authoritative and updates it.
+    /// Returns false, and writes nothing, when the discovery belongs only to disabled assets.
     /// </summary>
-    public async Task SuppressAsync(
+    public async Task<bool> SuppressAsync(
         string discoveryId,
         string findingType,
         string status,
         string suppressedBy,
         string? note)
     {
+        if (await IsHiddenAsync(discoveryId))
+            return false;
+
         var existing = (await suppressionsRepository.FindAsync(
             s => s.DiscoveryId == discoveryId && s.FindingType == findingType)).FirstOrDefault();
 
@@ -102,19 +110,29 @@ public class FindingSuppressionService(FindingSuppressionsRepository suppression
                 }
             }
         }
+        return true;
     }
 
     /// <summary>
     /// Deactivates a suppression (soft-delete to preserve audit history).
+    /// Returns false when the suppression does not exist or its discovery belongs only to
+    /// disabled assets.
     /// </summary>
-    public async Task UnsuppressAsync(string suppressionId)
+    public async Task<bool> UnsuppressAsync(string suppressionId)
     {
         var existing = await suppressionsRepository.GetByIdAsync(suppressionId);
-        if (existing == null)
-            return;
+        if (existing == null || await IsHiddenAsync(existing.DiscoveryId))
+            return false;
 
         existing.Active = false;
         await suppressionsRepository.UpdateAsync(existing);
+        return true;
+    }
+
+    private async Task<bool> IsHiddenAsync(string discoveryId)
+    {
+        var scope = await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync(), [discoveryId]);
+        return scope.IsHidden(discoveryId);
     }
 
     /// <summary>

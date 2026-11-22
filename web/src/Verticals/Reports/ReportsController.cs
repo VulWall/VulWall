@@ -22,14 +22,16 @@ public class ReportsController(
     DiscoveriesRepository discoveriesRepository,
     ScansRepository scansRepository,
     ReportsService reportsService,
-    ISuppressionFilter suppressionFilter)
+    ISuppressionFilter suppressionFilter,
+    IAssetScopeFilter assetScopeFilter)
     : Controller
 {
     public async Task<IActionResult> Index()
     {
         var scans = await scansRepository.GetAllAsync();
-        var rawFindings = await findingsRepository.GetAllAsync();
-        var allDiscoveries = await discoveriesRepository.GetAllAsync();
+        var scope = await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync());
+        var rawFindings = scope.Filter(await findingsRepository.GetAllAsync());
+        var allDiscoveries = scope.Filter(await discoveriesRepository.GetAllAsync());
 
         // Exclude actively-suppressed (discoveryId, findingType) pairs, matching Summary/Technical.
         var suppressedKeys = await suppressionFilter.GetActiveSuppressionKeysAsync();
@@ -58,8 +60,9 @@ public class ReportsController(
                 return NotFound("Organization not found");
             }
 
-            var allFindingsRaw = (await findingsRepository.GetAllAsync()).ToList();
-            var allDiscoveries = await discoveriesRepository.GetAllAsync();
+            var scope = await assetScopeFilter.GetAsync(orgId);
+            var allFindingsRaw = scope.Filter(await findingsRepository.GetAllAsync());
+            var allDiscoveries = scope.Filter(await discoveriesRepository.GetAllAsync());
             var scans = await scansRepository.GetAllAsync();
             var suppressedKeys = await suppressionFilter.GetActiveSuppressionKeysAsync();
 
@@ -129,8 +132,9 @@ public class ReportsController(
                 return NotFound("Organization not found");
             }
 
-            var allFindingsRaw = (await findingsRepository.GetAllAsync()).ToList();
-            var allDiscoveries = await discoveriesRepository.GetAllAsync();
+            var scope = await assetScopeFilter.GetAsync(orgId);
+            var allFindingsRaw = scope.Filter(await findingsRepository.GetAllAsync());
+            var allDiscoveries = scope.Filter(await discoveriesRepository.GetAllAsync());
             var scans = await scansRepository.GetAllAsync();
             var suppressedKeys = await suppressionFilter.GetActiveSuppressionKeysAsync();
 

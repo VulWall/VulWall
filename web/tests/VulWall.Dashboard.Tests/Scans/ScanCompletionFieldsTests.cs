@@ -157,12 +157,13 @@ public class ScanCompletionFieldsTests(MongoFixture mongo)
     [Fact]
     public void Comparison_FindingOfDegradedAsset_IsNotCheckedNotResolved()
     {
-        var baseline = new Scan { Id = "s1", OrgId = OrgId, Status = ScanStatus.Done, CreatedAt = DateTime.UtcNow.AddDays(-1) };
+        var baseline = new Scan { Id = "s1", OrgId = OrgId, Status = ScanStatus.Done, CreatedAt = DateTime.UtcNow.AddDays(-1), TargetedAssets = Targets() };
         var latest = new Scan
         {
             Id = "s2",
             OrgId = OrgId,
             Status = ScanStatus.Done,
+            TargetedAssets = Targets(),
             FindingsReconciled = false,
             DegradedAssets = [new DegradedAsset { AssetId = "a1", Domain = "gone.example", Reason = "root_nxdomain" }],
             UncheckedFindingIds = ["f-gone"],
@@ -186,12 +187,28 @@ public class ScanCompletionFieldsTests(MongoFixture mongo)
     [Fact]
     public void Comparison_WithoutDegradedAssets_ResolvesMissingFindings()
     {
-        var baseline = new Scan { Id = "s1", OrgId = OrgId, Status = ScanStatus.Done };
-        var latest = new Scan { Id = "s2", OrgId = OrgId, Status = ScanStatus.Done, FindingsReconciled = true };
+        var baseline = new Scan { Id = "s1", OrgId = OrgId, Status = ScanStatus.Done, TargetedAssets = Targets() };
+        var latest = new Scan { Id = "s2", OrgId = OrgId, Status = ScanStatus.Done, FindingsReconciled = true, TargetedAssets = Targets() };
 
         var cmp = ScansService.BuildComparison(baseline, latest, [NewFinding("f1", "TLS 1.0 enabled", "s1")]);
 
         Assert.Equal(1, cmp.ResolvedTotal);
         Assert.Equal(0, cmp.NotCheckedCount);
     }
+
+    [Fact]
+    public void Comparison_LatestScanTargetedNothing_LeavesEveryMissingGroupNotChecked()
+    {
+        // Every asset was disabled: the scanner closed the queued scan at once, checking nothing.
+        var baseline = new Scan { Id = "s1", OrgId = OrgId, Status = ScanStatus.Done, TargetedAssets = Targets() };
+        var latest = new Scan { Id = "s2", OrgId = OrgId, Status = ScanStatus.Done, FindingsReconciled = false };
+
+        var cmp = ScansService.BuildComparison(baseline, latest,
+            [NewFinding("f1", "TLS 1.0 enabled", "s1"), NewFinding("f2", "Missing HSTS", "s1")]);
+
+        Assert.Equal(0, cmp.ResolvedTotal);
+        Assert.Equal(2, cmp.NotCheckedCount);
+    }
+
+    private static List<TargetedAsset> Targets() => [new TargetedAsset { AssetId = "a1", Type = "domain", Value = "example.com" }];
 }

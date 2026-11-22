@@ -2,6 +2,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Common.Services;
 using VulWall.Dashboard.Common.Services.AIServices;
 using VulWall.Dashboard.Data.Repositories;
@@ -18,12 +19,14 @@ public class ExecutiveSummaryProcessorTests(MongoFixture mongo)
     {
         private int _calls;
         public int Calls => Volatile.Read(ref _calls);
+        public string? LastMessage { get; private set; }
 
         public Task<string?> GetResponseAsync(string promptName, string userMessage, string? model = null,
             CancellationToken cancellationToken = default)
         {
             // Called from concurrent workers in one test.
             Interlocked.Increment(ref _calls);
+            LastMessage = userMessage;
             return Task.FromResult(response);
         }
     }
@@ -36,6 +39,7 @@ public class ExecutiveSummaryProcessorTests(MongoFixture mongo)
             new DiscoveriesPublicRepository(Db),
             new KnowledgeBaseCacheService(Db, new MemoryCache(new MemoryCacheOptions())),
             new ExecutiveSummaryService(Ai, NullLogger<ExecutiveSummaryService>.Instance),
+            new AssetScopeFilter(new AssetsPublicRepository(Db), new DiscoveriesPublicRepository(Db)),
             NullLogger<ExecutiveSummaryProcessor>.Instance);
     }
 
@@ -223,6 +227,41 @@ public class ExecutiveSummaryProcessorTests(MongoFixture mongo)
         Assert.Equal(1, doc["executive_summary_attempts"].ToInt32());
         Assert.Equal(0, await processor.ProcessPendingAsync(aiEnabled: true, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task ProcessPending_LeavesOutDisabledAssetFindings()
+    {
+        var s = Create();
+        var id = await InsertScan(s, "done");
+        var enabled = ObjectId.GenerateNewId();
+        var disabled = ObjectId.GenerateNewId();
+        await s.Db.GetCollection<BsonDocument>("assets").InsertManyAsync([
+            new BsonDocument { { "_id", enabled }, { "org_id", "org-1" }, { "type", "domain" }, { "enabled", true } },
+            new BsonDocument { { "_id", disabled }, { "org_id", "org-1" }, { "type", "domain" }, { "enabled", false } },
+        ]);
+        await s.Db.GetCollection<BsonDocument>("discoveries").InsertManyAsync([
+            new BsonDocument { { "_id", "d-on" }, { "org_id", "org-1" }, { "asset_type", "domain" }, { "asset_ids", new BsonArray { enabled.ToString() } } },
+            new BsonDocument { { "_id", "d-off" }, { "org_id", "org-1" }, { "asset_type", "domain" }, { "asset_ids", new BsonArray { disabled.ToString() } } },
+        ]);
+        await s.Db.GetCollection<BsonDocument>("findings").InsertManyAsync([
+            SummaryFinding("f-on", "d-on", id, "Enabled asset issue"),
+            SummaryFinding("f-off", "d-off", id, "Disabled asset issue"),
+            SummaryFinding("f-orphan", "d-missing", id, "Orphan issue"),
+        ]);
+
+        await s.NewProcessor().ProcessPendingAsync(aiEnabled: true, CancellationToken.None);
+
+        Assert.Contains("Enabled asset issue", s.Ai.LastMessage);
+        Assert.DoesNotContain("Disabled asset issue", s.Ai.LastMessage);
+        Assert.DoesNotContain("Orphan issue", s.Ai.LastMessage);
+        Assert.Contains("\"high_count\":1", s.Ai.LastMessage);
+    }
+
+    private static BsonDocument SummaryFinding(string id, string discoveryId, string scanId, string title) => new()
+    {
+        { "_id", id }, { "org_id", "org-1" }, { "discovery_id", discoveryId }, { "scan_ids", new BsonArray { scanId } },
+        { "severity", "high" }, { "title", title }, { "finding_type", "type-" + id }, { "source", "nuclei" }, { "status", "open" },
+    };
 
     private static Task AgeClaim(Setup s, string id, TimeSpan age) =>
         s.Scans.UpdateOneAsync(new BsonDocument("_id", id),
