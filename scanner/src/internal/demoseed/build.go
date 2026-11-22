@@ -146,6 +146,7 @@ func Build(orgID string, now time.Time, version string) *Dataset {
 	// Assets, added a week before the first scan.
 	addedOn := starts[0].AddDate(0, 0, -7)
 	var targets []shared.AssetTarget
+	assetIDs := map[string]string{} // root domain or IP -> assets._id (hex)
 	addAsset := func(typ, value string) {
 		a := assetDoc{ID: primitive.NewObjectIDFromTimestamp(addedOn), OrgID: orgID, Type: typ, Enabled: true, AddedOn: addedOn, Demo: true}
 		v := value
@@ -156,6 +157,7 @@ func Build(orgID string, now time.Time, version string) *Dataset {
 		}
 		ds.Assets = append(ds.Assets, a)
 		targets = append(targets, shared.AssetTarget{AssetID: a.ID.Hex(), Type: typ, Value: value})
+		assetIDs[value] = a.ID.Hex()
 	}
 	for _, d := range rootDomains {
 		addAsset(shared.TargetTypeDomain, d)
@@ -189,11 +191,16 @@ func Build(orgID string, now time.Time, version string) *Dataset {
 			}
 			return m
 		}
+		owner := assetIDs[h.root] // the asset whose scan reaches this host and its address
+		if h.root == "" {
+			owner = assetIDs[h.ip]
+		}
 		base := func(id, assetType, source string, parent *string, from int) shared.Discovery {
 			return shared.Discovery{
 				ID: id, OrgID: orgID, ScanIDs: scansBetween(from, last), AssetType: assetType, Source: source,
 				Status: shared.AssetStatusActive, OwnershipStatus: shared.OwnershipStatusVerified,
 				DiscoveredAt: seenAt(from), ParentID: parent, FirstSeen: seenAt(from), LastSeen: seenAt(last),
+				AssetIDs: []string{owner},
 			}
 		}
 

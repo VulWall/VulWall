@@ -58,7 +58,14 @@ func TestBuildMarksEveryDocumentAndKeepsReferencesConsistent(t *testing.T) {
 		}
 		scans[s.ID] = true
 	}
+	assets := map[string]bool{}
+	for _, a := range ds.Assets {
+		assets[a.ID.Hex()] = true
+	}
 	for _, d := range ds.Discoveries {
+		if len(d.AssetIDs) != 1 || !assets[d.AssetIDs[0]] {
+			t.Errorf("discovery %s: asset_ids %v, want the one seeded asset that reaches it", d.ID, d.AssetIDs)
+		}
 		if d.ParentID != nil {
 			if _, ok := discoveries[*d.ParentID]; !ok {
 				t.Errorf("discovery %s: parent %s missing", d.ID, *d.ParentID)

@@ -588,6 +588,7 @@ func (s *Service) publishDiscoveryJobs(ctx context.Context, orgID, scanID string
 				TraceContext: telemetry.InjectTraceContext(ctx), // Inject trace context for distributed tracing
 				ScanID:       &scanID,
 				OrgID:        orgID,
+				AssetID:      asset.ID,
 				IP:           *asset.IP,
 				Created:      time.Now(),
 			}

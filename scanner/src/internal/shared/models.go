@@ -35,6 +35,7 @@ type DiscoveryFinding struct {
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"` // W3C TraceContext headers for span linking (not stored in DB)
 	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"` // Optional: scan identifier for linking to UI scans
 	OrgID        string                 `json:"org_id" bson:"org_id"`                       // Required: organization GUID
+	AssetID      string                 `json:"asset_id,omitempty" bson:"asset_id,omitempty"` // assets._id whose scan reached this discovery
 	Source       string                 `json:"source" bson:"source"`                       // Source name: "subfinder", "nmap", "masscan", etc.
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Host         string                 `json:"host" bson:"host"`
@@ -69,6 +70,7 @@ type IPDiscoveryJob struct {
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`                 // W3C TraceContext headers for span linking (not stored in DB)
 	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"`       // Optional: scan identifier for linking to UI scans
 	OrgID        string                 `json:"org_id" bson:"org_id"`                             // Required: organization GUID
+	AssetID      string                 `json:"asset_id,omitempty" bson:"asset_id,omitempty"`     // assets._id whose scan reached this IP
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"`   // Parent IP discovery ID
 	IP           string                 `json:"ip" bson:"ip"`                                     // Target IP address
 	TargetDomain string                 `json:"target_domain,omitempty" bson:"target_domain,omitempty"` // Domain that resolved to this IP (for CDN ownership checks)
@@ -86,6 +88,7 @@ type IPDiscoveryFinding struct {
 	TraceContext map[string]string      `json:"trace_context,omitempty" bson:"-"`               // W3C TraceContext headers for span linking (not stored in DB)
 	ScanID       *string                `json:"scan_id,omitempty" bson:"scan_id,omitempty"`     // Optional: scan identifier for linking to UI scans
 	OrgID        string                 `json:"org_id" bson:"org_id"`                           // Required: organization GUID
+	AssetID      string                 `json:"asset_id,omitempty" bson:"asset_id,omitempty"`   // assets._id whose scan reached this IP
 	Source       string                 `json:"source" bson:"source"`                           // Source name: "port_discovery", "nmap", etc.
 	ParentID     *string                `json:"parent_id,omitempty" bson:"parent_id,omitempty"` // Parent IP discovery ID
 	IP           string                 `json:"ip" bson:"ip"`
@@ -109,6 +112,7 @@ type Discovery struct {
 	ID              string                 `json:"_id" bson:"_id"`
 	OrgID           string                 `json:"org_id" bson:"org_id"`                           // Organization GUID
 	ScanIDs         []string               `json:"scan_ids,omitempty" bson:"scan_ids,omitempty"`   // Array of scan identifiers that detected this asset
+	AssetIDs        []string               `json:"asset_ids,omitempty" bson:"asset_ids,omitempty"` // assets._id (hex) of every asset whose scan reached this discovery
 	AssetType       string                 `json:"asset_type" bson:"asset_type"`                   // "domain", "subdomain", "ip", "port"
 	Source          string                 `json:"source" bson:"source"`                           // Source name that discovered this asset
 	Status          string                 `json:"status" bson:"status"`                           // active, inactive, unknown (technical state)

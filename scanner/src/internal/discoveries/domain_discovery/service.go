@@ -30,12 +30,18 @@ const (
 type Service struct {
 	redis           *redis.Client
 	logger          *zap.Logger
-	subfinderClient *subfinderx.Client
+	subfinderClient subdomainEnumerator
 	tracer          trace.Tracer
 	dnsWorkers      int      // concurrent subdomain lookups (DNS_RESOLVE_CONCURRENCY)
 	recheckServers  []string // public resolvers for a root that "does not exist" (DNS_RECHECK_RESOLVERS); nil = off
 	// lookupIP replaces the system resolver in tests; nil = the system resolver.
 	lookupIP func(ctx context.Context, network, host string) ([]net.IP, error)
+}
+
+// subdomainEnumerator is the subdomain source the service needs (subfinderx.Client;
+// replaced in tests).
+type subdomainEnumerator interface {
+	DiscoverSubdomains(ctx context.Context, domain string) ([]string, error)
 }
 
 func NewService(redisClient *redis.Client, logger *zap.Logger) (*Service, error) {
@@ -144,6 +150,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		TraceID:     job.TraceID,
 		ScanID:      job.ScanID,  // Pass through scan_id
 		OrgID:       job.OrgID,
+		AssetID:     job.AssetID,
 		Source:      "subfinder",
 		ParentID:    job.ParentID,
 		Host:        job.Host,
@@ -318,6 +325,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, job shared.DiscoveryJo
 			TraceID:     traceID,
 			ScanID:      scanID,
 			OrgID:       orgID,
+			AssetID:     job.AssetID,
 			Source:      "subfinder",
 			ParentID:    &parentDomainID,
 			Host:        host,

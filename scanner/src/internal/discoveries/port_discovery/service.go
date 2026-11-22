@@ -22,8 +22,13 @@ import (
 type Service struct {
 	redis      *redis.Client
 	logger     *zap.Logger
-	tcpScanner *services.Scanner
+	tcpScanner portScanner
 	tracer     trace.Tracer
+}
+
+// portScanner is the TCP scan the service needs (services.Scanner; replaced in tests).
+type portScanner interface {
+	ScanPortsFiltered(ctx context.Context, ip string, ports []int) []services.PortResult
 }
 
 func NewService(redisClient *redis.Client, logger *zap.Logger) *Service {
@@ -144,8 +149,29 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 		zap.Int("open_ports", len(openPorts)),
 	)
 
-	// Publish findings for each open port
 	now := time.Now()
+
+	// A direct IP asset (no name resolved to it) gets an IP finding on every scan, also with
+	// no port open: port ingestion records the asset on the IP and its ports. Not evidence
+	// of anything (no coverage), and port ingestion does not enrich the IP again.
+	if job.TargetDomain == "" {
+		if err := s.publishFinding(ctx, shared.IPDiscoveryFinding{
+			DiscoveryID: shared.GenerateIPID(job.OrgID, job.IP),
+			AssetType:   shared.AssetTypeIP,
+			TraceID:     job.TraceID,
+			ScanID:      job.ScanID,
+			OrgID:       job.OrgID,
+			AssetID:     job.AssetID,
+			Source:      "port_discovery",
+			IP:          job.IP,
+			Status:      shared.AssetStatusActive,
+			Timestamp:   now,
+		}); err != nil {
+			return fmt.Errorf("publish IP finding of %s: %w", job.IP, err)
+		}
+	}
+
+	// Publish findings for each open port
 	for _, portResult := range openPorts {
 		// Generate deterministic ID for this port (org-scoped)
 		portID := shared.GeneratePortID(job.OrgID, job.IP, portResult.Port, shared.ProtocolTCP)
@@ -162,6 +188,7 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 			TraceID:      job.TraceID,
 			ScanID:       job.ScanID,
 			OrgID:        job.OrgID,
+			AssetID:      job.AssetID,
 			ParentID:     job.ParentID,
 			Source:       "port_discovery",
 			IP:           job.IP,

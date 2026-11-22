@@ -351,6 +351,31 @@ func TestTriggerScanCreatesRunningScanAndPublishes(t *testing.T) {
 	}
 }
 
+// Every discovery job carries the asset it was made for: ingestion records it on the
+// discoveries the scan reaches (asset_ids).
+func TestTriggerScanJobsCarryAssetID(t *testing.T) {
+	store := newFakeStore()
+	store.orgs["org-1"] = true
+	store.assets["org-1"] = []shared.Asset{
+		domainAsset("a1", "example.com"),
+		{ID: "a2", Type: "ip", IP: strPtr("203.0.113.5"), Enabled: true},
+	}
+	svc, published := newTestService(store, nil)
+
+	if _, err := svc.TriggerScan(context.Background(), ScanRequest{OrgID: "org-1", Type: shared.ScanTypeScheduled, TriggeredBy: "system"}); err != nil {
+		t.Fatalf("TriggerScan: %v", err)
+	}
+	if len(*published) != 2 {
+		t.Fatalf("published = %+v, want a domain and an IP job", *published)
+	}
+	if job := (*published)[0].job.(shared.DiscoveryJob); job.AssetID != "a1" {
+		t.Errorf("domain job asset_id = %q, want a1", job.AssetID)
+	}
+	if job := (*published)[1].job.(shared.IPDiscoveryJob); job.AssetID != "a2" {
+		t.Errorf("IP job asset_id = %q, want a2", job.AssetID)
+	}
+}
+
 func TestTriggerScanMarksFailedWhenAllPublishesFail(t *testing.T) {
 	store := newFakeStore()
 	store.orgs["org-1"] = true

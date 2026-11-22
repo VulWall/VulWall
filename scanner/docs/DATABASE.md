@@ -202,6 +202,7 @@ type Discovery struct {
     ID              string                    `bson:"_id"`
     OrgID           string                    `bson:"org_id"`
     ScanIDs         []string                  `bson:"scan_ids"`
+    AssetIDs        []string                  `bson:"asset_ids,omitempty"` // assets._id (hex) whose scans reached it
     AssetType       string                    `bson:"asset_type"`       // domain, subdomain, ip, port
     Source          string                    `bson:"source"`
     Status          string                    `bson:"status"`           // active, inactive, unknown
@@ -316,6 +317,7 @@ type ScanStats struct {
   _id: "uuid-123",
   org_id: "org-456",
   scan_ids: ["scan-abc-456", "scan-xyz-789"],
+  asset_ids: ["507f1f77bcf86cd799439012"],
   asset_type: "domain",
   source: "subfinder",
   status: "active",
@@ -713,4 +715,5 @@ redis-cli XADD ip_discovery_queue * data '{
 - **source REQUIRED** — ingestion skips findings without `source` field
 - **Dedup keys:** findings deduplicated by `(org_id, discovery_id, finding_type, title)`
 - **Scan tracking:** `scan_ids` array uses MongoDB `$addToSet` to prevent duplicates
+- **Ownership:** `asset_ids` holds every asset (`assets._id`, hex) whose scan reached the discovery. Jobs and findings carry `asset_id`; domain and port ingestion add it with `$addToSet`. A port gets its IP's list: the IP is port-scanned once per scan, so domain ingestion adds a later asset to the IP and then to the IP's ports, and port ingestion copies the IP's list onto a port it writes. The port scan of a direct IP asset also publishes an `ip` finding on every scan, also with no port open, and port ingestion adds the asset to the IP and all its ports the same way (it does not enrich the IP again). New discoveries hold the id in the insert itself
 - **History:** IP resolution history and service history tracked via arrays, not overwrite

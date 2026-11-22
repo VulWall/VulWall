@@ -140,6 +140,10 @@ func (s *Service) processDiscovery(ctx context.Context, finding shared.Discovery
 	if err != nil {
 		return err
 	}
+	// Record the asset whose scan reached this name, also when it did not resolve.
+	if err := shared.AddDiscoveryAssetIDs(ctx, s.db, bson.M{"_id": discoveryID, "org_id": finding.OrgID}, finding.AssetID); err != nil {
+		return fmt.Errorf("failed to record asset on discovery: %w", err)
+	}
 
 	// Steps 2-5 require a resolved IP. If DNS failed, skip them — they will run
 	// on the next scan when the domain resolves successfully.
@@ -195,6 +199,15 @@ func (s *Service) processDiscovery(ctx context.Context, finding shared.Discovery
 				// Don't fail if enrichment trigger fails
 			}
 		}
+
+		// Record the asset on the IP, then on its ports. The IP is port-scanned once per
+		// scan, so its port findings carry only the first asset that reached it; this adds
+		// the others to the ports already written, and port ingestion copies the IP's list
+		// onto a port it writes later. After the port scan job (step 3): a retry of this
+		// message sees the scan on the IP and does not queue the job again.
+		if err := shared.AddIPAssetID(ctx, s.db, finding.OrgID, ipDiscoveryID, *finding.IP, finding.AssetID); err != nil {
+			return fmt.Errorf("failed to record asset on IP discovery: %w", err)
+		}
 	} else {
 		s.logger.Warn("Skipping IP/port/enrichment steps: DNS resolution failed for host",
 			zap.String("trace_id", finding.TraceID),
@@ -248,6 +261,7 @@ func (s *Service) upsertDomainDiscovery(ctx context.Context, finding shared.Disc
 			ID:              finding.DiscoveryID,            // Use provided deterministic ID (org-scoped)
 			OrgID:           finding.OrgID,                  // Organization GUID
 			ScanIDs:         scanIDs,                        // Array of scan identifiers
+			AssetIDs:        shared.NewDiscoveryAssetIDs(finding.AssetID),
 			AssetType:       assetType,
 			Source:          finding.Source,
 			Status:          finding.Status,
@@ -496,6 +510,7 @@ func (s *Service) upsertIPDiscovery(ctx context.Context, finding shared.Discover
 			ID:              ipDiscoveryID,
 			OrgID:           finding.OrgID,                  // Organization GUID
 			ScanIDs:         scanIDs,                        // Array of scan identifiers
+			AssetIDs:        shared.NewDiscoveryAssetIDs(finding.AssetID),
 			AssetType:       shared.AssetTypeIP,
 			Source:          finding.Source,
 			Status:          finding.Status,
@@ -594,6 +609,7 @@ func (s *Service) publishIPDiscoveryJob(ctx context.Context, finding shared.Disc
 		TraceContext: telemetry.InjectTraceContext(ctx), // Inject trace context for span linking
 		ScanID:       finding.ScanID,                    // Pass through scan_id
 		OrgID:        finding.OrgID,
+		AssetID:      finding.AssetID,
 		ParentID:     &ipDiscoveryID,
 		IP:           *finding.IP,
 		TargetDomain: finding.Host, // Domain that resolved to this IP (for CDN ownership checks)
@@ -696,6 +712,10 @@ func (s *Service) buildDiscoveryDocument(discovery shared.Discovery) bson.M {
 
 	if len(discovery.ScanIDs) > 0 {
 		doc["scan_ids"] = discovery.ScanIDs
+	}
+
+	if len(discovery.AssetIDs) > 0 {
+		doc["asset_ids"] = discovery.AssetIDs
 	}
 
 	if discovery.ParentID != nil {
