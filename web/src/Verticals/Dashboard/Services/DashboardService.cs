@@ -1,5 +1,6 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.KnowledgeBase;
@@ -20,7 +21,9 @@ public class DashboardService(
     DiscoveriesRepository discoveriesRepository,
     KnowledgeBaseCacheService knowledgeBaseCache,
     ISecurityScoreProvider securityScoreProvider,
-    ISuppressionFilter suppressionFilter)
+    ISuppressionFilter suppressionFilter,
+    IAssetScopeFilter assetScopeFilter,
+    IOrganizationContext organizationContext)
 {
     public async Task<Models.IndexViewModel> GetIndexViewModelAsync()
     {
@@ -35,14 +38,17 @@ public class DashboardService(
         var totalAssetsTask = assetsRepository.CountAsync(_ => true);
         var kbEntriesTask = knowledgeBaseCache.GetAllAsync();
         var suppressedKeysTask = suppressionFilter.GetActiveSuppressionKeysAsync();
+        var scopeTask = GetAssetScopeAsync();
 
-        await Task.WhenAll(allFindingsTask, allDiscoveriesTask, doneScansTask, totalAssetsTask, kbEntriesTask, suppressedKeysTask);
+        await Task.WhenAll(allFindingsTask, allDiscoveriesTask, doneScansTask, totalAssetsTask, kbEntriesTask, suppressedKeysTask, scopeTask);
 
         var suppressedKeys = await suppressedKeysTask;
-        var allFindingsRaw = (await allFindingsTask).ToList();
-        // Exclude actively-suppressed (discoveryId, findingType) pairs from open counts and score
+        var scope = await scopeTask;
+        // Drop disabled assets' data, then exclude actively-suppressed (discoveryId, findingType)
+        // pairs from open counts and score
+        var allFindingsRaw = scope.Filter(await allFindingsTask);
         var allFindings = suppressionFilter.FilterSuppressed(allFindingsRaw, suppressedKeys).ToList();
-        var allDiscoveries = (await allDiscoveriesTask).ToList();
+        var allDiscoveries = scope.Filter(await allDiscoveriesTask);
         var doneScans = (await doneScansTask).ToList();
         var totalAssets = await totalAssetsTask;
         var kbEntries = await kbEntriesTask;
@@ -209,6 +215,9 @@ public class DashboardService(
 
         return model;
     }
+
+    private async Task<AssetScope> GetAssetScopeAsync() =>
+        await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync());
 
     /// <summary>
     /// Display-only state of the Overview "Rescan now" button, by the same rule as the Scans

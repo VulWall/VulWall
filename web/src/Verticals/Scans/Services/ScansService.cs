@@ -1,5 +1,7 @@
 using Cronos;
 using VulWall.Dashboard.Common.Contracts.Enums;
+using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Utils;
 using VulWall.Dashboard.Data.Entities.Scan;
@@ -11,7 +13,9 @@ namespace VulWall.Dashboard.Scans.Services;
 
 public class ScansService(
     ScansRepository scansRepository,
-    FindingsRepository findingsRepository)
+    FindingsRepository findingsRepository,
+    IAssetScopeFilter assetScopeFilter,
+    IOrganizationContext organizationContext)
 {
     /// <summary>
     /// Gets the complete Index view model with all data.
@@ -25,11 +29,12 @@ public class ScansService(
             orderByProperty: s => s.CreatedAt,
             sortDirection: SortDirection.Descending);
         var allFindingsTask = findingsRepository.GetAllAsync();
+        var scopeTask = GetAssetScopeAsync();
 
-        await Task.WhenAll(allScansTask, allFindingsTask);
+        await Task.WhenAll(allScansTask, allFindingsTask, scopeTask);
 
         var allScans = (await allScansTask).ToList();
-        var allFindings = (await allFindingsTask).ToList();
+        var allFindings = (await scopeTask).Filter(await allFindingsTask);
 
         var statistics = new ScanOverviewStatistics
         {
@@ -87,8 +92,8 @@ public class ScansService(
         IReadOnlyDictionary<string, int>? uniqueIssueCounts = null;
         if (doneScanIds.Count > 0)
         {
-            var findings = (await findingsRepository.FindAsync(
-                f => f.ScanIds.Any(sid => doneScanIds.Contains(sid)))).ToList();
+            var findings = (await GetAssetScopeAsync()).Filter(await findingsRepository.FindAsync(
+                f => f.ScanIds.Any(sid => doneScanIds.Contains(sid))));
             uniqueIssueCounts = ComputeUniqueIssueCounts(doneScanIds, findings);
         }
 
@@ -222,11 +227,14 @@ public class ScansService(
         if (baseline.Status != ScanStatus.Done || latest.Status != ScanStatus.Done)
             return null;
 
-        var findings = await findingsRepository.FindAsync(
-            f => f.ScanIds.Any(sid => sid == fromScanId || sid == toScanId));
+        var findings = (await GetAssetScopeAsync()).Filter(await findingsRepository.FindAsync(
+            f => f.ScanIds.Any(sid => sid == fromScanId || sid == toScanId)));
 
         return BuildComparison(baseline, latest, findings);
     }
+
+    private async Task<AssetScope> GetAssetScopeAsync() =>
+        await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync());
 
     internal static ScanComparisonViewModel BuildComparison(Scan baseline, Scan latest, IEnumerable<Finding> allFindings)
     {

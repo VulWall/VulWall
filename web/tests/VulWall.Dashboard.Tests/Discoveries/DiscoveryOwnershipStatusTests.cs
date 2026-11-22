@@ -98,12 +98,6 @@ public class DiscoveryOwnershipStatusTests(MongoFixture mongo)
         { "asset_ids", new BsonArray { "asset-1", "asset-2" } },
     };
 
-    private static DiscoveriesService Service(IMongoDatabase db, string orgId)
-    {
-        var org = new FixedOrganizationContext(orgId);
-        return new DiscoveriesService(
-            new DiscoveriesRepository(db, org, NullLogger<OrgScopedRepository<Discovery, string>>.Instance),
-            new FindingsRepository(db, org, NullLogger<OrgScopedRepository<Finding, string>>.Instance),
-            new ScansRepository(db, org, NullLogger<OrgScopedRepository<Scan, string>>.Instance));
-    }
+    private static DiscoveriesService Service(IMongoDatabase db, string orgId) =>
+        new TestServices(db, orgId).DiscoveriesService();
 }
