@@ -152,6 +152,70 @@ public abstract class OrgScopedRepository<TEntity, TId>(
         return await base.ExistsAsync(combinedPredicate);
     }
 
+    public override async Task<TEntity?> GetByFieldAsync(string fieldName, object value)
+    {
+        var orgId = await orgContext.GetCurrentOrgIdAsync();
+        var filter = Builders<TEntity>.Filter.Eq(fieldName, value) & OrgFilter(orgId);
+        return await Collection.Find(filter).FirstOrDefaultAsync();
+    }
+
+    public override async Task CreateManyAsync(
+        IEnumerable<TEntity> entities,
+        IClientSessionHandle session,
+        CancellationToken cancellationToken = default)
+    {
+        var orgId = await orgContext.GetCurrentOrgIdAsync();
+        var entitiesList = entities.ToList();
+        foreach (var entity in entitiesList)
+        {
+            entity.OrgId = orgId;
+        }
+
+        await base.CreateManyAsync(entitiesList, session, cancellationToken);
+    }
+
+    public override async Task<TEntity?> FindOneAndUpdateAsync(
+        FilterDefinition<TEntity> filter,
+        UpdateDefinition<TEntity> update,
+        FindOneAndUpdateOptions<TEntity>? options = null)
+    {
+        var orgId = await orgContext.GetCurrentOrgIdAsync();
+        return await base.FindOneAndUpdateAsync(filter & OrgFilter(orgId), update, options);
+    }
+
+    public override async Task<long> UpdateOneAsync(FilterDefinition<TEntity> filter, UpdateDefinition<TEntity> update)
+    {
+        var orgId = await orgContext.GetCurrentOrgIdAsync();
+        return await base.UpdateOneAsync(filter & OrgFilter(orgId), update);
+    }
+
+    public override async Task<long> UpdateManyAsync(FilterDefinition<TEntity> filter, UpdateDefinition<TEntity> update)
+    {
+        var orgId = await orgContext.GetCurrentOrgIdAsync();
+        return await base.UpdateManyAsync(filter & OrgFilter(orgId), update);
+    }
+
+    public override async Task<long> DeleteManyAsync(Expression<Func<TEntity, bool>> predicate)
+    {
+        var orgId = await orgContext.GetCurrentOrgIdAsync();
+        return await base.DeleteManyAsync(CombineWithOrgFilter(predicate, orgId));
+    }
+
+    public override async Task<long> DeleteManyAsync(FilterDefinition<TEntity> filter)
+    {
+        var orgId = await orgContext.GetCurrentOrgIdAsync();
+        return await base.DeleteManyAsync(filter & OrgFilter(orgId));
+    }
+
+    private static FilterDefinition<TEntity> OrgFilter(string orgId)
+    {
+        var parameter = Expression.Parameter(typeof(TEntity), "e");
+        var orgEquals = Expression.Equal(
+            Expression.Property(parameter, nameof(IOrganizationEntity.OrgId)),
+            Expression.Constant(orgId));
+        return Builders<TEntity>.Filter.Where(Expression.Lambda<Func<TEntity, bool>>(orgEquals, parameter));
+    }
+
     private Expression<Func<TEntity, bool>> CombineWithOrgFilter(
         Expression<Func<TEntity, bool>> userPredicate,
         string orgId)
