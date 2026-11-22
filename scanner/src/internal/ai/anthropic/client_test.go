@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,11 +33,12 @@ func ok(stopReason, content string) reply {
 
 // fakeAPI serves replies in order and records each request.
 type fakeAPI struct {
-	t       *testing.T
-	mu      sync.Mutex
-	replies []reply
-	bodies  [][]byte
-	headers []http.Header
+	t        *testing.T
+	mu       sync.Mutex
+	replies  []reply
+	bodies   [][]byte
+	headers  []http.Header
+	location string // sent as Location with every reply when set
 }
 
 func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +57,9 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	next := f.replies[0]
 	f.replies = f.replies[1:]
+	if f.location != "" {
+		w.Header().Set("Location", f.location)
+	}
 	w.WriteHeader(next.status)
 	_, _ = io.WriteString(w, next.body)
 }
@@ -332,5 +338,115 @@ func TestGenerate_TextWithoutSchema(t *testing.T) {
 	}
 	if r := api.request(0); r.Tools != nil || r.ToolChoice != nil {
 		t.Errorf("text request sends tools: %+v", r)
+	}
+}
+
+func TestGenerate_ResponseTimeoutIsNotRetried(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		select { // longer than the client timeout below
+		case <-time.After(2 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := New("test-key", "", srv.URL, zap.NewNop())
+	c.httpClient.Timeout = 100 * time.Millisecond
+	var waits int
+	c.backoff = func(int) time.Duration { waits++; return time.Millisecond }
+
+	_, err := c.Generate(context.Background(), kbRequest())
+	if err == nil {
+		t.Fatal("no error after the request timed out")
+	}
+	if n := calls.Load(); n != 1 || waits != 0 {
+		t.Errorf("requests = %d, backoffs = %d; a timed-out generation must not be sent again", n, waits)
+	}
+}
+
+func TestGenerate_ConnectionRefusedIsRetried(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close() // nothing listens: every dial is refused
+	c := New("test-key", "", "http://"+addr, zap.NewNop())
+	var waits int
+	c.backoff = func(int) time.Duration { waits++; return time.Millisecond }
+
+	if _, err := c.Generate(context.Background(), kbRequest()); err == nil || !strings.Contains(err.Error(), "max retries exceeded") {
+		t.Fatalf("err = %v", err)
+	}
+	if waits != maxRetries {
+		t.Errorf("backoffs = %d, want %d", waits, maxRetries)
+	}
+}
+
+func TestGenerate_PauseTurnLimit(t *testing.T) {
+	// One request plus five continuations; the literal 6 makes a change to
+	// maxContinuations fail this test.
+	var replies []reply
+	for range 7 {
+		replies = append(replies, ok("pause_turn", `[{"type":"server_tool_use","id":"s","name":"web_search","input":{}}]`))
+	}
+	c, api, _ := newTestClient(t, "", replies...)
+
+	_, err := c.Generate(context.Background(), kbRequest())
+	if err == nil || !strings.Contains(err.Error(), "still paused") {
+		t.Fatalf("err = %v", err)
+	}
+	if api.calls() != 6 {
+		t.Errorf("requests = %d, want 6", api.calls())
+	}
+}
+
+func TestGenerate_SecondPauseExtendsTheSameAssistantTurn(t *testing.T) {
+	first := `[{"type":"thinking","thinking":"","signature":"a"},{"type":"server_tool_use","id":"s1","name":"web_search","input":{"query":"<x>"}}]`
+	second := `[{"type":"web_search_tool_result","tool_use_id":"s1","content":[]},{"type":"server_tool_use","id":"s2","name":"web_search","input":{}}]`
+	withContainer := func(stop, content string) reply {
+		r := ok(stop, content)
+		r.body = strings.Replace(r.body, `"content":`, `"container":{"id":"container_1","expires_at":"2026-11-22T18:00:00Z"},"content":`, 1)
+		return r
+	}
+	c, api, _ := newTestClient(t, "", withContainer("pause_turn", first), withContainer("pause_turn", second), ok("tool_use", toolCall))
+
+	res, err := c.Generate(context.Background(), kbRequest())
+	if err != nil || res.Outcome != ai.OutcomeOK {
+		t.Fatalf("result = %+v, err = %v", res, err)
+	}
+	r := api.request(2)
+	if len(r.Messages) != 2 || r.Messages[0].Role != "user" || r.Messages[1].Role != "assistant" {
+		t.Fatalf("messages = %d, want user + one assistant turn", len(r.Messages))
+	}
+	want := "[" + first[1:len(first)-1] + "," + second[1:len(second)-1] + "]"
+	if got := string(r.Messages[1].Content); got != want {
+		t.Errorf("assistant turn:\n got %s\nwant %s", got, want)
+	}
+	if got := string(r.raw["container"]); got != `"container_1"` {
+		t.Errorf("container = %s, want the paused turn's container", got)
+	}
+	if _, ok := api.request(0).raw["container"]; ok {
+		t.Error("first request sends a container")
+	}
+}
+
+func TestGenerate_DoesNotFollowRedirects(t *testing.T) {
+	var leaked atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leaked.Add(1)
+	}))
+	t.Cleanup(other.Close)
+	c, api, _ := newTestClient(t, "", reply{http.StatusTemporaryRedirect, ""})
+	// The fake API answers 307 with this Location.
+	api.location = other.URL + "/v1/messages"
+
+	_, err := c.Generate(context.Background(), kbRequest())
+	if err == nil || !strings.Contains(err.Error(), "HTTP 307") {
+		t.Fatalf("err = %v", err)
+	}
+	if leaked.Load() != 0 || api.calls() != 1 {
+		t.Errorf("redirect followed: other host got %d requests", leaked.Load())
 	}
 }

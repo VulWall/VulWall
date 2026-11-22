@@ -7,6 +7,9 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
+	"net/url"
 	"strings"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
@@ -86,6 +89,56 @@ type Config struct {
 
 // Enabled reports whether AI is configured at all.
 func (c Config) Enabled() bool { return c.APIKey != "" }
+
+// String masks the API key, so logging a Config never leaks it.
+func (c Config) String() string {
+	key := ""
+	if c.APIKey != "" {
+		key = "***"
+	}
+	return fmt.Sprintf("{Provider:%s APIKey:%s Model:%s BaseURL:%s}", c.Provider, key, c.Model, c.BaseURL)
+}
+
+// GoString masks the API key for %#v too.
+func (c Config) GoString() string { return "ai.Config" + c.String() }
+
+// ValidateBaseURL accepts an empty value (the provider's own API), an https
+// URL, or an http URL whose host is local: loopback, a private or link-local
+// address, localhost, a .local/.internal/.localhost name, or a single-label
+// name such as a compose service. Plain http to anything else would send the
+// API key and the prompts across the internet unencrypted.
+func ValidateBaseURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.Opaque != "" {
+		return fmt.Errorf("AI_BASE_URL %q is not an absolute URL", raw)
+	}
+	if u.User != nil {
+		return fmt.Errorf("AI_BASE_URL must not contain credentials")
+	}
+	switch u.Scheme {
+	case "https":
+		return nil
+	case "http":
+		if isLocalHost(u.Hostname()) {
+			return nil
+		}
+		return fmt.Errorf("AI_BASE_URL %q uses http to a non-local host; use https", raw)
+	default:
+		return fmt.Errorf("AI_BASE_URL %q must use https (or http to a local host)", raw)
+	}
+}
+
+func isLocalHost(host string) bool {
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+	}
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	return host == "localhost" || !strings.Contains(host, ".") ||
+		strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal")
+}
 
 // ConfigSource returns the current AI configuration. It is read on every
 // call, so a source backed by stored settings takes effect without a restart.

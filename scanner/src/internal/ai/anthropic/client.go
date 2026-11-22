@@ -132,7 +132,13 @@ func newHTTPClient() *http.Client {
 		IdleConnTimeout:       90 * time.Second,
 		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
 	}
-	return &http.Client{Timeout: requestTimeout, Transport: transport}
+	return &http.Client{
+		Timeout:   requestTimeout,
+		Transport: transport,
+		// Never follow a redirect: the x-api-key header would go with it,
+		// possibly to another host. A 3xx comes back as a non-retried error.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 }
 
 // Model implements ai.Provider.
@@ -180,6 +186,10 @@ type request struct {
 	Tools        []tool        `json:"tools,omitempty"`
 	ToolChoice   *toolChoice   `json:"tool_choice,omitempty"`
 	OutputConfig *outputConfig `json:"output_config,omitempty"`
+	// Container is the code-execution container of a paused turn (web
+	// search with dynamic filtering runs code); sent back so the resumed
+	// turn keeps its files.
+	Container string `json:"container,omitempty"`
 }
 
 type response struct {
@@ -187,7 +197,10 @@ type response struct {
 	StopReason  string          `json:"stop_reason"`
 	StopDetails *stopDetails    `json:"stop_details"`
 	Content     json.RawMessage `json:"content"`
-	Usage       struct {
+	Container   *struct {
+		ID string `json:"id"`
+	} `json:"container"`
+	Usage struct {
 		InputTokens   int `json:"input_tokens"`
 		OutputTokens  int `json:"output_tokens"`
 		ServerToolUse *struct {
@@ -315,13 +328,20 @@ func (c *Client) Generate(ctx context.Context, req ai.Request) (ai.Result, error
 		}
 
 		// pause_turn: the server-side tool loop stopped early. Send the turn
-		// back unchanged and the API resumes it; no user message is added.
+		// back unchanged, with its container, and the API resumes it; no user
+		// message is added. A response holds only the blocks of that request,
+		// so a second pause extends the same assistant turn.
 		if resp.StopReason == "pause_turn" {
 			if continuations >= maxContinuations {
 				return result, fmt.Errorf("turn still paused after %d continuations", maxContinuations)
 			}
 			continuations++
-			body.Messages = append(body.Messages, message{Role: "assistant", Content: resp.Content})
+			if body.Messages, err = appendAssistant(body.Messages, resp.Content); err != nil {
+				return result, err
+			}
+			if resp.Container != nil && resp.Container.ID != "" {
+				body.Container = resp.Container.ID
+			}
 			continue
 		}
 
@@ -355,9 +375,10 @@ func (c *Client) Generate(ctx context.Context, req ai.Request) (ai.Result, error
 		if err != nil {
 			return result, err
 		}
-		body.Messages = append(body.Messages,
-			message{Role: "assistant", Content: resp.Content},
-			message{Role: "user", Content: nudge})
+		if body.Messages, err = appendAssistant(body.Messages, resp.Content); err != nil {
+			return result, err
+		}
+		body.Messages = append(body.Messages, message{Role: "user", Content: nudge})
 	}
 }
 
@@ -430,9 +451,39 @@ func (c *Client) do(ctx context.Context, payload []byte) (*response, error) {
 	return &resp, nil
 }
 
+// appendAssistant adds a response's content to the conversation. When the
+// last message is already an assistant turn (after pause_turn), the blocks
+// are appended to it, so the history alternates user and assistant. The
+// blocks themselves are copied as received.
+func appendAssistant(msgs []message, content json.RawMessage) ([]message, error) {
+	content = bytes.TrimSpace(content)
+	if len(content) < 2 || content[0] != '[' || content[len(content)-1] != ']' {
+		return nil, errors.New("response content is not a JSON array")
+	}
+	last := len(msgs) - 1
+	if last < 0 || msgs[last].Role != "assistant" {
+		return append(msgs, message{Role: "assistant", Content: content}), nil
+	}
+	prev := bytes.TrimSpace(msgs[last].Content)
+	prevBody := bytes.TrimSpace(prev[1 : len(prev)-1])
+	newBody := bytes.TrimSpace(content[1 : len(content)-1])
+	merged := make([]byte, 0, len(prev)+len(content))
+	merged = append(merged, '[')
+	merged = append(merged, prevBody...)
+	if len(prevBody) > 0 && len(newBody) > 0 {
+		merged = append(merged, ',')
+	}
+	merged = append(merged, newBody...)
+	merged = append(merged, ']')
+	msgs[last] = message{Role: "assistant", Content: merged}
+	return msgs, nil
+}
+
 // retryable reports whether a later attempt can succeed: 429 rate limit,
-// 529 overloaded, gateway errors, and network timeouts or resets. 500 is not
-// retried: the request may have run.
+// 529 overloaded, gateway errors, and failures to connect (dial, TLS
+// handshake, refused, reset). A timeout while waiting for the response is
+// not retried: the generation may have run and been billed, and another
+// 10-minute wait would block the KB queue. 500 is not retried either.
 func retryable(err error) bool {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
@@ -442,12 +493,14 @@ func retryable(err error) bool {
 		}
 		return false
 	}
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
+	var opErr *net.OpError
+	if errors.As(err, &opErr) && opErr.Op == "dial" {
 		return true
 	}
 	msg := err.Error()
-	return strings.Contains(msg, "connection refused") || strings.Contains(msg, "connection reset")
+	return strings.Contains(msg, "TLS handshake timeout") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "connection reset")
 }
 
 // marshal encodes v without HTML escaping, so text in prompts and echoed

@@ -30,6 +30,10 @@ const (
 		"covering business impact, technical details, and metadata."
 	// kbMaxOutputTokens covers thinking, searches and the entry.
 	kbMaxOutputTokens = 16000
+	// kbGenerateTimeout bounds one generation with all its requests (pause_turn
+	// continuations, the follow-up and retries), so one job cannot hold the
+	// single KB consumer for long.
+	kbGenerateTimeout = 15 * time.Minute
 )
 
 // ProviderSource returns the AI provider for the current configuration.
@@ -153,13 +157,15 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.KBGenerationJob) er
 	}
 	webSearch := provider.Capabilities().WebSearch
 
-	result, err := provider.Generate(ctx, ai.Request{
+	genCtx, cancel := context.WithTimeout(ctx, kbGenerateTimeout)
+	result, err := provider.Generate(genCtx, ai.Request{
 		System:          s.composeSystemPrompt(webSearch),
 		User:            s.buildJobContext(job),
 		MaxOutputTokens: kbMaxOutputTokens,
 		Schema:          &ai.Schema{Name: kbToolName, Description: kbToolDescription, JSON: s.responseSchema},
 		WebSearch:       webSearch,
 	})
+	cancel()
 	if err != nil {
 		return fail(fmt.Errorf("failed to generate KB entry: %w", err))
 	}

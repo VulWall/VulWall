@@ -162,13 +162,15 @@ type staticProvider struct{ p ai.Provider }
 func (s staticProvider) Provider(context.Context) (ai.Provider, error) { return s.p, nil }
 
 type fakeProvider struct {
-	caps   ai.Capabilities
-	result ai.Result
-	got    ai.Request
+	caps     ai.Capabilities
+	result   ai.Result
+	got      ai.Request
+	deadline time.Time
 }
 
-func (f *fakeProvider) Generate(_ context.Context, req ai.Request) (ai.Result, error) {
+func (f *fakeProvider) Generate(ctx context.Context, req ai.Request) (ai.Result, error) {
 	f.got = req
+	f.deadline, _ = ctx.Deadline()
 	return f.result, nil
 }
 func (f *fakeProvider) Capabilities() ai.Capabilities { return f.caps }
@@ -212,6 +214,19 @@ func TestProcessJob_RequestFollowsCapabilities(t *testing.T) {
 	}
 	if !strings.Contains(p.got.User, "<scanner_title>No CSP</scanner_title>") {
 		t.Errorf("user prompt = %q", p.got.User)
+	}
+}
+
+func TestProcessJob_GenerationHasOneDeadline(t *testing.T) {
+	p := &fakeProvider{result: ai.Result{Outcome: ai.OutcomeNoOutput}}
+	start := time.Now()
+	_ = newTestService(t, nil, p).ProcessJob(context.Background(), testJob)
+
+	if p.deadline.IsZero() {
+		t.Fatal("Generate ran without a deadline")
+	}
+	if left := p.deadline.Sub(start); left > kbGenerateTimeout+time.Second || left < kbGenerateTimeout-time.Minute {
+		t.Errorf("deadline in %s, want about %s", left, kbGenerateTimeout)
 	}
 }
 

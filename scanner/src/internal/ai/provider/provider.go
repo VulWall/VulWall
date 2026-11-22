@@ -20,6 +20,9 @@ func New(cfg ai.Config, logger *zap.Logger) (ai.Provider, error) {
 	if !cfg.Enabled() {
 		return nil, ErrDisabled
 	}
+	if err := ai.ValidateBaseURL(cfg.BaseURL); err != nil {
+		return nil, err
+	}
 	switch cfg.Provider {
 	case "", ai.ProviderAnthropic:
 		return anthropic.New(cfg.APIKey, cfg.Model, cfg.BaseURL, logger), nil

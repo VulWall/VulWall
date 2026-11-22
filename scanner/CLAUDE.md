@@ -156,7 +156,7 @@ Environment variables (the repo-root `.env.example` lists the ones users set; `d
 | `AI_API_KEY` | Optional. Enables the KB engine; unset = KB stage skipped. Compose passes all `AI_*` values to the web app too |
 | `AI_PROVIDER` | AI provider (default and only value: `anthropic`); an unknown value turns the KB engine off with an error in the log |
 | `AI_MODEL` | Model for the KB engine (default: `claude-sonnet-5-5`, `anthropic.DefaultModel`) |
-| `AI_BASE_URL` | Optional base URL of a gateway or proxy in front of the provider's API (the scanner sends the key in `x-api-key`) |
+| `AI_BASE_URL` | Optional base URL of a gateway or proxy in front of the provider's API (the scanner sends the key in `x-api-key` and follows no redirects). Must be https; http only to a local host (loopback, private IP, `localhost`, a `.local`/`.internal` name or a single-label name such as a compose service). Any other value turns AI off with an error in the log (`ai.ValidateBaseURL`) |
 | `NUCLEI_WORKERS` | Concurrent nuclei processes across both trigger streams (default 2) |
 | `NUCLEI_RATE_LIMIT` | nuclei `-rl`, requests per second per process (default 30; not a positive integer = default, with a warning). nuclei's own 150 saturates a home/office uplink: it drops the target as "unresponsive permanently" and the run is coverage `error` |
 | `NUCLEI_INTERACTSH` | `on`/`true` runs nuclei's OAST checks via interactsh; anything else = `-ni` (default off: callbacks would go to ProjectDiscovery's public `oast.*` servers) |

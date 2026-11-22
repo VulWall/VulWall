@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/ai"
@@ -62,5 +64,51 @@ func TestEnvSource(t *testing.T) {
 	want := ai.Config{Provider: "anthropic", APIKey: "k", Model: "", BaseURL: "https://gateway.example"}
 	if err != nil || cfg != want {
 		t.Errorf("config = %+v, err = %v", cfg, err)
+	}
+}
+
+func TestValidateBaseURL(t *testing.T) {
+	tests := []struct {
+		url string
+		ok  bool
+	}{
+		{"", true},
+		{"https://gateway.example.com", true},
+		{"https://gateway.example.com/anthropic/", true},
+		{"http://localhost:4000", true},
+		{"http://127.0.0.1:4000", true},
+		{"http://[::1]:4000", true},
+		{"http://10.0.0.5", true},
+		{"http://192.168.1.10:8080", true},
+		{"http://litellm:4000", true}, // compose service name
+		{"http://gateway.internal", true},
+		{"http://api.anthropic.com", false},
+		{"http://8.8.8.8", false},
+		{"ftp://gateway.example.com", false},
+		{"https://user:pass@gateway.example.com", false},
+		{"gateway.example.com", false},
+		{"https://", false},
+	}
+	for _, tt := range tests {
+		err := ai.ValidateBaseURL(tt.url)
+		if (err == nil) != tt.ok {
+			t.Errorf("ValidateBaseURL(%q) = %v, want ok=%v", tt.url, err, tt.ok)
+		}
+	}
+}
+
+func TestNew_RejectsPlainHTTPToARemoteHost(t *testing.T) {
+	_, err := New(ai.Config{Provider: "anthropic", APIKey: "k", BaseURL: "http://gateway.example.com"}, zap.NewNop())
+	if err == nil || !strings.Contains(err.Error(), "https") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestConfigNeverPrintsTheKey(t *testing.T) {
+	cfg := ai.Config{Provider: "anthropic", APIKey: "sk-ant-secret", Model: "m"}
+	for _, verb := range []string{"%v", "%+v", "%#v", "%s"} {
+		if out := fmt.Sprintf(verb, cfg); strings.Contains(out, "sk-ant-secret") || !strings.Contains(out, "***") {
+			t.Errorf("%s prints %q", verb, out)
+		}
 	}
 }
