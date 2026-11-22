@@ -34,7 +34,10 @@ public interface IAssetScope
     /// <summary>True only for a known discovery that is hidden (not for an unknown id).</summary>
     bool IsHidden(string? discoveryId);
 
-    /// <summary>The <c>asset_ids</c> of a known discovery; null when unknown or not recorded.</summary>
+    /// <summary>
+    /// The <c>asset_ids</c> of a known discovery; null when unknown or not recorded, empty while
+    /// an asset delete is pending.
+    /// </summary>
     IReadOnlyCollection<string>? OwnersOf(string? discoveryId);
 
     List<Discovery> Filter(IEnumerable<Discovery> discoveries);

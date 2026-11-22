@@ -40,7 +40,10 @@ public class Discovery : IEntity<string>, IOrganizationEntity
     [BsonElement("scan_ids")]
     public List<string>? ScanIds { get; set; }
 
-    // Assets whose scans found this discovery. The scanner will write it with $addToSet (follow-up PR for #99).
+    // Assets (assets._id, hex) whose scans reached this discovery. The scanner only adds to it
+    // ($addToSet) and never writes an empty list. Never write an empty list from C# either (no full
+    // replace of a discovery): [] means an asset delete is pending (AssetsService.DeleteAssetAsync)
+    // and is hidden. A missing field means ownership was not recorded; it stays visible.
     [BsonElement("asset_ids")]
     [BsonIgnoreIfNull]
     public List<string>? AssetIds { get; set; }

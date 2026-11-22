@@ -48,6 +48,9 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 		bson.M{"_id": "live", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{"s1", "s2", thisScan}, "asset_ids": bson.A{"asset-off", "asset-on"}},
 		// Owned only by a disabled asset: out of scope, even with evidence that would resolve it.
 		bson.M{"_id": "off", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{thisScan}, "asset_ids": bson.A{"asset-off"}},
+		// asset_ids: [] (the web app is deleting its last asset): out of scope too. The driver must
+		// decode it to an empty, non-nil slice; "gone" and "never" have no field and stay in scope.
+		bson.M{"_id": "pending", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{thisScan}, "asset_ids": bson.A{}},
 		bson.M{"_id": "gone", "org_id": org, "asset_type": shared.AssetTypeSubdomain, "scan_ids": bson.A{"s0"}},
 		bson.M{"_id": "never", "org_id": org, "asset_type": shared.AssetTypeSubdomain},
 		bson.M{"_id": "port", "org_id": org, "asset_type": shared.AssetTypePort, "scan_ids": bson.A{"s2", thisScan}},
@@ -62,6 +65,7 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 		bson.M{"_id": "f-name-run", "org_id": org, "discovery_id": "port", "source": "nuclei", "finding_type": "i", "title": "I", "status": "open", "scan_ids": bson.A{"s2"},
 			"metadata": bson.M{shared.FindingMetaScanHost: "shop.example.com", "template_id": "i"}},
 		bson.M{"_id": "f-off", "org_id": org, "discovery_id": "off", "source": "http-headers", "finding_type": "j", "title": "J", "status": "open", "scan_ids": bson.A{"s2"}},
+		bson.M{"_id": "f-pending", "org_id": org, "discovery_id": "pending", "source": "http-headers", "finding_type": "k", "title": "K", "status": "open", "scan_ids": bson.A{"s2"}},
 		bson.M{"_id": "f-seen", "org_id": org, "discovery_id": "live", "source": "nuclei", "finding_type": "g", "title": "G", "status": "open", "scan_ids": bson.A{thisScan}},
 	)
 	absent := func(scan string) bson.M {
@@ -72,6 +76,7 @@ func TestFindingsToResolveAgainstMongo(t *testing.T) {
 			"reported": bson.A{bson.M{"finding_type": "b", "title": "B"}}},
 		bson.M{"scan_id": thisScan, "org_id": org, "source": "nuclei", "discovery_id": "live", "status": shared.CoverageError},
 		bson.M{"scan_id": thisScan, "org_id": org, "source": "http-headers", "discovery_id": "off", "status": shared.CoverageOK},
+		bson.M{"scan_id": thisScan, "org_id": org, "source": "http-headers", "discovery_id": "pending", "status": shared.CoverageOK},
 		bson.M{"scan_id": thisScan, "org_id": org, "source": "nuclei", "discovery_id": "port", "status": shared.CoverageOK},
 		absent(thisScan), absent("s2"), absent("s1"),
 	)

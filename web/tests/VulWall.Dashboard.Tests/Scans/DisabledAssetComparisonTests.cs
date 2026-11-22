@@ -1,6 +1,11 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using VulWall.Dashboard.Common.Contracts.Enums;
+using VulWall.Dashboard.Data.Entities.Scan;
+using VulWall.Dashboard.Scans.Services;
 using VulWall.Dashboard.Tests.Infrastructure;
+using FindingEntity = VulWall.Dashboard.Data.Entities.Finding.Finding;
+using ScanEntity = VulWall.Dashboard.Data.Entities.Scan.Scan;
 
 namespace VulWall.Dashboard.Tests.Scans;
 
@@ -64,6 +69,28 @@ public class DisabledAssetComparisonTests(MongoFixture mongo)
 
         Assert.NotNull(cmp);
         Assert.Equal(["C new"], cmp.Added.Select(f => f.Title).ToArray());
+    }
+
+    // An empty asset_ids means an asset delete is pending: no targeted asset owns the discovery,
+    // so its finding is not checked by the latest scan rather than resolved.
+    [Fact]
+    public void Comparison_DiscoveryWithEmptyAssetIds_IsNotCheckedNotResolved()
+    {
+        var at = DateTime.UtcNow;
+        TargetedAsset[] targets = [new() { AssetId = AssetC, Type = "domain", Value = "c.com" }];
+        var baseline = new ScanEntity { Id = "b", OrgId = OrgId, CreatedAt = at.AddHours(-1), TargetedAssets = [.. targets] };
+        var latest = new ScanEntity { Id = "l", OrgId = OrgId, CreatedAt = at, TargetedAssets = [.. targets] };
+        var finding = new FindingEntity
+        {
+            Id = "f", OrgId = OrgId, DiscoveryId = "d-pending", ScanIds = ["b"], Severity = Severity.High,
+            Title = "Pending", FindingType = "type-pending", Source = "nuclei",
+        };
+
+        var cmp = ScansService.BuildComparison(baseline, latest, [finding],
+            id => id == "d-pending" ? Array.Empty<string>() : null);
+
+        Assert.Empty(cmp.Resolved);
+        Assert.Equal(1, cmp.NotCheckedCount);
     }
 
     private static BsonDocument Scan(string id, DateTime at, params string[] targets) => new()
