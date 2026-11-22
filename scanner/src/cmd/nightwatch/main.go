@@ -27,6 +27,8 @@ import (
 	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/js_dependency_scanner"
 	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/nuclei_scanner"
 	"github.com/VulWall/VulWall/scanner/src/internal/active_recon/testssl_scanner"
+	"github.com/VulWall/VulWall/scanner/src/internal/ai"
+	"github.com/VulWall/VulWall/scanner/src/internal/ai/provider"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/logger"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/mongox"
@@ -36,7 +38,6 @@ import (
 	"github.com/VulWall/VulWall/scanner/src/internal/discoveries/domain_discovery"
 	"github.com/VulWall/VulWall/scanner/src/internal/discoveries/port_discovery"
 	"github.com/VulWall/VulWall/scanner/src/internal/enrichers/knowledge_base"
-	"github.com/VulWall/VulWall/scanner/src/internal/enrichers/knowledge_base/anthropic"
 	"github.com/VulWall/VulWall/scanner/src/internal/ingestion"
 	"github.com/VulWall/VulWall/scanner/src/internal/scan_coordinator"
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
@@ -219,17 +220,26 @@ func consumers(rdb *redis.Client, db *mongo.Database, log *zap.Logger) ([]compon
 	return list, nil
 }
 
-// knowledgeBase returns the KB engine, or nil when ANTHROPIC_API_KEY is not
-// set. Without it, kb_generation_queue keeps its jobs; they are processed
-// once the key is configured and the scanner restarts.
+// knowledgeBase returns the KB engine, or nil when AI_API_KEY is not set.
+// Without it, kb_generation_queue keeps its jobs; they are processed once the
+// key is configured and the scanner restarts.
 func knowledgeBase(rdb *redis.Client, log *zap.Logger) (*component, error) {
-	apiKey := config.GetEnv(config.EnvAnthropicAPIKey, "")
-	if apiKey == "" {
-		log.Info("ANTHROPIC_API_KEY is not set: AI knowledge-base generation is disabled. Findings keep the scanners' own descriptions.")
+	source := ai.EnvSource{}
+	cfg, err := source.Load(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if !cfg.Enabled() {
+		log.Info("AI_API_KEY is not set: AI knowledge-base generation is disabled. Findings keep the scanners' own descriptions.")
 		return nil, nil
 	}
-	model := config.GetEnv(config.EnvAnthropicModel, anthropic.DefaultModel)
-	service, err := knowledge_base.NewService(rdb, anthropic.NewClient(apiKey, model, log), log)
+	// Fail at start-up, not on the first job, for an unknown AI_PROVIDER.
+	p, err := provider.New(cfg, log)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("AI knowledge-base generation is enabled", zap.String("provider", cfg.Provider), zap.String("model", p.Model()))
+	service, err := knowledge_base.NewService(rdb, provider.NewResolver(source, log), log)
 	if err != nil {
 		return nil, err
 	}

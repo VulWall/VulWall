@@ -1,0 +1,5 @@
+## References
+
+You have no web access for this entry. Set **references** to null. Never write URLs from memory.
+
+You MUST call the generate_kb_entry tool to produce your final structured output. Do not include JSON in your text reply — use the tool.

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/VulWall/VulWall/scanner/src/internal/ai"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/redisx"
 	"github.com/VulWall/VulWall/scanner/src/internal/core/telemetry"
-	"github.com/VulWall/VulWall/scanner/src/internal/enrichers/knowledge_base/anthropic"
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
+	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -23,23 +23,40 @@ import (
 //go:embed prompts/*.txt prompts/*.json
 var promptsFS embed.FS
 
-// Service handles knowledge base entry generation using Anthropic Claude
+const (
+	// kbToolName names the structured output. The prompts refer to it.
+	kbToolName        = "generate_kb_entry"
+	kbToolDescription = "Generate a structured knowledge base entry for a security vulnerability finding, " +
+		"covering business impact, technical details, and metadata."
+	// kbMaxOutputTokens covers thinking, searches and the entry.
+	kbMaxOutputTokens = 16000
+)
+
+// ProviderSource returns the AI provider for the current configuration.
+// provider.Resolver implements it.
+type ProviderSource interface {
+	Provider(ctx context.Context) (ai.Provider, error)
+}
+
+// Service generates knowledge base entries with the configured AI provider.
 type Service struct {
-	redis           *redis.Client
-	anthropicClient *anthropic.Client
-	logger          *zap.Logger
-	tracer          trace.Tracer
-	systemPrompt    string
-	responseSchema  json.RawMessage // cached at startup; embedded FS never changes at runtime
+	redis          *redis.Client
+	providers      ProviderSource
+	logger         *zap.Logger
+	tracer         trace.Tracer
+	systemPrompt   string // core rules; composeSystemPrompt adds the search-dependent part
+	webSearchPart  string
+	noSearchPart   string
+	responseSchema json.RawMessage // cached at startup; embedded FS never changes at runtime
 }
 
 // NewService creates a new knowledge base engine service
-func NewService(redisClient *redis.Client, anthropicClient *anthropic.Client, logger *zap.Logger) (*Service, error) {
+func NewService(redisClient *redis.Client, providers ProviderSource, logger *zap.Logger) (*Service, error) {
 	s := &Service{
-		redis:          redisClient,
-		anthropicClient: anthropicClient,
-		logger:         logger,
-		tracer:         otel.Tracer("knowledge-base-engine"),
+		redis:     redisClient,
+		providers: providers,
+		logger:    logger,
+		tracer:    otel.Tracer("knowledge-base-engine"),
 	}
 
 	// Load system prompt
@@ -57,20 +74,31 @@ func NewService(redisClient *redis.Client, anthropicClient *anthropic.Client, lo
 	return s, nil
 }
 
-// loadSystemPrompt loads the system prompt from embedded filesystem
+// loadSystemPrompt loads the prompt parts from the embedded filesystem.
 func (s *Service) loadSystemPrompt() error {
-	content, err := promptsFS.ReadFile("prompts/system_prompt.txt")
-	if err != nil {
-		return fmt.Errorf("failed to read system_prompt.txt: %w", err)
+	for name, dst := range map[string]*string{
+		"system_prompt.txt": &s.systemPrompt,
+		"web_search.txt":    &s.webSearchPart,
+		"no_web_search.txt": &s.noSearchPart,
+	} {
+		content, err := promptsFS.ReadFile("prompts/" + name)
+		if err != nil {
+			return fmt.Errorf("failed to read %s: %w", name, err)
+		}
+		*dst = strings.TrimSpace(string(content))
 	}
-
-	s.systemPrompt = string(content)
-
-	s.logger.Info("Loaded system prompt",
-		zap.Int("length", len(content)),
-	)
-
 	return nil
+}
+
+// composeSystemPrompt returns the system prompt for a provider with or
+// without web search. Without it the prompt never mentions searching, and
+// references must be null.
+func (s *Service) composeSystemPrompt(webSearch bool) string {
+	part := s.noSearchPart
+	if webSearch {
+		part = s.webSearchPart
+	}
+	return s.systemPrompt + "\n\n" + part + "\n"
 }
 
 // loadResponseSchema loads and caches the JSON Schema from embedded filesystem.
@@ -82,7 +110,7 @@ func (s *Service) loadResponseSchema() error {
 	}
 
 	// Validate well-formed JSON at startup — catches build-time corruption early
-	// rather than producing opaque 400 errors from Anthropic at runtime.
+	// rather than producing opaque 400 errors from the provider at runtime.
 	if !json.Valid(content) {
 		return fmt.Errorf("response_schema.json is not valid JSON")
 	}
@@ -113,27 +141,57 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.KBGenerationJob) er
 		zap.String("title", job.Title),
 	)
 
-	// Build finding context for Claude
-	findingContext := s.buildJobContext(job)
-
-	// Generate KB entry via Anthropic structured output.
-	// The schema (cached at startup) is passed as the tool's input_schema, so the
-	// Anthropic API enforces that Claude's response matches it exactly — no prompt-level
-	// schema injection is needed and markdown-wrapped or malformed JSON is impossible.
-	responseText, err := s.anthropicClient.GenerateKBEntry(ctx, s.systemPrompt, findingContext, s.responseSchema)
-	if err != nil {
+	fail := func(err error) error {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		return fmt.Errorf("failed to generate KB entry: %w", err)
+		return err
 	}
 
-	s.logger.Info("KB entry generated",
+	provider, err := s.providers.Provider(ctx)
+	if err != nil {
+		return fail(fmt.Errorf("AI provider: %w", err))
+	}
+	webSearch := provider.Capabilities().WebSearch
+
+	result, err := provider.Generate(ctx, ai.Request{
+		System:          s.composeSystemPrompt(webSearch),
+		User:            s.buildJobContext(job),
+		MaxOutputTokens: kbMaxOutputTokens,
+		Schema:          &ai.Schema{Name: kbToolName, Description: kbToolDescription, JSON: s.responseSchema},
+		WebSearch:       webSearch,
+	})
+	if err != nil {
+		return fail(fmt.Errorf("failed to generate KB entry: %w", err))
+	}
+	span.SetAttributes(attribute.String("ai.outcome", string(result.Outcome)), attribute.String("ai.model", result.Model))
+	s.logger.Info("KB generation finished",
 		zap.String("finding_type", job.FindingType),
-		zap.Int("response_length", len(responseText)),
+		zap.String("model", result.Model),
+		zap.String("outcome", string(result.Outcome)),
+		zap.Int("input_tokens", result.Usage.InputTokens),
+		zap.Int("output_tokens", result.Usage.OutputTokens),
+		zap.Int("web_searches", result.WebSearches),
 	)
 
+	// Without a usable entry, no KB document is written and findings keep the
+	// scanners' own text.
+	switch result.Outcome {
+	case ai.OutcomeOK:
+	case ai.OutcomeRefused:
+		return fail(fmt.Errorf("KB generation for %s refused (category %q)", job.FindingType, result.RefusalCategory))
+	default:
+		return fail(fmt.Errorf("KB generation for %s ended without an entry (outcome %s)", job.FindingType, result.Outcome))
+	}
+	if err := validateEntry(result.JSON); err != nil {
+		return fail(fmt.Errorf("invalid KB entry for %s: %w", job.FindingType, err))
+	}
+	entry, err := normalizeEntry(result.JSON, webSearch)
+	if err != nil {
+		return fail(fmt.Errorf("invalid KB entry for %s: %w", job.FindingType, err))
+	}
+
 	// Publish result to stream
-	if err := s.publishResult(ctx, job, responseText); err != nil {
+	if err := s.publishResult(ctx, job, entry, result.Model); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -213,24 +271,11 @@ func formatMetadataValue(value interface{}) string {
 }
 
 // publishResult publishes the KB generation result to the stream
-func (s *Service) publishResult(ctx context.Context, job shared.KBGenerationJob, responseJSON string) error {
-	// Parse JSON response into map for structured storage.
-	// With structured output (tool_use), the response is guaranteed valid JSON by the
-	// Anthropic API — this unmarshal should never fail in normal operation.
-	var entry map[string]interface{}
-	if err := json.Unmarshal([]byte(responseJSON), &entry); err != nil {
-		s.logger.Error("Failed to parse KB response as JSON, skipping publish to prevent corrupt entry",
-			zap.Error(err),
-			zap.String("finding_type", job.FindingType),
-			zap.Int("response_length", len(responseJSON)),
-		)
-		return fmt.Errorf("unparseable KB response for %s: %w", job.FindingType, err)
-	}
-
+func (s *Service) publishResult(ctx context.Context, job shared.KBGenerationJob, entry map[string]any, model string) error {
 	result := shared.KBGenerationResult{
 		FindingType: job.FindingType,
 		Entry:       entry,
-		Model:       s.anthropicClient.GetModel(),
+		Model:       model,
 		TraceID:     job.TraceID,
 		Timestamp:   time.Now(),
 	}
@@ -245,7 +290,7 @@ func (s *Service) publishResult(ctx context.Context, job shared.KBGenerationJob,
 
 	s.logger.Info("Published KB generation result",
 		zap.String("finding_type", job.FindingType),
-		zap.String("model", s.anthropicClient.GetModel()),
+		zap.String("model", model),
 	)
 
 	return nil
