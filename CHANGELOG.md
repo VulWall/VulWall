@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.1](https://github.com/VulWall/VulWall/compare/v0.3.0...v0.3.1) (2026-11-22)
+
+
+### Fixed
+
+* delete the data only a deleted asset owns ([#129](https://github.com/VulWall/VulWall/issues/129)) ([474f1ff](https://github.com/VulWall/VulWall/commit/474f1ff6c7abb893b50ad9cb58366f0da626811d))
+* hide the data of disabled assets ([#127](https://github.com/VulWall/VulWall/issues/127)) ([db2c7f2](https://github.com/VulWall/VulWall/commit/db2c7f29dfcf68e384fb86c0c0fa428cd0067461))
+* keep asset ownership right across add, toggle and delete ([#132](https://github.com/VulWall/VulWall/issues/132)) ([6a22ece](https://github.com/VulWall/VulWall/commit/6a22ece8cafce45f9acd26aee0329f561a81fd23))
+* **scanner:** record which assets reach each discovery ([#125](https://github.com/VulWall/VulWall/issues/125)) ([2ae590c](https://github.com/VulWall/VulWall/commit/2ae590c433a01a82780c4302ca8c058d39e1ef17))
+* **web:** count new, skipped and unchecked findings correctly in comparisons ([#130](https://github.com/VulWall/VulWall/issues/130)) ([7b97be2](https://github.com/VulWall/VulWall/commit/7b97be23acab5c402c0d0a83572a98592f6f151c))
+* **web:** org-scope repository writes and update ownership status in place ([#124](https://github.com/VulWall/VulWall/issues/124)) ([013e1ca](https://github.com/VulWall/VulWall/commit/013e1ca46ab4c765b3524376b9b546e830f99420))
+
 ## [0.3.0](https://github.com/VulWall/VulWall/compare/v0.2.0...v0.3.0) (2026-11-21)
 
 
