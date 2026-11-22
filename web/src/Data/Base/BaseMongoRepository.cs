@@ -11,7 +11,9 @@ public abstract class BaseMongoRepository<TEntity, TId>(IMongoDatabase database,
 {
     private readonly IMongoCollection<TEntity> _collection = database.GetCollection<TEntity>(collectionName);
 
-    public IMongoDatabase Database => database;
+    protected IMongoDatabase Database => database;
+
+    protected IMongoCollection<TEntity> Collection => _collection;
 
     public virtual async Task<TEntity?> GetByIdAsync(TId id)
     {
@@ -115,6 +117,26 @@ public abstract class BaseMongoRepository<TEntity, TId>(IMongoDatabase database,
     {
         var result = await _collection.DeleteManyAsync(predicate);
         return result.DeletedCount;
+    }
+
+    public virtual async Task<long> DeleteManyAsync(FilterDefinition<TEntity> filter)
+    {
+        var result = await _collection.DeleteManyAsync(filter);
+        return result.DeletedCount;
+    }
+
+    /// <summary>Partial update ($set, $pull, ...) of the first match. Returns the matched count.</summary>
+    public virtual async Task<long> UpdateOneAsync(FilterDefinition<TEntity> filter, UpdateDefinition<TEntity> update)
+    {
+        var result = await _collection.UpdateOneAsync(filter, update);
+        return result.MatchedCount;
+    }
+
+    /// <summary>Partial update ($set, $pull, ...) of every match. Returns the matched count.</summary>
+    public virtual async Task<long> UpdateManyAsync(FilterDefinition<TEntity> filter, UpdateDefinition<TEntity> update)
+    {
+        var result = await _collection.UpdateManyAsync(filter, update);
+        return result.MatchedCount;
     }
 
     // Helper methods that work because TEntity implements IEntity<TId>
