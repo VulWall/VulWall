@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Driver;
@@ -12,6 +14,7 @@ using VulWall.Dashboard.Data.Entities.FindingSuppression;
 using VulWall.Dashboard.Data.Entities.Scan;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Discoveries.Services;
+using VulWall.Dashboard.Recommendations;
 using VulWall.Dashboard.Recommendations.Services;
 using VulWall.Dashboard.Reports;
 using VulWall.Dashboard.Reports.Services;
@@ -33,7 +36,8 @@ internal sealed class TestServices(IMongoDatabase db, string orgId)
     public IAssetScopeFilter AssetScope => new AssetScopeFilter(new AssetsPublicRepository(db), new DiscoveriesPublicRepository(db));
 
     public FindingSuppressionService Suppressions => new(
-        new FindingSuppressionsRepository(db, _org, NullLogger<OrgScopedRepository<FindingSuppression, string>>.Instance));
+        new FindingSuppressionsRepository(db, _org, NullLogger<OrgScopedRepository<FindingSuppression, string>>.Instance),
+        AssetScope, _org);
 
     public KnowledgeBaseCacheService KnowledgeBase => new(db, new MemoryCache(new MemoryCacheOptions()));
 
@@ -50,6 +54,14 @@ internal sealed class TestServices(IMongoDatabase db, string orgId)
         var kb = KnowledgeBase;
         return new DashboardService(Assets, Findings, Scans, Discoveries, kb,
             new SecurityScoreService(kb), Suppressions, AssetScope, _org);
+    }
+
+    public RecommendationsController RecommendationsController()
+    {
+        var controller = new RecommendationsController(
+            NullLogger<RecommendationsController>.Instance, RecommendationsService(), Suppressions);
+        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+        return controller;
     }
 
     public ReportsController ReportsController()

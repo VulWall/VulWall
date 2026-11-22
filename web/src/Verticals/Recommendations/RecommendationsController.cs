@@ -74,12 +74,14 @@ public class RecommendationsController(
                            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                            ?? "unknown";
 
-        await suppressionService.SuppressAsync(
+        var found = await suppressionService.SuppressAsync(
             input.DiscoveryId,
             input.FindingType,
             input.Status,
             suppressedBy,
             input.Note);
+        if (!found)
+            return NotFound();
 
         TempData["Info"] = "Finding has been dismissed.";
 
@@ -97,7 +99,8 @@ public class RecommendationsController(
             return BadRequest("SuppressionId is required.");
         }
 
-        await suppressionService.UnsuppressAsync(input.SuppressionId);
+        if (!await suppressionService.UnsuppressAsync(input.SuppressionId))
+            return NotFound();
 
         TempData["Info"] = "Finding has been restored.";
 

@@ -106,6 +106,11 @@ public class DiscoveriesService(
             return false;
         }
 
+        // A disabled asset's discovery is not found, as on the Discoveries page.
+        var scope = await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync(), [discoveryId]);
+        if (scope.IsHidden(discoveryId))
+            return false;
+
         // Partial $set: a full replace would drop the scanner fields the Discovery entity does not map.
         var matched = await discoveriesRepository.UpdateOneAsync(
             Builders<Discovery>.Filter.Eq(d => d.Id, discoveryId),

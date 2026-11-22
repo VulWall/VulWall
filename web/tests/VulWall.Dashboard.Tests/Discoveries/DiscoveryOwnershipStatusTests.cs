@@ -23,6 +23,7 @@ public class DiscoveryOwnershipStatusTests(MongoFixture mongo)
         var db = mongo.NewDatabase();
         var discoveries = db.GetCollection<BsonDocument>("discoveries");
         await discoveries.InsertOneAsync(ScannerDiscovery("d-1", "org-1"));
+        await SeedEnabledAssetAsync(db, "org-1");
 
         var updated = await Service(db, "org-1").UpdateOwnershipStatusAsync("d-1", OwnershipStatus.NotMine);
 
@@ -31,7 +32,7 @@ public class DiscoveryOwnershipStatusTests(MongoFixture mongo)
         Assert.Equal(new BsonString("notmine"), stored["ownership_status"]);
         Assert.Equal("nginx 1.25", stored["banner"].AsString);
         Assert.Equal(new BsonArray { "http" }, stored["previous_services"]);
-        Assert.Equal(new BsonArray { "asset-1", "asset-2" }, stored["asset_ids"]);
+        Assert.Equal(new BsonArray { AssetOne, AssetTwo }, stored["asset_ids"]);
     }
 
     [Fact]
@@ -39,8 +40,25 @@ public class DiscoveryOwnershipStatusTests(MongoFixture mongo)
     {
         var db = mongo.NewDatabase();
         await db.GetCollection<BsonDocument>("discoveries").InsertOneAsync(ScannerDiscovery("d-1", "org-1"));
+        await SeedEnabledAssetAsync(db, "org-1");
 
         Assert.True(await Service(db, "org-1").UpdateOwnershipStatusAsync("d-1", OwnershipStatus.Verified));
+    }
+
+    [Fact]
+    public async Task Controller_DisabledAssetsDiscovery_ReturnsNotFoundAndLeavesItUnchanged()
+    {
+        var db = mongo.NewDatabase();
+        var discoveries = db.GetCollection<BsonDocument>("discoveries");
+        var original = ScannerDiscovery("d-1", "org-1");
+        await discoveries.InsertOneAsync(original);
+        await SeedEnabledAssetAsync(db, "org-1", enabled: false);
+
+        var result = await new DiscoveriesController(Service(db, "org-1"))
+            .UpdateOwnershipStatus("d-1", OwnershipStatus.NotMine);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal(original, await discoveries.Find(new BsonDocument("_id", "d-1")).SingleAsync());
     }
 
     [Fact]
@@ -89,13 +107,23 @@ public class DiscoveryOwnershipStatusTests(MongoFixture mongo)
         Assert.Equal(original, await discoveries.Find(new BsonDocument("_id", "d-1")).SingleAsync());
     }
 
+    private const string AssetOne = "65a000000000000000000001";
+    private const string AssetTwo = "65a000000000000000000002";
+
+    // AssetOne owns the discovery; AssetTwo does not exist (a deleted asset).
+    private static Task SeedEnabledAssetAsync(IMongoDatabase db, string orgId, bool enabled = true) =>
+        db.GetCollection<BsonDocument>("assets").InsertOneAsync(new BsonDocument
+        {
+            { "_id", ObjectId.Parse(AssetOne) }, { "org_id", orgId }, { "type", "ip" }, { "enabled", enabled },
+        });
+
     private static BsonDocument ScannerDiscovery(string id, string orgId) => new()
     {
         { "_id", id }, { "org_id", orgId }, { "asset_type", "port" }, { "source", "naabu" },
         { "status", "active" }, { "ownership_status", "verified" },
         { "port", 443 }, { "ip", "192.0.2.10" },
         { "banner", "nginx 1.25" }, { "previous_services", new BsonArray { "http" } },
-        { "asset_ids", new BsonArray { "asset-1", "asset-2" } },
+        { "asset_ids", new BsonArray { AssetOne, AssetTwo } },
     };
 
     private static DiscoveriesService Service(IMongoDatabase db, string orgId) =>

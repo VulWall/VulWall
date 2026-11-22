@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Recommendations.Constants;
@@ -263,6 +264,46 @@ public class DisabledAssetHidesDataTests(MongoFixture mongo)
         var model = await s.Services.DiscoveriesService().GetIndexViewModelAsync();
 
         Assert.Equal(1, model.Discoveries.Single(d => d.Name == "a.com").HighIssues);
+    }
+
+    [Fact]
+    public async Task SuppressFinding_OnDisabledAssetDiscovery_IsNotFoundAndWritesNothing()
+    {
+        var s = await CreateAsync();
+        await s.SetEnabled(s.AssetB, false);
+
+        var result = await s.Services.RecommendationsController().SuppressFinding(new SuppressFindingInput
+        {
+            DiscoveryId = "d-b-api", FindingType = "type-B-subdomain-issue", Status = SuppressionStatus.FalsePositive,
+        });
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Equal(0, await s.Db.GetCollection<BsonDocument>("finding_suppressions").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
+    }
+
+    [Fact]
+    public async Task UnsuppressFinding_OnDisabledAssetDiscovery_IsNotFoundAndKeepsTheSuppression()
+    {
+        var s = await CreateAsync();
+        Assert.True(await s.Services.Suppressions.SuppressAsync("d-b-api", "type-x", SuppressionStatus.AcceptedRisk, "admin", null));
+        var suppressionId = (await s.Services.Suppressions.GetActiveSuppressionsAsync()).Single().Id;
+        await s.SetEnabled(s.AssetB, false);
+
+        var result = await s.Services.RecommendationsController().UnsuppressFinding(new UnsuppressFindingInput { SuppressionId = suppressionId });
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Single(await s.Services.Suppressions.GetActiveSuppressionsAsync());
+    }
+
+    [Fact]
+    public async Task UpdateOwnershipStatus_OnDisabledAssetDiscovery_IsNotFound()
+    {
+        var s = await CreateAsync();
+        await s.SetEnabled(s.AssetB, false);
+        var service = s.Services.DiscoveriesService();
+
+        Assert.False(await service.UpdateOwnershipStatusAsync("d-b-api", OwnershipStatus.NotMine));
+        Assert.True(await service.UpdateOwnershipStatusAsync("ip-shared", OwnershipStatus.NotMine));
     }
 
     private static string[] TitlesOf(IEnumerable<FindingEntity> findings) =>
