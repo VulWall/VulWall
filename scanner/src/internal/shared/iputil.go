@@ -187,8 +187,10 @@ func ssrfSafeDial(lookup lookupIPFunc, dial dialFunc, timeout time.Duration) dia
 // the code simple; Happy Eyeballs (RFC 8305) would connect faster on a broken IPv6 path, but
 // the scanners are batch jobs and do not need that.
 //
-// The error is the dial error itself when one address was tried, so callers that check
-// net.Error.Timeout() see it unchanged; otherwise the errors of all attempts, joined.
+// The error is the dial error itself when one address was tried; otherwise a dialErrors
+// with the error of every attempt. errors.Is matches any of them, so a refusal from one
+// address (shared.IsConnRefused) reads as refused even if another address timed out: a
+// refusing address is a definite answer, as it was when it was the only one dialed.
 func dialEach(ctx context.Context, dial dialFunc, network string, ips []net.IP, port string) (net.Conn, error) {
 	var errs []error
 	for i, ip := range ips {
@@ -210,7 +212,26 @@ func dialEach(ctx context.Context, dial dialFunc, network string, ips []net.IP, 
 	if len(errs) == 1 {
 		return nil, errs[0]
 	}
-	return nil, errors.Join(errs...)
+	return nil, dialErrors(errs)
+}
+
+// dialErrors is the error of a dial in which every address failed. It is a net.Error, like
+// the error of a single dial, so callers that check Timeout() keep working: it is a timeout
+// when every attempt timed out.
+type dialErrors []error
+
+func (e dialErrors) Error() string   { return errors.Join(e...).Error() }
+func (e dialErrors) Unwrap() []error { return e }
+func (e dialErrors) Temporary() bool { return e.Timeout() }
+
+func (e dialErrors) Timeout() bool {
+	for _, err := range e {
+		var netErr net.Error
+		if !errors.As(err, &netErr) || !netErr.Timeout() {
+			return false
+		}
+	}
+	return true
 }
 
 // minAttemptTime is the shortest time dialEach gives one address while more time is left,

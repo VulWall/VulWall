@@ -229,3 +229,39 @@ func TestPartialDeadline(t *testing.T) {
 		}
 	}
 }
+
+// When every attempt times out, the error is still a net.Error whose Timeout() is true, as
+// for a single address: callers such as url.Error.Timeout() type-assert it.
+func TestSSRFSafeDial_AllTimeoutsIsTimeout(t *testing.T) {
+	t.Parallel()
+	f := &fakeNet{
+		answer: []string{publicV6a, publicV4},
+		hang:   map[string]bool{publicV6a: true, publicV4: true},
+	}
+	_, err := ssrfSafeDial(f.lookup, f.dial, 50*time.Millisecond)(context.Background(), "tcp", "slow.example:443")
+	netErr, ok := err.(net.Error)
+	if !ok || !netErr.Timeout() {
+		t.Fatalf("error %v (%T), want a net.Error with Timeout() true", err, err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("error %v does not wrap context.DeadlineExceeded", err)
+	}
+}
+
+// A refusal from any address makes the whole dial read as refused (IsConnRefused), even if
+// another address failed otherwise; a mix that is not all timeouts is not a timeout.
+func TestSSRFSafeDial_MixedErrorsRefusedIfAnyRefused(t *testing.T) {
+	t.Parallel()
+	f := &fakeNet{
+		answer: []string{publicV6a, publicV4},
+		hang:   map[string]bool{publicV6a: true},
+		fail:   syscall.ECONNREFUSED,
+	}
+	_, err := ssrfSafeDial(f.lookup, f.dial, 4*time.Second)(context.Background(), "tcp", "mixed.example:80")
+	if !IsConnRefused(err) {
+		t.Errorf("IsConnRefused(%v) = false, want true", err)
+	}
+	if netErr, ok := err.(net.Error); !ok || netErr.Timeout() {
+		t.Errorf("error %v: want a net.Error with Timeout() false", err)
+	}
+}
