@@ -65,7 +65,7 @@ scan coordinator
 5. **Findings ingestion.** Stores findings in the `findings` collection. A finding that was seen
    before is updated, not duplicated, and a resolved finding that comes back is opened again.
    For a finding type that VulWall has not seen before, it queues a job for the knowledge-base
-   engine, which runs only when `ANTHROPIC_API_KEY` is set.
+   engine, which runs only when `AI_API_KEY` is set.
 
 ## When is a scan done?
 

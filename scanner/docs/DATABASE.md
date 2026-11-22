@@ -168,7 +168,7 @@ type KBGenerationJob struct {
 }
 ```
 
-**KBGenerationResult** — published by knowledge-base-engine after Anthropic API call:
+**KBGenerationResult** — published by knowledge-base-engine after the AI provider call:
 ```go
 type KBGenerationResult struct {
     FindingType  string                 `json:"finding_type"`
@@ -488,7 +488,7 @@ One record per `(scan_id, source, discovery_id)` (unique index), written by
 
 Each finding carries the scanner's own human-readable text, so the web app can
 show it without a knowledge-base entry (the KB engine is optional and only runs
-when `ANTHROPIC_API_KEY` is set). Empty values are not written, and an update
+when `AI_API_KEY` is set). Empty values are not written, and an update
 never clears text that an earlier scan stored.
 
 | Field | Type | nuclei | testssl | certificate | jsscanner (retire.js) | http-headers | email-security |

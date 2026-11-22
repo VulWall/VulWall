@@ -8,10 +8,14 @@ using DbFinding = VulWall.Dashboard.Data.Entities.Finding.Finding;
 namespace VulWall.Dashboard.Reports.Services.ReportGeneration;
 
 public class ExecutiveSummaryService(
-    IAIService aiService,
+    IAiService aiService,
+    PromptLoader promptLoader,
     ILogger<ExecutiveSummaryService> logger)
 {
     private const string PromptName = "Executive_Summary_Agent";
+
+    // Room for thinking plus a 2-3 sentence answer.
+    private const int MaxOutputTokens = 4096;
 
     public async Task<string?> GenerateExecutiveSummaryAsync(
         string securityPosture,
@@ -28,18 +32,27 @@ public class ExecutiveSummaryService(
                 WriteIndented = false
             });
 
-            var response = await aiService.GetResponseAsync(
-                PromptName,
-                inputJson,
-                cancellationToken: cancellationToken);
+            var systemPrompt = await promptLoader.LoadPromptFromFileAsync(PromptName);
+            var result = await aiService.GenerateAsync(
+                new AiRequest(systemPrompt, inputJson, MaxOutputTokens), cancellationToken);
 
-            if (string.IsNullOrWhiteSpace(response))
+            if (result.Outcome != AiOutcome.Ok)
             {
-                logger.LogWarning("AI returned empty response for executive summary");
+                logger.LogWarning(
+                    "AI executive summary not usable: outcome {Outcome}, refusal category {Category}, model {Model}",
+                    result.Outcome, result.RefusalCategory, result.Model);
                 return null;
             }
 
-            return response.Trim();
+            var summary = result.Text.Trim();
+            var problem = ExecutiveSummaryValidator.Validate(summary);
+            if (problem is not null)
+            {
+                logger.LogWarning("AI executive summary rejected: {Problem}", problem);
+                return null;
+            }
+
+            return summary;
         }
         catch (Exception ex)
         {

@@ -49,8 +49,10 @@ Docker Compose recreates the containers whose settings changed. Your data is kep
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ANTHROPIC_API_KEY` | empty | Turns on AI remediation guidance and executive summaries. See [AI recommendations](/docs/configuration/ai/). |
-| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Model for AI remediation guidance (scanner) and executive summaries (web app). |
+| `AI_API_KEY` | empty | Turns on AI remediation guidance and executive summaries. See [AI recommendations](/docs/configuration/ai/). |
+| `AI_PROVIDER` | `anthropic` | AI provider. Only `anthropic` is supported for now. |
+| `AI_MODEL` | `claude-sonnet-5-5` | Model for AI remediation guidance (scanner) and executive summaries (web app). |
+| `AI_BASE_URL` | empty | Base URL of a gateway or proxy in front of the provider's API. Empty uses the provider's own API. Must be https; http only to a local host (loopback, private IP, `localhost`, a `.local`/`.internal` name or a single-label name such as a compose service). Any other value turns AI off with an error in the log. |
 
 ## Tracing (optional)
 

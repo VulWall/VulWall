@@ -15,21 +15,26 @@ namespace VulWall.Dashboard.Tests.Reports;
 [Collection(MongoCollection.Name)]
 public class ExecutiveSummaryProcessorTests(MongoFixture mongo)
 {
-    private sealed class FakeAi(string? response) : IAIService
+    // A null response stands for a call that returned no usable text.
+    private sealed class FakeAi(string? response) : IAiService
     {
         private int _calls;
         public int Calls => Volatile.Read(ref _calls);
         public string? LastMessage { get; private set; }
 
-        public Task<string?> GetResponseAsync(string promptName, string userMessage, string? model = null,
-            CancellationToken cancellationToken = default)
+        public Task<AiResult> GenerateAsync(AiRequest request, CancellationToken cancellationToken = default)
         {
             // Called from concurrent workers in one test.
             Interlocked.Increment(ref _calls);
-            LastMessage = userMessage;
-            return Task.FromResult(response);
+            LastMessage = request.UserPrompt;
+            return Task.FromResult(response is null
+                ? new AiResult(AiOutcome.NoOutput, string.Empty, "fake", 1, 0)
+                : new AiResult(AiOutcome.Ok, response, "fake", 1, 1));
         }
     }
+
+    private const string Summary =
+        "Your perimeter looks healthy, with no urgent exposure found. A few minor settings are worth tidying up.";
 
     private sealed record Setup(IMongoDatabase Db, IMongoCollection<BsonDocument> Scans, FakeAi Ai)
     {
@@ -38,12 +43,13 @@ public class ExecutiveSummaryProcessorTests(MongoFixture mongo)
             new FindingsPublicRepository(Db),
             new DiscoveriesPublicRepository(Db),
             new KnowledgeBaseCacheService(Db, new MemoryCache(new MemoryCacheOptions())),
-            new ExecutiveSummaryService(Ai, NullLogger<ExecutiveSummaryService>.Instance),
+            new ExecutiveSummaryService(Ai, new PromptLoader(new MemoryCache(new MemoryCacheOptions())),
+                NullLogger<ExecutiveSummaryService>.Instance),
             new AssetScopeFilter(new AssetsPublicRepository(Db), new DiscoveriesPublicRepository(Db)),
             NullLogger<ExecutiveSummaryProcessor>.Instance);
     }
 
-    private Setup Create(string? aiResponse = "Your perimeter looks healthy.")
+    private Setup Create(string? aiResponse = Summary)
     {
         var db = mongo.NewDatabase();
         return new Setup(db, db.GetCollection<BsonDocument>("scans"), new FakeAi(aiResponse));
@@ -60,7 +66,7 @@ public class ExecutiveSummaryProcessorTests(MongoFixture mongo)
         Assert.Equal(1, processed);
         var doc = await Get(s, id);
         Assert.Equal("done", doc["executive_summary_status"].AsString);
-        Assert.Equal("Your perimeter looks healthy.", doc["executive_summary"].AsString);
+        Assert.Equal(Summary, doc["executive_summary"].AsString);
         Assert.True(doc.Contains("started_at")); // scanner-owned field survives the partial update
     }
 
@@ -87,6 +93,19 @@ public class ExecutiveSummaryProcessorTests(MongoFixture mongo)
         await s.NewProcessor().ProcessPendingAsync(aiEnabled: true, CancellationToken.None);
 
         Assert.Equal("failed", (await Get(s, id))["executive_summary_status"].AsString);
+    }
+
+    [Fact]
+    public async Task ProcessPending_InvalidAiSummary_MarksFailedWithoutSummary()
+    {
+        var s = Create(aiResponse: "```json\n{\"summary\": \"Your perimeter looks healthy overall, nothing urgent.\"}\n```");
+        var id = await InsertScan(s, "done");
+
+        await s.NewProcessor().ProcessPendingAsync(aiEnabled: true, CancellationToken.None);
+
+        var doc = await Get(s, id);
+        Assert.Equal("failed", doc["executive_summary_status"].AsString);
+        Assert.False(doc.Contains("executive_summary"));
     }
 
     [Fact]

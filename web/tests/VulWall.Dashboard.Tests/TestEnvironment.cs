@@ -12,6 +12,6 @@ internal static class TestEnvironment
     [ModuleInitializer]
     internal static void Initialize()
     {
-        Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "");
+        Environment.SetEnvironmentVariable("AI_API_KEY", "");
     }
 }

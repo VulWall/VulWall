@@ -1,5 +1,6 @@
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.AIServices;
 using VulWall.Dashboard.Common.Services.Organization;
 using VulWall.Dashboard.Common.Services.Mappers;
 using VulWall.Dashboard.Common.Utils;
@@ -16,7 +17,8 @@ public class RecommendationsService(
     KnowledgeBaseCacheService knowledgeBaseCache,
     FindingSuppressionService suppressionService,
     IAssetScopeFilter assetScopeFilter,
-    IOrganizationContext organizationContext)
+    IOrganizationContext organizationContext,
+    AiStatus aiStatus)
 {
     public async Task<RecommendationsIndexViewModel> GetIndexViewModelAsync()
     {
@@ -276,7 +278,7 @@ public class RecommendationsService(
         {
             Finding = findingVm,
             AffectedAssets = affectedAssets,
-            ShowAiKeyHint = string.IsNullOrWhiteSpace(ServiceSettings.Instance.AnthropicApiKey)
+            ShowAiKeyHint = !await aiStatus.IsEnabledAsync()
         };
     }
 

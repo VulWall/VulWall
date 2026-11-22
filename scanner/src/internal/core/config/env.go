@@ -27,13 +27,17 @@ const (
 	EnvTestSSLVersion = "TESTSSL_VERSION"
 
 	// ===========================================
-	// API Keys
+	// AI
 	// ===========================================
 
-	// EnvAnthropicAPIKey is the Anthropic API key for knowledge base generation
-	EnvAnthropicAPIKey = "ANTHROPIC_API_KEY"
-	// EnvAnthropicModel is the Anthropic model to use (default: claude-sonnet-4-6)
-	EnvAnthropicModel = "ANTHROPIC_MODEL"
+	// EnvAIProvider selects the AI provider (default and only value: anthropic)
+	EnvAIProvider = "AI_PROVIDER"
+	// EnvAIAPIKey is the AI provider's API key; empty turns AI off
+	EnvAIAPIKey = "AI_API_KEY"
+	// EnvAIModel is the model ID (default: the provider's default model)
+	EnvAIModel = "AI_MODEL"
+	// EnvAIBaseURL overrides the provider's API base URL (optional)
+	EnvAIBaseURL = "AI_BASE_URL"
 
 	// ===========================================
 	// OpenTelemetry / Tracing

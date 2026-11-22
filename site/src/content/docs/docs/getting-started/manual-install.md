@@ -7,7 +7,7 @@ Use this method if you want to build the images from source, follow `main`, or s
 
 ```sh
 git clone https://github.com/VulWall/VulWall.git && cd VulWall
-cp .env.example .env        # optional: set ANTHROPIC_API_KEY
+cp .env.example .env        # optional: set AI_API_KEY
 echo "SETUP_TOKEN=$(openssl rand -hex 16)" >> .env
 docker compose up -d
 ```

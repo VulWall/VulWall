@@ -54,8 +54,10 @@ services:
       MONGO_URI: mongodb://mongo:27017
       MONGO_DB: vulwall
       REDIS_URI: redis://redis:6379/0
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
       NUCLEI_WORKERS: ${NUCLEI_WORKERS:-2}
       NUCLEI_RATE_LIMIT: ${NUCLEI_RATE_LIMIT:-30}
       NUCLEI_INTERACTSH: ${NUCLEI_INTERACTSH:-off}
@@ -108,9 +110,11 @@ services:
     environment:
       MONGO_URI: mongodb://mongo:27017
       MONGO_DB: vulwall
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      # The web app reads an empty value as the model name, so pass the default here.
-      DEFAULT_AI_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      # Empty AI_* values mean the default, as in the scanner.
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       SETUP_TOKEN: ${SETUP_TOKEN:-}

@@ -15,7 +15,7 @@ for your systems. See [Requirements](/docs/getting-started/requirements/).
 
 You need to be comfortable running Docker on a server. You do not need to be a security expert to
 read the results: each finding comes with a description, advice on how to fix it and references,
-and with an [Anthropic API key](/docs/configuration/ai/) also guidance written for business and
+and with an [AI provider API key](/docs/configuration/ai/) also guidance written for business and
 technical readers.
 
 ### What does it check?
@@ -80,7 +80,7 @@ how it is backed up and when it is deleted. See [Back up and restore](/docs/oper
   target call back to an interactsh server. Unless you run your own (`NUCLEI_INTERACTSH_SERVER`),
   that is one of ProjectDiscovery's public servers (`oast.*`), which then sees the callbacks and
   so learns which of your sites is vulnerable. See [Configuration](/docs/configuration/#scanner).
-- **AI, only if you set `ANTHROPIC_API_KEY`:** finding details go to Anthropic's API. See
+- **AI, only if you set `AI_API_KEY`:** finding details go to Anthropic's API. See
   [what is sent](/docs/configuration/ai/#what-is-sent-to-anthropic).
 - **Traces, only if you turn on tracing:** to the OTLP backend you configure.
 - **Update check:** shortly after start, then every 6 hours, the web app asks the GitHub API

@@ -23,7 +23,7 @@ whole scanner.
 | 7 | **email-security-scanner** | `email_security_scanner_service` | `domain_scan_triggers` | `security_findings` | `consumers()` | No |
 | 8 | **certificate-scanner** | `certificate_scanner_service` | `domain_scan_triggers` + `port_scan_triggers` | `security_findings` | `consumers()` | No |
 | 9 | **discovery-enrichment** | `discovery_enrichment_service` | `discovery_enrichment_queue` | `discovery_enrichment_results` | `consumers()` | No |
-| 10 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | `knowledgeBase()` — only when `ANTHROPIC_API_KEY` is set | No |
+| 10 | **knowledge-base-engine** | `knowledge_base_engine_service` | `kb_generation_queue` | `kb_generation_results` | `knowledgeBase()` — only when `AI_API_KEY` is set | No |
 | 11 | **domain-ingestion** | `domain_ingestion_service` | `domain_discovery_results` | `ip_discovery_queue`, `discovery_enrichment_queue`, `domain_scan_triggers` | `consumers()` → ingestion orchestrator | Yes |
 | 12 | **port-ingestion** | `port_ingestion_service` | `ip_discovery_results` | `discovery_enrichment_queue`, `port_scan_triggers` (none for 80/443 of a CDN edge address, nor for any port of one without a name; see ARCHITECTURE.md, nuclei targets) | `consumers()` → ingestion orchestrator | Yes |
 | 13 | **findings-ingestion** | `findings_ingestion_service` | `security_findings` | MongoDB `findings`, `scan_coverage`; `kb_generation_queue` | `consumers()` → ingestion orchestrator | Yes |
@@ -34,7 +34,7 @@ whole scanner.
 **Notes:**
 - Ingestion slices (#11–15) run inside the ingestion orchestrator (`src/internal/ingestion/orchestrator.go`).
 - The scan coordinator (#16) is three goroutines: the cron **scheduler** (per-org `scan_cron`, plus stream cleanup), the **queued-scan poller** (every 5 s, claims scans the web app queued, and scheduled scans the cron queued behind a running scan), and the **scan monitor** (marks scans `done`). It writes the `scans` collection, and the scan monitor also resolves `findings`; see the scan lifecycle in [DATABASE.md](DATABASE.md#scans-collection).
-- Without `ANTHROPIC_API_KEY` the KB engine (#10) does not start. `kb_generation_queue` keeps its jobs until the key is set.
+- Without `AI_API_KEY` the KB engine (#10) does not start. `kb_generation_queue` keeps its jobs until the key is set.
 - Every consumer uses `redisx.ConsumeStream`: a handler error is retried in the worker (3 attempts), then the message goes to `dead_letter` (capped at about 10,000 entries, `MAXLEN ~`) and is ACKed; malformed messages (`redisx.Permanent`) and panics go there at once. Shutdown leaves the message pending.
 - **Restart loses pending work, including KB and enrichment.** At startup `ReleaseOrphanedPending` deletes the previous process's consumers, with their pending entries, from every group in `ownedGroups()`. For the scan-pipeline groups this is safe: the running scan is closed `interrupted_by_restart` and resolves nothing. For the terminal groups it is a loss: a `kb_generation_queue` job or a `discovery_enrichment_queue` job that was in progress is dropped (its finding keeps no KB entry until the next new finding of that type takes the Redis `kb_generating:<type>` lock after 24 h; its discovery keeps the enrichment of the previous scan).
 - `main.go` creates the job-queue groups (`0`) and every trigger-stream group (`$`) before any component starts.
@@ -93,7 +93,7 @@ The two discovery job queues are included because a discovery job can run for ma
 
 **When adding a new active recon scanner:** You MUST add its consumer group to `scanPipelineGroups()` in `pipeline.go`, after the stages that feed it (guarded by `TestScanPipelineGroups`) or scans will complete before the new scanner finishes processing.
 
-**Deliberately excluded (only these):** the `discovery_enrichment_*` and `kb_generation_*` streams are terminal branches (enrichment writes only discovery metadata; KB writes only the `knowledge_base` collection) and produce no findings or triggers. They must NOT be added here — gating completion on the slow, cross-org, Anthropic-backed KB queue would let one org's backlog stall every other org's scans.
+**Deliberately excluded (only these):** the `discovery_enrichment_*` and `kb_generation_*` streams are terminal branches (enrichment writes only discovery metadata; KB writes only the `knowledge_base` collection) and produce no findings or triggers. They must NOT be added here — gating completion on the slow, cross-org, AI-backed KB queue would let one org's backlog stall every other org's scans.
 
 ---
 
