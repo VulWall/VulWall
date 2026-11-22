@@ -283,8 +283,10 @@ public class AssetOwnershipIntegrityTests(MongoFixture mongo)
             AfterUpdateMany = () => s.C("assets").UpdateOneAsync(AssetFilter(s.A), Builders<BsonDocument>.Update.Unset("deleting"))
         };
 
-        await Service(s, s.Services.Assets, discoveries).DeleteAssetAsync(s.A);
+        var (ok, error) = await Service(s, s.Services.Assets, discoveries).DeleteAssetAsync(s.A);
 
+        Assert.False(ok);
+        Assert.Equal(AssetsService.DeleteNotFinishedError, error);
         Assert.Equal(1, await s.C("assets").CountDocumentsAsync(AssetFilter(s.A)));
     }
 
@@ -352,17 +354,18 @@ public class AssetOwnershipIntegrityTests(MongoFixture mongo)
         Assert.Equal(1, await s.C("findings").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("discovery_id", "dead-and-y")));
     }
 
-    // An asset added while a delete runs is inserted before its id reaches a discovery, so the
-    // delete never takes it for one that no longer exists.
+    // An asset added while a delete runs is inserted before its id reaches a discovery. The delete
+    // reads the recorded ids before the existing assets, so an asset added (and recorded) after
+    // its read of the assets is in neither list and never taken for one that no longer exists.
     [Fact]
     public async Task Delete_AssetAddedMeanwhile_KeepsItsId()
     {
         var s = await CreateAsync();
         var z = ObjectId.GenerateNewId();
         var org = new FixedOrganizationContext(Org);
-        var discoveries = new HookedDiscoveries(s.Db, org)
+        var assets = new HookedAssets(s.Db, org)
         {
-            AfterRecordedAssetIds = async () =>
+            AfterGetAll = async () =>
             {
                 await s.C("assets").InsertOneAsync(Asset(z, Org, Api));
                 await s.C("discoveries").UpdateOneAsync(Builders<BsonDocument>.Filter.Eq("_id", ApiId),
@@ -370,7 +373,7 @@ public class AssetOwnershipIntegrityTests(MongoFixture mongo)
             }
         };
 
-        var (ok, error) = await Service(s, s.Services.Assets, discoveries).DeleteAssetAsync(s.A);
+        var (ok, error) = await Service(s, assets, s.Services.Discoveries).DeleteAssetAsync(s.A);
 
         Assert.True(ok, error);
         Assert.Equal([z.ToString()], await OwnersAsync(s, ApiId));
@@ -413,6 +416,14 @@ public class AssetOwnershipIntegrityTests(MongoFixture mongo)
     {
         public Func<Task>? BeforeUpdateOne { get; init; }
         public Func<Task>? AfterUpdateOne { get; init; }
+        public Func<Task>? AfterGetAll { get; init; }
+
+        public override async Task<IEnumerable<Asset>> GetAllAsync()
+        {
+            var all = (await base.GetAllAsync()).ToList();
+            if (AfterGetAll != null) await AfterGetAll();
+            return all;
+        }
 
         public override async Task<long> UpdateOneAsync(FilterDefinition<Asset> filter, UpdateDefinition<Asset> update)
         {
@@ -426,15 +437,7 @@ public class AssetOwnershipIntegrityTests(MongoFixture mongo)
     private sealed class HookedDiscoveries(IMongoDatabase db, IOrganizationContext org)
         : DiscoveriesRepository(db, org, NullLogger<OrgScopedRepository<Discovery, string>>.Instance)
     {
-        public Func<Task>? AfterRecordedAssetIds { get; init; }
         public Func<Task>? AfterUpdateMany { get; init; }
-
-        public override async Task<List<string>> GetRecordedAssetIdsAsync()
-        {
-            var ids = await base.GetRecordedAssetIdsAsync();
-            if (AfterRecordedAssetIds != null) await AfterRecordedAssetIds();
-            return ids;
-        }
 
         public override async Task<long> UpdateManyAsync(FilterDefinition<Discovery> filter, UpdateDefinition<Discovery> update)
         {

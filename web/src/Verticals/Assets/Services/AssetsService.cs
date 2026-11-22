@@ -143,6 +143,9 @@ public class AssetsService(
     public const string DeletingToggleError =
         "This asset's delete did not finish. Delete it again to finish.";
 
+    public const string DeleteNotFinishedError =
+        "The delete did not finish. Delete the asset again to finish.";
+
     // Enable, disable and delete are refused while a scan is queued or running: the scanner reads
     // the enabled assets once, when the scan starts, and would keep scanning (and writing results
     // for) an asset that was disabled or deleted after that.
@@ -218,7 +221,8 @@ public class AssetsService(
 
         // Last, so a run that fails part-way can be retried from the Assets page. Only a marked
         // asset: the mark is what kept its data safe from the steps above.
-        await assetsRepository.DeleteManyAsync(byId & Builders<Asset>.Filter.Eq(a => a.Deleting, true));
+        if (await assetsRepository.DeleteManyAsync(byId & Builders<Asset>.Filter.Eq(a => a.Deleting, true)) == 0)
+            return (false, DeleteNotFinishedError);
         return (true, null);
     }
 
