@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
+	"os"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -12,8 +14,8 @@ import (
 	"time"
 )
 
-// Public addresses: the guard refuses the documentation ranges (TEST-NET, 2001:db8::/32 is
-// not reserved but reads as fake), so the fakes answer with real public literals.
+// Public addresses: the guard refuses the documentation ranges (TEST-NET, 2001:db8::/32),
+// so the fakes answer with real public literals.
 const (
 	publicV4  = "93.184.216.34"
 	publicV6a = "2606:2800:220:1:248:1893:25c8:1946"
@@ -21,11 +23,13 @@ const (
 )
 
 // fakeNet is a resolver and a dialer for ssrfSafeDial. Dials to an address in conns
-// succeed; dials to an address in hang block until their ctx ends; others fail with fail.
+// succeed; dials to an address in hang block until their ctx ends; dials to an address in
+// errs fail at once with its error; others fail with fail.
 type fakeNet struct {
 	answer  []string
 	hang    map[string]bool
 	conns   map[string]bool
+	errs    map[string]error
 	fail    error
 	lookups atomic.Int32
 
@@ -55,6 +59,8 @@ func (f *fakeNet) dial(ctx context.Context, network, addr string) (net.Conn, err
 	case f.hang[host]:
 		<-ctx.Done()
 		return nil, &net.OpError{Op: "dial", Net: network, Err: ctx.Err()}
+	case f.errs[host] != nil:
+		return nil, &net.OpError{Op: "dial", Net: network, Err: f.errs[host]}
 	default:
 		return nil, &net.OpError{Op: "dial", Net: network, Err: f.fail}
 	}
@@ -248,20 +254,98 @@ func TestSSRFSafeDial_AllTimeoutsIsTimeout(t *testing.T) {
 	}
 }
 
-// A refusal from any address makes the whole dial read as refused (IsConnRefused), even if
-// another address failed otherwise; a mix that is not all timeouts is not a timeout.
-func TestSSRFSafeDial_MixedErrorsRefusedIfAnyRefused(t *testing.T) {
+// errTimeout is what net returns for a dial that ran out of time ("i/o timeout").
+var errTimeout = os.ErrDeadlineExceeded
+
+// A multi-address dial reads as refused (IsConnRefused, so "nothing listens") only when
+// every attempt was refused or found its address family unusable, and at least one was
+// refused. A timeout, a cancel or another error on any address leaves it not refused: that
+// address may have a listener, so the check is incomplete.
+func TestIsConnRefused_MultiAddressDial(t *testing.T) {
+	t.Parallel()
+	refused, unreach, noAddr := syscall.ECONNREFUSED, syscall.ENETUNREACH, syscall.EADDRNOTAVAIL
+	cases := []struct {
+		name        string
+		v6, v4      error
+		wantRefused bool
+	}{
+		{"all refused", refused, refused, true},
+		{"broken IPv6, closed IPv4 port (issue #51)", unreach, refused, true},
+		{"IPv6 address not available, closed IPv4 port", noAddr, refused, true},
+		{"no family usable, none refused", unreach, noAddr, false},
+		{"timeout then refused", errTimeout, refused, false},
+		{"refused then timeout", refused, errTimeout, false},
+		{"refused then reset", refused, syscall.ECONNRESET, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := &fakeNet{
+				answer: []string{publicV6a, publicV4},
+				errs:   map[string]error{publicV6a: tc.v6, publicV4: tc.v4},
+			}
+			_, err := ssrfSafeDial(f.lookup, f.dial, 5*time.Second)(context.Background(), "tcp", "dual.example:80")
+			if err == nil {
+				t.Fatal("dial succeeded, want an error")
+			}
+			if got := IsConnRefused(err); got != tc.wantRefused {
+				t.Errorf("IsConnRefused(%v) = %v, want %v", err, got, tc.wantRefused)
+			}
+		})
+	}
+}
+
+// Cancelling the dial after a refusal is not a refusal: the other address was never tried.
+func TestIsConnRefused_RefusedThenCancelled(t *testing.T) {
 	t.Parallel()
 	f := &fakeNet{
 		answer: []string{publicV6a, publicV4},
-		hang:   map[string]bool{publicV6a: true},
-		fail:   syscall.ECONNREFUSED,
+		errs:   map[string]error{publicV6a: syscall.ECONNREFUSED},
+		hang:   map[string]bool{publicV4: true},
 	}
-	_, err := ssrfSafeDial(f.lookup, f.dial, 4*time.Second)(context.Background(), "tcp", "mixed.example:80")
-	if !IsConnRefused(err) {
-		t.Errorf("IsConnRefused(%v) = false, want true", err)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for len(f.dialedHosts()) < 2 {
+			time.Sleep(time.Millisecond)
+		}
+		cancel()
+	}()
+	_, err := ssrfSafeDial(f.lookup, f.dial, 0)(ctx, "tcp", "dual.example:80")
+	if IsConnRefused(err) {
+		t.Errorf("IsConnRefused(%v) = true, want false", err)
 	}
-	if netErr, ok := err.(net.Error); !ok || netErr.Timeout() {
-		t.Errorf("error %v: want a net.Error with Timeout() false", err)
+}
+
+// The error of a multi-address dial reaches ProbeError through http.Client (url.Error
+// around it): a timeout next to a refusal makes the check incomplete; refusals only, next
+// to a protocol that answered, do not.
+func TestProbeError_MultiAddressDialThroughHTTPClient(t *testing.T) {
+	t.Parallel()
+	get := func(errs map[string]error) error {
+		f := &fakeNet{answer: []string{publicV6a, publicV4}, errs: errs}
+		client := &http.Client{Transport: &http.Transport{
+			DialContext: ssrfSafeDial(f.lookup, f.dial, 5*time.Second),
+		}}
+		resp, err := client.Get("http://dual.example/")
+		if err == nil {
+			resp.Body.Close()
+			t.Fatal("GET succeeded, want a dial error")
+		}
+		return err
+	}
+
+	mixed := get(map[string]error{publicV6a: errTimeout, publicV4: syscall.ECONNREFUSED})
+	if err := ProbeError(mixed, nil); err == nil {
+		t.Errorf("ProbeError(timeout+refused, answered) = nil, want the check incomplete")
+	}
+
+	allRefused := get(map[string]error{publicV6a: syscall.ECONNREFUSED, publicV4: syscall.ECONNREFUSED})
+	if err := ProbeError(allRefused, nil); err != nil {
+		t.Errorf("ProbeError(all refused, answered) = %v, want nil", err)
+	}
+
+	issue51 := get(map[string]error{publicV6a: syscall.ENETUNREACH, publicV4: syscall.ECONNREFUSED})
+	if err := ProbeError(issue51, nil); err != nil {
+		t.Errorf("ProbeError(unreachable+refused, answered) = %v, want nil", err)
 	}
 }

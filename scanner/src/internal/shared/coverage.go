@@ -85,8 +85,14 @@ func TargetCoverage(source string, target ScanTarget, reported []FindingKey, run
 }
 
 // IsConnRefused reports whether err is a refused TCP connection: a definite answer that
-// nothing listens on the port, unlike a timeout.
+// nothing listens on the port, unlike a timeout. For a dial over several addresses
+// (SSRFSafeDialContext) it is true only when every address refused or was unusable, and at
+// least one refused (dialErrors.allRefused); errors.Is alone would match any one refusal.
 func IsConnRefused(err error) bool {
+	var dialErrs dialErrors
+	if errors.As(err, &dialErrs) {
+		return dialErrs.allRefused()
+	}
 	return errors.Is(err, syscall.ECONNREFUSED)
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"syscall"
 	"time"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
@@ -188,9 +189,7 @@ func ssrfSafeDial(lookup lookupIPFunc, dial dialFunc, timeout time.Duration) dia
 // the scanners are batch jobs and do not need that.
 //
 // The error is the dial error itself when one address was tried; otherwise a dialErrors
-// with the error of every attempt. errors.Is matches any of them, so a refusal from one
-// address (shared.IsConnRefused) reads as refused even if another address timed out: a
-// refusing address is a definite answer, as it was when it was the only one dialed.
+// with the error of every attempt (see IsConnRefused for when that reads as refused).
 func dialEach(ctx context.Context, dial dialFunc, network string, ips []net.IP, port string) (net.Conn, error) {
 	var errs []error
 	for i, ip := range ips {
@@ -223,6 +222,24 @@ type dialErrors []error
 func (e dialErrors) Error() string   { return errors.Join(e...).Error() }
 func (e dialErrors) Unwrap() []error { return e }
 func (e dialErrors) Temporary() bool { return e.Timeout() }
+
+// allRefused reports whether the dial is a definite "nothing listens": every attempt was
+// refused or found its address family unusable (no route, no source address: a broken
+// IPv6 path), and at least one was refused. A timeout, a cancel or any other error leaves
+// the answer open, because that address may have a listener.
+func (e dialErrors) allRefused() bool {
+	refused := false
+	for _, err := range e {
+		switch {
+		case errors.Is(err, syscall.ECONNREFUSED):
+			refused = true
+		case errors.Is(err, syscall.ENETUNREACH), errors.Is(err, syscall.EADDRNOTAVAIL):
+		default:
+			return false
+		}
+	}
+	return refused
+}
 
 func (e dialErrors) Timeout() bool {
 	for _, err := range e {
