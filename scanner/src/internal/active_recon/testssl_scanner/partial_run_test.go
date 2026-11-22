@@ -117,7 +117,7 @@ func TestRunTestSSLScanKeepsFindingsOfIncompleteRun(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			fakeTestSSL(t, tc.json, tc.code)
-			got, err := s.runTestSSLScan(context.Background(), "127.0.0.1:443", "LOW")
+			got, err := s.runTestSSLScan(context.Background(), "127.0.0.1:443", "127.0.0.1", "LOW")
 			if err == nil {
 				t.Fatal("err = nil, want the run to be incomplete")
 			}

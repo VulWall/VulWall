@@ -60,8 +60,13 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		zap.String("org_id", target.OrgID),
 	)
 
-	// Run testssl.sh scan (LOW severity and above - excludes INFO)
-	findings, err := s.runTestSSLScan(ctx, target.Target, "LOW")
+	// Run testssl.sh scan (LOW severity and above - excludes INFO) against the address
+	// validated here (--ip), so testssl.sh does not resolve the host again.
+	var findings []TestSSLFinding
+	ip, err := resolveTargetIP(ctx, target.Target)
+	if err == nil {
+		findings, err = s.runTestSSLScan(ctx, target.Target, ip, "LOW")
+	}
 	if err != nil && ctx.Err() != nil {
 		// Shutdown cut the run off. This is expected: the message stays unACKed and the
 		// next start closes the scan as interrupted.
@@ -72,8 +77,11 @@ func (s *Service) ProcessDiscovery(ctx context.Context, target ScanTarget) error
 		return err
 	}
 	if err == nil {
-		// Like nuclei, only a target that still answers after the run makes it evidence.
-		if rerr := shared.Reachable(ctx, target.Target); rerr != nil {
+		// Like nuclei, only a target that still answers after the run makes it evidence. Dial
+		// the IP testssl.sh scanned: another address of the host answering proves nothing
+		// about it. resolveTargetIP accepted the host:port, so the split cannot fail.
+		_, port, _ := net.SplitHostPort(target.Target)
+		if rerr := shared.Reachable(ctx, net.JoinHostPort(ip, port)); rerr != nil {
 			err = fmt.Errorf("target not reachable after the run: %w", rerr)
 		}
 	}
@@ -147,8 +155,9 @@ func testSSLArgs(jsonPath, severity, ip, target string) []string {
 	}
 }
 
-// runTestSSLScan executes testssl.sh scanner on the target
-func (s *Service) runTestSSLScan(ctx context.Context, target string, severity string) ([]TestSSLFinding, error) {
+// runTestSSLScan executes testssl.sh scanner on the target, connecting to ip (validated by
+// resolveTargetIP).
+func (s *Service) runTestSSLScan(ctx context.Context, target, ip, severity string) ([]TestSSLFinding, error) {
 	// Create temporary file for JSON output
 	// testssl.sh's --jsonfile writes to a file, not stdout
 	tmpFile, err := os.CreateTemp("", "testssl-*.json")
@@ -166,12 +175,8 @@ func (s *Service) runTestSSLScan(ctx context.Context, target string, severity st
 	// -U: scan for vulnerabilities only (not all checks)
 	// --severity: filter by severity (LOW, MEDIUM, HIGH, CRITICAL)
 	// Target format: host:port
-	// --ip: test the address we validated here instead of letting testssl.sh
+	// --ip: test the address validated by the caller instead of letting testssl.sh
 	// resolve the host again (closes the DNS-rebinding window).
-	ip, err := resolveTargetIP(ctx, target)
-	if err != nil {
-		return nil, err
-	}
 	cmd := execx.Command(ctx, "testssl.sh", testSSLArgs(tmpPath, severity, ip, target)...)
 
 	// Execute command and capture stderr/stdout for error reporting
