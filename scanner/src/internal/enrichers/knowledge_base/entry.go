@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 )
 
-// kbEntry is the part of a generated entry that validateEntry checks. The
+// kbEntry is the part of a generated entry that ValidateEntry checks. The
 // published entry is the full JSON object, not this struct.
 type kbEntry struct {
 	Business struct {
@@ -41,13 +40,12 @@ type kbEntry struct {
 	} `json:"metadata"`
 }
 
-var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-
-// validateEntry checks a generated entry beyond what the JSON Schema
-// enforces: every section is present, enums hold known values, and the text
-// fields are long enough to be useful. Providers without strict schema
-// output depend on it; for Anthropic it catches empty or stub answers.
-func validateEntry(raw json.RawMessage) error {
+// ValidateEntry checks a generated entry beyond what the JSON Schema
+// enforces: every section is present, enums hold known values, and the main
+// text fields are long enough to be useful. Providers without strict schema
+// output depend on it; for Anthropic it catches empty or stub answers. The
+// bounds are loose on purpose: a rejected entry is a paid generation lost.
+func ValidateEntry(raw json.RawMessage) error {
 	var e kbEntry
 	if err := json.Unmarshal(raw, &e); err != nil {
 		return fmt.Errorf("entry is not a JSON object: %w", err)
@@ -58,22 +56,17 @@ func validateEntry(raw json.RawMessage) error {
 			problems = append(problems, fmt.Errorf("%s: %d characters, want at least %d", field, n, minLen))
 		}
 	}
-	list := func(field string, items []string, minItems, maxItems, minLen int) {
+	list := func(field string, items []string, minItems, maxItems int) {
 		if len(items) < minItems || len(items) > maxItems {
 			problems = append(problems, fmt.Errorf("%s: %d items, want %d to %d", field, len(items), minItems, maxItems))
 		}
 		for i, item := range items {
-			text(fmt.Sprintf("%s[%d]", field, i), item, minLen)
+			text(fmt.Sprintf("%s[%d]", field, i), item, 1)
 		}
 	}
 	oneOf := func(field, value string, allowed ...string) {
 		if !slices.Contains(allowed, value) {
 			problems = append(problems, fmt.Errorf("%s: %q is not one of %v", field, value, allowed))
-		}
-	}
-	slug := func(field, value string) {
-		if !slugPattern.MatchString(value) {
-			problems = append(problems, fmt.Errorf("%s: %q is not a URL slug", field, value))
 		}
 	}
 
@@ -82,8 +75,8 @@ func validateEntry(raw json.RawMessage) error {
 	text("business.summary", b.Summary, 40)
 	text("business.impact", b.Impact, 40)
 	oneOf("business.urgency", b.Urgency, "immediate", "high", "medium", "low")
-	list("business.actions", b.Actions, 1, 6, 10)
-	slug("business.blog_slug", b.BlogSlug)
+	list("business.actions", b.Actions, 1, 6)
+	text("business.blog_slug", b.BlogSlug, 1)
 
 	t := e.Technical
 	text("technical.title", t.Title, 5)
@@ -92,9 +85,9 @@ func validateEntry(raw json.RawMessage) error {
 	text("technical.impact", t.Impact, 20)
 	oneOf("technical.severity.level", t.Severity.Level, "critical", "high", "medium", "low", "info")
 	text("technical.severity.justification", t.Severity.Justification, 10)
-	list("technical.remediation_steps", t.RemediationSteps, 1, 10, 10)
-	list("technical.verification_steps", t.VerificationSteps, 1, 10, 10)
-	slug("technical.blog_slug", t.BlogSlug)
+	list("technical.remediation_steps", t.RemediationSteps, 1, 10)
+	list("technical.verification_steps", t.VerificationSteps, 1, 10)
+	text("technical.blog_slug", t.BlogSlug, 1)
 
 	m := e.Metadata
 	text("metadata.owasp_category", m.OWASPCategory, 2)

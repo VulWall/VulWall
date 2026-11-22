@@ -61,7 +61,7 @@ internal sealed class TestServices(IMongoDatabase db, string orgId)
 
     public RecommendationsService RecommendationsService() =>
         new(Findings, Discoveries, Scans, KnowledgeBase, Suppressions, AssetScope, _org,
-            new AiStatus(new EnvAiConfigSource()));
+            new AiStatus(new EnvAiConfigSource(), NullLogger<AiStatus>.Instance));
 
     public DashboardService DashboardService()
     {

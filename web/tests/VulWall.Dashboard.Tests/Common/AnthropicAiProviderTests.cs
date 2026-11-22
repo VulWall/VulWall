@@ -185,10 +185,12 @@ public class AiServiceTests
     public async Task AiStatus_FollowsTheCurrentConfig()
     {
         var configs = new Configs(new AiConfig("anthropic", "", "", ""));
-        var status = new AiStatus(configs);
+        var status = new AiStatus(configs, NullLogger<AiStatus>.Instance);
 
         Assert.False(await status.IsEnabledAsync());
         configs.Config = configs.Config with { ApiKey = "k" };
         Assert.True(await status.IsEnabledAsync());
+        configs.Config = configs.Config with { Provider = "openia" };
+        Assert.False(await status.IsEnabledAsync());
     }
 }

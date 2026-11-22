@@ -19,12 +19,24 @@ public sealed class EnvAiConfigSource : IAiConfigSource
 
 /// <summary>
 /// Whether AI features are on. The executive summary poller and the "how to get AI guidance" hints ask
-/// it each time instead of reading the configuration once at start-up.
+/// it each time instead of reading the configuration once at start-up. An unknown provider counts as
+/// off, so finished scans are marked skipped (and summarized once it is fixed) instead of failing.
 /// </summary>
-public sealed class AiStatus(IAiConfigSource configSource)
+public sealed class AiStatus(IAiConfigSource configSource, ILogger<AiStatus> logger)
 {
-    public async Task<bool> IsEnabledAsync(CancellationToken cancellationToken = default) =>
-        (await configSource.GetAsync(cancellationToken)).IsEnabled;
+    private string? _reportedProvider;
+
+    public async Task<bool> IsEnabledAsync(CancellationToken cancellationToken = default)
+    {
+        var config = await configSource.GetAsync(cancellationToken);
+        if (config.HasApiKey && !config.IsKnownProvider && config.Provider != Volatile.Read(ref _reportedProvider))
+        {
+            Volatile.Write(ref _reportedProvider, config.Provider);
+            logger.LogError("AI is disabled: unknown AI_PROVIDER '{Provider}' (supported: {Supported})",
+                config.Provider, AiConfig.Anthropic);
+        }
+        return config.IsEnabled;
+    }
 }
 
 /// <summary>
@@ -50,7 +62,7 @@ public sealed class AiService(IAiConfigSource configSource, ILoggerFactory logge
 
     private IAiProvider GetProvider(AiConfig config)
     {
-        if (!config.IsEnabled)
+        if (!config.HasApiKey)
             throw new InvalidOperationException("AI is not configured (AI_API_KEY is empty)");
 
         lock (_lock)

@@ -72,7 +72,11 @@ func TestValidateEntry(t *testing.T) {
 		{"short summary", func(e map[string]any) { section(e, "business")["summary"] = "Bad." }, "business.summary"},
 		{"unknown urgency", func(e map[string]any) { section(e, "business")["urgency"] = "asap" }, "business.urgency"},
 		{"no actions", func(e map[string]any) { section(e, "business")["actions"] = []any{} }, "business.actions"},
-		{"bad slug", func(e map[string]any) { section(e, "business")["blog_slug"] = "Not A Slug" }, "business.blog_slug"},
+		{"blank slug", func(e map[string]any) { section(e, "business")["blog_slug"] = " " }, "business.blog_slug"},
+		{"short list items are fine", func(e map[string]any) {
+			section(e, "technical")["verification_steps"] = []any{"Retest."}
+			section(e, "technical")["blog_slug"] = "jquery-3.5_xss"
+		}, ""},
 		{"unknown severity", func(e map[string]any) {
 			section(section(e, "technical"), "severity")["level"] = "severe"
 		}, "technical.severity.level"},
@@ -84,7 +88,7 @@ func TestValidateEntry(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateEntry(validEntry(t, tt.mutate))
+			err := ValidateEntry(validEntry(t, tt.mutate))
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -96,7 +100,7 @@ func TestValidateEntry(t *testing.T) {
 			}
 		})
 	}
-	if err := validateEntry(json.RawMessage(`"text"`)); err == nil {
+	if err := ValidateEntry(json.RawMessage(`"text"`)); err == nil {
 		t.Error("a JSON string passed validation")
 	}
 }

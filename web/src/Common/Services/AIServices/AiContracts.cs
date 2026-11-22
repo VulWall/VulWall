@@ -51,7 +51,12 @@ public sealed record AiConfig(string Provider, string ApiKey, string Model, stri
 {
     public const string Anthropic = "anthropic";
 
-    public bool IsEnabled => !string.IsNullOrWhiteSpace(ApiKey);
+    public bool HasApiKey => !string.IsNullOrWhiteSpace(ApiKey);
+
+    public bool IsKnownProvider => Provider == Anthropic;
+
+    /// <summary>A key is set and the provider is one this build supports.</summary>
+    public bool IsEnabled => HasApiKey && IsKnownProvider;
 }
 
 /// <summary>A provider adapter. Built by <see cref="AiService"/> from the current <see cref="AiConfig"/>.</summary>

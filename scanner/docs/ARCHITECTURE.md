@@ -277,7 +277,7 @@ security_findings → findings_ingestion
                     ├── Resolve the provider from AI_* config (read per job)
                     ├── Compose the prompt: core + web-search part (or no-search part)
                     ├── provider.Generate: strict schema output, web search if supported
-                    ├── validateEntry (sections, enums, lengths); drop bad references
+                    ├── ValidateEntry (sections, enums, lengths); drop bad references
                     └── Publish to kb_generation_results (refused / truncated / invalid → nothing)
                             └──► kb_ingestion
                                     └── Upsert to knowledge_base collection (_id = "kb_" + findingType)

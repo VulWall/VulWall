@@ -233,10 +233,12 @@ func knowledgeBase(rdb *redis.Client, log *zap.Logger) (*component, error) {
 		log.Info("AI_API_KEY is not set: AI knowledge-base generation is disabled. Findings keep the scanners' own descriptions.")
 		return nil, nil
 	}
-	// Fail at start-up, not on the first job, for an unknown AI_PROVIDER.
+	// Like other bad optional settings, an unknown AI_PROVIDER turns the
+	// feature off with an error in the log instead of stopping the scanner.
 	p, err := provider.New(cfg, log)
 	if err != nil {
-		return nil, err
+		log.Error("AI knowledge-base generation is disabled: invalid AI settings", zap.Error(err))
+		return nil, nil
 	}
 	log.Info("AI knowledge-base generation is enabled", zap.String("provider", cfg.Provider), zap.String("model", p.Model()))
 	service, err := knowledge_base.NewService(rdb, provider.NewResolver(source, log), log)

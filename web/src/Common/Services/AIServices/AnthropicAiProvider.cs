@@ -27,7 +27,7 @@ public sealed class AnthropicAiProvider(AnthropicClient client, string model, IL
     /// </summary>
     public static AnthropicClient CreateClient(AiConfig config, HttpClient? httpClient = null)
     {
-        if (!config.IsEnabled)
+        if (!config.HasApiKey)
             throw new InvalidOperationException("No AI API key configured");
         var options = new ClientOptions { ApiKey = config.ApiKey };
         if (!string.IsNullOrWhiteSpace(config.BaseUrl))

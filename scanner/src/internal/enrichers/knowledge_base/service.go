@@ -182,7 +182,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.KBGenerationJob) er
 	default:
 		return fail(fmt.Errorf("KB generation for %s ended without an entry (outcome %s)", job.FindingType, result.Outcome))
 	}
-	if err := validateEntry(result.JSON); err != nil {
+	if err := ValidateEntry(result.JSON); err != nil {
 		return fail(fmt.Errorf("invalid KB entry for %s: %w", job.FindingType, err))
 	}
 	entry, err := normalizeEntry(result.JSON, webSearch)

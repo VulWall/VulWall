@@ -148,9 +148,10 @@ func (c *Client) Capabilities() ai.Capabilities {
 type message struct {
 	Role string `json:"role"`
 	// Content is a JSON string for user turns and the response's content
-	// array, byte for byte, for assistant turns: thinking signatures,
-	// encrypted search results and block types this client does not know
-	// must go back unchanged.
+	// array, unchanged, for assistant turns: thinking signatures, encrypted
+	// search results and block types this client does not know must go back
+	// as received. The encoder only removes whitespace between JSON tokens
+	// (the API sends none); string contents are never re-escaped.
 	Content json.RawMessage `json:"content"`
 }
 

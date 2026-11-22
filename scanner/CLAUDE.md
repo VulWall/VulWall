@@ -154,7 +154,7 @@ Environment variables (the repo-root `.env.example` lists the ones users set; `d
 | `MONGO_URI` | MongoDB connection string (default `mongodb://localhost:27017`) |
 | `MONGO_DB` | Database name (default: `vulwall`) |
 | `AI_API_KEY` | Optional. Enables the KB engine; unset = KB stage skipped. Compose passes all `AI_*` values to the web app too |
-| `AI_PROVIDER` | AI provider (default and only value: `anthropic`); an unknown value fails start-up |
+| `AI_PROVIDER` | AI provider (default and only value: `anthropic`); an unknown value turns the KB engine off with an error in the log |
 | `AI_MODEL` | Model for the KB engine (default: `claude-sonnet-5-5`, `anthropic.DefaultModel`) |
 | `AI_BASE_URL` | Optional base URL of a gateway or proxy in front of the provider's API (the scanner sends the key in `x-api-key`) |
 | `NUCLEI_WORKERS` | Concurrent nuclei processes across both trigger streams (default 2) |
