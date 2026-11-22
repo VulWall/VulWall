@@ -152,14 +152,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update modal content
         const content = document.getElementById('assetToggleContent');
         if (content) {
-            const action = newEnabled ? 'enable' : 'disable';
             const box = document.createElement('div');
             box.className = `alert alert-${newEnabled ? 'success' : 'warning'} mb-0`;
             const strong = document.createElement('strong');
             strong.textContent = assetName;
             const p = document.createElement('p');
             p.className = 'mb-0 mt-1 small';
-            p.textContent = `This will ${action} scanning for this asset.`;
+            p.textContent = newEnabled
+                ? 'This will enable scanning for this asset and show its results again.'
+                : 'This will disable scanning for this asset and hide its results. You can enable it again at any time to show them.';
             box.append(strong, p);
             content.replaceChildren(box);
         }
