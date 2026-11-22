@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/VulWall/VulWall/scanner/src/internal/core/config"
 )
@@ -142,18 +143,20 @@ func resolvePublicIPs(ctx context.Context, lookup lookupIPFunc, host string) ([]
 //  2. Resolve and validate the host with ResolvePublicIPs (numeric hosts are
 //     validated without a lookup; DNS failure is rejected, fail-closed; any
 //     reserved answer rejects the dial, even if other answers are public).
-//  3. Dial directly to the first validated IP by address (not hostname), so
-//     the OS/Go runtime never performs a second lookup that could be rebound.
+//  3. Dial the validated IPs by address (not hostname), one after the other
+//     until one connects, so the OS/Go runtime never performs a second lookup
+//     that could be rebound. See dialEach for the order and the time budget.
 //
 // ALLOW_PRIVATE_TARGETS=true disables the reserved-range check but keeps the
 // single-resolution dial.
 //
-// The caller-supplied dialer controls timeouts and keep-alive settings.
+// The caller-supplied dialer controls keep-alive settings. Its Timeout bounds the
+// whole call, all addresses together, as it does for a net.Dialer given a host name.
 func SSRFSafeDialContext(dialer *net.Dialer) func(ctx context.Context, network, addr string) (net.Conn, error) {
-	return ssrfSafeDial(net.DefaultResolver.LookupIP, dialer.DialContext)
+	return ssrfSafeDial(net.DefaultResolver.LookupIP, dialer.DialContext, dialer.Timeout)
 }
 
-func ssrfSafeDial(lookup lookupIPFunc, dial dialFunc) dialFunc {
+func ssrfSafeDial(lookup lookupIPFunc, dial dialFunc, timeout time.Duration) dialFunc {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(addr)
 		if err != nil {
@@ -165,9 +168,90 @@ func ssrfSafeDial(lookup lookupIPFunc, dial dialFunc) dialFunc {
 			return nil, err
 		}
 
-		safeAddr := net.JoinHostPort(ips[0].String(), port)
-		return dial(ctx, network, safeAddr)
+		if timeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
+		return dialEach(ctx, dial, network, interleaveFamilies(ips), port)
 	}
+}
+
+// dialEach dials ips (validated by the caller) in order and returns the first connection.
+// A dual-stack host whose IPv6 path is broken still connects over IPv4.
+//
+// The attempts share the ctx deadline: each one gets the remaining time divided by the
+// addresses left, but at least 2 seconds, like net.Dialer with a host name (net's
+// partialDeadline). So a first address that hangs takes half of a two-address budget, not
+// all of it, and the call never takes longer than the deadline. Sequential attempts keep
+// the code simple; Happy Eyeballs (RFC 8305) would connect faster on a broken IPv6 path, but
+// the scanners are batch jobs and do not need that.
+//
+// The error is the dial error itself when one address was tried, so callers that check
+// net.Error.Timeout() see it unchanged; otherwise the errors of all attempts, joined.
+func dialEach(ctx context.Context, dial dialFunc, network string, ips []net.IP, port string) (net.Conn, error) {
+	var errs []error
+	for i, ip := range ips {
+		if err := ctx.Err(); err != nil {
+			errs = append(errs, err)
+			break
+		}
+		attemptCtx, cancel := ctx, context.CancelFunc(func() {})
+		if deadline, ok := ctx.Deadline(); ok {
+			attemptCtx, cancel = context.WithDeadline(ctx, partialDeadline(time.Now(), deadline, len(ips)-i))
+		}
+		conn, err := dial(attemptCtx, network, net.JoinHostPort(ip.String(), port))
+		cancel()
+		if err == nil {
+			return conn, nil
+		}
+		errs = append(errs, err)
+	}
+	if len(errs) == 1 {
+		return nil, errs[0]
+	}
+	return nil, errors.Join(errs...)
+}
+
+// minAttemptTime is the shortest time dialEach gives one address while more time is left,
+// as net's saneMinimum.
+const minAttemptTime = 2 * time.Second
+
+// partialDeadline returns the deadline of one attempt when addrsLeft addresses (this one
+// included) share the time until deadline.
+func partialDeadline(now, deadline time.Time, addrsLeft int) time.Time {
+	left := deadline.Sub(now)
+	share := left / time.Duration(addrsLeft)
+	if share < minAttemptTime {
+		share = min(minAttemptTime, left)
+	}
+	return now.Add(share)
+}
+
+// interleaveFamilies orders ips so that the address families alternate, starting with the
+// family of the first address and keeping the resolver order within a family (RFC 8305
+// section 4). A host with several IPv6 addresses on a broken IPv6 path then reaches IPv4 on
+// the second attempt, before the budget runs out.
+func interleaveFamilies(ips []net.IP) []net.IP {
+	var first, other []net.IP
+	isV4 := ips[0].To4() != nil
+	for _, ip := range ips {
+		if (ip.To4() != nil) == isV4 {
+			first = append(first, ip)
+		} else {
+			other = append(other, ip)
+		}
+	}
+	out := make([]net.IP, 0, len(ips))
+	for i := 0; i < len(first) || i < len(other); i++ {
+		if i < len(first) {
+			out = append(out, first[i])
+		}
+		if i < len(other) {
+			out = append(out, other[i])
+		}
+	}
+	return out
 }
 
 // IsPrivateIP reports whether the given IP string falls within any reserved,

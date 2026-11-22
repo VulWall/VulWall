@@ -124,7 +124,7 @@ func ProbeError(errs ...error) error {
 	return nil
 }
 
-// reachTimeout bounds one connection attempt of Reachable.
+// reachTimeout bounds the dial of one address of Reachable (all the IPs it resolves to).
 const reachTimeout = 5 * time.Second
 
 // Reachable returns nil when a TCP connection to any of addrs (host:port) succeeds, else the
