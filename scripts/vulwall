@@ -236,7 +236,7 @@ cmd_restore() {
     compose exec -T mongo mongorestore --quiet --drop --archive --gzip <"$file" ||
         die "mongorestore failed."
     say "Restored $file."
-    say "Settings such as SETUP_TOKEN and ANTHROPIC_API_KEY are in .env, not in the database."
+    say "Settings such as SETUP_TOKEN and AI_API_KEY are in .env, not in the database."
     say "If you need them, copy them from the .env file of the backup."
 }
 

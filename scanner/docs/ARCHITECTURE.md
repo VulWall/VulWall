@@ -74,7 +74,7 @@ DISCOVERY ENRICHMENT FLOW:
 KNOWLEDGE BASE FLOW:
 1. findings_ingestion checks if KB entry exists for finding_type (Redis SETNX lock + MongoDB check)
 2. If new finding_type: publishes KBGenerationJob to kb_generation_queue
-3. knowledge-base-engine calls Anthropic Claude API to generate business + technical KB content
+3. knowledge-base-engine calls the configured AI provider (Anthropic for now) to generate business + technical KB content
 4. Publishes KBGenerationResult to kb_generation_results
 5. kb_ingestion upserts to knowledge_base collection (_id = "kb_" + findingType, $setOnInsert for idempotency)
 6. The web app reads from knowledge_base collection (shared across all orgs, ~84 entries)
@@ -260,7 +260,7 @@ Only one scan per organization is active at a time; see the lifecycle rules in [
 **Location:** `src/internal/enrichers/knowledge_base/`
 
 The KB engine is **optional**. `nightwatch` starts it only when
-`ANTHROPIC_API_KEY` is set; otherwise findings show the scanners' own
+`AI_API_KEY` is set; otherwise findings show the scanners' own
 `description`, `remediation` and `references`, and `kb_generation_queue` keeps
 its jobs until the key is configured.
 
@@ -272,18 +272,25 @@ security_findings → findings_ingestion
     ├── Check: knowledge_base collection has no entry for this finding_type?
     └── If all pass: publish to kb_generation_queue
             └──► knowledge-base-engine
-                    ├── Load system prompt + response schema from embedded files
+                    ├── Load prompt parts + response schema from embedded files
                     ├── Filter attacker-controlled metadata (safeMetadataForKB)
-                    ├── Call Anthropic Claude API (temperature 0.3, max_tokens 8192)
-                    ├── Parse JSON response (business + technical sections)
-                    └── Publish to kb_generation_results
+                    ├── Resolve the provider from AI_* config (read per job)
+                    ├── Compose the prompt: core + web-search part (or no-search part)
+                    ├── provider.Generate: strict schema output, web search if supported
+                    ├── validateEntry (sections, enums, lengths); drop bad references
+                    └── Publish to kb_generation_results (refused / truncated / invalid → nothing)
                             └──► kb_ingestion
                                     └── Upsert to knowledge_base collection (_id = "kb_" + findingType)
 ```
 
 **Key design:** ONE entry per unique finding_type (~84 types), shared across all orgs. Uses `$setOnInsert` for idempotent writes. The web app reads from this collection for recommendations, reports, and security scores.
 
-**Components:** Anthropic client with retry logic (429/502/503/504/529), embedded prompts, bounded response reads (1MB), prompt injection mitigation via metadata filtering.
+**Components:**
+
+- `internal/ai`: the provider-neutral contract (`Request`, `Result` with an outcome `ok`/`refused`/`truncated`/`no_output`, `Capabilities`, `ConfigSource`; `EnvSource` reads `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`).
+- `internal/ai/provider`: `New` (factory by `AI_PROVIDER`) and `Resolver` (reads the config on every call and rebuilds the provider when it changes).
+- `internal/ai/anthropic`: Messages API over HTTP, `anthropic-version: 2026-10-21`, no sampling parameters. Strict `generate_kb_entry` tool with `tool_choice: auto` (current models reject a forced choice) and one follow-up when the turn ends without the call. `pause_turn` resumes by echoing the assistant content as raw JSON. A refusal is final (logged with its category, not retried). `web_search_20260209` and `output_config.effort: medium` go only to models known to accept them (`currentModels`); others get `web_search_20250305` and no effort. Retries 429/502/503/504/529 and network timeouts with backoff; `max_tokens` 16000; 10-minute HTTP timeout; 4 MB response limit.
+- Prompt injection mitigation via metadata filtering and untrusted-data tags.
 
 ---
 

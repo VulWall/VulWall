@@ -1,12 +1,12 @@
 ---
 title: AI recommendations
-description: Optional AI remediation guidance and executive summaries with an Anthropic API key.
+description: Optional AI remediation guidance and executive summaries with an AI provider API key.
 ---
 
 VulWall works without AI. Every finding shows the scanner's own description and, when the scanner
 provides them, remediation advice and references.
 
-With an Anthropic API key, VulWall also:
+With an API key for an AI provider (Anthropic for now), VulWall also:
 
 - writes business and technical remediation guidance for each **finding type** (for example
   "missing HSTS header"), once, and shows it with every finding of that type;
@@ -17,7 +17,7 @@ With an Anthropic API key, VulWall also:
 Add your key to `.env` and apply it:
 
 ```sh
-ANTHROPIC_API_KEY=sk-ant-...
+AI_API_KEY=sk-ant-...
 ```
 
 ```sh
@@ -28,8 +28,16 @@ The scanner starts its knowledge-base engine only when the key is set. Finding t
 found before you set the key are queued and processed once it is set. Scans that finished less
 than 7 days before you set the key get an executive summary too.
 
-`ANTHROPIC_MODEL` selects the model for the guidance and the executive summaries (default
-`claude-sonnet-4-6`).
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `AI_API_KEY` | empty | The provider's API key. Empty turns AI off. |
+| `AI_PROVIDER` | `anthropic` | The AI provider. Only `anthropic` is supported for now. |
+| `AI_MODEL` | `claude-sonnet-5-5` | Model for the guidance and the executive summaries. |
+| `AI_BASE_URL` | the provider's API | Base URL of a gateway or proxy in front of the provider's API. The scanner sends the key in the `x-api-key` header, the web app as `Authorization: Bearer`. |
+
+The guidance uses Anthropic's web search tool to look up advisories and references. AI output is
+checked before it is stored: an answer that is incomplete, too short or in the wrong format is
+dropped, and the finding keeps the scanner's own text (or the report has no executive summary).
 
 ## What is sent to Anthropic
 
@@ -39,4 +47,4 @@ than 7 days before you set the key get an executive summary too.
 - For an executive summary: the number of findings per severity, and the title, impact and
   explanation of up to three Critical or High findings.
 
-Nothing is sent when `ANTHROPIC_API_KEY` is empty. API usage is billed to your Anthropic account.
+Nothing is sent when `AI_API_KEY` is empty. API usage is billed to your Anthropic account.

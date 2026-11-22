@@ -13,9 +13,9 @@ back.
   assets you own or are authorized to test.
 - **Scans**: scan history, live status and an on-demand "Scan now".
 - **Discoveries**: subdomains, IPs, open ports and services found by the scanner.
-- **Recommendations**: fix guidance per finding. With an Anthropic API key the scanner builds an
+- **Recommendations**: fix guidance per finding. With an AI provider API key the scanner builds an
   AI knowledge base; without one you get the scanner's own description and reference links.
-- **Reports**: summary and technical reports. With an Anthropic API key the summary report gets
+- **Reports**: summary and technical reports. With an AI provider API key the summary report gets
   an AI executive summary.
 - **Settings**: organization name, industry, website and logo.
 
@@ -56,15 +56,17 @@ The image runs as the non-root `app` user, listens on port 8080 and has a health
 
 ## Configuration
 
-All settings are environment variables. None of them is a secret except `ANTHROPIC_API_KEY`.
+All settings are environment variables. None of them is a secret except `AI_API_KEY`.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
 | `MONGO_DB` | `vulwall` | Database name (shared with the scanner) |
 | `PORT` | `8080` | HTTP port |
-| `ANTHROPIC_API_KEY` | empty | Optional. Enables AI executive summaries on reports |
-| `DEFAULT_AI_MODEL` | `claude-sonnet-4-6` | Anthropic model for executive summaries. The root `docker-compose.yml` sets it from `ANTHROPIC_MODEL`, the setting the scanner uses too. A set but empty value is used as the model name, so leave it unset for the default |
+| `AI_API_KEY` | empty | Optional. Enables AI executive summaries on reports |
+| `AI_PROVIDER` | `anthropic` | AI provider; only `anthropic` for now. The scanner reads the same `AI_*` settings |
+| `AI_MODEL` | `claude-sonnet-5-5` | Model for executive summaries. Empty means the default |
+| `AI_BASE_URL` | empty | Gateway or proxy in front of the provider's API (the web app sends the key as `Authorization: Bearer`) |
 | `SECURE_COOKIES` | `false` | Set to `true` when the app is served over HTTPS. Turns on Secure cookies, HSTS and the HTTP to HTTPS redirect. Leave `false` for plain `http://localhost` |
 | `TRUSTED_PROXIES` | empty | Comma-separated IPs or CIDR ranges of reverse proxies whose `X-Forwarded-For`/`X-Forwarded-Proto` headers are trusted (for example `10.0.0.0/8`). Empty: only loopback is trusted |
 | `VULWALL_VERSION` | `dev` | Version shown in the About dialog. Set at image build time with the `VULWALL_VERSION` build argument; release images use the tag, and the root `make build` passes `dev (<short commit>)` |
@@ -91,7 +93,7 @@ Behind a TLS-terminating reverse proxy, set `SECURE_COOKIES=true` and add the pr
   scanner picks it up. A scan counts as in progress while it is `queued`, `pending` or `running`
   (for at most 24 hours).
 - **Executive summaries**: a background job checks every 30 seconds for finished scans and writes
-  one AI summary per scan when `ANTHROPIC_API_KEY` is set. Without a key the report shows the
+  one AI summary per scan when `AI_API_KEY` is set. Summaries that fail `ExecutiveSummaryValidator` (length, JSON, Markdown, sentence count) are stored as failed. Without a key the report shows the
   standard overview instead.
 - **Flags and provider logos**: put PNG files in `src/wwwroot/images/logos/countries/{code}.png`
   (ISO 3166-1 alpha-2, lowercase) and `src/wwwroot/images/logos/cloud/{provider}.png` (for

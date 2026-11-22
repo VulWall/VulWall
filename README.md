@@ -44,7 +44,7 @@ The findings use the real texts of the scanners.
 - The dashboard shows assets, scan history, discoveries, findings and
   reports. Each finding comes with the scanner's own description and,
   when the scanner provides them, remediation advice and references.
-- With an Anthropic API key, VulWall also writes business and technical
+- With an AI provider API key (Anthropic for now), VulWall also writes business and technical
   remediation guidance for each finding type, and executive summaries. This
   is optional.
 - Scans run on the schedule you set in Settings → Scan schedule. Until you
@@ -89,7 +89,7 @@ Or install from a clone of this repository:
 
 ```bash
 git clone https://github.com/VulWall/VulWall.git && cd VulWall
-cp .env.example .env        # optional: set ANTHROPIC_API_KEY
+cp .env.example .env        # optional: set AI_API_KEY
 echo "SETUP_TOKEN=$(openssl rand -hex 16)" >> .env
 docker compose up -d
 ```
@@ -161,8 +161,10 @@ comments.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ANTHROPIC_API_KEY` | empty | Enables AI remediation guidance and executive summaries |
-| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Model for AI remediation guidance and executive summaries |
+| `AI_API_KEY` | empty | Enables AI remediation guidance and executive summaries |
+| `AI_PROVIDER` | `anthropic` | AI provider; only `anthropic` for now |
+| `AI_MODEL` | `claude-sonnet-5-5` | Model for AI remediation guidance and executive summaries |
+| `AI_BASE_URL` | empty | Gateway or proxy in front of the provider's API |
 | `VULWALL_PORT` | `8080` | Host port of the web UI (bound to `127.0.0.1`) |
 | `SETUP_TOKEN` | empty | First-run setup token. The install script sets a random one; empty means a new random token at each start, printed in the log |
 | `VULWALL_VERSION` | `latest` | Image tag of `ghcr.io/vulwall/scanner` and `ghcr.io/vulwall/web` |

@@ -47,7 +47,7 @@ How long a scan takes depends on how many subdomains and open ports VulWall find
   owner, cloud provider and WAF of each.
 - **Dashboard** and **Recommendations**: the problems VulWall found, by severity (Critical, High,
   Medium, Low, Info), with the scanner's description, remediation advice and references. With an
-  [Anthropic API key](/docs/configuration/ai/), you also get AI-written business and technical
+  [AI provider API key](/docs/configuration/ai/), you also get AI-written business and technical
   guidance for each finding type.
 - **Reports**: a summary report and a technical report.
 

@@ -36,7 +36,7 @@ scanner/
     │   ├── scan_coordinator/  # scheduler, queued-scan poller, scan monitor, stream cleanup
     │   ├── discoveries/     # domain_discovery, port_discovery
     │   ├── active_recon/    # nuclei, testssl, certificate, js_dep, http_header, email_security, discovery_enrichment
-    │   ├── enrichers/       # knowledge_base (optional Anthropic Claude KB engine)
+    │   ├── enrichers/       # knowledge_base (optional AI KB engine; provider contract in internal/ai)
     │   └── ingestion/       # orchestrator + 5 slices (domain, port, findings, enrichment, kb)
     ├── go.mod
     └── go.sum
@@ -153,8 +153,10 @@ Environment variables (the repo-root `.env.example` lists the ones users set; `d
 | `REDIS_URI` | Redis connection string (default `redis://localhost:6379/0`) |
 | `MONGO_URI` | MongoDB connection string (default `mongodb://localhost:27017`) |
 | `MONGO_DB` | Database name (default: `vulwall`) |
-| `ANTHROPIC_API_KEY` | Optional. Enables the KB engine; unset = KB stage skipped |
-| `ANTHROPIC_MODEL` | Anthropic model for the KB engine (default: `claude-sonnet-4-6`). Compose also passes it to the web app as `DEFAULT_AI_MODEL` |
+| `AI_API_KEY` | Optional. Enables the KB engine; unset = KB stage skipped. Compose passes all `AI_*` values to the web app too |
+| `AI_PROVIDER` | AI provider (default and only value: `anthropic`); an unknown value fails start-up |
+| `AI_MODEL` | Model for the KB engine (default: `claude-sonnet-5-5`, `anthropic.DefaultModel`) |
+| `AI_BASE_URL` | Optional base URL of a gateway or proxy in front of the provider's API (the scanner sends the key in `x-api-key`) |
 | `NUCLEI_WORKERS` | Concurrent nuclei processes across both trigger streams (default 2) |
 | `NUCLEI_RATE_LIMIT` | nuclei `-rl`, requests per second per process (default 30; not a positive integer = default, with a warning). nuclei's own 150 saturates a home/office uplink: it drops the target as "unresponsive permanently" and the run is coverage `error` |
 | `NUCLEI_INTERACTSH` | `on`/`true` runs nuclei's OAST checks via interactsh; anything else = `-ni` (default off: callbacks would go to ProjectDiscovery's public `oast.*` servers) |
