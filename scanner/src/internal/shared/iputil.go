@@ -104,11 +104,22 @@ func CheckPublicIPs(ips []net.IP) error {
 // CheckPublicIPs. It fails closed: a DNS error or an empty answer is an error.
 // A numeric host is validated without a lookup.
 func ResolvePublicIPs(ctx context.Context, host string) ([]net.IP, error) {
+	return resolvePublicIPs(ctx, net.DefaultResolver.LookupIP, host)
+}
+
+// lookupIPFunc and dialFunc are the network operations of SSRFSafeDialContext; tests pass
+// fakes for them.
+type (
+	lookupIPFunc func(ctx context.Context, network, host string) ([]net.IP, error)
+	dialFunc     func(ctx context.Context, network, addr string) (net.Conn, error)
+)
+
+func resolvePublicIPs(ctx context.Context, lookup lookupIPFunc, host string) ([]net.IP, error) {
 	if ip := net.ParseIP(host); ip != nil {
 		ips := []net.IP{ip}
 		return ips, CheckPublicIPs(ips)
 	}
-	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	ips, err := lookup(ctx, "ip", host)
 	if err != nil {
 		return nil, fmt.Errorf("ssrf-guard: DNS resolution failed for %q: %w", host, err)
 	}
@@ -139,19 +150,23 @@ func ResolvePublicIPs(ctx context.Context, host string) ([]net.IP, error) {
 //
 // The caller-supplied dialer controls timeouts and keep-alive settings.
 func SSRFSafeDialContext(dialer *net.Dialer) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return ssrfSafeDial(net.DefaultResolver.LookupIP, dialer.DialContext)
+}
+
+func ssrfSafeDial(lookup lookupIPFunc, dial dialFunc) dialFunc {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(addr)
 		if err != nil {
 			return nil, fmt.Errorf("ssrf-guard: malformed address %q: %w", addr, err)
 		}
 
-		ips, err := ResolvePublicIPs(ctx, host)
+		ips, err := resolvePublicIPs(ctx, lookup, host)
 		if err != nil {
 			return nil, err
 		}
 
 		safeAddr := net.JoinHostPort(ips[0].String(), port)
-		return dialer.DialContext(ctx, network, safeAddr)
+		return dial(ctx, network, safeAddr)
 	}
 }
 
