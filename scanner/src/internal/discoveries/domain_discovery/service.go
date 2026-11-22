@@ -144,6 +144,7 @@ func (s *Service) ProcessJob(ctx context.Context, job shared.DiscoveryJob) error
 		TraceID:     job.TraceID,
 		ScanID:      job.ScanID,  // Pass through scan_id
 		OrgID:       job.OrgID,
+		AssetID:     job.AssetID,
 		Source:      "subfinder",
 		ParentID:    job.ParentID,
 		Host:        job.Host,
@@ -318,6 +319,7 @@ func (s *Service) discoverSubdomains(ctx context.Context, job shared.DiscoveryJo
 			TraceID:     traceID,
 			ScanID:      scanID,
 			OrgID:       orgID,
+			AssetID:     job.AssetID,
 			Source:      "subfinder",
 			ParentID:    &parentDomainID,
 			Host:        host,

@@ -162,6 +162,7 @@ func (s *Service) processTCPScan(ctx context.Context, job shared.IPDiscoveryJob)
 			TraceID:      job.TraceID,
 			ScanID:       job.ScanID,
 			OrgID:        job.OrgID,
+			AssetID:      job.AssetID,
 			ParentID:     job.ParentID,
 			Source:       "port_discovery",
 			IP:           job.IP,

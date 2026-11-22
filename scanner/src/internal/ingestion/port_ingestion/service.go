@@ -11,6 +11,7 @@ import (
 	"github.com/VulWall/VulWall/scanner/src/internal/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -106,10 +107,24 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.IPDiscovery
 		}
 	}
 
+	// Record the asset whose scan reached this IP (a direct IP asset has no domain
+	// ingestion to do it). After the enrichment job: a retry of this message
+	// sees the IP as not new and does not queue it again. Before the port write below,
+	// which copies the IP's list.
+	if err := shared.AddDiscoveryAssetIDs(ctx, s.db, bson.M{"_id": ipDiscoveryID, "org_id": finding.OrgID}, finding.AssetID); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("scan.success", false))
+		return fmt.Errorf("failed to record asset on IP discovery: %w", err)
+	}
+
 	// 3. Upsert port discovery (with org_id) - skip if this is an IP finding
 	var portDiscoveryID string
 	if finding.AssetType == shared.AssetTypePort {
 		portDiscoveryID, err = s.upsertPortDiscovery(ctx, finding, ipDiscoveryID, now)
+		if err == nil {
+			err = s.copyIPAssetIDs(ctx, finding.OrgID, ipDiscoveryID, portDiscoveryID)
+		}
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
@@ -334,6 +349,26 @@ func (s *Service) upsertPortDiscovery(ctx context.Context, finding shared.IPDisc
 	}
 
 	return existingPortDiscovery.ID, nil
+}
+
+// copyIPAssetIDs adds the IP's asset_ids to the port. The IP is port-scanned once per scan,
+// so the port finding carries only the first asset that reached it. Domain ingestion adds
+// the others to the IP and then to its ports; reading the IP after the port is written
+// means each such asset reaches the port one way or the other.
+func (s *Service) copyIPAssetIDs(ctx context.Context, orgID, ipDiscoveryID, portDiscoveryID string) error {
+	var ip struct {
+		AssetIDs []string `bson:"asset_ids"`
+	}
+	err := s.db.Collection(shared.CollectionDiscoveries).FindOne(ctx,
+		bson.M{"_id": ipDiscoveryID, "org_id": orgID},
+		options.FindOne().SetProjection(bson.M{"asset_ids": 1})).Decode(&ip)
+	if err != nil {
+		return fmt.Errorf("failed to read IP discovery assets: %w", err)
+	}
+	if err := shared.AddDiscoveryAssetIDs(ctx, s.db, bson.M{"_id": portDiscoveryID, "org_id": orgID}, ip.AssetIDs...); err != nil {
+		return fmt.Errorf("failed to record assets on port discovery: %w", err)
+	}
+	return nil
 }
 
 // updatePortDiscovery updates port discovery with new scan results and tracks service changes
