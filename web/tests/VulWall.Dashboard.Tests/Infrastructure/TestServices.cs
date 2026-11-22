@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Driver;
@@ -60,8 +61,17 @@ internal sealed class TestServices(IMongoDatabase db, string orgId)
     {
         var controller = new RecommendationsController(
             NullLogger<RecommendationsController>.Instance, RecommendationsService(), Suppressions);
-        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+        var http = new DefaultHttpContext();
+        controller.ControllerContext = new ControllerContext { HttpContext = http };
+        controller.TempData = new TempDataDictionary(http, new InMemoryTempDataProvider());
         return controller;
+    }
+
+    private sealed class InMemoryTempDataProvider : ITempDataProvider
+    {
+        private IDictionary<string, object> _values = new Dictionary<string, object>();
+        public IDictionary<string, object> LoadTempData(HttpContext context) => _values;
+        public void SaveTempData(HttpContext context, IDictionary<string, object> values) => _values = values;
     }
 
     public ReportsController ReportsController()

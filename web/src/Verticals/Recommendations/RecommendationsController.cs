@@ -81,7 +81,12 @@ public class RecommendationsController(
             suppressedBy,
             input.Note);
         if (!found)
-            return NotFound();
+        {
+            TempData["Error"] = "This finding is not available. Its asset may be disabled.";
+            if (!string.IsNullOrEmpty(returnFindingId))
+                return RedirectToAction(nameof(Detail), new { id = returnFindingId });
+            return RedirectToAction(nameof(Index));
+        }
 
         TempData["Info"] = "Finding has been dismissed.";
 
@@ -100,7 +105,12 @@ public class RecommendationsController(
         }
 
         if (!await suppressionService.UnsuppressAsync(input.SuppressionId))
-            return NotFound();
+        {
+            TempData["Error"] = "This dismissed finding is not available. Its asset may be disabled.";
+            if (!string.IsNullOrEmpty(returnFindingId))
+                return RedirectToAction(nameof(Detail), new { id = returnFindingId });
+            return RedirectToAction(nameof(Index));
+        }
 
         TempData["Info"] = "Finding has been restored.";
 

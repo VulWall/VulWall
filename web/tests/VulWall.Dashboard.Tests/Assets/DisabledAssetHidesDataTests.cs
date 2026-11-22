@@ -267,31 +267,38 @@ public class DisabledAssetHidesDataTests(MongoFixture mongo)
     }
 
     [Fact]
-    public async Task SuppressFinding_OnDisabledAssetDiscovery_IsNotFoundAndWritesNothing()
+    public async Task SuppressFinding_OnDisabledAssetDiscovery_RedirectsWithAnErrorAndWritesNothing()
     {
         var s = await CreateAsync();
         await s.SetEnabled(s.AssetB, false);
+        var controller = s.Services.RecommendationsController();
 
-        var result = await s.Services.RecommendationsController().SuppressFinding(new SuppressFindingInput
+        var result = await controller.SuppressFinding(new SuppressFindingInput
         {
             DiscoveryId = "d-b-api", FindingType = "type-B-subdomain-issue", Status = SuppressionStatus.FalsePositive,
-        });
+        }, returnFindingId: s.FindingId(BSubIssue));
 
-        Assert.IsType<NotFoundResult>(result);
+        // A plain form post: back to the page with a flash message, not the 404 page.
+        var redirect = Assert.IsType<RedirectToActionResult>(result);
+        Assert.Equal("Detail", redirect.ActionName);
+        Assert.NotNull(controller.TempData["Error"]);
         Assert.Equal(0, await s.Db.GetCollection<BsonDocument>("finding_suppressions").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
     }
 
     [Fact]
-    public async Task UnsuppressFinding_OnDisabledAssetDiscovery_IsNotFoundAndKeepsTheSuppression()
+    public async Task UnsuppressFinding_OnDisabledAssetDiscovery_RedirectsWithAnErrorAndKeepsTheSuppression()
     {
         var s = await CreateAsync();
         Assert.True(await s.Services.Suppressions.SuppressAsync("d-b-api", "type-x", SuppressionStatus.AcceptedRisk, "admin", null));
         var suppressionId = (await s.Services.Suppressions.GetActiveSuppressionsAsync()).Single().Id;
         await s.SetEnabled(s.AssetB, false);
 
-        var result = await s.Services.RecommendationsController().UnsuppressFinding(new UnsuppressFindingInput { SuppressionId = suppressionId });
+        var controller = s.Services.RecommendationsController();
 
-        Assert.IsType<NotFoundResult>(result);
+        var result = await controller.UnsuppressFinding(new UnsuppressFindingInput { SuppressionId = suppressionId });
+
+        Assert.Equal("Index", Assert.IsType<RedirectToActionResult>(result).ActionName);
+        Assert.NotNull(controller.TempData["Error"]);
         Assert.Single(await s.Services.Suppressions.GetActiveSuppressionsAsync());
     }
 

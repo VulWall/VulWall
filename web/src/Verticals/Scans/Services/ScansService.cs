@@ -247,14 +247,16 @@ public class ScansService(
             findings.Select(f => f.DiscoveryId).OfType<string>().Distinct().ToList());
 
     /// <summary>
-    /// Whether <paramref name="scan"/> did not check <paramref name="finding"/> because none of
-    /// the assets that own its discovery was a target of the scan (a disabled asset). Scans
-    /// without targeted_assets, and discoveries without owners, never count as out of scope.
+    /// Whether <paramref name="scan"/> did not check <paramref name="finding"/>: the scan targeted
+    /// no asset at all (every asset disabled; the scanner closes it at once), or none of the
+    /// assets that own the finding's discovery was a target of the scan (a disabled asset).
+    /// A discovery without owners is in scope of any scan that targeted something.
     /// </summary>
     private static bool OutOfScope(Scan scan, Finding finding, Func<string?, IReadOnlyCollection<string>?> ownersOf)
     {
         if (scan.TargetedAssets.Count == 0)
-            return false;
+            return true;
+        // Known limit: these are today's owners (asset_ids now), not the owners at scan time.
         var owners = ownersOf(finding.DiscoveryId);
         return owners is { Count: > 0 } && !owners.Any(id => scan.TargetedAssets.Any(t => t.AssetId == id));
     }
