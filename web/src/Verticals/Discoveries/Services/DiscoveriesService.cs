@@ -1,3 +1,4 @@
+using MongoDB.Driver;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services;
@@ -93,16 +94,12 @@ public class DiscoveriesService(
             return false;
         }
 
-        var discovery = await discoveriesRepository.GetByIdAsync(discoveryId);
-        if (discovery == null)
-        {
-            return false;
-        }
+        // Partial $set: a full replace would drop the scanner fields the Discovery entity does not map.
+        var matched = await discoveriesRepository.UpdateOneAsync(
+            Builders<Discovery>.Filter.Eq(d => d.Id, discoveryId),
+            Builders<Discovery>.Update.Set(d => d.OwnershipStatus, ownershipStatus));
 
-        discovery.OwnershipStatus = ownershipStatus;
-        await discoveriesRepository.UpdateAsync(discovery);
-
-        return true;
+        return matched > 0;
     }
 
     private DiscoveryItemViewModel MapDiscoveryToViewModel(

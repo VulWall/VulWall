@@ -6,6 +6,7 @@ using VulWall.Dashboard.Data.Entities;
 using VulWall.Dashboard.Data.Entities.Asset;
 using VulWall.Dashboard.Data.Entities.Discovery;
 using VulWall.Dashboard.Data.Entities.Scan;
+using VulWall.Dashboard.Data.Entities.ScanCoverage;
 using VulWall.Dashboard.Data.Entities.Finding;
 using VulWall.Dashboard.Data.Entities.FindingSuppression;
 using VulWall.Dashboard.Data.Entities.KnowledgeBase;
@@ -176,3 +177,10 @@ public class FindingSuppressionsRepository(
     IOrganizationContext orgContext,
     ILogger<OrgScopedRepository<FindingSuppression, string>> logger)
     : OrgScopedRepository<FindingSuppression, string>(database, "finding_suppressions", orgContext, logger);
+
+// The scanner writes scan_coverage; the web app only removes records (asset deletion).
+public class ScanCoverageRepository(
+    IMongoDatabase database,
+    IOrganizationContext orgContext,
+    ILogger<OrgScopedRepository<ScanCoverage, string>> logger)
+    : OrgScopedRepository<ScanCoverage, string>(database, "scan_coverage", orgContext, logger);
