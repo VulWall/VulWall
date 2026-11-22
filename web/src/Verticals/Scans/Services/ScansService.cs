@@ -270,21 +270,20 @@ public class ScansService(
             .Where(g => g.Any(f => ScanCheck.NotChecked(latest, f, ownersOf)))
             .Select(g => g.Key)
             .ToHashSet();
-        // Likewise a group is not "added" when all its findings existed already and the baseline
-        // skipped their assets. A finding first seen after the baseline (a new asset) is added.
-        var baselineSkippedKeys = latestFindings
-            .Where(f => f.Severity != Severity.Info)
-            .GroupBy(Key)
-            .Where(g => g.All(f => ScanCheck.SkippedBy(baseline, f, ownersOf)))
-            .Select(g => g.Key)
-            .ToHashSet();
         var baselineDeduped = baselineGroups.Select(g => g.First()).ToList();
 
+        // Likewise a group is not "added" when the baseline did not check any of its findings
+        // (ScanCheck.SkippedBy). Each group is shown by a finding the baseline did check, when
+        // it has one, so a mixed group is added and shows its new finding.
         var latestDeduped = latestFindings
             .Where(f => f.Severity != Severity.Info)
             .GroupBy(Key)
-            .Select(g => g.First())
+            .Select(g => g.FirstOrDefault(f => !ScanCheck.SkippedBy(baseline, f, ownersOf)) ?? g.First())
             .ToList();
+        var baselineSkippedKeys = latestDeduped
+            .Where(f => ScanCheck.SkippedBy(baseline, f, ownersOf))
+            .Select(Key)
+            .ToHashSet();
 
         var latestKeySet  = latestDeduped.Select(Key).ToHashSet();
         var baselineKeySet = baselineDeduped.Select(Key).ToHashSet();

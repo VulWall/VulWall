@@ -62,7 +62,7 @@ public class NewAssetComparisonTests(MongoFixture mongo)
         var cmp = await services.ScansService().GetComparisonAsync("s1", "s2");
 
         Assert.NotNull(cmp);
-        Assert.Equal(1, cmp.AddedTotal);
+        Assert.Equal(["B new"], cmp.Added.Select(f => f.Title).ToArray());
     }
 
     private static BsonDocument Scan(string id, DateTime at, params string[] targets) => new()
