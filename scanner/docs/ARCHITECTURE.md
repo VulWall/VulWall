@@ -431,6 +431,18 @@ message: a retry cannot succeed. A result without `asset_id` is written as befor
 through the positive cache is cleaned by the next asset delete, which also pulls the ids of
 assets that no longer exist (see `DATABASE.md`, Discoveries Collection).
 
+Findings ingestion does not write discoveries, so it checks the discovery instead: a finding
+whose `discovery_id` is not a discovery of the organization, or has `asset_ids: []` (an asset
+delete is pending), is ACKed and logged, not written (#131). Every scanner is triggered only
+after domain or port ingestion wrote the discovery, so a missing one means a delete removed it.
+Coverage records follow the same rule, with one exception: `domain_discovery` and
+`port_discovery` coverage is published next to a discovery result that another worker writes
+(an NXDOMAIN root's `absent`, a direct IP asset's port scan `ok`), so it can arrive first in the
+asset's first scan. It is written when its discovery is missing and dropped only while a delete
+is pending. The check is one `_id` read per message, uncached: a deterministic id can be written
+again by a later scan, so a cached "missing" would drop real results. The gap between the check
+and the write still leaves a short window.
+
 ---
 
 ## Key Design Decisions
