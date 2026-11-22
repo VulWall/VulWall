@@ -51,7 +51,9 @@ public class AnthropicAiProviderTests
 
         var (request, body) = Assert.Single(handler.Requests);
         Assert.Equal("http://ai.test/v1/messages", request.RequestUri!.ToString());
+        // SDK 13.x sends the key as a bearer token and no x-api-key header (the docs say so).
         Assert.Equal("Bearer test-key", request.Headers.Authorization?.ToString());
+        Assert.False(request.Headers.Contains("x-api-key"));
         Assert.Equal("2026-10-21", request.Headers.GetValues("anthropic-version").Single());
 
         var json = JsonDocument.Parse(body).RootElement;
@@ -125,6 +127,27 @@ public class AnthropicAiProviderTests
     }
 
     [Fact]
+    public async Task CreateClient_WithoutBaseUrl_UsesAnthropicNotAmbientBaseUrl()
+    {
+        var previous = Environment.GetEnvironmentVariable("ANTHROPIC_BASE_URL");
+        Environment.SetEnvironmentVariable("ANTHROPIC_BASE_URL", "http://ambient.test");
+        try
+        {
+            var handler = new CapturingHandler(Response("end_turn", ThinkingThenText));
+            var client = AnthropicAiProvider.CreateClient(
+                new AiConfig(AiConfig.Anthropic, "test-key", "", ""), new HttpClient(handler));
+            await new AnthropicAiProvider(client, AnthropicAiProvider.DefaultModel,
+                NullLogger<AnthropicAiProvider>.Instance).GenerateAsync(Request);
+
+            Assert.Equal("https://api.anthropic.com/v1/messages", handler.Requests.Single().Request.RequestUri!.ToString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ANTHROPIC_BASE_URL", previous);
+        }
+    }
+
+    [Fact]
     public void CreateClient_WithoutKey_Throws()
     {
         Assert.Throws<InvalidOperationException>(() =>
@@ -192,5 +215,51 @@ public class AiServiceTests
         Assert.True(await status.IsEnabledAsync());
         configs.Config = configs.Config with { Provider = "openia" };
         Assert.False(await status.IsEnabledAsync());
+        configs.Config = configs.Config with { Provider = "anthropic", BaseUrl = "http://gateway.example.com" };
+        Assert.False(await status.IsEnabledAsync());
+        configs.Config = configs.Config with { BaseUrl = "http://litellm:4000" };
+        Assert.True(await status.IsEnabledAsync());
+    }
+
+    [Fact]
+    public async Task Generate_PlainHttpToRemoteHost_IsRefusedBeforeAnyCall()
+    {
+        var service = new AiService(new Configs(new AiConfig("anthropic", "k", "", "http://gateway.example.com")),
+            NullLoggerFactory.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.GenerateAsync(new AiRequest("s", "u", 10)));
+        Assert.Contains("https", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("https://gateway.example.com", true)]
+    [InlineData("https://gateway.example.com/anthropic/", true)]
+    [InlineData("http://localhost:4000", true)]
+    [InlineData("http://127.0.0.1:4000", true)]
+    [InlineData("http://[::1]:4000", true)]
+    [InlineData("http://10.0.0.5", true)]
+    [InlineData("http://172.20.0.3:8080", true)]
+    [InlineData("http://192.168.1.10:8080", true)]
+    [InlineData("http://litellm:4000", true)]
+    [InlineData("http://gateway.internal", true)]
+    [InlineData("http://api.anthropic.com", false)]
+    [InlineData("http://8.8.8.8", false)]
+    [InlineData("http://172.32.0.1", false)]
+    [InlineData("ftp://gateway.example.com", false)]
+    [InlineData("https://user:pass@gateway.example.com", false)]
+    [InlineData("gateway.example.com", false)]
+    public void ValidateBaseUrl(string url, bool ok) =>
+        Assert.Equal(ok, AiConfig.ValidateBaseUrl(url) is null);
+
+    [Fact]
+    public void AiConfig_ToString_MasksTheKey()
+    {
+        var text = new AiConfig("anthropic", "sk-ant-secret", "m", "").ToString();
+
+        Assert.DoesNotContain("sk-ant-secret", text);
+        Assert.Contains("ApiKey = ***", text);
+        Assert.Contains("Provider = anthropic", text);
     }
 }

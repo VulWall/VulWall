@@ -33,7 +33,7 @@ than 7 days before you set the key get an executive summary too.
 | `AI_API_KEY` | empty | The provider's API key. Empty turns AI off. |
 | `AI_PROVIDER` | `anthropic` | The AI provider. Only `anthropic` is supported for now. |
 | `AI_MODEL` | `claude-sonnet-5-5` | Model for the guidance and the executive summaries. |
-| `AI_BASE_URL` | the provider's API | Base URL of a gateway or proxy in front of the provider's API. The scanner sends the key in the `x-api-key` header, the web app as `Authorization: Bearer`. |
+| `AI_BASE_URL` | the provider's API | Base URL of a gateway or proxy in front of the provider's API. Must be https; http only to a local host (loopback, private IP, `localhost`, a `.local`/`.internal` name or a single-label name such as a compose service). Any other value turns AI off with an error in the log. The scanner sends the key in the `x-api-key` header, the web app as `Authorization: Bearer`. |
 
 The guidance uses Anthropic's web search tool to look up advisories and references. AI output is
 checked before it is stored: an answer that is incomplete, too short or in the wrong format is

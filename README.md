@@ -164,7 +164,7 @@ comments.
 | `AI_API_KEY` | empty | Enables AI remediation guidance and executive summaries |
 | `AI_PROVIDER` | `anthropic` | AI provider; only `anthropic` for now |
 | `AI_MODEL` | `claude-sonnet-5-5` | Model for AI remediation guidance and executive summaries |
-| `AI_BASE_URL` | empty | Gateway or proxy in front of the provider's API |
+| `AI_BASE_URL` | empty | Gateway or proxy in front of the provider's API. https, or http to a local host only |
 | `VULWALL_PORT` | `8080` | Host port of the web UI (bound to `127.0.0.1`) |
 | `SETUP_TOKEN` | empty | First-run setup token. The install script sets a random one; empty means a new random token at each start, printed in the log |
 | `VULWALL_VERSION` | `latest` | Image tag of `ghcr.io/vulwall/scanner` and `ghcr.io/vulwall/web` |

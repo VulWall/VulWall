@@ -66,7 +66,7 @@ All settings are environment variables. None of them is a secret except `AI_API_
 | `AI_API_KEY` | empty | Optional. Enables AI executive summaries on reports |
 | `AI_PROVIDER` | `anthropic` | AI provider; only `anthropic` for now. The scanner reads the same `AI_*` settings |
 | `AI_MODEL` | `claude-sonnet-5-5` | Model for executive summaries. Empty means the default |
-| `AI_BASE_URL` | empty | Gateway or proxy in front of the provider's API (the web app sends the key as `Authorization: Bearer`) |
+| `AI_BASE_URL` | empty | Gateway or proxy in front of the provider's API (the web app sends the key as `Authorization: Bearer`). Must be https; http only to a local host (loopback, private IP, `localhost`, a `.local`/`.internal` name or a single-label name such as a compose service). Any other value turns AI off with an error in the log. |
 | `SECURE_COOKIES` | `false` | Set to `true` when the app is served over HTTPS. Turns on Secure cookies, HSTS and the HTTP to HTTPS redirect. Leave `false` for plain `http://localhost` |
 | `TRUSTED_PROXIES` | empty | Comma-separated IPs or CIDR ranges of reverse proxies whose `X-Forwarded-For`/`X-Forwarded-Proto` headers are trusted (for example `10.0.0.0/8`). Empty: only loopback is trusted |
 | `VULWALL_VERSION` | `dev` | Version shown in the About dialog. Set at image build time with the `VULWALL_VERSION` build argument; release images use the tag, and the root `make build` passes `dev (<short commit>)` |

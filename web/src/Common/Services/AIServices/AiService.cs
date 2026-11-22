@@ -24,16 +24,17 @@ public sealed class EnvAiConfigSource : IAiConfigSource
 /// </summary>
 public sealed class AiStatus(IAiConfigSource configSource, ILogger<AiStatus> logger)
 {
-    private string? _reportedProvider;
+    private string? _reportedProblem;
 
     public async Task<bool> IsEnabledAsync(CancellationToken cancellationToken = default)
     {
         var config = await configSource.GetAsync(cancellationToken);
-        if (config.HasApiKey && !config.IsKnownProvider && config.Provider != Volatile.Read(ref _reportedProvider))
+        var problem = config.HasApiKey ? config.Problem : null;
+        // Logged once per distinct problem, not on every 30-second poll.
+        if (problem is not null && problem != Volatile.Read(ref _reportedProblem))
         {
-            Volatile.Write(ref _reportedProvider, config.Provider);
-            logger.LogError("AI is disabled: unknown AI_PROVIDER '{Provider}' (supported: {Supported})",
-                config.Provider, AiConfig.Anthropic);
+            Volatile.Write(ref _reportedProblem, problem);
+            logger.LogError("AI is disabled: {Problem}", problem);
         }
         return config.IsEnabled;
     }
@@ -64,6 +65,8 @@ public sealed class AiService(IAiConfigSource configSource, ILoggerFactory logge
     {
         if (!config.HasApiKey)
             throw new InvalidOperationException("AI is not configured (AI_API_KEY is empty)");
+        if (AiConfig.ValidateBaseUrl(config.BaseUrl) is { } badUrl)
+            throw new InvalidOperationException(badUrl);
 
         lock (_lock)
         {

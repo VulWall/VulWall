@@ -1,3 +1,7 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+
 namespace VulWall.Dashboard.Common.Services.AIServices;
 
 /// <summary>
@@ -55,8 +59,61 @@ public sealed record AiConfig(string Provider, string ApiKey, string Model, stri
 
     public bool IsKnownProvider => Provider == Anthropic;
 
-    /// <summary>A key is set and the provider is one this build supports.</summary>
-    public bool IsEnabled => HasApiKey && IsKnownProvider;
+    /// <summary>Why the settings cannot be used although a key is set, or null.</summary>
+    public string? Problem => !IsKnownProvider
+        ? $"unknown AI_PROVIDER '{Provider}' (supported: {Anthropic})"
+        : ValidateBaseUrl(BaseUrl);
+
+    /// <summary>A key is set and the rest of the settings are usable.</summary>
+    public bool IsEnabled => HasApiKey && Problem is null;
+
+    /// <summary>
+    /// Accepts an empty value (the provider's own API), an https URL, or an http URL whose host is
+    /// local: loopback, a private or link-local address, localhost, a .local/.internal/.localhost name
+    /// or a single-label name such as a compose service. Plain http to anything else would send the
+    /// key and the prompts across the internet unencrypted. Same rule as the scanner's
+    /// ai.ValidateBaseURL. Returns the problem, or null.
+    /// </summary>
+    public static string? ValidateBaseUrl(string baseUrl)
+    {
+        if (string.IsNullOrEmpty(baseUrl))
+            return null;
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host))
+            return $"AI_BASE_URL '{baseUrl}' is not an absolute URL";
+        if (!string.IsNullOrEmpty(uri.UserInfo))
+            return "AI_BASE_URL must not contain credentials";
+        return uri.Scheme switch
+        {
+            "https" => null,
+            "http" when IsLocalHost(uri.Host) => null,
+            "http" => $"AI_BASE_URL '{baseUrl}' uses http to a non-local host; use https",
+            _ => $"AI_BASE_URL '{baseUrl}' must use https (or http to a local host)",
+        };
+    }
+
+    private static bool IsLocalHost(string host)
+    {
+        if (IPAddress.TryParse(host.Trim('[', ']'), out var ip))
+        {
+            if (IPAddress.IsLoopback(ip))
+                return true;
+            if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+                return ip.IsIPv6LinkLocal || ip.IsIPv6UniqueLocal;
+            var b = ip.GetAddressBytes();
+            return b[0] == 10 || (b[0] == 172 && b[1] is >= 16 and <= 31) || (b[0] == 192 && b[1] == 168) ||
+                   (b[0] == 169 && b[1] == 254);
+        }
+        host = host.TrimEnd('.').ToLowerInvariant();
+        return host == "localhost" || !host.Contains('.') || host.EndsWith(".localhost") ||
+               host.EndsWith(".local") || host.EndsWith(".internal");
+    }
+
+    // The key never goes into logs or exception messages through ToString().
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append($"Provider = {Provider}, ApiKey = {(HasApiKey ? "***" : "")}, Model = {Model}, BaseUrl = {BaseUrl}");
+        return true;
+    }
 }
 
 /// <summary>A provider adapter. Built by <see cref="AiService"/> from the current <see cref="AiConfig"/>.</summary>

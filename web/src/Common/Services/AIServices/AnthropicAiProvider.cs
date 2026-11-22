@@ -12,6 +12,7 @@ public sealed class AnthropicAiProvider(AnthropicClient client, string model, IL
     : IAiProvider
 {
     public const string DefaultModel = "claude-sonnet-5-5";
+    public const string DefaultBaseUrl = "https://api.anthropic.com";
 
     // Models that take output_config.effort. Matched by prefix; others get no effort, which every
     // model accepts. Keep in step with the scanner's internal/ai/anthropic list.
@@ -22,16 +23,19 @@ public sealed class AnthropicAiProvider(AnthropicClient client, string model, IL
     ];
 
     /// <summary>
-    /// A client for the given key only. With an explicit key the SDK reads no credential from the
-    /// environment or from a profile on disk.
+    /// A client for the given key and base URL only. With an explicit key the SDK reads no credential
+    /// from the environment or a profile on disk, and with an explicit base URL it ignores
+    /// ANTHROPIC_BASE_URL. The SDK sends the key as <c>Authorization: Bearer</c>.
     /// </summary>
     public static AnthropicClient CreateClient(AiConfig config, HttpClient? httpClient = null)
     {
         if (!config.HasApiKey)
             throw new InvalidOperationException("No AI API key configured");
-        var options = new ClientOptions { ApiKey = config.ApiKey };
-        if (!string.IsNullOrWhiteSpace(config.BaseUrl))
-            options.BaseUrl = config.BaseUrl;
+        var options = new ClientOptions
+        {
+            ApiKey = config.ApiKey,
+            BaseUrl = string.IsNullOrWhiteSpace(config.BaseUrl) ? DefaultBaseUrl : config.BaseUrl,
+        };
         if (httpClient is not null)
             options.HttpClient = httpClient;
         return new AnthropicClient(options);
