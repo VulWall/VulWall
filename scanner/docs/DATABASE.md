@@ -367,8 +367,8 @@ The three states:
   Hidden by the web app and skipped by finding resolution, like a discovery of a disabled asset.
 
 When the user deletes an asset, the web app first disables it and checks again that no scan
-started (a scan that read the asset before the disable is seen by that check, and the delete
-stops with the asset disabled). Then:
+started (a scan that read the asset before the disable is seen by that check; the delete
+then stops and sets `enabled` back to its value before the delete). Then:
 
 1. It removes the id from `asset_ids` (`$pull`) in every discovery of the organization.
 2. Discoveries whose `asset_ids` is now empty belong to no asset. Per batch, the web app checks
