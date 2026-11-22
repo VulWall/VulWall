@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Driver;
 using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Common.Services;
+using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Dashboard.Services;
 using VulWall.Dashboard.Data.Base;
 using VulWall.Dashboard.Data.Entities.Asset;
@@ -13,6 +14,7 @@ using VulWall.Dashboard.Data.Entities.Discovery;
 using VulWall.Dashboard.Data.Entities.Finding;
 using VulWall.Dashboard.Data.Entities.FindingSuppression;
 using VulWall.Dashboard.Data.Entities.Scan;
+using VulWall.Dashboard.Data.Entities.ScanCoverage;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Discoveries.Services;
 using VulWall.Dashboard.Recommendations;
@@ -34,11 +36,16 @@ internal sealed class TestServices(IMongoDatabase db, string orgId)
     public FindingsRepository Findings => new(db, _org, NullLogger<OrgScopedRepository<Finding, string>>.Instance);
     public ScansRepository Scans => new(db, _org, NullLogger<OrgScopedRepository<Scan, string>>.Instance);
 
+    public FindingSuppressionsRepository SuppressionsRepository =>
+        new(db, _org, NullLogger<OrgScopedRepository<FindingSuppression, string>>.Instance);
+    public ScanCoverageRepository ScanCoverage => new(db, _org, NullLogger<OrgScopedRepository<ScanCoverage, string>>.Instance);
+
+    public AssetsService AssetsService() =>
+        new(Assets, Scans, new ScanTriggerService(Scans), Discoveries, Findings, SuppressionsRepository, ScanCoverage);
+
     public IAssetScopeFilter AssetScope => new AssetScopeFilter(new AssetsPublicRepository(db), new DiscoveriesPublicRepository(db));
 
-    public FindingSuppressionService Suppressions => new(
-        new FindingSuppressionsRepository(db, _org, NullLogger<OrgScopedRepository<FindingSuppression, string>>.Instance),
-        AssetScope, _org);
+    public FindingSuppressionService Suppressions => new(SuppressionsRepository, AssetScope, _org);
 
     public KnowledgeBaseCacheService KnowledgeBase => new(db, new MemoryCache(new MemoryCacheOptions()));
 

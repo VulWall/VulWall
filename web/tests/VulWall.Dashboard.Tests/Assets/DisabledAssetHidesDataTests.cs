@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using VulWall.Dashboard.Common.Contracts.Enums;
-using VulWall.Dashboard.Common.Services.ScanTrigger;
-using VulWall.Dashboard.Assets.Services;
 using VulWall.Dashboard.Recommendations.Constants;
 using VulWall.Dashboard.Recommendations.Models;
 using VulWall.Dashboard.Reports.Models;
@@ -42,9 +40,7 @@ public class DisabledAssetHidesDataTests(MongoFixture mongo)
     {
         public async Task SetEnabled(string assetId, bool enabled)
         {
-            var scans = Services.Scans;
-            var service = new AssetsService(Services.Assets, scans, new ScanTriggerService(scans));
-            var (success, error) = await service.UpdateAssetStatusAsync(assetId, enabled);
+            var (success, error) = await Services.AssetsService().UpdateAssetStatusAsync(assetId, enabled);
             Assert.True(success, error);
         }
 

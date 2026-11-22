@@ -1,13 +1,8 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Services;
-using VulWall.Dashboard.Common.Services.ScanTrigger;
-using VulWall.Dashboard.Data.Base;
-using VulWall.Dashboard.Data.Entities.Asset;
 using VulWall.Dashboard.Data.Entities.Scan;
-using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Tests.Infrastructure;
 
 namespace VulWall.Dashboard.Tests.Assets;
@@ -18,10 +13,7 @@ public class AssetsServiceTests(MongoFixture mongo)
     private (AssetsService Service, IMongoCollection<BsonDocument> Assets) Create()
     {
         var db = mongo.NewDatabase();
-        var orgContext = new FixedOrganizationContext("org-1");
-        var assets = new AssetsRepository(db, orgContext, NullLogger<OrgScopedRepository<Asset, string>>.Instance);
-        var scans = new ScansRepository(db, orgContext, NullLogger<OrgScopedRepository<Scan, string>>.Instance);
-        return (new AssetsService(assets, scans, new ScanTriggerService(scans)), db.GetCollection<BsonDocument>("assets"));
+        return (new TestServices(db, "org-1").AssetsService(), db.GetCollection<BsonDocument>("assets"));
     }
 
     [Fact]

@@ -1,17 +1,27 @@
+using MongoDB.Driver;
 using VulWall.Dashboard.Common.Contracts.Enums;
 using VulWall.Dashboard.Common.Services.ScanTrigger;
 using VulWall.Dashboard.Data.Entities.Asset;
+using VulWall.Dashboard.Data.Entities.Discovery;
+using VulWall.Dashboard.Data.Entities.Finding;
+using VulWall.Dashboard.Data.Entities.FindingSuppression;
 using VulWall.Dashboard.Data.Entities.Scan;
 using VulWall.Dashboard.Data.Repositories;
 using VulWall.Dashboard.Assets.Models;
 using VulWall.Dashboard.Assets.Validation;
+using ScanCoverageRecord = VulWall.Dashboard.Data.Entities.ScanCoverage.ScanCoverage;
+using SortDirection = VulWall.Dashboard.Common.Contracts.Enums.SortDirection;
 
 namespace VulWall.Dashboard.Assets.Services;
 
 public class AssetsService(
     AssetsRepository assetsRepository,
     ScansRepository scansRepository,
-    ScanTriggerService scanTriggerService)
+    ScanTriggerService scanTriggerService,
+    DiscoveriesRepository discoveriesRepository,
+    FindingsRepository findingsRepository,
+    FindingSuppressionsRepository suppressionsRepository,
+    ScanCoverageRepository scanCoverageRepository)
 {
     public async Task<IndexViewModel> GetAssetsAsync()
     {
@@ -164,8 +174,60 @@ public class AssetsService(
         if (await IsScanInProgressAsync())
             return (false, ScanInProgressDeleteError);
 
-        await assetsRepository.DeleteAsync(id);
+        await DeleteOwnedDataAsync(asset.Id);
+
+        // Last, so a run that fails part-way can be retried from the Assets page.
+        await assetsRepository.DeleteManyAsync(Builders<Asset>.Filter.Eq(a => a.Id, asset.Id));
         return (true, null);
+    }
+
+    private const int DeleteBatchSize = 1000;
+
+    /// <summary>
+    /// Removes the asset from <c>asset_ids</c> and deletes the discoveries no asset owns any more,
+    /// with their findings, suppressions and scan coverage. Scans and the knowledge base stay.
+    /// Every write is org-scoped by the repositories.
+    ///
+    /// Only a discovery whose <c>asset_ids</c> is now empty is deleted, never "every discovery
+    /// that holds this id": whoever controls DNS under one asset can make the scanner add that
+    /// asset to another asset's IP. A discovery without <c>asset_ids</c> is never deleted.
+    ///
+    /// MongoDB runs without transactions here, so a retry must finish a run that stopped at any
+    /// step. The scanner never writes an empty <c>asset_ids</c> (it omits the field or adds with
+    /// $addToSet), so an empty one can only come from this pull: the org's empty discoveries are
+    /// exactly the ones still to delete, also when an earlier run stopped after the pull. They
+    /// stay as the marker until the last step deletes them.
+    /// </summary>
+    private async Task DeleteOwnedDataAsync(string assetId)
+    {
+        var d = Builders<Discovery>.Filter;
+        await discoveriesRepository.UpdateManyAsync(
+            d.AnyEq(x => x.AssetIds, assetId),
+            Builders<Discovery>.Update.Pull(x => x.AssetIds, assetId));
+
+        var ownerless = d.Size(x => x.AssetIds, 0);
+        var orphanIds = (await discoveriesRepository.FindAsync(x => x.AssetIds != null && x.AssetIds.Count == 0))
+            .Select(x => x.Id)
+            .ToList();
+
+        foreach (var batch in orphanIds.Chunk(DeleteBatchSize))
+        {
+            await findingsRepository.DeleteManyAsync(Builders<Finding>.Filter.In(x => x.DiscoveryId, batch));
+            await suppressionsRepository.DeleteManyAsync(Builders<FindingSuppression>.Filter.In(x => x.DiscoveryId, batch));
+            await scanCoverageRepository.DeleteManyAsync(
+                Builders<ScanCoverageRecord>.Filter.In(x => x.DiscoveryId, batch));
+
+            // Before the discoveries go: the empty ones are the only record of what is deleted.
+            // An IP left pointing at a deleted parent is dropped from the Discoveries page;
+            // without a parent it is shown on its own, and the next scan re-parents it. A
+            // discovery without asset_ids is not touched.
+            await discoveriesRepository.UpdateManyAsync(
+                d.In(x => x.ParentId, batch) & d.SizeGt(x => x.AssetIds, 0),
+                Builders<Discovery>.Update.Unset(x => x.ParentId));
+
+            // Empty again in the filter: a discovery that got an owner since the select stays.
+            await discoveriesRepository.DeleteManyAsync(d.In(x => x.Id, batch) & ownerless);
+        }
     }
 
     public Task<bool> IsScanInProgressAsync() => scanTriggerService.IsScanInProgressAsync();
