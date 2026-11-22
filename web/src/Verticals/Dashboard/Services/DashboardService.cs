@@ -216,7 +216,7 @@ public class DashboardService(
         return model;
     }
 
-    private async Task<AssetScope> GetAssetScopeAsync() =>
+    private async Task<IAssetScope> GetAssetScopeAsync() =>
         await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync());
 
     /// <summary>

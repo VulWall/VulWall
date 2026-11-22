@@ -159,10 +159,17 @@ public class FindingsPublicRepository(IMongoDatabase database)
 public class DiscoveriesPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<Discovery, string>(database, "discoveries")
 {
-    /// <summary>Id and asset_ids of every discovery of the org, without the rest of the document.</summary>
-    public async Task<List<(string Id, IReadOnlyCollection<string>? AssetIds)>> GetOwnersAsync(string orgId)
+    /// <summary>
+    /// Id and asset_ids of the org's discoveries, without the rest of the document: every one, or
+    /// only <paramref name="ids"/> when given.
+    /// </summary>
+    public async Task<List<(string Id, IReadOnlyCollection<string>? AssetIds)>> GetOwnersAsync(
+        string orgId, IReadOnlyCollection<string>? ids = null)
     {
-        var docs = await Collection.Find(d => d.OrgId == orgId)
+        var filter = Builders<Discovery>.Filter.Eq(d => d.OrgId, orgId);
+        if (ids != null)
+            filter &= Builders<Discovery>.Filter.In(d => d.Id, ids);
+        var docs = await Collection.Find(filter)
             .Project(d => new { d.Id, d.AssetIds })
             .ToListAsync();
         return docs.Select(d => (d.Id, (IReadOnlyCollection<string>?)d.AssetIds)).ToList();

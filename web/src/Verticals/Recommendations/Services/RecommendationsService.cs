@@ -137,7 +137,7 @@ public class RecommendationsService(
         return viewModel;
     }
 
-    private async Task<AssetScope> GetAssetScopeAsync() =>
+    private async Task<IAssetScope> GetAssetScopeAsync() =>
         await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync());
 
     private static string? GetTarget(string? discoveryId, Dictionary<string, Data.Entities.Discovery.Discovery> discoveryDict)

@@ -6,53 +6,38 @@ namespace VulWall.Dashboard.Common.Services;
 /// <summary>
 /// Read-side contract for hiding the data of disabled assets, shared across verticals.
 /// Every reader of findings or discoveries applies the returned scope.
+/// The Assets vertical implements it.
 /// </summary>
 public interface IAssetScopeFilter
 {
     /// <summary>
     /// Loads the scope of <paramref name="orgId"/>. The org id is explicit because background
-    /// jobs (the executive summary) run without a signed-in user.
+    /// jobs (the executive summary) run without a signed-in user. With
+    /// <paramref name="discoveryIds"/>, only those discoveries are loaded: the scope then knows
+    /// nothing about other ids, so pass every discovery id the caller will ask about.
     /// </summary>
-    Task<AssetScope> GetAsync(string orgId);
+    Task<IAssetScope> GetAsync(string orgId, IReadOnlyCollection<string>? discoveryIds = null);
 }
 
 /// <summary>
-/// Which discoveries and findings of one org are visible, by the assets that own them.
-/// <para>
-/// A discovery is hidden only when <c>asset_ids</c> is non-empty and none of its ids is an
-/// existing, enabled asset. A discovery without <c>asset_ids</c> stays visible. A finding is
-/// visible when its discovery exists and is visible.
-/// </para>
-/// Disabling an asset writes nothing to these documents, so re-enabling shows them again.
+/// Which discoveries and findings of one org are visible, by the assets that own them
+/// (<c>discoveries.asset_ids</c>). Disabling an asset writes nothing to these documents,
+/// so re-enabling shows them again.
 /// </summary>
-public sealed class AssetScope
+public interface IAssetScope
 {
-    private readonly HashSet<string> _enabledAssetIds;
-    private readonly HashSet<string> _visibleDiscoveryIds = [];
-    private readonly HashSet<string> _hiddenDiscoveryIds = [];
+    bool IsVisible(Discovery discovery);
 
-    public AssetScope(
-        IEnumerable<string> enabledAssetIds,
-        IEnumerable<(string Id, IReadOnlyCollection<string>? AssetIds)> discoveries)
-    {
-        _enabledAssetIds = enabledAssetIds.ToHashSet();
-        foreach (var (id, assetIds) in discoveries)
-            (IsOwnedByEnabledAsset(assetIds) ? _visibleDiscoveryIds : _hiddenDiscoveryIds).Add(id);
-    }
+    /// <summary>A finding is visible when its discovery exists and is visible.</summary>
+    bool IsVisible(Finding finding);
 
-    public bool IsVisible(Discovery discovery) => IsOwnedByEnabledAsset(discovery.AssetIds);
+    /// <summary>True only for a known discovery that is hidden (not for an unknown id).</summary>
+    bool IsHidden(string? discoveryId);
 
-    public bool IsVisible(Finding finding) =>
-        finding.DiscoveryId != null && _visibleDiscoveryIds.Contains(finding.DiscoveryId);
+    /// <summary>The <c>asset_ids</c> of a known discovery; null when unknown or not recorded.</summary>
+    IReadOnlyCollection<string>? OwnersOf(string? discoveryId);
 
-    /// <summary>True only for an existing discovery that is hidden (not for an unknown id).</summary>
-    public bool IsHidden(string? discoveryId) =>
-        discoveryId != null && _hiddenDiscoveryIds.Contains(discoveryId);
+    List<Discovery> Filter(IEnumerable<Discovery> discoveries);
 
-    public List<Discovery> Filter(IEnumerable<Discovery> discoveries) => discoveries.Where(IsVisible).ToList();
-
-    public List<Finding> Filter(IEnumerable<Finding> findings) => findings.Where(IsVisible).ToList();
-
-    private bool IsOwnedByEnabledAsset(IReadOnlyCollection<string>? assetIds) =>
-        assetIds is not { Count: > 0 } || assetIds.Any(_enabledAssetIds.Contains);
+    List<Finding> Filter(IEnumerable<Finding> findings);
 }
