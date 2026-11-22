@@ -389,7 +389,9 @@ started (a scan that read the asset before the disable is seen by that check; th
 then stops and sets `enabled` back to its value before the delete). Then it sets
 `deleting: true` on the asset and never clears it: the asset can only be deleted again. The web
 app refuses to enable or disable it and treats it as disabled, the scan coordinator does not scan
-it, and domain and port ingestion drop its results (`shared.AssetGuard`). Then:
+it, and domain and port ingestion drop its results (`shared.AssetGuard`). Findings ingestion
+drops a finding or scanner coverage whose discovery no longer exists in the organization or has
+`asset_ids: []` (see ARCHITECTURE.md, ingestion). Then:
 
 1. It removes the id from `asset_ids` (`$pull`) in every discovery of the organization, together
    with the ids of assets that no longer exist in the organization. Those come from scan
