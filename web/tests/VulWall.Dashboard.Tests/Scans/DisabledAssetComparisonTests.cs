@@ -41,9 +41,9 @@ public class DisabledAssetComparisonTests(MongoFixture mongo)
             new BsonDocument { { "_id", "d-c" }, { "org_id", OrgId }, { "asset_type", "domain" }, { "domain", "c.com" }, { "asset_ids", new BsonArray { AssetC } } },
         ]);
         await db.GetCollection<BsonDocument>("findings").InsertManyAsync([
-            Finding("f-a", "d-a", "A still open", "open", "s1", "s3"),
-            Finding("f-c-fixed", "d-c", "C fixed", "resolved", "s1"),
-            Finding("f-c-new", "d-c", "C new", "open", "s3"),
+            Finding("f-a", "d-a", "A still open", "open", now.AddHours(-3), "s1", "s3"),
+            Finding("f-c-fixed", "d-c", "C fixed", "resolved", now.AddHours(-3), "s1"),
+            Finding("f-c-new", "d-c", "C new", "open", now.AddHours(-1), "s3"),
         ]);
         return new TestServices(db, OrgId);
     }
@@ -100,10 +100,11 @@ public class DisabledAssetComparisonTests(MongoFixture mongo)
         { "targeted_assets", new BsonArray(targets.Select(t => new BsonDocument { { "asset_id", t }, { "type", "domain" }, { "value", t } })) },
     };
 
-    private static BsonDocument Finding(string id, string discoveryId, string title, string status, params string[] scanIds) => new()
+    private static BsonDocument Finding(string id, string discoveryId, string title, string status, DateTime firstDetected,
+        params string[] scanIds) => new()
     {
         { "_id", id }, { "org_id", OrgId }, { "discovery_id", discoveryId }, { "scan_ids", new BsonArray(scanIds) },
         { "severity", "high" }, { "title", title }, { "finding_type", "type-" + id }, { "source", "nuclei" },
-        { "status", status }, { "first_detected", DateTime.UtcNow }, { "last_detected", DateTime.UtcNow },
+        { "status", status }, { "first_detected", firstDetected }, { "last_detected", firstDetected },
     };
 }

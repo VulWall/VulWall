@@ -246,22 +246,6 @@ public class ScansService(
             await organizationContext.GetCurrentOrgIdAsync(),
             findings.Select(f => f.DiscoveryId).OfType<string>().Distinct().ToList());
 
-    /// <summary>
-    /// Whether <paramref name="scan"/> did not check <paramref name="finding"/>: the scan targeted
-    /// no asset at all (every asset disabled; the scanner closes it at once), or none of the
-    /// assets that own the finding's discovery was a target of the scan (a disabled asset, or an
-    /// empty <c>asset_ids</c> while a delete is pending). A discovery without <c>asset_ids</c>, or
-    /// one that is unknown, is in scope of any scan that targeted something.
-    /// </summary>
-    private static bool OutOfScope(Scan scan, Finding finding, Func<string?, IReadOnlyCollection<string>?> ownersOf)
-    {
-        if (scan.TargetedAssets.Count == 0)
-            return true;
-        // Known limit: these are today's owners (asset_ids now), not the owners at scan time.
-        var owners = ownersOf(finding.DiscoveryId);
-        return owners != null && !owners.Any(id => scan.TargetedAssets.Any(t => t.AssetId == id));
-    }
-
     internal static ScanComparisonViewModel BuildComparison(Scan baseline, Scan latest, IEnumerable<Finding> allFindings,
         Func<string?, IReadOnlyCollection<string>?>? ownersOf = null)
     {
@@ -277,22 +261,22 @@ public class ScansService(
         static string Key(Finding f) => $"{f.FindingType ?? f.Title}|{f.Severity}|{f.Source ?? ""}";
 
         // A group missing from the latest scan is "not checked" rather than resolved when any of
-        // its findings sits under an asset the latest scan could not fully check (the scanner
-        // left those open: Scan.UncheckedFindingIds), or under assets the latest scan did not
-        // target at all (disabled then: the scanner skips those findings).
-        var uncheckedIds = latest.UncheckedFindingIds.ToHashSet();
+        // its findings is one the latest scan could not check (ScanCheck.NotChecked).
         var baselineGroups = baselineFindings
             .Where(f => f.Severity != Severity.Info)
             .GroupBy(Key)
             .ToList();
         var notCheckedKeys = baselineGroups
-            .Where(g => g.Any(f => uncheckedIds.Contains(f.Id) || OutOfScope(latest, f, ownersOf)))
+            .Where(g => g.Any(f => ScanCheck.NotChecked(latest, f, ownersOf)))
             .Select(g => g.Key)
             .ToHashSet();
-        // Likewise a group that the baseline did not target is not "added" in the latest scan.
-        var baselineUncheckedKeys = latestFindings
-            .Where(f => f.Severity != Severity.Info && OutOfScope(baseline, f, ownersOf))
-            .Select(Key)
+        // Likewise a group is not "added" when all its findings existed already and the baseline
+        // skipped their assets. A finding first seen after the baseline (a new asset) is added.
+        var baselineSkippedKeys = latestFindings
+            .Where(f => f.Severity != Severity.Info)
+            .GroupBy(Key)
+            .Where(g => g.All(f => ScanCheck.SkippedBy(baseline, f, ownersOf)))
+            .Select(g => g.Key)
             .ToHashSet();
         var baselineDeduped = baselineGroups.Select(g => g.First()).ToList();
 
@@ -309,7 +293,7 @@ public class ScansService(
         var resolved  = missing.Where(f => !notCheckedKeys.Contains(Key(f))).ToList();
         var notChecked = missing.Count - resolved.Count;
         var added     = latestDeduped
-            .Where(f => !baselineKeySet.Contains(Key(f)) && !baselineUncheckedKeys.Contains(Key(f)))
+            .Where(f => !baselineKeySet.Contains(Key(f)) && !baselineSkippedKeys.Contains(Key(f)))
             .ToList();
         var unchanged = baselineDeduped.Count(f => latestKeySet.Contains(Key(f)));
 
