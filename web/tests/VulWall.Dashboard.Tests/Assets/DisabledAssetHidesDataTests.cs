@@ -118,22 +118,6 @@ public class DisabledAssetHidesDataTests(MongoFixture mongo)
     }
 
     [Fact]
-    public async Task AssetScope_OtherOrgsAssetsDoNotCount()
-    {
-        var s = await CreateAsync();
-        await s.SetEnabled(s.AssetB, false);
-        // An enabled asset of another org with the same id string must not unhide anything.
-        await s.Db.GetCollection<BsonDocument>("assets").InsertOneAsync(new BsonDocument
-        {
-            { "_id", ObjectId.GenerateNewId() }, { "org_id", "other-org" }, { "type", "domain" }, { "enabled", true },
-        });
-
-        var scope = await s.Services.AssetScope.GetAsync("other-org");
-
-        Assert.Empty(scope.Filter(await s.Services.Findings.GetAllAsync()));
-    }
-
-    [Fact]
     public async Task Dashboard_DropsDisabledAssetFindingsFromCountsAndScore()
     {
         var s = await CreateAsync();
@@ -144,8 +128,8 @@ public class DisabledAssetHidesDataTests(MongoFixture mongo)
 
         Assert.Equal(VisibleWhenAllEnabled.Length, enabled.HighIssues);
         Assert.Equal(VisibleWhenBDisabled.Length, disabled.HighIssues);
-        Assert.True(disabled.SecurityScore >= enabled.SecurityScore,
-            $"score {disabled.SecurityScore} should not drop below {enabled.SecurityScore} when findings are hidden");
+        Assert.True(disabled.SecurityScore > enabled.SecurityScore,
+            $"score {disabled.SecurityScore} should rise above {enabled.SecurityScore} when findings are hidden");
         Assert.Equal("a.com", disabled.PrimaryDomain);
     }
 

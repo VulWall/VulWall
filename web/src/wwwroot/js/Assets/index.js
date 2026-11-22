@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
             p.className = 'mb-0 mt-1 small';
             p.textContent = newEnabled
                 ? 'This will enable scanning for this asset and show its results again.'
-                : 'This will disable scanning for this asset and hide its results. You can enable it again at any time to show them.';
+                : 'This will disable scanning for this asset and hide its results. Enable it again to show them.';
             box.append(strong, p);
             content.replaceChildren(box);
         }
