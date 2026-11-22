@@ -150,8 +150,10 @@ public class AssetsService(
     // Delete: a scan that slipped through would add the asset back to asset_ids after the cascade
     // removed it, and that data would stay hidden for good. So delete disables the asset first and
     // checks again: a scan that starts after the disable does not read the asset, and one that
-    // started before it is seen by the second check, which stops the delete with the asset left
-    // disabled (deleting again after the scan finishes the job). What is left is the scanner's own
+    // started before it is seen by the second check, which stops the delete and sets enabled back
+    // to what it was. That scan already read the asset, so the restore changes nothing it scans,
+    // and the Assets page stays truthful. If a write fails after the disable, the asset stays
+    // disabled; deleting it again finishes the job. What is left is the scanner's own
     // gap between reading the assets and inserting the scan, which is in memory. Closing it fully
     // would need a lock shared with the scanner, which is not worth it for this.
 
@@ -182,16 +184,18 @@ public class AssetsService(
             return (false, ScanInProgressDeleteError);
 
         // Disable first, then check again (see the comment above UpdateAssetStatusAsync).
-        await assetsRepository.UpdateOneAsync(
-            Builders<Asset>.Filter.Eq(a => a.Id, asset.Id),
-            Builders<Asset>.Update.Set(a => a.Enabled, false));
+        var byId = Builders<Asset>.Filter.Eq(a => a.Id, asset.Id);
+        await assetsRepository.UpdateOneAsync(byId, Builders<Asset>.Update.Set(a => a.Enabled, false));
         if (await IsScanInProgressAsync())
+        {
+            await assetsRepository.UpdateOneAsync(byId, Builders<Asset>.Update.Set(a => a.Enabled, asset.Enabled));
             return (false, ScanInProgressDeleteError);
+        }
 
         await DeleteOwnedDataAsync(asset.Id);
 
         // Last, so a run that fails part-way can be retried from the Assets page.
-        await assetsRepository.DeleteManyAsync(Builders<Asset>.Filter.Eq(a => a.Id, asset.Id));
+        await assetsRepository.DeleteManyAsync(byId);
         return (true, null);
     }
 

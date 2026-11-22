@@ -121,7 +121,7 @@ Each vertical is self-contained and includes:
 
 ### Available Verticals
 * **Account**: First-run `/setup`, `/login`, `/logout` (local admin account)
-* **Assets**: Asset management (domains, IPs); assets are enabled on add, no ownership verification
+* **Assets**: Asset management (domains, IPs); assets are enabled on add, no ownership verification. Disabling hides the asset's data (`IAssetScopeFilter`, from `discoveries.asset_ids`) and writes nothing. Deleting removes the id from `asset_ids` and deletes the discoveries left with no owner, with their findings, suppressions and scan coverage (`AssetsService.DeleteAssetAsync`; see `scanner/docs/DATABASE.md`). Never delete "every discovery that contains the asset id": the scanner only adds owners, and DNS under one asset can add it to another asset's discoveries
 * **Dashboard**: Main overview, metrics, charts, recent scans
 * **Discoveries**: Discovered assets, ports, services from scans
 * **Recommendations**: AI-powered security recommendations for findings
@@ -504,7 +504,7 @@ public class ScansService(ScansRepository scansRepository, FindingsRepository fi
 | Vertical | Service | Purpose |
 |----------|---------|---------|
 | Account | `AccountService` | Admin setup, password hashing, credential check |
-| Assets | `AssetsService` | Asset CRUD |
+| Assets | `AssetsService` | Asset CRUD; delete removes the data only that asset owns |
 | Dashboard | `DashboardService` | Metrics, charts, recent scans |
 | Discoveries | `DiscoveriesService` | Discovery data aggregation |
 | Recommendations | `RecommendationsService` | Finding recommendations |

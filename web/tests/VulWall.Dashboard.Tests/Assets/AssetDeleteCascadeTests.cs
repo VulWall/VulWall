@@ -321,16 +321,20 @@ public abstract class AssetDeleteCascadeTestsBase(MongoFixture mongo, int batchS
     }
 
     // A scan that read the asset as enabled before the disable is seen by the second check: the
-    // delete stops with the asset disabled and nothing removed, and a later delete finishes it.
-    [Fact]
-    public async Task Delete_ScanStartedBeforeTheDisable_StopsWithTheAssetDisabled()
+    // delete stops, removes nothing and sets enabled back to what it was. A later delete finishes it.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Delete_ScanStartedBeforeTheDisable_StopsAndRestoresTheAssetState(bool enabled)
     {
         var s = await CreateAsync();
+        var byId = Builders<BsonDocument>.Filter.Eq("_id", ObjectId.Parse(s.X));
+        await s.C("assets").UpdateOneAsync(byId, Builders<BsonDocument>.Update.Set("enabled", enabled));
         var faults = new Faults
         {
             AfterWrite = async write =>
             {
-                if (write == 1) // the first write; with the fix, the disable
+                if (write == 1) // the disable
                     await s.C("scans").InsertOneAsync(new BsonDocument
                     {
                         { "_id", "s-race" }, { "org_id", OrgId }, { "status", "running" }, { "type", "scheduled" },
@@ -343,8 +347,7 @@ public abstract class AssetDeleteCascadeTestsBase(MongoFixture mongo, int batchS
 
         Assert.False(success);
         Assert.Equal(AssetsService.ScanInProgressDeleteError, error);
-        var asset = await s.C("assets").Find(Builders<BsonDocument>.Filter.Eq("_id", ObjectId.Parse(s.X))).SingleAsync();
-        Assert.False(asset["enabled"].AsBoolean);
+        Assert.Equal(enabled, (await s.C("assets").Find(byId).SingleAsync())["enabled"].AsBoolean);
         Assert.Equal(OwnedByXOnly.Concat(Survivors).Order(), await IdsAsync(s.C("discoveries"), OrgId));
         Assert.Equal([s.X, s.Y], await AssetIdsAsync(s, "ip-shared"));
         Assert.Equal(OwnedByXOnly.Length + Survivors.Length, await s.C("findings").CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("org_id", OrgId)));
