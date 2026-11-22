@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.2](https://github.com/VulWall/VulWall/compare/v0.3.1...v0.3.2) (2026-11-22)
+
+
+### Fixed
+
+* **scanner:** dial every validated address in the SSRF-safe dialer ([#135](https://github.com/VulWall/VulWall/issues/135)) ([f999043](https://github.com/VulWall/VulWall/commit/f999043e5e1f91a14b96b59026375deb0cc82095))
+* **scanner:** drop late findings of deleted discoveries ([#133](https://github.com/VulWall/VulWall/issues/133)) ([5a7f8d9](https://github.com/VulWall/VulWall/commit/5a7f8d9fd07e0606109b21d0b0dfeb4470b49b95))
+
 ## [0.3.1](https://github.com/VulWall/VulWall/compare/v0.3.0...v0.3.1) (2026-11-22)
 
 
