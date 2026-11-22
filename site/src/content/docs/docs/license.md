@@ -25,7 +25,7 @@ different name.
 ## Brand assets
 
 The logo and brand assets are © 2026 Moji Tajik, designed by
-[Reyhaneh Kamali](https://reyhane.pro/), and are not covered by the MIT License. They include
+[Reyhaan](https://reyhane.pro/), and are not covered by the MIT License. They include
 the logo images and favicons in the web app and on this website, and the brand guide in the
 design skill. [NOTICE](https://github.com/VulWall/VulWall/blob/main/NOTICE) lists the files.
 
@@ -34,8 +34,8 @@ and the MIT License covers them.
 
 ## Credits
 
-VulWall is built by [Moji Tajik](https://github.com/MojtabaTajik). The logo, colour palette and
-design system are by [Reyhaneh Kamali](https://reyhane.pro/), UI/UX Designer.
+VulWall is built by [Moji](https://github.com/MojtabaTajik). The logo, colour palette and
+design system are by [Reyhaan](https://reyhane.pro/), UI/UX Designer.
 
 ## Third-party components
 
