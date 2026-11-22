@@ -29,8 +29,9 @@ public static class ScanCheck
 
     /// <summary>
     /// The scan targeted no asset at all (every asset disabled; the scanner closes it at once), or
-    /// none of the assets that own the finding's discovery. A discovery without owners is in scope
-    /// of any scan that targeted something.
+    /// none of the assets that own the finding's discovery (a disabled asset, or an empty
+    /// <c>asset_ids</c> while a delete is pending). A discovery without <c>asset_ids</c>, or one
+    /// that is unknown, is in scope of any scan that targeted something.
     /// </summary>
     private static bool OutOfScope(Scan scan, Finding finding, Func<string?, IReadOnlyCollection<string>?> ownersOf)
     {
@@ -38,6 +39,6 @@ public static class ScanCheck
             return true;
         // Known limit: these are today's owners (asset_ids now), not the owners at scan time.
         var owners = ownersOf(finding.DiscoveryId);
-        return owners is { Count: > 0 } && !owners.Any(id => scan.TargetedAssets.Any(t => t.AssetId == id));
+        return owners != null && !owners.Any(id => scan.TargetedAssets.Any(t => t.AssetId == id));
     }
 }
