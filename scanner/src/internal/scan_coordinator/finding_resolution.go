@@ -44,6 +44,8 @@ type discoveryRef struct {
 	ID        string `bson:"_id"`
 	AssetType string `bson:"asset_type"`
 	IP        string `bson:"ip"`
+	// AssetIDs: the assets whose scans reached the discovery (assets._id, hex).
+	AssetIDs []string `bson:"asset_ids"`
 	// Observed: the discovery has the closing scan in scan_ids (re-discovered live).
 	Observed bool `bson:"observed"`
 	// SeenIn: the recent scans (resolutionInput.recentScans) that have it in scan_ids.
@@ -65,6 +67,8 @@ type coverageKey struct{ source, discoveryID string }
 // resolutionInput is everything the resolution decision reads, loaded by loadResolutionInput.
 type resolutionInput struct {
 	orgID string
+	// targetedAssets are the asset ids the closing scan targeted (its enabled assets).
+	targetedAssets map[string]bool
 	// recentScans are the closing scan followed by the org's previous pipeline_quiescent
 	// scans, newest first, at most goneAfterScans in all.
 	recentScans []string
@@ -92,9 +96,13 @@ type resolutionDecision struct {
 //   - host_no_longer_found: its host was confirmed gone in each of the last goneAfterScans
 //     drained scans, this one included (hostGone).
 //
+// A candidate whose discovery belongs only to assets the scan did not target (disabled or
+// deleted assets) is skipped: the scan was never meant to check it, so it is neither resolved
+// nor counted unchecked. A discovery without asset_ids is never skipped.
+//
 // Every other candidate stays open (unchecked): a missing coverage record, a check that did
-// not complete, a host that was not seen this scan, a disabled asset or a lost message all
-// leave the finding as it was. Absence of data never resolves anything.
+// not complete, a host that was not seen this scan or a lost message all leave the finding as
+// it was. Absence of data never resolves anything.
 func decideResolutions(in resolutionInput) resolutionDecision {
 	var out resolutionDecision
 	for _, f := range in.candidates {
@@ -102,6 +110,8 @@ func decideResolutions(in resolutionInput) resolutionDecision {
 		switch {
 		case !ok:
 			out.unchecked = append(out.unchecked, f.ID)
+		case !targetedByScan(in, d):
+			// skipped: not in this scan's scope
 		case d.Observed && notReproduced(f, in.coverage[coverageKey{f.Source, f.DiscoveryID}]):
 			out.notReproduced = append(out.notReproduced, f.ID)
 		case hostGone(in, d):
@@ -111,6 +121,15 @@ func decideResolutions(in resolutionInput) resolutionDecision {
 		}
 	}
 	return out
+}
+
+// targetedByScan reports whether the closing scan targeted at least one of d's assets, or d
+// has no asset_ids (written before ownership was recorded).
+func targetedByScan(in resolutionInput, d discoveryRef) bool {
+	if len(d.AssetIDs) == 0 {
+		return true
+	}
+	return slices.ContainsFunc(d.AssetIDs, func(id string) bool { return in.targetedAssets[id] })
 }
 
 // notReproduced reports whether cov proves that f is no longer present: the check completed
@@ -174,7 +193,10 @@ func (m *ScanMonitor) findingsToResolve(ctx context.Context, scan shared.Scan) (
 }
 
 func (m *ScanMonitor) loadResolutionInput(ctx context.Context, scan shared.Scan) (resolutionInput, error) {
-	in := resolutionInput{orgID: scan.OrgID}
+	in := resolutionInput{orgID: scan.OrgID, targetedAssets: map[string]bool{}}
+	for _, t := range scan.TargetedAssets {
+		in.targetedAssets[t.AssetID] = true
+	}
 
 	cursor, err := m.db.Collection(shared.CollectionFindings).Find(ctx,
 		bson.M{"org_id": scan.OrgID, "status": shared.FindingStatusOpen, "scan_ids": bson.M{"$ne": scan.ID}},
@@ -268,6 +290,7 @@ func (m *ScanMonitor) discoveriesOf(ctx context.Context, orgID, scanID string, r
 		options.Find().SetProjection(bson.M{
 			"asset_type": 1,
 			"ip":         1,
+			"asset_ids":  1,
 			"observed":   bson.M{"$in": bson.A{scanID, scanIDs}},
 			"seen_in":    bson.M{"$setIntersection": bson.A{scanIDs, recent}},
 		}),
