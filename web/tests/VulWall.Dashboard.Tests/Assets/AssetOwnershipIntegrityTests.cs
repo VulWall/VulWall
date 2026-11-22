@@ -165,6 +165,78 @@ public class AssetOwnershipIntegrityTests(MongoFixture mongo)
         Assert.Equal([s.A], await OwnersAsync(s, ApiId));
     }
 
+    // The scanner stores a DNS-found address as Go prints it. An IP asset typed in another form
+    // (upper case, uncompressed, IPv4-mapped) is stored in that form, so it meets the same
+    // discovery, and deleting the domain that found the address keeps it.
+    [Fact]
+    public async Task AddIpAsset_InAnotherNotation_IsRecordedOnTheScannedAddress()
+    {
+        var s = await CreateAsync();
+        const string v6 = "2a00:1450:4001:80b::200e";
+        var v6Id = DiscoveryIds.Ip(Org, v6);
+        await s.C("discoveries").UpdateOneAsync(Builders<BsonDocument>.Filter.Eq("_id", ApiId),
+            Builders<BsonDocument>.Update.Push("resolution_history",
+                new BsonDocument { { "ip", v6 }, { "first_seen", DateTime.UtcNow } }));
+        await s.C("discoveries").InsertManyAsync([
+            Discovery(Org, v6Id, "ip", [s.A], ip: v6, parentId: ApiId),
+            Discovery(Org, "port-v6", "port", [s.A], ip: v6, port: 443, parentId: v6Id),
+        ]);
+
+        var (upper, e1) = await s.Assets.CreateIpAssetAsync("2A00:1450:4001:80B::200E");
+        var (expanded, e2) = await s.Assets.CreateIpAssetAsync("2a00:1450:4001:080b:0:0:0:200e");
+        var (mapped, e3) = await s.Assets.CreateIpAssetAsync("::ffff:8.8.8.8");
+
+        Assert.Null(e1 ?? e2 ?? e3);
+        Assert.Equal(v6, upper!.Ip);
+        Assert.Equal(v6, expanded!.Ip);
+        Assert.Equal(OldIp, mapped!.Ip);
+        Assert.Equal(Sorted(s.A, upper.Id, expanded.Id), await OwnersAsync(s, v6Id));
+        Assert.Equal(Sorted(s.A, upper.Id, expanded.Id), await OwnersAsync(s, "port-v6"));
+        Assert.Equal(Sorted(s.A, mapped.Id), await OwnersAsync(s, OldIpId));
+
+        var (deleted, error) = await s.Assets.DeleteAssetAsync(s.A);
+
+        Assert.True(deleted, error);
+        Assert.Equal(Sorted(upper.Id, expanded.Id), await OwnersAsync(s, v6Id));
+        Assert.Equal(Sorted(upper.Id, expanded.Id), await OwnersAsync(s, "port-v6"));
+        Assert.Equal([mapped.Id], await OwnersAsync(s, OldIpId));
+    }
+
+    // Only the scanner records first owners: a discovery without asset_ids stays without, so an
+    // asset delete never deletes it.
+    [Fact]
+    public async Task AddAsset_DiscoveryWithoutAssetIds_IsNotClaimed()
+    {
+        var s = await CreateAsync();
+        await s.C("discoveries").UpdateManyAsync(Builders<BsonDocument>.Filter.In("_id", new[] { ApiId, NowIpId, NowPortId }),
+            Builders<BsonDocument>.Update.Unset("asset_ids"));
+
+        var (b, error) = await s.Assets.CreateDomainAssetAsync(Api);
+        Assert.Null(error);
+        var (deleted, deleteError) = await s.Assets.DeleteAssetAsync(b!.Id);
+
+        Assert.True(deleted, deleteError);
+        foreach (var id in new[] { ApiId, NowIpId, NowPortId })
+            Assert.False((await DocAsync(s, id, Org)).Contains("asset_ids"), id);
+    }
+
+    // The asset exists once inserted; a failure to record it on known discoveries is not shown
+    // (its first scan records it), so the user does not add it twice.
+    [Fact]
+    public async Task AddAsset_OwnershipWriteFails_StillAddsTheAsset()
+    {
+        var s = await CreateAsync();
+        var discoveries = new HookedDiscoveries(s.Db, new FixedOrganizationContext(Org))
+        {
+            AfterUpdateMany = () => throw new MongoException("simulated outage")
+        };
+
+        var (b, error) = await Service(s, s.Services.Assets, discoveries).CreateDomainAssetAsync(Api);
+
+        Assert.Null(error);
+        Assert.Equal(1, await s.C("assets").CountDocumentsAsync(AssetFilter(b!.Id)));
+    }
+
     [Fact]
     public async Task AddUnknownHost_CreatesNoDiscovery()
     {
@@ -290,6 +362,66 @@ public class AssetOwnershipIntegrityTests(MongoFixture mongo)
         Assert.Equal(1, await s.C("assets").CountDocumentsAsync(AssetFilter(s.A)));
     }
 
+    // Two deletes of one asset at once: the one that finishes first removes the asset, and the
+    // other one reports success too, not "did not finish".
+    [Fact]
+    public async Task Delete_AlreadyFinishedByAnotherDelete_IsASuccess()
+    {
+        var s = await CreateAsync();
+        var org = new FixedOrganizationContext(Org);
+        var discoveries = new HookedDiscoveries(s.Db, org)
+        {
+            AfterUpdateMany = () => s.C("assets").DeleteOneAsync(AssetFilter(s.A))
+        };
+
+        var (ok, error) = await Service(s, s.Services.Assets, discoveries).DeleteAssetAsync(s.A);
+
+        Assert.True(ok, error);
+    }
+
+    // A delete stopped by a scan restores enabled, but never over the mark that a second delete
+    // of the asset set in between.
+    [Fact]
+    public async Task Delete_StoppedByAScan_DoesNotRestoreOverAMark()
+    {
+        var s = await CreateAsync();
+        var org = new FixedOrganizationContext(Org);
+        var writes = 0;
+        var assets = new HookedAssets(s.Db, org)
+        {
+            AfterUpdateOne = async () =>
+            {
+                if (++writes != 1) return; // the disable
+                await s.C("assets").UpdateOneAsync(AssetFilter(s.A), Builders<BsonDocument>.Update.Set("deleting", true));
+                await s.C("scans").InsertOneAsync(new BsonDocument
+                {
+                    { "_id", "s-race" }, { "org_id", Org }, { "status", "running" }, { "type", "scheduled" },
+                    { "created_at", DateTime.UtcNow }, { "started_at", DateTime.UtcNow },
+                });
+            }
+        };
+
+        var (ok, error) = await Service(s, assets, s.Services.Discoveries).DeleteAssetAsync(s.A);
+
+        Assert.False(ok);
+        Assert.Equal(AssetsService.ScanInProgressDeleteError, error);
+        var a = await AssetDocAsync(s, s.A);
+        Assert.False(a["enabled"].AsBoolean);
+        Assert.True(a["deleting"].AsBoolean);
+    }
+
+    [Fact]
+    public async Task Statistics_CountADeletingAssetNeitherActiveNorInactive()
+    {
+        var s = await CreateAsync();
+        await s.Assets.CreateIpAssetAsync("1.1.1.1");
+        await HalfDeleteAsync(s, s.A);
+
+        var stats = await s.Assets.GetStatisticsAsync();
+
+        Assert.Equal((2, 1, 0), (stats.TotalAssets, stats.ActiveAssets, stats.InactiveAssets));
+    }
+
     [Fact]
     public async Task Delete_StoppedByAScan_LeavesNoMark()
     {
@@ -408,7 +540,8 @@ public class AssetOwnershipIntegrityTests(MongoFixture mongo)
     {
         var scans = s.Services.Scans;
         return new AssetsService(assets, scans, new ScanTriggerService(scans), discoveries,
-            s.Services.Findings, s.Services.SuppressionsRepository, s.Services.ScanCoverage);
+            s.Services.Findings, s.Services.SuppressionsRepository, s.Services.ScanCoverage,
+            NullLogger<AssetsService>.Instance);
     }
 
     private sealed class HookedAssets(IMongoDatabase db, IOrganizationContext org)

@@ -375,8 +375,14 @@ subdomain id the scanner gives it: more than one dot is a subdomain), the IPs th
 to now (`resolution_history` entries without `last_seen`) and their ports; for an IP asset the
 IP and its ports. It uses the scanner's ids (`shared/ids.go`, ported to
 `web/src/Verticals/Assets/Services/DiscoveryIds.cs`; both hold the same test vectors) and only
-`$addToSet` on existing discoveries of the org. So adding `api.a.com` after `a.com` found it
-means disabling or deleting `a.com` no longer hides or deletes that data.
+`$addToSet` on existing discoveries of the org that already have `asset_ids`: the scanner
+records first owners, so a discovery without the field keeps it. So adding `api.a.com` after
+`a.com` found it means disabling or deleting `a.com` no longer hides or deletes that data.
+Adding a root domain records it only on its exact host, not on the subdomains earlier scans
+found below it; its first scan records those. The web app stores an IP asset as Go's
+`net.IP.String()` prints it (IPv6 lower case and compressed, IPv4-mapped as IPv4), the form
+DNS-found addresses have, so both meet one discovery. A failure to record ownership after the
+asset is inserted is logged, not shown: the first scan records the same.
 
 When the user deletes an asset, the web app first disables it and checks again that no scan
 started (a scan that read the asset before the disable is seen by that check; the delete
@@ -391,6 +397,9 @@ it, and domain and port ingestion drop its results (`shared.AssetGuard`). Then:
    `safety_timeout`, a stuck consumer): the asset guard drops them, but its cache and the gap
    between its check and the write leave a short window. The web app reads the recorded ids
    before the existing assets, so an asset added meanwhile is never taken for a deleted one.
+   Because the guard drops a late message whole, a port result that a dead asset's scan brought
+   for an IP it shared with a live asset is lost too: the live co-owner's port data for that IP
+   is updated one scan later.
 2. Discoveries whose `asset_ids` is now empty belong to no asset. Per batch, the web app checks
    again that they are still empty (a scan may have added an owner back), deletes their
    `findings`, `finding_suppressions` and `scan_coverage` records (by `discovery_id`), removes

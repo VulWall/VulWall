@@ -35,6 +35,27 @@ public class DiscoveryIdsTests
     public void Ids_AreOrgScoped() =>
         Assert.Equal("1f0f89da-6576-5075-884c-73d154cc6be6", DiscoveryIds.Domain("org-2", "example.com"));
 
+    // Go's net.IP.String() for the same input (the scanner stores DNS-found addresses so).
+    [Theory]
+    [InlineData("8.8.8.8", "8.8.8.8")]
+    [InlineData(" 8.8.8.8 ", "8.8.8.8")]
+    [InlineData("::ffff:8.8.8.8", "8.8.8.8")]
+    [InlineData("::FFFF:808:808", "8.8.8.8")]
+    [InlineData("2001:DB8::1", "2001:db8::1")]
+    [InlineData("2001:0db8:0:0:0:0:0:1", "2001:db8::1")]
+    [InlineData("2001:db8:0:0:1:0:0:1", "2001:db8::1:0:0:1")]
+    [InlineData("2001:db8:0:1:0:0:0:1", "2001:db8:0:1::1")]
+    [InlineData("2001:db8::", "2001:db8::")]
+    [InlineData("::8.8.8.8", "::808:808")]
+    [InlineData("2606:4700:4700::1111", "2606:4700:4700::1111")]
+    [InlineData("2A00:1450:4001:80B::200E", "2a00:1450:4001:80b::200e")]
+    [InlineData("2a00:1450:4001:080b:0000:0000:0000:200e", "2a00:1450:4001:80b::200e")]
+    [InlineData("::", "::")]
+    [InlineData("::1", "::1")]
+    [InlineData("1:0:0:0:0:0:0:0", "1::")]
+    public void CanonicalIp_MatchesGo(string input, string go) =>
+        Assert.Equal(go, DiscoveryIds.CanonicalIp(input));
+
     // The scanner's determineDomainAssetType for an asset's own job: more than one dot is a
     // subdomain, whatever the public suffix.
     [Theory]

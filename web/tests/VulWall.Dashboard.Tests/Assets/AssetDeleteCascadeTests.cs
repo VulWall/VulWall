@@ -454,7 +454,8 @@ public abstract class AssetDeleteCascadeTestsBase(MongoFixture mongo, int batchS
         var scans = s.Services.Scans;
         return new AssetsService(new FaultyAssets(s.Db, org, faults), scans, new ScanTriggerService(scans),
             new FaultyDiscoveries(s.Db, org, faults), new FaultyFindings(s.Db, org, faults),
-            new FaultySuppressions(s.Db, org, faults), new FaultyCoverage(s.Db, org, faults))
+            new FaultySuppressions(s.Db, org, faults), new FaultyCoverage(s.Db, org, faults),
+            NullLogger<AssetsService>.Instance)
         {
             DeleteBatchSize = batchSize
         };

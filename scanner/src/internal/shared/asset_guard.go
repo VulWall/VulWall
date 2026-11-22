@@ -23,6 +23,10 @@ import (
 // short window; the web delete also pulls the ids of assets that no longer exist, so the next
 // delete cleans what slips through.
 //
+// Ingestion drops a guarded message whole. A port result of a dead asset's scan for an IP it
+// shared with a live asset is lost with it, so the live co-owner's port data for that IP is
+// updated by its own next scan, one scan later.
+//
 // Thread-safe: multiple ingestion workers may call Exists concurrently.
 type AssetGuard struct {
 	// lookup performs the underlying check; a field so the cache can be tested without a

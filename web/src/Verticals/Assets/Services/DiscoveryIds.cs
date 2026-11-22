@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -31,6 +33,51 @@ internal static class DiscoveryIds
     /// <summary>Trimmed only, not lower-cased, as in the scanner.</summary>
     public static string Ip(string orgId, string ip) =>
         V5($"org:{orgId}:ip:{ip.Trim()}");
+
+    /// <summary>
+    /// <paramref name="ip"/> as Go's <c>net.IP.String()</c> writes it, which is how the scanner
+    /// stores the addresses DNS finds: IPv4 dotted, an IPv4-mapped IPv6 address as plain IPv4,
+    /// other IPv6 in lower case with the longest run of two or more zero groups compressed (the
+    /// first one on a tie), and no embedded IPv4 or zone. The IP id is not normalised, so an IP
+    /// asset must be stored in this form to meet the discovery its DNS-found twin has.
+    /// </summary>
+    public static string CanonicalIp(string ip)
+    {
+        var address = IPAddress.Parse(ip.Trim());
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+        if (address.AddressFamily == AddressFamily.InterNetwork)
+            return address.ToString();
+
+        var bytes = address.GetAddressBytes();
+        var groups = new int[8];
+        for (var i = 0; i < 8; i++)
+            groups[i] = (bytes[2 * i] << 8) | bytes[2 * i + 1];
+
+        int bestStart = -1, bestLength = 1;
+        for (var i = 0; i < 8; i++)
+        {
+            var j = i;
+            while (j < 8 && groups[j] == 0) j++;
+            if (j - i > bestLength)
+                (bestStart, bestLength) = (i, j - i);
+            i = Math.Max(i, j);
+        }
+
+        var parts = new List<string>();
+        for (var i = 0; i < 8; i++)
+        {
+            if (i == bestStart)
+            {
+                parts.Add(i == 0 ? ":" : "");
+                i += bestLength - 1;
+                if (i == 7) parts.Add("");
+                continue;
+            }
+            parts.Add(groups[i].ToString("x"));
+        }
+        return string.Join(":", parts);
+    }
 
     // RFC 4122 version 5, as Go's uuid.NewSHA1: SHA-1 of the namespace bytes (big-endian) and
     // the name, first 16 bytes, version 5 and the RFC variant.

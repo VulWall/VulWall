@@ -21,7 +21,8 @@ public class AssetsService(
     DiscoveriesRepository discoveriesRepository,
     FindingsRepository findingsRepository,
     FindingSuppressionsRepository suppressionsRepository,
-    ScanCoverageRepository scanCoverageRepository)
+    ScanCoverageRepository scanCoverageRepository,
+    ILogger<AssetsService> logger)
 {
     public async Task<IndexViewModel> GetAssetsAsync()
     {
@@ -109,12 +110,13 @@ public class AssetsService(
 
     public async Task<(Asset? Asset, string? Error)> CreateIpAssetAsync(string ipAddress)
     {
-        var ip = ipAddress.Trim();
-
-        if (!System.Net.IPAddress.TryParse(ip, out _))
+        if (!System.Net.IPAddress.TryParse(ipAddress.Trim(), out _))
         {
             return (null, "Please enter a valid IP address.");
         }
+
+        // The form the scanner stores DNS-found addresses in, so this asset meets their discovery.
+        var ip = DiscoveryIds.CanonicalIp(ipAddress);
 
         if (PrivateIpValidator.IsPrivateIp(ip))
         {
@@ -211,7 +213,9 @@ public class AssetsService(
         await assetsRepository.UpdateOneAsync(byId, Builders<Asset>.Update.Set(a => a.Enabled, false));
         if (await IsScanInProgressAsync())
         {
-            await assetsRepository.UpdateOneAsync(byId, Builders<Asset>.Update.Set(a => a.Enabled, asset.Enabled));
+            // Not over a mark that another delete of this asset set meanwhile.
+            await assetsRepository.UpdateOneAsync(byId & Builders<Asset>.Filter.Ne(a => a.Deleting, true),
+                Builders<Asset>.Update.Set(a => a.Enabled, asset.Enabled));
             return (false, ScanInProgressDeleteError);
         }
         await assetsRepository.UpdateOneAsync(byId,
@@ -221,7 +225,10 @@ public class AssetsService(
 
         // Last, so a run that fails part-way can be retried from the Assets page. Only a marked
         // asset: the mark is what kept its data safe from the steps above.
-        if (await assetsRepository.DeleteManyAsync(byId & Builders<Asset>.Filter.Eq(a => a.Deleting, true)) == 0)
+        // Nothing deleted: another delete of this asset finished first (success), or the mark is
+        // gone (not finished).
+        if (await assetsRepository.DeleteManyAsync(byId & Builders<Asset>.Filter.Eq(a => a.Deleting, true)) == 0
+            && await assetsRepository.GetByIdAsync(asset.Id) != null)
             return (false, DeleteNotFinishedError);
         return (true, null);
     }
@@ -301,19 +308,37 @@ public class AssetsService(
     /// or deleting <c>a.com</c> no longer hides or deletes it. Uses the recorded resolution, not
     /// a new DNS lookup. Only adds ($addToSet) to existing, org-scoped discoveries.
     ///
+    /// Only discoveries that already have <c>asset_ids</c>: the first owners come from the
+    /// scanner, so a discovery without the field (never deleted by an asset delete) keeps it.
+    ///
     /// Runs after the asset insert: a delete that runs meanwhile pulls only ids of assets that do
-    /// not exist (see DeleteOwnedDataAsync), so it cannot pull this one.
+    /// not exist (see DeleteOwnedDataAsync), so it cannot pull this one. A failure is logged, not
+    /// shown: the asset exists, and its first scan records the same ownership. Reporting it
+    /// would invite the user to add the asset a second time.
     /// </summary>
     private async Task RecordOwnershipAsync(Asset asset)
     {
+        try
+        {
+            await AddOwnerToKnownDiscoveriesAsync(asset);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not record asset {AssetId} on its known discoveries; its next scan records it", asset.Id);
+        }
+    }
+
+    private async Task AddOwnerToKnownDiscoveriesAsync(Asset asset)
+    {
         var d = Builders<Discovery>.Filter;
         var add = Builders<Discovery>.Update.AddToSet(x => x.AssetIds, asset.Id);
+        var owned = d.Exists(x => x.AssetIds);
 
         List<string> ips;
         if (asset.Type == AssetType.Domain)
         {
             var hostId = DiscoveryIds.ForDomainAsset(asset.OrgId, asset.Domain!);
-            await discoveriesRepository.UpdateManyAsync(d.Eq(x => x.Id, hostId), add);
+            await discoveriesRepository.UpdateManyAsync(d.Eq(x => x.Id, hostId) & owned, add);
             ips = await discoveriesRepository.GetCurrentIpsAsync(hostId);
         }
         else
@@ -324,8 +349,8 @@ public class AssetsService(
         // The IP before its ports, as the scanner does (shared.AddIPAssetID).
         foreach (var ip in ips)
         {
-            await discoveriesRepository.UpdateManyAsync(d.Eq(x => x.Id, DiscoveryIds.Ip(asset.OrgId, ip)), add);
-            await discoveriesRepository.UpdateManyAsync(d.Eq(x => x.AssetType, AssetType.Port) & d.Eq(x => x.Ip, ip), add);
+            await discoveriesRepository.UpdateManyAsync(d.Eq(x => x.Id, DiscoveryIds.Ip(asset.OrgId, ip)) & owned, add);
+            await discoveriesRepository.UpdateManyAsync(d.Eq(x => x.AssetType, AssetType.Port) & d.Eq(x => x.Ip, ip) & owned, add);
         }
     }
 
@@ -353,8 +378,9 @@ public class AssetsService(
         return new AssetsStatistics
         {
             TotalAssets = assetsList.Count,
-            ActiveAssets = assetsList.Count(a => a.Enabled),
-            InactiveAssets = assetsList.Count(a => !a.Enabled)
+            // A deleting asset is neither: its row says "Deleting".
+            ActiveAssets = assetsList.Count(a => a.Enabled && !a.Deleting),
+            InactiveAssets = assetsList.Count(a => !a.Enabled && !a.Deleting)
         };
     }
 
