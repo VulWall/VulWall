@@ -31,11 +31,27 @@ func (s *Service) RecordCoverage(ctx context.Context, msg shared.SecurityFinding
 	if !s.orgGuard.Exists(ctx, msg.OrgID) {
 		return nil
 	}
+	// Not for a discovery that an asset delete removes or has removed (discoveryStateOf). A
+	// missing discovery is kept for the sources whose coverage can come before it.
+	state, err := s.discoveryStateOf(ctx, msg.OrgID, cov.DiscoveryID)
+	if err != nil {
+		return err
+	}
+	if state == discoveryDeleting || (state == discoveryMissing && !coverageMayPrecedeDiscovery(cov.Source)) {
+		s.logger.Info("Skipping coverage: discovery no longer exists or is being deleted",
+			zap.String("org_id", msg.OrgID),
+			zap.String("scan_id", *msg.ScanID),
+			zap.String("source", cov.Source),
+			zap.String("discovery_id", cov.DiscoveryID),
+			zap.Bool("delete_pending", state == discoveryDeleting),
+		)
+		return nil
+	}
 
 	collection := s.db.Collection(shared.CollectionScanCoverage,
 		options.Collection().SetWriteConcern(writeconcern.Majority()))
 	filter := bson.M{"scan_id": *msg.ScanID, "source": cov.Source, "discovery_id": cov.DiscoveryID}
-	_, err := collection.UpdateOne(ctx, filter, coverageUpdate(msg.OrgID, *cov, time.Now()),
+	_, err = collection.UpdateOne(ctx, filter, coverageUpdate(msg.OrgID, *cov, time.Now()),
 		options.Update().SetUpsert(true))
 	if mongo.IsDuplicateKeyError(err) {
 		// Two upserts of a new record raced; the second one now finds the record.

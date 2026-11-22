@@ -77,6 +77,25 @@ func (s *Service) ProcessFinding(ctx context.Context, finding shared.SecurityFin
 		return nil
 	}
 
+	// Drop a finding whose discovery is gone or being deleted (discoveryStateOf). Every
+	// scanner is triggered only after ingestion wrote the discovery, so a missing one means
+	// an asset delete removed it. Soft-skip, as above.
+	state, err := s.discoveryStateOf(ctx, finding.OrgID, finding.DiscoveryID)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	if state != discoveryPresent {
+		s.logger.Info("Skipping finding: discovery no longer exists or is being deleted",
+			zap.String("org_id", finding.OrgID),
+			zap.String("discovery_id", finding.DiscoveryID),
+			zap.String("finding_type", finding.FindingType),
+			zap.Bool("delete_pending", state == discoveryDeleting),
+		)
+		return nil
+	}
+
 	s.logger.Info("Processing security finding",
 		zap.String("org_id", finding.OrgID),
 		zap.String("source", finding.Source),
