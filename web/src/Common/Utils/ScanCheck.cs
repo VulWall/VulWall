@@ -4,29 +4,28 @@ using VulWall.Dashboard.Data.Entities.Scan;
 namespace VulWall.Dashboard.Common.Utils;
 
 /// <summary>
-/// Which findings a scan did not check. Scan history (comparisons, report deltas) uses it so
-/// that a finding the scanner skipped is not counted as resolved, and is not counted as new
-/// when a later scan sees it again. <c>ownersOf</c> gives the asset ids that own a discovery
-/// (<see cref="Services.IAssetScope.OwnersOf"/>).
+/// Which findings a scan did not check: the scanner left them open without proof
+/// (<see cref="Scan.UncheckedFindingIds"/>), or the scan did not target their asset (disabled
+/// then). Scan history (comparisons, report deltas) uses it so that such a finding is not
+/// counted as resolved, and is not counted as new when a later scan sees it again.
+/// <c>ownersOf</c> gives the asset ids that own a discovery (<see cref="Services.IAssetScope.OwnersOf"/>).
 /// </summary>
 public static class ScanCheck
 {
-    /// <summary>
-    /// Whether <paramref name="scan"/> did not see <paramref name="finding"/> because it could
-    /// not check it: the scanner left it open without proof (<see cref="Scan.UncheckedFindingIds"/>),
-    /// or the scan did not target its asset.
-    /// </summary>
+    /// <summary>Whether <paramref name="scan"/> did not check <paramref name="finding"/>.</summary>
     public static bool NotChecked(Scan scan, Finding finding, Func<string?, IReadOnlyCollection<string>?> ownersOf) =>
-        scan.UncheckedFindingIds.Contains(finding.Id) || OutOfScope(scan, finding, ownersOf);
+        scan.UncheckedFindingIdSet.Contains(finding.Id) || OutOfScope(scan, finding, ownersOf);
 
     /// <summary>
-    /// Whether <paramref name="finding"/> already existed when <paramref name="baseline"/> started
-    /// and the baseline did not target its asset (it was disabled then). Such a finding is not new
-    /// in a later scan. A finding first detected after the baseline started is new, for example
-    /// on an asset added after the baseline.
+    /// Whether <paramref name="finding"/> already existed when <paramref name="baseline"/> ran and
+    /// the baseline did not check it. Such a finding is not new in a later scan. An unchecked
+    /// finding always existed before the baseline (the scanner lists only open findings the scan
+    /// did not see). A finding of an asset the baseline did not target is new when it was first
+    /// detected after the baseline started, for example on an asset added after the baseline.
     /// </summary>
     public static bool SkippedBy(Scan baseline, Finding finding, Func<string?, IReadOnlyCollection<string>?> ownersOf) =>
-        finding.FirstDetected < (baseline.StartedAt ?? baseline.CreatedAt) && OutOfScope(baseline, finding, ownersOf);
+        baseline.UncheckedFindingIdSet.Contains(finding.Id)
+        || (finding.FirstDetected < (baseline.StartedAt ?? baseline.CreatedAt) && OutOfScope(baseline, finding, ownersOf));
 
     /// <summary>
     /// The scan targeted no asset at all (every asset disabled; the scanner closes it at once), or

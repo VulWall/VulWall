@@ -55,6 +55,22 @@ public class FindingDeltaBuilderTests(MongoFixture mongo)
         Assert.Equal(0, delta.New);
     }
 
+    // s2 could not fully check asset A (degraded): the scanner left f-u open and listed it in
+    // s2's unchecked_finding_ids. s3 sees it again, so it is not new in s3.
+    [Fact]
+    public void UncheckedFinding_IsNotNew_WhenTheNextScanSeesItAgain()
+    {
+        var s1 = NewScan("u1", S1At, AssetA);
+        var s2 = NewScan("u2", S2At, AssetA);
+        s2.UncheckedFindingIds = ["f-u"];
+        var s3 = NewScan("u3", S3At, AssetA);
+        List<Finding> findings = [NewFinding("f-u", "d-a", S1At, "u1", "u3")];
+        Func<string?, IReadOnlyCollection<string>?> ownersOf = id => id is null ? null : Owners.GetValueOrDefault(id);
+
+        Assert.Equal(0, new FindingDeltaBuilder().Build(s2, s1, findings, ownersOf).Resolved);
+        Assert.Equal(0, new FindingDeltaBuilder().Build(s3, s2, findings, ownersOf).New);
+    }
+
     [Fact]
     public void SkippedFinding_IsNotNew_WhenTheAssetIsScannedAgain()
     {

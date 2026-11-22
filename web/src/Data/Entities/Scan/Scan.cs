@@ -72,6 +72,15 @@ public class Scan : IEntity<string>, IOrganizationEntity
     [BsonElement("unchecked_finding_ids")]
     public List<string> UncheckedFindingIds { get; set; } = [];
 
+    private HashSet<string>? _uncheckedFindingIdSet;
+
+    /// <summary>
+    /// <see cref="UncheckedFindingIds"/> as a set for per-finding lookups, built on first use.
+    /// The web app reads scans and never changes this list, so the set does not go stale.
+    /// </summary>
+    [BsonIgnore]
+    public IReadOnlySet<string> UncheckedFindingIdSet => _uncheckedFindingIdSet ??= [.. UncheckedFindingIds];
+
     /// <summary>Number of distinct assets in <see cref="DegradedAssets"/>.</summary>
     public int DegradedAssetCount() =>
         DegradedAssets.Select(a => string.IsNullOrEmpty(a.AssetId) ? a.Domain : a.AssetId).Distinct().Count();

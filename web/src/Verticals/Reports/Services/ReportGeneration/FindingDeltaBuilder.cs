@@ -9,8 +9,9 @@ namespace VulWall.Dashboard.Reports.Services.ReportGeneration;
 /// Computes how the finding set changed between the current scan and the previous one.
 /// A finding entity accumulates the IDs of every scan it appeared in, so membership of a
 /// scan is determined by whether that scan's ID is present in the finding's <c>ScanIds</c>.
-/// A finding that one of the two scans did not check is neither new nor resolved
-/// (<see cref="ScanCheck"/>), the same rule as the scan comparison.
+/// A finding that one of the two scans did not check (unchecked by the scanner, or its asset not
+/// targeted) is neither new nor resolved (<see cref="ScanCheck"/>), the same rule as the scan
+/// comparison.
 /// </summary>
 public class FindingDeltaBuilder
 {
