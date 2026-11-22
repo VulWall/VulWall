@@ -40,6 +40,11 @@ public class Discovery : IEntity<string>, IOrganizationEntity
     [BsonElement("scan_ids")]
     public List<string>? ScanIds { get; set; }
 
+    // Assets whose scans found this discovery. The scanner will write it with $addToSet (follow-up PR for #99).
+    [BsonElement("asset_ids")]
+    [BsonIgnoreIfNull]
+    public List<string>? AssetIds { get; set; }
+
     [BsonElement("parent_id")]
     public string? ParentId { get; set; }
 

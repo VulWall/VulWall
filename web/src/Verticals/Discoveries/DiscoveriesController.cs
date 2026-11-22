@@ -18,6 +18,12 @@ public class DiscoveriesController(
     [HttpPost]
     public async Task<IActionResult> UpdateOwnershipStatus(string discoveryId, OwnershipStatus ownershipStatus)
     {
+        // A missing or unknown value binds to default(OwnershipStatus) (Verified) or an undefined number.
+        if (!ModelState.IsValid || !Enum.IsDefined(ownershipStatus))
+        {
+            return BadRequest("Invalid ownership status.");
+        }
+
         var success = await discoveriesService.UpdateOwnershipStatusAsync(discoveryId, ownershipStatus);
 
         if (!success)
