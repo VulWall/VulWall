@@ -44,6 +44,32 @@ public class DiscoveriesRepository(
     /// <summary>The ids of the org's discoveries that match <paramref name="filter"/>, nothing else.</summary>
     public virtual async Task<List<string>> FindIdsAsync(FilterDefinition<Discovery> filter) =>
         await Collection.Find(await InOrgAsync(filter)).Project(d => d.Id).ToListAsync();
+
+    /// <summary>Every asset id that the org's discoveries hold in <c>asset_ids</c>.</summary>
+    public virtual async Task<List<string>> GetRecordedAssetIdsAsync() =>
+        await (await Collection.DistinctAsync<string>("asset_ids", await InOrgAsync(FilterDefinition<Discovery>.Empty)))
+            .ToListAsync();
+
+    /// <summary>
+    /// The addresses a domain or subdomain discovery resolves to now: its <c>resolution_history</c>
+    /// entries without <c>last_seen</c> (the scanner leaves it out, or null, while an address is
+    /// current). Read raw, because the entity maps <c>last_seen</c> as a non-null date.
+    /// </summary>
+    public virtual async Task<List<string>> GetCurrentIpsAsync(string discoveryId)
+    {
+        var doc = await Collection.Find(await InOrgAsync(Builders<Discovery>.Filter.Eq(d => d.Id, discoveryId)))
+            .Project(Builders<Discovery>.Projection.Include("resolution_history").Exclude("_id"))
+            .FirstOrDefaultAsync();
+        if (doc == null || !doc.TryGetValue("resolution_history", out var history) || !history.IsBsonArray)
+            return [];
+        return history.AsBsonArray
+            .OfType<BsonDocument>()
+            .Where(e => !e.TryGetValue("last_seen", out var lastSeen) || lastSeen.IsBsonNull)
+            .Where(e => e.TryGetValue("ip", out var ip) && ip.IsString)
+            .Select(e => e["ip"].AsString)
+            .Distinct()
+            .ToList();
+    }
 }
 
 public class ScansRepository(
@@ -185,8 +211,9 @@ public class DiscoveriesPublicRepository(IMongoDatabase database)
 public class AssetsPublicRepository(IMongoDatabase database)
     : BaseMongoRepository<Asset, string>(database, "assets")
 {
+    /// <summary>The org's enabled assets; an asset whose delete has started is not one.</summary>
     public Task<List<string>> GetEnabledIdsAsync(string orgId) =>
-        Collection.Find(a => a.OrgId == orgId && a.Enabled).Project(a => a.Id).ToListAsync();
+        Collection.Find(a => a.OrgId == orgId && a.Enabled && !a.Deleting).Project(a => a.Id).ToListAsync();
 }
 
 // KnowledgeBaseRepository uses BaseMongoRepository (not OrgScoped) because:

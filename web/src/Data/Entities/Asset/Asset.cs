@@ -23,6 +23,13 @@ public class Asset : IEntity<string>, IOrganizationEntity
     [BsonElement("enabled")]
     public bool Enabled { get; set; }
 
+    // Set when a delete starts (AssetsService.DeleteAssetAsync) and never cleared: the asset can
+    // then only be deleted again, not enabled or disabled, and the scanner neither scans it nor
+    // records it on discoveries. Missing on assets no delete has touched.
+    [BsonElement("deleting")]
+    [BsonIgnoreIfDefault]
+    public bool Deleting { get; set; }
+
     [BsonElement("domain")]
     [BsonIgnoreIfNull]
     public string? Domain { get; set; }

@@ -34,6 +34,9 @@ public interface IAssetScope
     /// <summary>True only for a known discovery that is hidden (not for an unknown id).</summary>
     bool IsHidden(string? discoveryId);
 
+    /// <summary>True only for a known discovery that is visible (not for an unknown id).</summary>
+    bool IsVisibleDiscovery(string? discoveryId);
+
     /// <summary>
     /// The <c>asset_ids</c> of a known discovery; null when unknown or not recorded, empty while
     /// an asset delete is pending.

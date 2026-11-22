@@ -51,7 +51,9 @@ public class FindingSuppressionService(
     /// Creates or updates a suppression for the given (discoveryId, findingType) pair.
     /// Idempotent: re-suppressing the same pair updates status/note rather than duplicating.
     /// On a duplicate-key race, treats the existing row as authoritative and updates it.
-    /// Returns false, and writes nothing, when the discovery belongs only to disabled assets.
+    /// Returns false, and writes nothing, when the discovery does not exist in the org or belongs
+    /// only to disabled assets: a suppression on an unknown id would never show, and would apply
+    /// to a discovery that a later scan creates under that id.
     /// </summary>
     public async Task<bool> SuppressAsync(
         string discoveryId,
@@ -60,7 +62,8 @@ public class FindingSuppressionService(
         string suppressedBy,
         string? note)
     {
-        if (await IsHiddenAsync(discoveryId))
+        var scope = await assetScopeFilter.GetAsync(await organizationContext.GetCurrentOrgIdAsync(), [discoveryId]);
+        if (!scope.IsVisibleDiscovery(discoveryId))
             return false;
 
         var existing = (await suppressionsRepository.FindAsync(
