@@ -114,7 +114,7 @@ func CreateHTTPClient() *http.Client {
 	}
 
 	// SSRFSafeDialContext resolves DNS once, validates every returned IP against
-	// the full reserved-range list, then dials directly to the first safe IP.
+	// the full reserved-range list, then dials the safe IPs directly, in turn.
 	// This closes the DNS-rebinding TOCTOU gap: the OS never performs a second
 	// lookup that could be rebound to a private address at connection time.
 	transport.DialContext = shared.SSRFSafeDialContext(&net.Dialer{
