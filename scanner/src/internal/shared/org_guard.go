@@ -20,10 +20,16 @@ import (
 // Valid 24-char hex ids are converted to an ObjectID; anything else falls back
 // to a string match so a non-hex legacy id still resolves.
 func OrgIDFilter(orgID string) bson.M {
-	if oid, err := primitive.ObjectIDFromHex(orgID); err == nil {
+	return ObjectIDFilter(orgID)
+}
+
+// ObjectIDFilter is the `_id` filter of a document whose `_id` is an ObjectID that the
+// scanner holds as hex (organizations, assets), with OrgIDFilter's fallback to a string match.
+func ObjectIDFilter(id string) bson.M {
+	if oid, err := primitive.ObjectIDFromHex(id); err == nil {
 		return bson.M{"_id": oid}
 	}
-	return bson.M{"_id": orgID}
+	return bson.M{"_id": id}
 }
 
 // OrgCacheTTL controls how long a NEGATIVE org-existence result (org does not

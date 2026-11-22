@@ -27,6 +27,7 @@ type assetIDsEnv struct {
 	ctx    context.Context
 	domain *Service
 	port   *port_ingestion.Service
+	db     *mongo.Database
 	coll   *mongo.Collection
 	rdb    *redis.Client
 	scanID string
@@ -61,16 +62,29 @@ func newAssetIDsEnv(t *testing.T) *assetIDsEnv {
 	if _, err := db.Collection(shared.CollectionOrganizations).InsertOne(ctx, bson.M{"_id": testOrg}); err != nil {
 		t.Fatal(err)
 	}
-	logger := zap.NewNop()
-	guard := shared.NewOrgGuard(db, logger)
-	return &assetIDsEnv{
-		t: t, ctx: ctx,
-		domain: NewService(db, rdb, logger, guard),
-		port:   port_ingestion.NewService(db, rdb, logger, guard),
+	// The assets these tests scan. Ingestion drops results of an asset that does not exist.
+	for _, id := range []string{"asset-a", "asset-b", "asset-ip", "asset-d"} {
+		if _, err := db.Collection(shared.CollectionAssets).InsertOne(ctx, bson.M{"_id": id, "org_id": testOrg, "enabled": true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := &assetIDsEnv{
+		t: t, ctx: ctx, db: db,
 		coll:   db.Collection(shared.CollectionDiscoveries),
 		rdb:    rdb,
 		scanID: "scan-1",
 	}
+	e.restart()
+	return e
+}
+
+// restart builds the ingestion services anew, as a fresh worker process would: with empty
+// org and asset guard caches.
+func (e *assetIDsEnv) restart() {
+	logger := zap.NewNop()
+	orgGuard, assetGuard := shared.NewOrgGuard(e.db, logger), shared.NewAssetGuard(e.db, logger)
+	e.domain = NewService(e.db, e.rdb, logger, orgGuard, assetGuard)
+	e.port = port_ingestion.NewService(e.db, e.rdb, logger, orgGuard, assetGuard)
 }
 
 // host ingests a domain discovery finding: a name that the scan of assetID reached,

@@ -46,6 +46,9 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 	// write path drop results for orgs that no longer exist instead of recreating
 	// orphan documents. A single shared instance keeps the negative cache global.
 	orgGuard := shared.NewOrgGuard(o.db, o.logger)
+	// Shared asset guard: domain and port ingestion drop results of an asset that was
+	// deleted, or whose delete has started, while its scan was in flight.
+	assetGuard := shared.NewAssetGuard(o.db, o.logger)
 
 	// Create wait group to manage goroutines
 	var wg sync.WaitGroup
@@ -57,7 +60,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting domain ingestion consumer")
 
-		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.logger, activity, orgGuard)
+		domainConsumer := domain_ingestion.NewConsumer(o.redis, o.db, o.logger, activity, orgGuard, assetGuard)
 		if err := domainConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Domain ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("domain ingestion: %w", err)
@@ -70,7 +73,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 		defer wg.Done()
 		o.logger.Info("Starting port ingestion consumer")
 
-		portConsumer := port_ingestion.NewConsumer(o.redis, o.db, o.logger, activity, orgGuard)
+		portConsumer := port_ingestion.NewConsumer(o.redis, o.db, o.logger, activity, orgGuard, assetGuard)
 		if err := portConsumer.Start(ctx); err != nil && err != context.Canceled {
 			o.logger.Error("Port ingestion consumer failed", zap.Error(err))
 			errChan <- fmt.Errorf("port ingestion: %w", err)

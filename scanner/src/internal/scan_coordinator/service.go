@@ -386,11 +386,14 @@ func (m mongoScanStore) hasScanIn(ctx context.Context, orgID string, statuses []
 	return true, nil
 }
 
-// orgAssets retrieves all enabled user-added assets for an organization.
+// orgAssets retrieves all enabled user-added assets of an organization that no delete has started on.
 func (m mongoScanStore) orgAssets(ctx context.Context, orgID string) ([]shared.Asset, error) {
 	cursor, err := m.db.Collection(shared.CollectionAssets).Find(ctx, bson.M{
 		"org_id":  orgID,
 		"enabled": true,
+		// The web app sets deleting when an asset's delete starts; such an asset is never
+		// scanned again, also if enabled were set back by mistake.
+		"deleting": bson.M{"$ne": true},
 	})
 	if err != nil {
 		return nil, err
