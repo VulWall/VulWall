@@ -159,8 +159,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const p = document.createElement('p');
             p.className = 'mb-0 mt-1 small';
             p.textContent = newEnabled
-                ? 'This will enable scanning for this asset and show its results again.'
-                : 'This will disable scanning for this asset and hide its results. Enable it again to show them.';
+                ? 'This will enable scanning for this asset. Most views show its results after the next scan.'
+                : 'This will disable scanning for this asset and hide its results. They are also removed from history until you enable it again.';
             box.append(strong, p);
             content.replaceChildren(box);
         }

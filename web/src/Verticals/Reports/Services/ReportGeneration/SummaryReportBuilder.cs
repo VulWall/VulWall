@@ -41,7 +41,8 @@ public class SummaryReportBuilder
         Data.Entities.Scan.Scan? mostRecentScan,
         IEnumerable<Data.Entities.Scan.Scan> allDoneScans,
         IEnumerable<DbFinding> allFindings,
-        string? previousScanId,
+        Data.Entities.Scan.Scan? previousScan,
+        Func<string?, IReadOnlyCollection<string>?> ownersOf,
         IEnumerable<Data.Entities.Discovery.Discovery>? allDiscoveries = null,
         byte[]? logo = null,
         string? logoContentType = null)
@@ -61,7 +62,7 @@ public class SummaryReportBuilder
             .ToList();
 
         var scoreTrend = _scoreHistoryBuilder.Build(trendScans, allFindingsList, allDiscoveriesList);
-        var findingDelta = _findingDeltaBuilder.Build(mostRecentScan?.Id, previousScanId, allFindingsList);
+        var findingDelta = _findingDeltaBuilder.Build(mostRecentScan, previousScan, allFindingsList, ownersOf);
 
         // Load KB entries for enrichment (only ~84 docs)
         var kbEntries = await _knowledgeBaseCache.GetAllAsync();
